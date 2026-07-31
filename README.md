@@ -39,22 +39,10 @@ in two mailboxes is stored once.
 SPEC.md               the store specification (normative, RFC 2119)
 migrations/           canonical, forward-only schema migrations (SQL)
   0001_init.sql       schema version 1
-EXPORT.md             the file-per-item interchange profile (Maildir/m2dir/vdir)
 README.md             this file
 LICENSE-MIT           dual license
 LICENSE-APACHE
 ```
-
-## Two documents, two jobs
-
-- **[`SPEC.md`](./SPEC.md)** — the **native store**: SQLite + blob files.
-  Optimises for scale, indexing, transactions and OS-uniformity. This is what an
-  implementation runs on.
-- **[`EXPORT.md`](./EXPORT.md)** — a **portable interchange profile**: a
-  dependency-free file-per-item tree (the Maildir/m2dir/vdir merge) a store
-  exports to for archival, backup and interop with `mutt`, `rsync` and friends.
-  Optimises for the opposite properties — tool-agnostic, greppable,
-  corruption-local — which is why it is a separate document.
 
 ## Status
 

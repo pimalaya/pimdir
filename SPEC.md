@@ -1,15 +1,10 @@
 # Pimdir store specification
 
-Status: draft. The native on-disk store for text-based personal-information
-items (mail, calendar events, contacts, notes, tasks). A pimdir store is a
-**SQLite database** (the queryable index and mutable state) plus a
-**content-addressed blob directory** (the immutable item bodies): a hybrid that
-keeps the scale, indexing and cross-OS uniformity of SQLite while keeping large
-bodies out of the database.
-
-The portable, dependency-free *file-per-item* layout — the maildir/m2dir/vdir
-merge — is a separate interchange profile in [`EXPORT.md`](./EXPORT.md); it is
-what a store exports to for archival and interop, not how it runs.
+Status: draft. The on-disk store for text-based personal-information items (mail,
+calendar events, contacts, notes, tasks). A pimdir store is a **SQLite database**
+(the queryable index and mutable state) plus a **content-addressed blob
+directory** (the immutable item bodies): a hybrid that keeps the scale, indexing
+and cross-OS uniformity of SQLite while keeping large bodies out of the database.
 
 The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are to be interpreted as
 in RFC 2119.
@@ -253,16 +248,7 @@ pimdir store is the portable, cross-implementation form of what himalaya-android
 and `base_*` columns are the engine's detail ladder, dirty-tracking and
 three-way-merge baseline.
 
-## 11. Import and export
-
-Maildir, m2dir and vdir are reached through the file-per-item interchange profile
-in [`EXPORT.md`](./EXPORT.md): `pimdir export` writes a store out as that
-portable tree (for backup, archival, or handoff to `mutt`/`rsync`), and
-`pimdir import` reads one back in. That profile is where "no dependency, greppable,
-corruption-local" matter; the native store optimises for the opposite set of
-properties, which is why they are two documents.
-
-## 12. Encodings
+## 11. Encodings
 
 Two implementations produce byte-identical stores only if they encode the model
 into columns identically. These rules are normative.
@@ -286,10 +272,10 @@ into columns identically. These rules are normative.
 - A binding's `base` is present iff at least one of `base_flags`, `base_object`,
   `base_revision` is non-`NULL`; absent, all three are `NULL`.
 
-## 13. Operations
+## 12. Operations
 
 The storage seam is serviced by the canonical statements in
-[`queries.sql`](./queries.sql), bound with §12 encodings. The statements are the
+[`queries.sql`](./queries.sql), bound with §11 encodings. The statements are the
 reference form; §8's invariants are what bind (an implementation MAY use an
 equivalent statement).
 
