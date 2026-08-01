@@ -311,3 +311,32 @@ per-source placement view and the stored `items` + `bindings`, using
 
 An implementation MAY skip the refcount/GC steps on a batch that stored or
 dropped no objects.
+
+## 13. Application meta conventions (informative)
+
+The store never parses `meta` (§11): it is an opaque, application-defined summary
+blob. But the *writer* of a collection (a sync connector) and its *readers* (a
+client rendering a list) must agree on its shape per `kind`, so a reader can
+display an item without fetching its body. These conventions are **informative**
+— not enforced by the store — and each is JSON with a leading integer `v` for
+versioning. Absent optional fields mean "unknown".
+
+### `message/rfc822` — `v: 1`
+
+```json
+{
+  "v": 1,
+  "message_id": "abc@host",        // string, optional — bare Message-ID (no <>)
+  "subject": "Hello",              // string, required (may be empty)
+  "from": "alice@example.org",     // string, optional — first sender address
+  "to": "bob@example.org",         // string, optional — first recipient address
+  "date": "2026-08-01T10:00:00Z",  // string, optional — RFC 3339
+  "size": 1234                     // integer, optional — raw message octets
+}
+```
+
+Flags are **not** in `meta`; they are the item's `flags` (§11). Written by
+Neverest's sync connector (both the enumerate/`Meta` and the streamed/`Full`
+paths); read by any client projecting the collection (e.g. a Himalaya pimdir
+backend). Other kinds (`text/vcard`, `text/calendar`) define their own `v: 1`
+convention the same way when they are first written.
