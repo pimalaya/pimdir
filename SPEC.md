@@ -1,6 +1,6 @@
 # Pimdir store specification
 
-Status: draft. The on-disk store for text-based personal-information items (mail, calendar events, contacts, notes, tasks). A pimdir store is a **SQLite database** (the queryable index and mutable state) plus a **content-addressed blob directory** (the immutable item bodies): a hybrid that keeps the scale, indexing and cross-OS uniformity of SQLite while keeping large bodies out of the database.
+Status: draft. The on-disk store for text-based personal-information items (mail, calendar events, contacts, notes, tasks). A pimdir store is a **SQLite database** (the queryable index and mutable state) plus a **content-addressed blob directory** (the item bodies, each stored as an immutable blob): a hybrid that keeps the scale, indexing and cross-OS uniformity of SQLite while keeping large bodies out of the database. A body edit (a mutable-content item such as a CardDAV contact) writes a new blob and repoints the item; each blob is immutable, an item's current body is not.
 
 The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are to be interpreted as in RFC 2119.
 
@@ -19,7 +19,7 @@ Restricting to SQLite specifically (not "any SQL database") is deliberate: the p
 ## 2. Terminology
 
 - **Store**: a directory holding one database file and one blob directory.
-- **Database**: the SQLite file pimdir.db holding collections, placements, objects (index rows) and checkpoints.
+- **Database**: the SQLite file pimdir.db holding collections, items and their per-source bindings, objects (index rows) and checkpoints.
 - **Collection**: a mailbox, address book or calendar; a row in `collections`.
 - **Item**: one message, event, task or contact.
 - **Placement**: one item's presence in one collection: its handle, mutable state (flags), detail level, sync base, and a pointer to its object. The same logical item in two collections is two placements sharing one object.
@@ -63,19 +63,23 @@ The canonical schema is migrations/0001_init.sql; it is normative and this secti
 - **`collections`**: `id`, `kind` (the media type shared by every item in it), `name`, `parent` (hierarchy by reference, never by row nesting), optional presentation (`color`, `description`, `sort_order`), and the cross-source content-conflict `conflict` policy.
 - **`sources`**: one row per source that syncs a collection (a server, a phone), keyed `(collection, source)`, carrying that source's opaque `checkpoint`. A single-source collection has one row.
 - **`objects`**: `hash` (primary key, under `hash_algo`), `size`, and `refcount` (§5, §8). The bytes are *not* stored here.
-- **`items`**: the shared truth of one logical item, keyed `(collection, link_id)`. Carries the mutable `flags` (a JSON array of strings), the current `object_hash`, the opaque `meta` summary, the detail `level` (0 probed → 1 meta → 2 full), and the cross-source state `deleted` / `conflicted` / `conflict_object`. It also carries `seq`, the item's **public id** in its collection (§4a): the `link_id` is the internal cross-source identity, but a client shows `seq` and resolves it back to `link_id`.
+- **`items`**: the shared truth of one logical item, keyed `(collection, link_id)`. Carries the mutable `flags` (a JSON array of strings), the current `object_hash`, the opaque `meta` summary, the detail `level` (0 probed → 1 meta → 2 full), and the cross-source state `deleted` / `conflicted` / `conflict_object`. It also carries `seq`, the item's store-global **public id** (§9.1): the `link_id` is the internal cross-source identity, but a client shows `seq` and resolves it back to `link_id`.
 - **`bindings`**: one source's binding of an item, keyed `(collection, link_id, source)`. Carries the item's `handle` on that source and the three-way-merge base (`base_flags`, `base_object`, `base_revision`): the "light cache of the last agreed state". A single-source item has one binding; a two-server or server-plus-phone item has two.
 
 An item and a base per source is the whole model: **single-source is the N=1 case** (one binding). The only thing N≥2 adds is `deleted`: a delete has to linger on the item until *every* source has dropped it, which N=1 never needs.
 
 Flags are a JSON array of strings rather than a normalised child table: the set is small per item and SQLite's `json_each` makes "all unread in a collection" an ordinary query. A consumer with heavy flag-query needs MAY build its own derived flags table. That is a private index, out of scope here, exactly as any search index is. (This dissolves the file-per-item "reading a name is cheaper than a file" problem: a flag is a column, queried by index, never a `readdir`.)
 
+### 4.4 Queries
+
+The named, parameterised statements that service the store operations (§12) live under queries/, one file per concern: [collections](./queries/collections.sql), [items](./queries/items.sql), [bindings](./queries/bindings.sql), [sources](./queries/sources.sql) and [objects](./queries/objects.sql). They are the reference form, bound with the §11 encodings; an implementation SHOULD use them verbatim and MAY substitute an equivalent that preserves the same invariants (§8).
+
 ## 5. The blob store
 
 Object bytes live as files under objects/, one file per hash, **sharded two levels by hash prefix** (`objects/<hash[0:2]>/<hash[2:4]>/<hash>`) to keep any one directory small. The hash is encoded in a single-case, filesystem-safe alphabet (lowercase base32, RFC 4648, no padding) so the blob path is valid on every target filesystem.
 
 - **Write** is atomic: write to a temporary period-prefixed file in the same shard directory, `fsync`, then `rename` into place. Because the name is the content hash, a body is immutable and its file is never rewritten.
-- **Reference counting**: `objects.refcount` MUST equal the number of placements pointing at that hash through either `object_hash` or `base_object`. Refcounts are maintained in the same transaction as the placement writes that change them.
+- **Reference counting**: `objects.refcount` MUST equal the number of pointers at that hash, counting an item's `object_hash` and `conflict_object` and a binding's `base_object`. Refcounts are maintained in the same transaction as the writes that change them.
 - **Garbage collection**: an object whose refcount reaches zero MAY be deleted; its blob file is removed after the row. A store MAY instead recompute refcounts from the placement columns and sweep orphans: O(placements), and immune to incremental-bookkeeping drift.
 - Bodies are content-addressed, so an identical body delivered to two collections is stored once; copy, move and undelete are pointer edits, never byte copies.
 
@@ -92,7 +96,7 @@ The runner MUST:
 
 Migrations are **forward-only**. There are no down-migrations because the database is derived: an implementation that meets a store newer than it understands, or a corrupt store, MAY rebuild from the blob store and a full re-sync instead of migrating down.
 
-> **Caveat (normative):** the database is the *only* home of **un-pushed local mutation**: a flag change or delete made offline and not yet synced (`status <> clean`). Rebuild-by-resync therefore MAY lose such changes. A migration MUST preserve placement state; rebuild is a last resort, not a substitute for migrating.
+> **Caveat (normative):** the database is the *only* home of **un-pushed local mutation**: a flag change or delete made offline and not yet synced (an item whose current state has diverged from its per-source base). Rebuild-by-resync therefore MAY lose such changes. A migration MUST preserve item and binding state; rebuild is a last resort, not a substitute for migrating.
 
 Because pre-3.35 SQLite could not drop or alter columns, migrations that reshape a table use the create-new / copy / drop-old / rename dance; on the required 3.37+ baseline `DROP COLUMN` is available directly.
 
@@ -101,7 +105,7 @@ Because pre-3.35 SQLite could not drop or alter columns, migrations that reshape
 The store has a **single-owner** rule: at any time at most one process, on one host, may open pimdir.db for writing. This is stronger than "serialize the requests" and is the invariant that makes the network case safe.
 
 - **Local**: WAL mode gives concurrent readers plus one writer within a host; multiple local readers are fine.
-- **Network filesystem (NFS/SMB)**: SQLite's cross-host advisory locking is unreliable there, so a store on a share MUST be owned by exactly one process on one host, typically a front daemon (the Pimalaya gateway) that clients talk to rather than opening the file themselves. Two owners (one per host) MUST NOT run; an implementation SHOULD enforce single-instance with a lease. Such an owner MUST NOT rely on WAL's shared-memory (`-shm`) file or on `mmap` (both assume a local filesystem): it MUST use either rollback-journal mode or `PRAGMA locking_mode = EXCLUSIVE` (which runs WAL without the shared-memory segment). With a single owner there is no cross-host locking to get wrong, so the network-filesystem hazards do not arise.
+- **Network filesystem (NFS/SMB)**: SQLite's cross-host advisory locking is unreliable there, so a store on a share MUST be owned by exactly one process on one host, typically a front daemon that clients talk to rather than opening the file themselves. Two owners (one per host) MUST NOT run; an implementation SHOULD enforce single-instance with a lease. Such an owner MUST NOT rely on WAL's shared-memory (`-shm`) file or on `mmap` (both assume a local filesystem): it MUST use either rollback-journal mode or `PRAGMA locking_mode = EXCLUSIVE` (which runs WAL without the shared-memory segment). With a single owner there is no cross-host locking to get wrong, so the network-filesystem hazards do not arise.
 
 Because writes are transactional, a whole reconciled flag set or a multi-item move commits atomically; a reader never observes a torn multi-item change.
 
@@ -118,7 +122,7 @@ Four identifiers, kept distinct:
 - **handle**: the backend's per-collection id (IMAP UID, DAV href); changes if the backend reassigns it, so it is never the cross-collection key.
 - **link id**: the item's stable cross-collection identity (`Message-ID`, vCard/iCal `UID`), the dedup and threading key. **Internal**: a store consumer keys reads and edits by the public **seq**, not the link id.
 - **hash**: content state and the blob key; changes when the content changes (mutable-content backends only; mail bodies are immutable).
-- **seq**: the item's **public id** within its collection (`items.seq`): a small integer a consumer shows and accepts in place of the long link id.
+- **seq**: the item's store-global **public id** (`items.seq`): a small integer a consumer shows and accepts in place of the long link id, the same across every collection the message is filed in (§9.1).
 
 Deduplication keys on equal **hash**, so a message filed in two mailboxes, or a body already fetched by another collection, is stored once. Opening it in a second collection costs no network. Merging keys on **link id**, conservatively: a missed dedup is harmless, a wrong merge hides data.
 
@@ -130,9 +134,11 @@ The `link_id` is the right *internal* key (stable, cross-source) but the wrong t
 - **Assigned once, monotonic, never reused.** The store assigns a message's `seq` the first time it inserts an item with that `link_id` (in any collection) and reuses it for every later placement of the same `link_id`. The counter only ever increases, so a `seq` is not reused even after the message is deleted everywhere. A stale id never silently addresses a different message.
 - **Resolved back to `link_id`.** A consumer reads/edits by `(collection, seq)`; the store maps it to the `link_id` and operates on the link id internally. `(collection, seq)` is unique (one placement per message per collection).
 
-## 10. Relationship to the io-replica engine
+## 10. Sync model
 
-This schema is the io-replica storage seam written down. The engine is I/O-free: it yields `Wants` for storage effects (`load`, `lookup-object`, `write`) and remote effects, and a consumer services them. `collections`, `placements`, `objects` and `checkpoint` are exactly the persisted shape of that seam, so a pimdir store is the portable, cross-implementation form of what himalaya-android's `IndexDb` and neverest's replica already persist ad hoc. The `level`, `status` and `base_*` columns are the engine's detail ladder, dirty-tracking and three-way-merge baseline.
+The store is shaped for offline-first synchronisation against one or more remote sources. A shared item holds the merged truth; a per-source binding records the base, the last state agreed with that source. A sync layer above the store derives what changed locally (the current item versus the binding's base) and what changed remotely, and reconciles the two. The detail `level` lets an item be known before its body is fetched, so enumeration stays cheap and bodies hydrate lazily. `deleted` carries a removal across sources until every one has dropped it; `conflicted` and `conflict_object` record an unresolved cross-source content divergence for the consumer to settle. A single-source store degenerates to one binding per item and never needs the cross-source memory.
+
+The store persists this model and services the operations in §12. Deriving pushes, merging and resolving conflicts belong to the sync layer above it, not to the store.
 
 ## 11. Encodings
 
@@ -151,14 +157,14 @@ Two implementations produce byte-identical stores only if they encode the model 
 
 ## 12. Operations
 
-The storage seam is serviced by the canonical statements in [queries.sql](./queries.sql), bound with §11 encodings. The statements are the reference form; §8's invariants are what bind (an implementation MAY use an equivalent statement).
+The store operations are serviced by the canonical statements under queries/ (§4.4), bound with the §11 encodings. The statements are the reference form; §8's invariants are what bind, and an implementation MAY use an equivalent statement.
 
-A store is opened *as one source*. `load`/`write` translate between the engine's per-source placement view and the stored `items` + `bindings`, using [`io_replica::hub`]'s `project`/`absorb`.
+A store is opened *as one source*. `load` and `write` translate between a per-source placement view and the stored `items` and `bindings`: `load` projects the collection's shared items into the placements this source holds (or should copy), and `write` folds this source's changes back.
 
-- **`load(collection)`** builds the collection's hub (`load_items` + `load_bindings`, with `load_conflict`), projects it for this source into placements, and reads this source's `load_checkpoint`. (Unlinked, freshly probed placements have no link id to key an item on; an implementation holds them aside (in memory, or a residual table) until a `Meta` upgrade links them.)
+- **`load(collection)`** reads the collection's shared items and bindings (`load_items` + `load_bindings`, with `load_conflict`), projects them for this source into placements, and reads this source's `load_checkpoint`. (Unlinked, freshly probed placements have no link id to key an item on; an implementation holds them aside (in memory, or a residual table) until a `Meta` upgrade links them.)
 - **`lookup_objects(links)`** runs `lookup_objects` with `:links` bound to a JSON array of the link-id strings.
 - **`write(ops)`** runs as **one transaction**:
-  1. A `StoreObject` first writes its bytes to the blob file (temporary file → `fsync` → `rename` into the sharded path, §5) then runs `store_object`; the engine emits it before the placement that references it, so the body is durable first. A `SetCheckpoint` runs `ensure_collection` then `upsert_checkpoint` for this source. Placement upserts and drops are folded into the collection's hub (`absorb` for this source), which is then saved: `set_conflict`, `delete_items`, and a re-`insert_item` / `insert_binding` of the hub: a load-all / replace-all per touched collection.
+  1. A `StoreObject` first writes its bytes to the blob file (temporary file → `fsync` → `rename` into the sharded path, §5) then runs `store_object`; the writer emits it before the placement that references it, so the body is durable first. A `SetCheckpoint` runs `ensure_collection` then `upsert_checkpoint` for this source. Placement upserts and drops are merged into the collection's shared items and bindings for this source, which are then saved: `set_conflict`, `delete_items`, and a re-`insert_item` / `insert_binding` of the merged result: a load-all / replace-all per touched collection.
   2. Run `recompute_refcounts`.
   3. Run `list_garbage_objects`, remembering the hashes; run `delete_garbage_objects`.
   4. Commit.
@@ -184,4 +190,4 @@ The store never parses `meta` (§11): it is an opaque, application-defined summa
 }
 ```
 
-Flags are **not** in `meta`; they are the item's `flags` (§11). Written by Neverest's sync connector (both the enumerate/`Meta` and the streamed/`Full` paths); read by any client projecting the collection (e.g. a Himalaya pimdir backend). Other kinds (`text/vcard`, `text/calendar`) define their own `v: 1` convention the same way when they are first written.
+Flags are **not** in `meta`; they are the item's `flags` (§11). It is written by the sync connector on both the enumerate/`Meta` and the streamed/`Full` paths, and read by any client projecting the collection. Other kinds (`text/vcard`, `text/calendar`) define their own `v: 1` convention the same way when they are first written.

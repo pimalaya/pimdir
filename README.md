@@ -27,7 +27,7 @@ This repository is the specification only, with no reference implementation. Imp
 
 ## Specification
 
-The complete, normative specification is [SPEC.md](./SPEC.md), written to RFC 2119. A pimdir store is a SQLite database (the queryable index and mutable state) plus a content-addressed blob directory (the immutable item bodies): it keeps the scale, indexing and cross-OS uniformity of SQLite while keeping large bodies beside the database rather than inside it. The canonical schema and its forward-only migration scripts live under migrations/, so every implementation converges on the same on-disk store.
+The complete, normative specification is [SPEC.md](./SPEC.md), written to RFC 2119. A pimdir store is a SQLite database (the queryable index and mutable state) plus a content-addressed blob directory (the item bodies, each stored as an immutable blob): it keeps the scale, indexing and cross-OS uniformity of SQLite while keeping large bodies beside the database rather than inside it. A blob is never rewritten; editing a mutable-content item (a CardDAV contact, a CalDAV event) writes a new blob and repoints the item at it, and the old blob is collected once unreferenced. The canonical schema and its forward-only migration scripts live under migrations/, so every implementation converges on the same on-disk store.
 
 ## Layout
 
@@ -35,7 +35,7 @@ The complete, normative specification is [SPEC.md](./SPEC.md), written to RFC 21
 SPEC.md               the store specification (normative, RFC 2119)
 migrations/           canonical, forward-only schema migrations (SQL)
   0001_init.sql       schema version 1
-queries.sql           the reference statements servicing the storage seam
+queries/              the reference statements, one file per concern
 README.md             this file
 LICENSE-MIT           dual license
 LICENSE-APACHE
