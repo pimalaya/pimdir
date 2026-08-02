@@ -114,7 +114,9 @@ section is its prose companion.
   link_id)`. Carries the mutable `flags` (a JSON array of strings), the current
   `object_hash`, the opaque `meta` summary, the detail `level` (0 probed → 1 meta
   → 2 full), and the cross-source state `deleted` / `conflicted` /
-  `conflict_object`.
+  `conflict_object`. It also carries `seq`, the item's **public id** in its
+  collection (§4a): the `link_id` is the internal cross-source identity, but a
+  client shows `seq` and resolves it back to `link_id`.
 - **`bindings`**: one source's binding of an item, keyed `(collection, link_id,
   source)`. Carries the item's `handle` on that source and the three-way-merge
   base (`base_flags`, `base_object`, `base_revision`) — the "light cache of the
@@ -223,19 +225,44 @@ move commits atomically; a reader never observes a torn multi-item change.
 
 ## 9. Identity and dedup
 
-Three identifiers, kept distinct:
+Four identifiers, kept distinct:
 
-- **handle** — the backend's per-collection id; changes if the backend reassigns
-  it, so it is never the cross-collection key.
+- **handle** — the backend's per-collection id (IMAP UID, DAV href); changes if
+  the backend reassigns it, so it is never the cross-collection key.
 - **link id** — the item's stable cross-collection identity (`Message-ID`, vCard/
-  iCal `UID`), the dedup and threading key.
+  iCal `UID`), the dedup and threading key. **Internal**: a store consumer keys
+  reads and edits by the public **seq**, not the link id.
 - **hash** — content state and the blob key; changes when the content changes
   (mutable-content backends only; mail bodies are immutable).
+- **seq** — the item's **public id** within its collection (`items.seq`): a small
+  integer a consumer shows and accepts in place of the long link id.
 
 Deduplication keys on equal **hash**, so a message filed in two mailboxes, or a
 body already fetched by another collection, is stored once — opening it in a
 second collection costs no network. Merging keys on **link id**, conservatively:
 a missed dedup is harmless, a wrong merge hides data.
+
+### 9.1 The public id (`seq`)
+
+The `link_id` is the right *internal* key (stable, cross-source) but the wrong
+thing to show a user — it is a long `Message-ID`/`UID` string. Each item therefore
+carries a `seq`: a small integer a consumer displays and accepts wherever it would
+otherwise take a link id (read, flag, move, delete). It is a property of the
+**message**, not of a mailbox placement — consistent with dedup and a merged view:
+
+- **One id per message, store-global.** A message filed in several mailboxes (the
+  same `link_id`) keeps the **same** `seq` in every one of them, so a merged /
+  cross-mailbox view shows it once under one id and ids never clash between
+  mailboxes. The `seq` is drawn from a single store-wide counter (`store_meta.
+  next_seq`), not a per-collection one.
+- **Assigned once, monotonic, never reused.** The store assigns a message's `seq`
+  the first time it inserts an item with that `link_id` (in any collection) and
+  reuses it for every later placement of the same `link_id`. The counter only ever
+  increases, so a `seq` is not reused even after the message is deleted everywhere
+  — a stale id never silently addresses a different message.
+- **Resolved back to `link_id`.** A consumer reads/edits by `(collection, seq)`;
+  the store maps it to the `link_id` and operates on the link id internally.
+  `(collection, seq)` is unique (one placement per message per collection).
 
 ## 10. Relationship to the io-replica engine
 

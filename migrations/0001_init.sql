@@ -17,7 +17,10 @@ CREATE TABLE store_meta (
     format     TEXT    NOT NULL DEFAULT 'pimdir',
     version    INTEGER NOT NULL,            -- store format version; tracks user_version
     hash_algo  TEXT    NOT NULL,            -- 'blake3' (default) or 'sha256-128'
-    created_at TEXT    NOT NULL             -- RFC 3339 timestamp
+    created_at TEXT    NOT NULL,            -- RFC 3339 timestamp
+    -- Store-global monotonic counter handing out the next item `seq`. Only ever
+    -- increases, so a public id is never reused across the whole store.
+    next_seq   INTEGER NOT NULL DEFAULT 1
 ) STRICT;
 
 -- Collections: mailboxes, address books, calendars. Hierarchy is by `parent`,
@@ -56,7 +59,8 @@ CREATE TABLE objects (
 -- it too — the cross-source delete memory that a single-source store never needs.
 CREATE TABLE items (
     collection      TEXT NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
-    link_id         TEXT NOT NULL,         -- cross-source identity (Message-ID / vCard-iCal UID)
+    link_id         TEXT NOT NULL,         -- cross-source identity (Message-ID / vCard-iCal UID), internal
+    seq             INTEGER NOT NULL,      -- the message's public id: store-global, one per link_id (shared across its mailboxes), never reused
     flags           TEXT,                  -- JSON array of flag strings (shared mutable state)
     object_hash     TEXT REFERENCES objects(hash),  -- current body; NULL until hydrated
     meta            TEXT,                  -- opaque summary (envelope); NULL until Meta-fetched
@@ -66,6 +70,14 @@ CREATE TABLE items (
     conflict_object TEXT REFERENCES objects(hash),   -- the diverging body a Manual conflict recorded
     PRIMARY KEY (collection, link_id)
 ) STRICT;
+
+-- A message's public id is shared by its placements, so it is unique per
+-- (collection, seq); a client resolves it back to the internal `link_id`.
+CREATE UNIQUE INDEX items_by_seq ON items(collection, seq);
+-- The same link id can occur in several collections (a message filed in two
+-- mailboxes); this indexes the "does this message already have a seq?" lookup that
+-- makes all its placements share one id.
+CREATE INDEX items_by_link ON items(link_id);
 
 -- One source's binding of an item: its handle there and the base last synced
 -- with it (the three-way-merge baseline).
