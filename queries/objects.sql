@@ -19,13 +19,14 @@ WHERE object_hash IS NOT NULL
   AND link_id IN (SELECT value FROM json_each(:links));
 
 -- name: recompute_refcounts
--- Recompute every object's refcount from the item and binding pointers that pin
--- it (shared body, conflict body, or a source's base). O(items+bindings), run
--- once at the end of a write batch.
+-- Recompute every object's refcount from the pointers that pin it: an item's
+-- shared or conflict body, a source's base, or a pending queue action's body
+-- (SPEC.md §14). O(items+bindings+queue), run once at the end of a write batch.
 UPDATE objects SET refcount =
     (SELECT count(*) FROM items i
      WHERE i.object_hash = objects.hash OR i.conflict_object = objects.hash)
-  + (SELECT count(*) FROM bindings b WHERE b.base_object = objects.hash);
+  + (SELECT count(*) FROM bindings b WHERE b.base_object = objects.hash)
+  + (SELECT count(*) FROM queue q WHERE q.object_hash = objects.hash);
 
 -- name: list_garbage_objects
 -- Objects no item/binding pins; blob files unlinked before the rows go.

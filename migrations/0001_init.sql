@@ -9,6 +9,13 @@
 -- base). A single-source store is the degenerate case of one binding per item;
 -- a two-source store (two servers, or a server and a phone) keeps two.
 --
+-- The store has a single writing owner (SPEC.md §7). The QUEUE is how every
+-- other process mutates anyway: a producer appends an action row (with, at
+-- most, the object upsert pinning its body), and the owner applies pending
+-- actions to the items and bindings, deleting each in the same transaction as
+-- its effects, so an action is applied exactly once. Payloads are versioned
+-- JSON per action kind (SPEC.md §14).
+--
 -- Requires SQLite >= 3.37 (STRICT tables, DROP COLUMN).
 
 -- Store-level metadata: exactly one row.
@@ -34,7 +41,12 @@ CREATE TABLE collections (
     description TEXT,
     sort_order  INTEGER,
     -- Cross-source content-conflict policy: 'manual' | 'prefer-incoming' | 'prefer-existing'.
-    conflict    TEXT NOT NULL DEFAULT 'manual'
+    conflict    TEXT NOT NULL DEFAULT 'manual',
+    -- Collection generation: bumped by the owner whenever it rebuilds the
+    -- collection's handle space (a backend identity reset), so a reader can derive
+    -- epoch-dependent protocol values (an IMAP UIDVALIDITY) from the store alone
+    -- (SPEC.md §15).
+    generation  INTEGER NOT NULL DEFAULT 1
 ) STRICT;
 
 -- One row per source that syncs a collection (a server, a phone). A
@@ -92,6 +104,23 @@ CREATE TABLE bindings (
     PRIMARY KEY (collection, link_id, source),
     FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON DELETE CASCADE
 ) STRICT;
+
+-- The action queue (SPEC.md §14): mutations requested by processes that are not
+-- the store owner, applied by the owner in append order.
+CREATE TABLE queue (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,  -- global append order
+    created_at  TEXT    NOT NULL,                   -- RFC 3339 timestamp
+    producer    TEXT    NOT NULL,                   -- enqueuing process, diagnostic only
+    collection  TEXT    NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+    action      TEXT    NOT NULL,                   -- 'add' | 'set-flags' | 'remove' | 'move' | 'copy' | 'update'
+    payload     TEXT    NOT NULL,                   -- versioned JSON, shape per action (SPEC.md §14)
+    object_hash TEXT    REFERENCES objects(hash),   -- pins the payload's body against GC, or NULL
+    attempts    INTEGER NOT NULL DEFAULT 0,         -- apply attempts so far
+    error       TEXT                                -- last failure; non-NULL means parked
+) STRICT;
+
+-- The owner drains a collection's pending actions in append order.
+CREATE INDEX queue_by_collection ON queue(collection, id);
 
 -- Cross-source identity lookup (dedup, thread stitching) and refcount navigation.
 CREATE INDEX items_by_object ON items(object_hash);

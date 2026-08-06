@@ -16,3 +16,12 @@ UPDATE collections SET conflict = :conflict WHERE id = :collection;
 
 -- name: load_conflict
 SELECT conflict FROM collections WHERE id = :collection;
+
+-- name: bump_generation
+-- The owner's handle-space reset marker (SPEC.md §15): run in the same
+-- transaction as the rebuild it records.
+UPDATE collections SET generation = generation + 1 WHERE id = :collection
+RETURNING generation;
+
+-- name: load_generation
+SELECT generation FROM collections WHERE id = :collection;
