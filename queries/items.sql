@@ -30,3 +30,28 @@ RETURNING next_seq - 1;
 -- name: insert_item
 INSERT INTO items(collection, link_id, seq, flags, object_hash, meta, level, deleted, conflicted, conflict_object)
 VALUES(:collection, :link_id, :seq, :flags, :object_hash, :meta, :level, :deleted, :conflicted, :conflict_object);
+
+-- The client read surface (SPEC.md §12.1): live-only reads keyed by the public
+-- id (`seq`), never by the internal link id.
+
+-- name: list_items_page
+-- A keyset page of a collection's live items. :after is the exclusive lower
+-- bound on link_id (the empty string starts from the beginning, since a link_id
+-- is never empty), so paging rides the items primary key with no extra index.
+SELECT seq, link_id, flags, object_hash, meta, level FROM items
+WHERE collection = :collection AND deleted = 0 AND link_id > :after
+ORDER BY link_id LIMIT :limit;
+
+-- name: get_item
+-- One live item by its public id, the client-facing key.
+SELECT seq, link_id, flags, object_hash, meta, level FROM items
+WHERE collection = :collection AND seq = :seq AND deleted = 0;
+
+-- name: count_items
+-- A collection's live item count (tombstones excluded).
+SELECT count(*) FROM items WHERE collection = :collection AND deleted = 0;
+
+-- name: seq_by_link
+-- Resolves an item's public id from its internal link id: the inverse of
+-- get_item, for a consumer that just staged an add and wants the new id.
+SELECT seq FROM items WHERE collection = :collection AND link_id = :link_id;

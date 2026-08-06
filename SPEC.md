@@ -176,8 +176,12 @@ A store is opened *as one source*. `load` and `write` translate between a per-so
 - **`load(collection)`** reads the collection's shared items and bindings (`load_items` + `load_bindings`, with `load_conflict`), projects them for this source into placements, and reads this source's `load_checkpoint`. (Unlinked, freshly probed placements have no link id to key an item on; an implementation holds them aside (in memory, or a residual table) until a `Meta` upgrade links them.)
 - **`lookup_objects(links)`** runs `lookup_objects` with `:links` bound to a JSON array of the link-id strings.
 - **`write(ops)`** runs as **one transaction**:
-  1. A `StoreObject` first writes its bytes to the blob file (temporary file → `fsync` → `rename` into the sharded path, §5) then runs `store_object`; the writer emits it before the placement that references it, so the body is durable first. A `SetCheckpoint` runs `ensure_collection` then `upsert_checkpoint` for this source. Placement upserts and drops are merged into the collection's shared items and bindings for this source, which are then saved: `set_conflict`, `delete_items`, and a re-`insert_item` / `insert_binding` of the merged result: a load-all / replace-all per touched collection.
-  2. Run `recompute_refcounts`.
+  1. A `StoreObject` carries the object's index row and, **optionally, its bytes**. Carrying bytes, the writer writes them to the blob file first (temporary file → `fsync` → `rename` into the sharded path, §5), then runs `store_object`. Carrying none, the body is already durable at its sharded path, streamed straight into the blob store by a consumer that fetched it without holding it whole; the writer then runs `store_object` alone. Whoever emits a byteless `StoreObject` MUST have completed that blob write before emitting it. Either form lands the object before the placement that references it, so the body is durable first.
+
+     A `SetCheckpoint` runs `ensure_collection` then `upsert_checkpoint` for this source.
+
+     Placement upserts and drops are merged into the collection's shared items and bindings for this source, and the merged result is persisted, `set_conflict` carrying the collection's policy. The reference form is a load-all / replace-all per touched collection (`delete_items`, then `insert_item` / `insert_binding` of the merged result). An implementation MAY instead persist the diff, updating only the items and bindings that changed and deleting only what vanished: §4.4 permits the substitution because the persisted state is identical.
+  2. Bring the refcount of every object the batch touched back in line with the §5 invariant, in this same transaction. The reference form is `recompute_refcounts`, a full recompute from the pointer tables, O(items+bindings+queue). An implementation MAY instead adjust each affected hash by the net change in pointers the batch made (`adjust_refcount`, O(changes)); §8's invariant is what binds, not the form, and a store MAY recompute at any time to repair drift.
   3. Run `list_garbage_objects`, remembering the hashes; run `delete_garbage_objects`.
   4. Commit.
   5. **After** the commit, unlink the blob files of the garbage hashes. Deleting the file after the row means a crash leaves at worst an orphan file (harmless, swept by the next batch) rather than a row pointing at a missing body. It is the same durability ordering as object creation.
@@ -185,6 +189,28 @@ A store is opened *as one source*. `load` and `write` translate between a per-so
 An implementation MAY skip the refcount/GC steps on a batch that stored or dropped no objects.
 
 Two further operations belong to the §14 queue: **`enqueue(collection, action, payload)`**, the producer's only write, and **`drain(collection)`**, the owner's application of pending actions.
+
+A collection's `kind` (§4.3) is **declared, never derived**: which media type a collection holds is configuration (this store's mailboxes, that store's address books), not something a sync layer can infer from the items it pulls. Whoever configures the store declares it with **`set_collection_kind(collection, kind)`**, out of band from `write`, and any process reads it back with `load_kind`. The two creation paths coexist safely: `ensure_collection`, the lazy one a write runs to guarantee its foreign-key target, inserts an empty kind and MUST NOT overwrite a declared one, so either may run first. An empty `kind` therefore means "created lazily by a sync, never declared", which is distinct from a collection the store has never seen at all.
+
+### 12.1 Reading the store
+
+The operations above serve the store's **owner**. A **reader** (§7) opens the database read-only and projects it as a local backend: listing collections, paging items, resolving one of them. These reads are kind-agnostic, the same statements serving mail, contacts and calendars, and they are keyed by the public `seq` (§9.1), never by the internal `link_id`. Each one below is named after the reference statement that services it (§4.4), with its parameters.
+
+- **`list_collections()`** returns every collection with its display metadata and its `generation` (§15), ordered by `sort_order` then `id`.
+- **`list_items_page(collection, after, limit)`** returns a keyset page of the collection's live items; `:after` is the exclusive lower bound on `link_id`, the empty string starting from the beginning. Keyset rather than `OFFSET`, so paging costs the same at any depth and does not shift under a concurrent write.
+- **`get_item(collection, seq)`** returns one live item.
+- **`count_items(collection)`** counts the collection's live items.
+- **`seq_by_link(collection, link_id)`** resolves the public id of an item whose link id the caller already holds, typically one it just staged through the queue.
+- **`list_sources()`** returns the distinct source names the store has synced, so a producer can discover which source to attribute its writes to.
+- **`load_kind(collection)`** returns the collection's declared media type, empty when a sync created the row without one.
+
+Three rules bind every read:
+
+- **Live only.** A tombstone (`deleted = 1`) is the sync layer's memory of a removal, not an item; the statements above exclude them, and a reader MUST NOT present one as a live item.
+- **Level-aware.** An item is projectable before its body exists: `level` (§11) says whether it is merely probed, summarised by `meta`, or full. A reader renders a list from `meta` and MUST treat an absent body as not yet hydrated rather than as an error or as a missing item; hydrating it is the owner's job, since a reader never writes (§7).
+- **Snapshot-consistent.** A reader sees a consistent WAL snapshot, and any number of readers may run concurrently with the owner (§7).
+
+A reader detects change cheaply by polling `PRAGMA data_version`, which moves whenever another connection commits, and MAY overlay the collection's pending actions on its projection for read-your-writes (§14.4).
 
 ## 13. Application meta conventions (informative)
 
@@ -216,7 +242,7 @@ A producer enqueues in **one transaction**: `ensure_collection`, then, when the 
 
 ### 14.2 Applying
 
-The owner drains each collection's pending actions in ascending `id`. Each action is applied to the items and bindings and its row deleted **in the same transaction**, so application is exactly-once and never partially visible; because applying is a pure store mutation (any remote push happens later, from the dirty state the application leaves behind), the transaction never spans network I/O. An action that fails is retried (`attempts` incremented); an action the owner judges permanently unappliable is **parked**: `error` is set, the action is skipped, and later actions of the collection proceed. Parked actions are left for operators and status surfaces; the owner MUST NOT delete them silently.
+The owner drains each collection's pending actions in ascending `id`. Each action is applied to the items and bindings and its row deleted **in the same transaction**, so application is exactly-once and never partially visible; because applying is a pure store mutation (any remote push happens later, from the dirty state the application leaves behind), the transaction never spans network I/O. An action that fails is retried (`bump_attempts`, leaving the row pending so the next drain picks it up); an action the owner judges permanently unappliable is **parked**: `error` is set, the action is skipped, and later actions of the collection proceed. Parked actions are left for operators and status surfaces; the owner MUST NOT delete them silently.
 
 ### 14.3 Actions
 

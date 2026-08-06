@@ -28,6 +28,11 @@ FROM queue WHERE collection = :collection AND error IS NULL ORDER BY id;
 -- writes, so applying is exactly-once.
 DELETE FROM queue WHERE id = :id;
 
+-- name: bump_attempts
+-- A failed but still retryable action: the attempt counter advances while the
+-- row stays pending, so the next drain picks it up again (SPEC.md §14.2).
+UPDATE queue SET attempts = attempts + 1 WHERE id = :id;
+
 -- name: park_action
 -- A permanently failing action: recorded and skipped, visible to operators and
 -- frontends instead of blocking the collection's queue forever.

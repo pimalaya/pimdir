@@ -14,3 +14,12 @@ FROM bindings WHERE collection = :collection;
 -- name: insert_binding
 INSERT INTO bindings(collection, link_id, source, handle, base_flags, base_object, base_revision)
 VALUES(:collection, :link_id, :source, :handle, :base_flags, :base_object, :base_revision);
+
+-- The client read surface (SPEC.md §12.1).
+
+-- name: list_sources
+-- The distinct source names the store has synced, across every collection, so
+-- a consumer can discover which source to attribute its writes to. Read from
+-- bindings rather than sources: a source appears here as soon as it holds one
+-- item, without waiting for a checkpoint row.
+SELECT DISTINCT source FROM bindings ORDER BY source;

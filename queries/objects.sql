@@ -7,8 +7,10 @@
 -- SPEC.md §11. Named parameters use `:name`.
 
 -- name: store_object
--- Index an object (write-op StoreObject); its bytes go to the blob file
--- (SPEC.md §5); refcount is recomputed after the batch.
+-- Index an object (write-op StoreObject). Its bytes live in the blob file
+-- (SPEC.md §5), written either by this batch or, for a byteless StoreObject,
+-- already streamed there by the consumer before the op was emitted. The
+-- refcount is settled later in the batch (SPEC.md §12).
 INSERT INTO objects(hash, size, refcount) VALUES(:hash, :size, 0)
 ON CONFLICT(hash) DO UPDATE SET size = excluded.size;
 
@@ -27,6 +29,12 @@ UPDATE objects SET refcount =
      WHERE i.object_hash = objects.hash OR i.conflict_object = objects.hash)
   + (SELECT count(*) FROM bindings b WHERE b.base_object = objects.hash)
   + (SELECT count(*) FROM queue q WHERE q.object_hash = objects.hash);
+
+-- name: adjust_refcount
+-- Adjust one object's refcount by the net change in pointers a batch made to
+-- it (SPEC.md §12): the O(changes) alternative to recompute_refcounts, for an
+-- implementation that diffs its writes. Preserves the same §5 invariant.
+UPDATE objects SET refcount = refcount + :delta WHERE hash = :hash;
 
 -- name: list_garbage_objects
 -- Objects no item/binding pins; blob files unlinked before the rows go.
