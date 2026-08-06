@@ -1,12 +1,14 @@
 # Pimdir store specification
 
-Status: draft. The on-disk store for text-based personal-information items (mail, calendar events, contacts, notes, tasks). A pimdir store is a **SQLite database** (the queryable index and mutable state) plus a **content-addressed blob directory** (the item bodies, each stored as an immutable blob): a hybrid that keeps the scale, indexing and cross-OS uniformity of SQLite while keeping large bodies out of the database. A body edit (a mutable-content item such as a CardDAV contact) writes a new blob and repoints the item; each blob is immutable, an item's current body is not.
+Status: draft
+
+The on-disk store for text-based personal-information items (mail, calendar events, contacts, notes, tasks…). A pimdir store is a **SQLite database** (the queryable index and mutable state) plus a **content-addressed blob directory** (the item bodies, each stored as an immutable blob): a hybrid that keeps the scale, indexing and cross-OS uniformity of SQLite while keeping large bodies out of the database. A body edit (a mutable-content item such as a CardDAV contact) writes a new blob and repoints the item; each blob is immutable, an item's current body is not.
 
 The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are to be interpreted as in RFC 2119.
 
 ## 1. Goals and lineage
 
-Pimdir is the generalisation of what every serious PIM store already does (Apple Mail, Thunderbird, notmuch, evolution-data-server): keep an **indexed binary store** for state and queries, and the **large immutable content** beside it. Its goals, in priority order:
+Pimdir is the generalisation of what most of PIM stores already do (Apple Mail, Thunderbird, notmuch, evolution-data-server): keep an **indexed binary store** for state and queries, and the **large immutable content** beside it. Its goals, in priority order:
 
 - **Generic**: one store for any text-based item kind, keyed by media type, not one store per domain.
 - **Scalable and indexed**: hundreds of thousands of items with real secondary indexes (by link id, by flag, by object), not per-item file opens.
