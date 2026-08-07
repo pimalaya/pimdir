@@ -91,16 +91,21 @@ CREATE UNIQUE INDEX items_by_seq ON items(collection, seq);
 -- makes all its placements share one id.
 CREATE INDEX items_by_link ON items(link_id);
 
--- One source's binding of an item: its handle there and the base last synced
--- with it (the three-way-merge baseline).
+-- One source's binding of an item: its handle there, the base last synced with
+-- it (the three-way-merge baseline), and whether that source's own sync is
+-- stuck on an unresolved content conflict.
 CREATE TABLE bindings (
-    collection    TEXT NOT NULL,
-    link_id       TEXT NOT NULL,
-    source        TEXT NOT NULL,           -- which source this base belongs to
-    handle        TEXT NOT NULL,           -- the item's backend id on this source (IMAP UID, DAV href)
-    base_flags    TEXT,                    -- JSON array of strings, or NULL
-    base_object   TEXT REFERENCES objects(hash),
-    base_revision TEXT,                    -- etag/modseq for mutable-content backends
+    collection        TEXT NOT NULL,
+    link_id           TEXT NOT NULL,
+    source            TEXT NOT NULL,       -- which source this base belongs to
+    handle            TEXT NOT NULL,       -- the item's backend id on this source (IMAP UID, DAV href)
+    base_flags        TEXT,                -- JSON array of strings, or NULL
+    base_object       TEXT REFERENCES objects(hash),
+    base_revision     TEXT,                -- etag/modseq for mutable-content backends
+    -- This source and its OWN remote diverged (§10). Distinct from
+    -- items.conflicted, which is the cross-source divergence.
+    conflicted        INTEGER NOT NULL DEFAULT 0,
+    conflict_revision TEXT,                -- the remote revision observed when it did, or NULL
     PRIMARY KEY (collection, link_id, source),
     FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON DELETE CASCADE
 ) STRICT;

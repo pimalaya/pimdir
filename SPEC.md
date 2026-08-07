@@ -66,7 +66,7 @@ The canonical schema is migrations/0001_init.sql; it is normative and this secti
 - **`sources`**: one row per source that syncs a collection (a server, a phone), keyed `(collection, source)`, carrying that source's opaque `checkpoint`. A single-source collection has one row.
 - **`objects`**: `hash` (primary key, under `hash_algo`), `size`, and `refcount` (§5, §8). The bytes are *not* stored here.
 - **`items`**: the shared truth of one logical item, keyed `(collection, link_id)`. Carries the mutable `flags` (a JSON array of strings), the current `object_hash`, the opaque `meta` summary, the detail `level` (0 probed → 1 meta → 2 full), and the cross-source state `deleted` / `conflicted` / `conflict_object`. It also carries `seq`, the item's store-global **public id** (§9.1): the `link_id` is the internal cross-source identity, but a client shows `seq` and resolves it back to `link_id`.
-- **`bindings`**: one source's binding of an item, keyed `(collection, link_id, source)`. Carries the item's `handle` on that source and the three-way-merge base (`base_flags`, `base_object`, `base_revision`): the "light cache of the last agreed state". A single-source item has one binding; a two-server or server-plus-phone item has two.
+- **`bindings`**: one source's binding of an item, keyed `(collection, link_id, source)`. Carries the item's `handle` on that source, the three-way-merge base (`base_flags`, `base_object`, `base_revision`) — the "light cache of the last agreed state" — and the unresolved-conflict pair `conflicted` / `conflict_revision` (§10). A single-source item has one binding; a two-server or server-plus-phone item has two.
 - **`queue`**: the action queue (§14): mutations requested by processes that are not the store owner, applied by the owner in append order. Carries the append `id`, `created_at`, the diagnostic `producer`, the target `collection`, the `action` kind, the versioned JSON `payload`, the GC-pinning `object_hash`, and the `attempts` / `error` parking state.
 
 An item and a base per source is the whole model: **single-source is the N=1 case** (one binding). The only thing N≥2 adds is `deleted`: a delete has to linger on the item until *every* source has dropped it, which N=1 never needs.
@@ -102,6 +102,10 @@ Migrations are **forward-only**. There are no down-migrations because the databa
 > **Caveat (normative):** the database is the *only* home of **un-pushed local mutation**: a flag change or delete made offline and not yet synced (an item whose current state has diverged from its per-source base). Rebuild-by-resync therefore MAY lose such changes. A migration MUST preserve item and binding state; rebuild is a last resort, not a substitute for migrating.
 
 Because pre-3.35 SQLite could not drop or alter columns, migrations that reshape a table use the create-new / copy / drop-old / rename dance; on the required 3.37+ baseline `DROP COLUMN` is available directly.
+
+> **While this spec is `draft` (normative):** version 1 is not yet frozen, so a schema change MAY be folded into [migrations/0001_init.sql](./migrations/0001_init.sql) in place rather than added as version 2. `PRAGMA user_version` stays `1`, and the ordered forward-only rule above governs every version from the first frozen one onwards.
+>
+> The cost is that a store created by an earlier draft of version 1 is *not* detectably out of date: its `user_version` already matches, so the runner does nothing and the missing columns surface as query errors. An implementation servicing a draft store MUST therefore either reconcile the shape on open (adding a folded-in column with `ALTER TABLE … ADD COLUMN`, which is idempotent when guarded by `PRAGMA table_info`) or refuse the store with a clear message telling the operator to recreate it. Silently failing a query later is not acceptable. This whole allowance disappears when the spec leaves `draft`.
 
 ## 7. Concurrency and ownership
 
@@ -144,7 +148,14 @@ The `link_id` is the right *internal* key (stable, cross-source) but the wrong t
 
 ## 10. Sync model
 
-The store is shaped for offline-first synchronisation against one or more remote sources. A shared item holds the merged truth; a per-source binding records the base, the last state agreed with that source. A sync layer above the store derives what changed locally (the current item versus the binding's base) and what changed remotely, and reconciles the two. The detail `level` lets an item be known before its body is fetched, so enumeration stays cheap and bodies hydrate lazily. `deleted` carries a removal across sources until every one has dropped it; `conflicted` and `conflict_object` record an unresolved cross-source content divergence for the consumer to settle. A single-source store degenerates to one binding per item and never needs the cross-source memory.
+The store is shaped for offline-first synchronisation against one or more remote sources. A shared item holds the merged truth; a per-source binding records the base, the last state agreed with that source. A sync layer above the store derives what changed locally (the current item versus the binding's base) and what changed remotely, and reconciles the two. The detail `level` lets an item be known before its body is fetched, so enumeration stays cheap and bodies hydrate lazily. `deleted` carries a removal across sources until every one has dropped it. A single-source store degenerates to one binding per item and never needs the cross-source memory.
+
+Two content divergences are recorded, and they are **not the same fact**:
+
+- **Cross-source** (`items.conflicted`, `items.conflict_object`): two sources edited the shared body differently. It belongs to the item, since it is a statement about the item's sources disagreeing with each other.
+- **Source-versus-its-own-remote** (`bindings.conflicted`, `bindings.conflict_revision`): one source's own three-way merge diverged from its remote, and the sync layer left it unresolved. It belongs to that binding, since a two-source store can have one source conflicted with its server while the other is perfectly in sync.
+
+A store MUST persist both independently; neither MUST set the other. A sync layer that cannot read its unresolved conflicts back gains no memory of them, so it re-derives on every run the push the remote already rejected and never converges, and a client reading the store cannot tell which items need a human. A binding's conflict MUST be cleared when the sync layer writes any resolved state for it, so resolving is an ordinary edit rather than a dedicated operation.
 
 The store persists this model and services the operations in §12. Deriving pushes, merging and resolving conflicts belong to the sync layer above it, not to the store.
 
@@ -160,6 +171,8 @@ Two implementations produce byte-identical stores only if they encode the model 
 - **`link_id`** (TEXT): the cross-source identity (an item is keyed by it).
 - **`meta`** (TEXT): an opaque application-defined summary blob, or `NULL` until a `Meta` fetch. The store never parses it.
 - **`base_revision`** (TEXT): an opaque etag/modseq for mutable-content backends, or `NULL`.
+- **`conflicted`** (INTEGER, on a binding): `0` or `1` — whether *this source* and its own remote diverged and the sync layer left the placement unresolved. Distinct from `items.conflicted`, the cross-source divergence (§10).
+- **`conflict_revision`** (TEXT): the remote revision observed when the binding was marked conflicted, or `NULL`. Non-`NULL` only while `conflicted` is `1`; a binding that is not conflicted MUST NOT carry one, so a resolved binding cannot hand a stale revision to the next sync.
 - **`checkpoint`** (BLOB): opaque sync-cursor bytes, or `NULL`.
 - A binding's `base` is present iff at least one of `base_flags`, `base_object`, `base_revision` is non-`NULL`; absent, all three are `NULL`.
 - **`action`** (TEXT): one of `'add'`, `'set-flags'`, `'remove'`, `'move'`, `'copy'`, `'update'` (§14).
