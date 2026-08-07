@@ -23,11 +23,14 @@ This repository is the specification only, with no reference implementation. Imp
 - **Portable**: one SQLite file, byte-identical across every OS and architecture, with none of the case-sensitivity, forbidden-character or path-length pitfalls of file-per-item layouts.
 - **Transactional**: a whole flag-set change or a multi-item move is one atomic commit a reader never catches half-done.
 - **Deduplicated**: bodies are stored once by content hash, so a message filed in two mailboxes costs a single copy.
+- **Retentive**: an item the last source dropped is retained rather than erased, so an expunge upstream never destroys the local copy; purging is explicit, and restoring one costs no network.
 - **Rebuildable**: the database is a derived index over the authoritative bodies and the remote, so corruption is survivable by re-sync.
 
 ## Specification
 
 The complete, normative specification is [SPEC.md](./SPEC.md), written to RFC 2119. A pimdir store is a SQLite database (the queryable index and mutable state) plus a content-addressed blob directory (the item bodies, each stored as an immutable blob): it keeps the scale, indexing and cross-OS uniformity of SQLite while keeping large bodies beside the database rather than inside it. A blob is never rewritten; editing a mutable-content item (a CardDAV contact, a CalDAV event) writes a new blob and repoints the item at it, and the old blob is collected once unreferenced. The canonical schema and its forward-only migration scripts live under migrations/, so every implementation converges on the same on-disk store.
+
+Two properties are worth knowing before reading further. Removal is a **soft delete**: when the last source that held an item drops it, the store retains the row (keeping its body pinned) and hides it from the sync seam and from the live reads, so nothing re-derives it and nothing loses it; only an explicit purge, by id or by cutoff, truly deletes. And the **action queue** is the write door for every process that does not own the store: a producer appends a kind plus a versioned JSON payload, the owner applies it in append order, and an owner that does not recognise a kind, or cannot perform it, skips the row rather than parking it, so one queue carries store mutations any owner can apply beside intents only a particular tool can carry out.
 
 ## Layout
 
@@ -43,7 +46,7 @@ LICENSE-APACHE
 
 ## Status
 
-Draft. Schema version 1 is defined and stable in shape; there is no conformance suite yet. Breaking changes bump the schema version and ship as a new migration script.
+Draft. Schema version 1 is defined and stable in shape; there is no conformance suite yet. While the spec is draft, version 1 is edited in place rather than superseded: a schema change folds into 0001_init.sql, the version stays 1, and a store created by an earlier draft is recreated rather than migrated. Once the spec leaves draft, breaking changes bump the schema version and ship as a new migration script.
 
 ## AI disclosure
 

@@ -18,8 +18,10 @@ SELECT DISTINCT collection FROM queue WHERE error IS NULL;
 
 -- name: load_pending_actions
 -- The owner's drain: a collection's pending (non-parked) actions, in append
--- order. A reader MAY run the same statement to overlay pending actions on its
--- item projection (read-your-writes, SPEC.md §14).
+-- order. An action whose kind this owner cannot apply is skipped, not parked,
+-- so it comes back in this result until an owner that can apply it does
+-- (SPEC.md §14.2). A reader MAY run the same statement to overlay pending
+-- actions on its item projection (read-your-writes, SPEC.md §14).
 SELECT id, created_at, producer, action, payload, object_hash, attempts
 FROM queue WHERE collection = :collection AND error IS NULL ORDER BY id;
 
@@ -42,3 +44,13 @@ UPDATE queue SET attempts = :attempts, error = :error WHERE id = :id;
 -- The parked actions, for status surfaces and operator repair.
 SELECT id, created_at, producer, collection, action, payload, attempts, error
 FROM queue WHERE error IS NOT NULL ORDER BY id;
+
+-- name: cancel_action
+-- One queue row removed by request rather than by application, pending or
+-- parked (SPEC.md §14.5): a queued item withdrawn, or a performed intent
+-- acknowledged by the process that could carry it out. The same delete as
+-- delete_action, named apart because the trigger is a request, not an apply.
+-- It releases the row's object_hash pin, so it MUST run in one transaction with
+-- the refcount settle: a body nothing else references then falls to the
+-- ordinary sweep (SPEC.md §5, §12).
+DELETE FROM queue WHERE id = :id;

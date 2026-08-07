@@ -14,7 +14,8 @@
 -- most, the object upsert pinning its body), and the owner applies pending
 -- actions to the items and bindings, deleting each in the same transaction as
 -- its effects, so an action is applied exactly once. Payloads are versioned
--- JSON per action kind (SPEC.md §14).
+-- JSON per action kind, and kinds are extensible: an owner that cannot apply a
+-- kind skips the row, leaving it pending for one that can (SPEC.md §14).
 --
 -- Requires SQLite >= 3.37 (STRICT tables, DROP COLUMN).
 
@@ -69,6 +70,9 @@ CREATE TABLE objects (
 -- The shared truth of one logical item, keyed by its cross-source link id.
 -- `deleted` lingers after one source removes it, until every source has dropped
 -- it too — the cross-source delete memory that a single-source store never needs.
+-- Once the last source has dropped it, the row is RETAINED rather than deleted
+-- (`retained_at` non-NULL): it keeps its object_hash, so the body stays pinned
+-- and its blob survives GC, and only an explicit purge removes it (SPEC.md §16).
 CREATE TABLE items (
     collection      TEXT NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
     link_id         TEXT NOT NULL,         -- cross-source identity (Message-ID / vCard-iCal UID), internal
@@ -78,6 +82,8 @@ CREATE TABLE items (
     meta            TEXT,                  -- opaque summary (envelope); NULL until Meta-fetched
     level           INTEGER NOT NULL,      -- detail ladder: 0 probed, 1 meta, 2 full
     deleted         INTEGER NOT NULL DEFAULT 0,      -- 1 while a delete is propagating across sources
+    retained_at     TEXT,    -- RFC 3339 instant the last binding vanished; non-NULL means retained (soft-deleted)
+    retained_by     TEXT,    -- the source whose removal retired the item, diagnostic only
     conflicted      INTEGER NOT NULL DEFAULT 0,      -- 1 while a content conflict is unresolved
     conflict_object TEXT REFERENCES objects(hash),   -- the diverging body a Manual conflict recorded
     PRIMARY KEY (collection, link_id)
@@ -90,6 +96,8 @@ CREATE UNIQUE INDEX items_by_seq ON items(collection, seq);
 -- mailboxes); this indexes the "does this message already have a seq?" lookup that
 -- makes all its placements share one id.
 CREATE INDEX items_by_link ON items(link_id);
+-- Retained (soft-deleted) items: the purge sweep and the trash listing scan only these.
+CREATE INDEX items_retained ON items(collection, retained_at) WHERE retained_at IS NOT NULL;
 
 -- One source's binding of an item: its handle there, the base last synced with
 -- it (the three-way-merge baseline), and whether that source's own sync is
@@ -117,7 +125,7 @@ CREATE TABLE queue (
     created_at  TEXT    NOT NULL,                   -- RFC 3339 timestamp
     producer    TEXT    NOT NULL,                   -- enqueuing process, diagnostic only
     collection  TEXT    NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
-    action      TEXT    NOT NULL,                   -- 'add' | 'set-flags' | 'remove' | 'move' | 'copy' | 'update'
+    action      TEXT    NOT NULL,                   -- 'add' | 'set-flags' | 'remove' | 'move' | 'copy' | 'update' | app-defined (SPEC.md §14.3)
     payload     TEXT    NOT NULL,                   -- versioned JSON, shape per action (SPEC.md §14)
     object_hash TEXT    REFERENCES objects(hash),   -- pins the payload's body against GC, or NULL
     attempts    INTEGER NOT NULL DEFAULT 0,         -- apply attempts so far
