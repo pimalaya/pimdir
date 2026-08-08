@@ -50,7 +50,7 @@ CREATE TABLE collections (
     account     TEXT,                      -- owning account id, or NULL in a single-account store
     kind        TEXT NOT NULL,             -- media type: message/rfc822, text/vcard, text/calendar, text/plain
     name        TEXT NOT NULL,             -- logical name (INBOX, Contacts)
-    parent      TEXT REFERENCES collections(id) ON DELETE SET NULL,
+    parent      TEXT REFERENCES collections(id) ON UPDATE CASCADE ON DELETE SET NULL,
     color       TEXT,                      -- optional presentation
     description TEXT,
     sort_order  INTEGER,
@@ -71,7 +71,7 @@ CREATE INDEX collections_by_account ON collections(account) WHERE account IS NOT
 -- One row per source that syncs a collection (a server, a phone). A
 -- single-source collection has one row here; the sync cursor is per source.
 CREATE TABLE sources (
-    collection TEXT NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+    collection TEXT NOT NULL REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
     source     TEXT NOT NULL,              -- source id (e.g. 'left', 'right', 'phone')
     checkpoint BLOB,                        -- opaque remote sync cursor (QRESYNC/JMAP state, DAV sync-token)
     PRIMARY KEY (collection, source)
@@ -92,12 +92,13 @@ CREATE TABLE objects (
 -- (`retained_at` non-NULL): it keeps its object_hash, so the body stays pinned
 -- and its blob survives GC, and only an explicit purge removes it (SPEC.md §16).
 CREATE TABLE items (
-    collection      TEXT NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+    collection      TEXT NOT NULL REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
     link_id         TEXT NOT NULL,         -- cross-source identity (Message-ID / vCard-iCal UID), internal
     seq             INTEGER NOT NULL,      -- the message's public id: store-global, one per link_id (shared across its mailboxes and accounts), never reused
     flags           TEXT,                  -- JSON array of flag strings (shared mutable state)
     object_hash     TEXT REFERENCES objects(hash),  -- current body; NULL until hydrated
     meta            TEXT,                  -- opaque summary (envelope); NULL until Meta-fetched
+    sort_key        TEXT NOT NULL DEFAULT '',  -- the kind's ordering key, written beside meta; '' means unknown
     level           INTEGER NOT NULL,      -- detail ladder: 0 probed, 1 meta, 2 full
     deleted         INTEGER NOT NULL DEFAULT 0,      -- 1 while a delete is propagating across sources
     retained_at     TEXT,    -- RFC 3339 instant the last binding vanished; non-NULL means retained (soft-deleted)
@@ -118,6 +119,12 @@ CREATE UNIQUE INDEX items_by_seq ON items(collection, seq);
 CREATE INDEX items_by_link ON items(link_id);
 -- Retained (soft-deleted) items: the purge sweep and the trash listing scan only these.
 CREATE INDEX items_retained ON items(collection, retained_at) WHERE retained_at IS NOT NULL;
+-- Orders a collection by the kind's own sort key, with `seq` as the tiebreaker
+-- that makes a keyset page over a non-unique key well defined. Without this the
+-- only orderings a store can serve are by `link_id` (the primary key) or by
+-- `seq`, neither of which means anything to a reader: a mail client cannot ask
+-- for the newest messages and a calendar cannot ask for a date range.
+CREATE INDEX items_by_sort ON items(collection, sort_key, seq);
 
 -- One source's binding of an item: its handle there, the base last synced with
 -- it (the three-way-merge baseline), and whether that source's own sync is
@@ -135,7 +142,10 @@ CREATE TABLE bindings (
     conflicted        INTEGER NOT NULL DEFAULT 0,
     conflict_revision TEXT,                -- the remote revision observed when it did, or NULL
     PRIMARY KEY (collection, link_id, source),
-    FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON DELETE CASCADE
+    -- ON UPDATE CASCADE as well as ON DELETE: renaming a collection cascades
+    -- into items.collection, which is this composite key's parent, so without it
+    -- the rename is refused one level down (SPEC.md §12).
+    FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
 ) STRICT;
 
 -- The action queue (SPEC.md §14): mutations requested by processes that are not
@@ -144,7 +154,7 @@ CREATE TABLE queue (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,  -- global append order
     created_at  TEXT    NOT NULL,                   -- RFC 3339 timestamp
     producer    TEXT    NOT NULL,                   -- enqueuing process, diagnostic only
-    collection  TEXT    NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+    collection  TEXT    NOT NULL REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
     action      TEXT    NOT NULL,                   -- 'add' | 'set-flags' | 'remove' | 'move' | 'copy' | 'update' | app-defined (SPEC.md §14.3)
     payload     TEXT    NOT NULL,                   -- versioned JSON, shape per action (SPEC.md §14)
     object_hash TEXT    REFERENCES objects(hash),   -- pins the payload's body against GC, or NULL

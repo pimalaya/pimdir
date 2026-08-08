@@ -11,7 +11,12 @@
 -- Every shared item of a collection, retained ones excluded: the sync seam sees
 -- live items only. Hiding a retained row here is what keeps it from ever being
 -- re-derived, on a delta or on a full sync (SPEC.md §16).
-SELECT link_id, flags, object_hash, meta, level, deleted, conflicted, conflict_object
+--
+-- `sort_key` rides along although the sync layer has no use for it, because the
+-- reference write is a replace-all (SPEC.md §12): load, merge, delete, insert.
+-- Without it here, insert_item would have nothing to bind and every sync would
+-- silently reset the ordering of every item it touched.
+SELECT link_id, flags, object_hash, meta, sort_key, level, deleted, conflicted, conflict_object
 FROM items WHERE collection = :collection AND retained_at IS NULL;
 
 -- name: delete_items
@@ -40,23 +45,59 @@ UPDATE store_meta SET next_seq = next_seq + 1 WHERE id = 1
 RETURNING next_seq - 1;
 
 -- name: insert_item
-INSERT INTO items(collection, link_id, seq, flags, object_hash, meta, level, deleted, conflicted, conflict_object)
-VALUES(:collection, :link_id, :seq, :flags, :object_hash, :meta, :level, :deleted, :conflicted, :conflict_object);
+INSERT INTO items(collection, link_id, seq, flags, object_hash, meta, sort_key, level, deleted, conflicted, conflict_object)
+VALUES(:collection, :link_id, :seq, :flags, :object_hash, :meta, :sort_key, :level, :deleted, :conflicted, :conflict_object);
 
 -- The client read surface (SPEC.md §12.1): live-only reads keyed by the public
 -- id (`seq`), never by the internal link id.
 
 -- name: list_items_page
--- A keyset page of a collection's live items. :after is the exclusive lower
--- bound on link_id (the empty string starts from the beginning, since a link_id
--- is never empty), so paging rides the items primary key with no extra index.
-SELECT seq, link_id, flags, object_hash, meta, level FROM items
+-- A keyset page of a collection's live items in link-id order. :after is the
+-- exclusive lower bound on link_id (the empty string starts from the beginning,
+-- since a link_id is never empty), so paging rides the items primary key with no
+-- extra index.
+--
+-- Link-id order is arbitrary to a reader. It is the right page for a sweep that
+-- must see every item exactly once (an export, a re-projection); a reader
+-- presenting a list wants one of the two sort-key pages below.
+SELECT seq, link_id, flags, object_hash, meta, sort_key, level FROM items
 WHERE collection = :collection AND deleted = 0 AND link_id > :after
 ORDER BY link_id LIMIT :limit;
 
+-- name: list_items_page_asc
+-- A keyset page of a collection's live items in the kind's own ascending order
+-- (SPEC.md §12.1): A to Z for contacts, earliest first for mail and calendars.
+--
+-- The cursor is the pair (:after_key, :after_seq), because a sort key is not
+-- unique: two messages share a timestamp, two contacts share a name. `seq`
+-- breaks the tie, and being unique per collection it makes the page total. The
+-- empty string with seq 0 starts from the beginning, since no real key sorts
+-- before an unknown one ascending.
+SELECT seq, link_id, flags, object_hash, meta, sort_key, level FROM items
+WHERE collection = :collection AND deleted = 0
+  AND (sort_key, seq) > (:after_key, :after_seq)
+ORDER BY sort_key, seq LIMIT :limit;
+
+-- name: list_items_page_desc
+-- The same page descending: newest first for mail and calendars, Z to A for
+-- contacts. Start from the beginning by binding the largest key the store can
+-- hold; an implementation SHOULD expose this as "no cursor" rather than make a
+-- caller invent a sentinel.
+SELECT seq, link_id, flags, object_hash, meta, sort_key, level FROM items
+WHERE collection = :collection AND deleted = 0
+  AND (sort_key, seq) < (:after_key, :after_seq)
+ORDER BY sort_key DESC, seq DESC LIMIT :limit;
+
+-- name: set_sort_key
+-- Restates one item's ordering key, for a re-projection that derives sort keys
+-- for items already stored (a store written before the kind had a convention, or
+-- one whose convention changed). Ordinary writes carry it in insert_item.
+UPDATE items SET sort_key = :sort_key
+WHERE collection = :collection AND link_id = :link_id;
+
 -- name: get_item
 -- One live item by its public id, the client-facing key.
-SELECT seq, link_id, flags, object_hash, meta, level FROM items
+SELECT seq, link_id, flags, object_hash, meta, sort_key, level FROM items
 WHERE collection = :collection AND seq = :seq AND deleted = 0;
 
 -- name: count_items
@@ -119,7 +160,7 @@ WHERE collection = :collection AND link_id = :link_id;
 -- list_items_page, and the only read that returns them. Same :after contract,
 -- the exclusive lower bound on link_id, so paging rides the items primary key.
 -- The body size comes from the object the row still pins, NULL when unhydrated.
-SELECT i.seq, i.link_id, i.flags, i.object_hash, i.meta, i.level,
+SELECT i.seq, i.link_id, i.flags, i.object_hash, i.meta, i.sort_key, i.level,
        i.retained_at, i.retained_by, o.size
 FROM items i LEFT JOIN objects o ON o.hash = i.object_hash
 WHERE i.collection = :collection AND i.retained_at IS NOT NULL AND i.link_id > :after

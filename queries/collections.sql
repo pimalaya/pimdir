@@ -30,6 +30,22 @@ ON CONFLICT(id) DO UPDATE SET kind = excluded.kind;
 -- regroups the collection and leaves its seqs, link ids and objects alone.
 UPDATE collections SET account = :account WHERE id = :collection;
 
+-- name: rename_collection
+-- Give a collection a new id, carrying its whole contents with it: every
+-- foreign key onto collections(id) is ON UPDATE CASCADE, so the items, sources,
+-- bindings, queue rows and child collections follow in the same statement
+-- (SPEC.md §12).
+--
+-- This is the only safe way to change an id. Deleting and recreating the
+-- collection instead destroys the cache: the ON DELETE CASCADE takes every item
+-- and binding with it, so a rename would silently become a full re-download and
+-- would drop any staged local change that had not been pushed yet.
+--
+-- Two things make an id change: a server renaming the collection (an IMAP
+-- RENAME, a DAV move), and an owner renaming the account whose name it
+-- namespaced the id with (§9.2). Both land here.
+UPDATE collections SET id = :new_id WHERE id = :collection;
+
 -- name: load_account
 SELECT account FROM collections WHERE id = :collection;
 

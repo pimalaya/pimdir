@@ -66,10 +66,10 @@ While this spec is `draft`, version 1 is **edited in place** (§6): a schema cha
 The canonical schema is migrations/0001_init.sql; it is normative and this section is its prose companion.
 
 - **`store_meta`** (one row): `format`, `version`, `hash_algo` (the hash used for every object: `blake3` RECOMMENDED, or `sha256-128`; recorded here so it is discoverable and swappable by a future migration), `created_at`.
-- **`collections`**: `id`, the owning `account` (§9.2, `NULL` in a single-account store), `kind` (the media type shared by every item in it), `name`, `parent` (hierarchy by reference, never by row nesting), optional presentation (`color`, `description`, `sort_order`), the cross-source content-conflict `conflict` policy, and the handle-space `generation` (§15).
+- **`collections`**: `id`, the owning `account` (§9.2, `NULL` in a single-account store), `kind` (the media type shared by every item in it), `name`, `parent` (hierarchy by reference, never by row nesting), optional presentation (`color`, `description`, `sort_order`), the cross-source content-conflict `conflict` policy, and the handle-space `generation` (§15). Every foreign key onto `id` is `ON UPDATE CASCADE`, so a collection can be renamed without losing its contents (§12); `ON DELETE` stays `CASCADE` (`SET NULL` for `parent`), so removing a collection still removes what it held.
 - **`sources`**: one row per source that syncs a collection (a server, a phone), keyed `(collection, source)`, carrying that source's opaque `checkpoint`. A single-source collection has one row.
 - **`objects`**: `hash` (primary key, under `hash_algo`), `size`, and `refcount` (§5, §8). The bytes are *not* stored here.
-- **`items`**: the shared truth of one logical item, keyed `(collection, link_id)`. Carries the mutable `flags` (a JSON array of strings), the current `object_hash`, the opaque `meta` summary, the detail `level` (0 probed → 1 meta → 2 full), and the cross-source state `deleted` / `conflicted` / `conflict_object`. It also carries `seq`, the item's store-global **public id** (§9.1): the `link_id` is the internal cross-source identity, but a client shows `seq` and resolves it back to `link_id`. Finally it carries the retention stamps `retained_at` (the RFC 3339 instant the item's last source binding vanished, `NULL` while it is live) and `retained_by` (the source whose removal retired it, diagnostic only): a non-`NULL` `retained_at` is the persisted form of "no source holds this any more, and the store kept it anyway" (§16). The partial index `items_retained` scopes the trash listing and the purge sweep to those rows.
+- **`items`**: the shared truth of one logical item, keyed `(collection, link_id)`. Carries the mutable `flags` (a JSON array of strings), the current `object_hash`, the opaque `meta` summary, the `sort_key` that orders it within its collection (§9.3), the detail `level` (0 probed → 1 meta → 2 full), and the cross-source state `deleted` / `conflicted` / `conflict_object`. It also carries `seq`, the item's store-global **public id** (§9.1): the `link_id` is the internal cross-source identity, but a client shows `seq` and resolves it back to `link_id`. Finally it carries the retention stamps `retained_at` (the RFC 3339 instant the item's last source binding vanished, `NULL` while it is live) and `retained_by` (the source whose removal retired it, diagnostic only): a non-`NULL` `retained_at` is the persisted form of "no source holds this any more, and the store kept it anyway" (§16). The partial index `items_retained` scopes the trash listing and the purge sweep to those rows.
 - **`bindings`**: one source's binding of an item, keyed `(collection, link_id, source)`. Carries the item's `handle` on that source, the three-way-merge base (`base_flags`, `base_object`, `base_revision`) — the "light cache of the last agreed state" — and the unresolved-conflict pair `conflicted` / `conflict_revision` (§10). A single-source item has one binding; a two-server or server-plus-phone item has two.
 - **`queue`**: the action queue (§14): mutations requested by processes that are not the store owner, applied by the owner in append order. Carries the append `id`, `created_at`, the diagnostic `producer`, the target `collection`, the `action` kind, the versioned JSON `payload`, the GC-pinning `object_hash`, and the `attempts` / `error` parking state.
 
@@ -175,6 +175,30 @@ This is the same discipline the rest of the store follows: `kind` is declared an
 
 **Configuration lives outside.** The store records which account a collection belongs to and nothing else about it: no credentials, no endpoints, no display name, no enabled flag. Those belong to whatever configures the owner. A consequence worth stating: the store learns an account only through its collections, so an account with no collection yet does not appear in a listing, and one whose collections are all removed stops appearing. A consumer needing the full roster reads it from its own configuration and uses the store for content.
 
+**One caution on namespacing.** An owner that prefixes its collection ids MUST make the prefix unambiguous, which means the separator it chooses may appear in the collection name but not in the account id. A hierarchical name is the common case and must survive (`work/[Gmail]/All Mail` is account `work`, collection `[Gmail]/All Mail`, recovered by stripping the known account and one separator). But an account id containing the separator makes the id ambiguous: account `a` with collection `b/c` and account `a/b` with collection `c` spell the same string, and nothing in the store can tell them apart afterwards. The store does not enforce this, because it neither parses nor validates the id; an owner that namespaces MUST enforce it on its own account ids.
+
+**Choose an account id that does not change.** The id is opaque to the store, so what it is made of is the owner's choice, and the choice matters: an id an owner namespaces its collection ids with becomes part of every one of them. Naming it after something the user can rename (a display name, a config section title) turns a rename into an id change for every collection of that account. That is survivable, since `rename_collection` exists and carries a collection's whole contents with it (§12), but it is work the owner does not have to create for itself. An id that is stable by construction, generated once and kept beside the account's configuration, costs nothing and never needs it.
+
+The store deliberately holds no account row of its own to make renaming a single update. It learns an account only through its collections, which keeps it from becoming a second, competing register of what accounts exist, to be reconciled against the one the owner already has.
+
+### 9.3 The sort key
+
+`link_id` and `seq` are identity, and neither is an **order**. A link id is a `Message-ID`; a `seq` is allocation order, which is close to arrival order on a first sync and unrelated to it afterwards. Keyed on those alone a store can be paged exhaustively and cannot answer the question every reader actually asks: *the newest fifty messages*, *this week's events*, *contacts from A*.
+
+Each item therefore carries a `sort_key`: one TEXT column giving its position in its collection's natural order.
+
+- **Kind-agnostic column, kind-specific meaning.** The store defines the column, the ordering rule and the paging statements; what a key *means* is per kind (§13), because only the writer knows whether an item is ordered by a date or by a name. One column serves all of them, so a reader pages a mailbox, an address book and a calendar through the same statement.
+- **Written, never derived.** The `sort_key` is written by the same writer that writes `meta`, in the same insert. The store MUST NOT parse `meta` to obtain it. This is deliberate and is the reason for a column rather than an expression over the summary blob: an index on `json_extract(meta, …)` would make `meta` normative JSON with a reserved key, for every kind, present and future, and would end the property that the store never looks inside it.
+- **TEXT, and byte order is the order.** The column is compared with SQLite's default `BINARY` collation, so the writer is responsible for encoding a key whose byte order is the intended order (§11). For a timestamp that means RFC 3339 normalised to UTC at a fixed width. This keeps the store free of type-per-kind branching: a name and an instant are both just bytes that sort.
+- **`''` means unknown**, and is the default, so an item is orderable before it has been summarised at all. An unknown key sorts before every real one ascending and after every real one descending, which puts not-yet-summarised items at the end of a newest-first mail listing, where they belong, and at the head of an A-to-Z contact listing, where they are visible as needing attention. A store MUST NOT treat `''` as a value with meaning beyond that.
+- **`seq` is the tiebreaker.** A sort key is not unique: two messages share a timestamp, two contacts share a name. Paging orders by `(sort_key, seq)`, and `seq` being unique per collection makes the page total, so no item is skipped or repeated across page boundaries.
+- **Restatable.** `set_sort_key` exists for a re-projection: a store written before its kind had a convention, or one whose convention changed, can have keys derived and written for items already present without re-fetching their bodies. It is not part of the ordinary write path. It is also the seam a consumer uses while its sync engine does not yet carry the key inline: the consumer owns the meta convention, so it can derive keys from summaries it already wrote and restate them after a sync, and drop the pass once the key rides the ordinary insert.
+- **Preserved by a write that does not restate it.** A `write` MUST leave an item's existing key alone unless it carries a new one. This is a real constraint rather than a truism, because the reference write is a replace-all (§12): it loads the collection's items, merges, deletes and re-inserts. `load_items` therefore returns `sort_key` and the replace-all carries it back, although nothing in the sync model reads it. Without that, every sync would silently reset the ordering of every item it touched, and a consumer restating keys afterwards would be racing its own sync forever.
+
+The paging statements are served by the `items_by_sort` index as an index seek, not a scan: `EXPLAIN QUERY PLAN` for a descending page reports `SEARCH items USING INDEX items_by_sort (collection=? AND (sort_key,seq)<(?,?))`. That is the whole point of a column over an expression on `meta`, and of a keyset cursor over `OFFSET`: the cost of a page does not grow with how deep into the collection it sits.
+
+A key is a *presentation* fact, not a sync one. Nothing in §10 reads it, no merge keys on it, and two stores that disagree about it still converge; a wrong key mis-sorts a list and loses nothing.
+
 ## 10. Sync model
 
 The store is shaped for offline-first synchronisation against one or more remote sources. A shared item holds the merged truth; a per-source binding records the base, the last state agreed with that source. A sync layer above the store derives what changed locally (the current item versus the binding's base) and what changed remotely, and reconciles the two. The detail `level` lets an item be known before its body is fetched, so enumeration stays cheap and bodies hydrate lazily. `deleted` carries a removal across sources until every one has dropped it; when the last one has, the item is **retired rather than erased** (§16). A single-source store degenerates to one binding per item and never needs the cross-source memory.
@@ -199,6 +223,7 @@ Two implementations produce byte-identical stores only if they encode the model 
 - **`object_hash` / `base_object` / `conflict_object`** (TEXT): a content hash under `store_meta.hash_algo`, base32, or `NULL`.
 - **`link_id`** (TEXT): the cross-source identity (an item is keyed by it).
 - **`meta`** (TEXT): an opaque application-defined summary blob, or `NULL` until a `Meta` fetch. The store never parses it.
+- **`sort_key`** (TEXT): the item's position in its collection's natural order (§9.3), written by the same writer that writes `meta` and never derived by the store. `''` means *unknown*, and is the default, so an item is orderable from the moment it exists. Its ordering is SQLite's default `BINARY` collation, so a writer MUST encode the key so that byte order **is** the intended order: a timestamp as RFC 3339 in UTC at a fixed width (`2026-08-01T10:00:00Z`), never a local offset, since `+02:00` and `Z` sort apart while naming the same instant.
 - **`base_revision`** (TEXT): an opaque etag/modseq for mutable-content backends, or `NULL`.
 - **`conflicted`** (INTEGER, on a binding): `0` or `1` — whether *this source* and its own remote diverged and the sync layer left the placement unresolved. Distinct from `items.conflicted`, the cross-source divergence (§10).
 - **`conflict_revision`** (TEXT): the remote revision observed when the binding was marked conflicted, or `NULL`. Non-`NULL` only while `conflicted` is `1`; a binding that is not conflicted MUST NOT carry one, so a resolved binding cannot hand a stale revision to the next sync.
@@ -240,6 +265,18 @@ A collection's `kind` (§4.3) is **declared, never derived**: which media type a
 
 The collection's `account` (§9.2) is configuration in exactly the same sense, and both creation paths therefore bind it. Neither overwrites it: `ensure_collection` inserts or does nothing, and `set_collection_kind` updates the `kind` alone, so a collection cannot change accounts as a side effect of a sync declaring its media type. Re-accounting a collection is the deliberate **`set_collection_account(collection, account)`**. Because the account partitions no identifier (§9.2), moving a collection regroups it and disturbs nothing: `seq`s, link ids and objects are unaffected.
 
+**Renaming a collection** is **`rename_collection(collection, new_id)`**, and it is the *only* safe way to change an id. Every foreign key onto `collections(id)` is `ON UPDATE CASCADE`, so the collection's items, bindings, sources, queue rows and child collections follow the id in the same statement, and the collection keeps its entire contents.
+
+The alternative an owner might reach for, deleting the row and recreating it under the new id, is destructive and silently so: the `ON DELETE CASCADE` takes every item and binding with it, turning a rename into a full re-download and discarding any staged local change that had not been pushed. An id also cannot simply be `UPDATE`d without the cascade: with `PRAGMA foreign_keys = ON` and dependent rows present, the default `NO ACTION` refuses it.
+
+Two things make an id change, and both land here: a server renaming the collection (an IMAP `RENAME`, a DAV move), and an owner renaming an account whose id it namespaced its collection ids with (§9.2). The second is avoidable by choosing a stable account id; the first is not avoidable at all, which is why the cascade exists.
+
+An account rename is therefore one `rename_collection` per collection of that account, plus `set_collection_account` to regroup them; the collection ids of an account are independent strings, so renaming one does not rename its children. Run them in one transaction and the account moves atomically or not at all.
+
+The cascade is required on two foreign keys, not one. `collections(id)` is the obvious parent, but `items(collection, link_id)` is also a parent, of `bindings`, and cascading the first makes `items.collection` change, which the second refuses under the default `NO ACTION`. A store that adds `ON UPDATE CASCADE` only to the keys naming `collections` will find its renames rejected one level down.
+
+This is the one operation where §4.1's `PRAGMA foreign_keys = ON` stops being hygiene and becomes correctness. With foreign keys off, the rename does not fail: it succeeds and cascades nothing, leaving every item, binding, source and queue row pointing at an id that no longer exists. A refusal is recoverable; a silent orphaning of the whole collection is not.
+
 ### 12.1 Reading the store
 
 The operations above serve the store's **owner**. A **reader** (§7) opens the database read-only and projects it as a local backend: listing collections, paging items, resolving one of them. These reads are kind-agnostic, the same statements serving mail, contacts and calendars, and they are keyed by the public `seq` (§9.1), never by the internal `link_id`. Each one below is named after the reference statement that services it (§4.4), with its parameters.
@@ -247,7 +284,8 @@ The operations above serve the store's **owner**. A **reader** (§7) opens the d
 - **`list_collections()`** returns every collection with its owning `account` (§9.2), display metadata and `generation` (§15), ordered by `sort_order` then `id`.
 - **`list_collections_by_account(account)`** returns one account's collections, the same shape, and is the filter axis of a merged view; binding `NULL` selects the collections of a single-account store.
 - **`list_accounts()`** returns the accounts owning at least one collection. A store knows an account only through its collections (§9.2), so this is not a configured roster and a consumer holding one reads it from its own configuration instead.
-- **`list_items_page(collection, after, limit)`** returns a keyset page of the collection's live items; `:after` is the exclusive lower bound on `link_id`, the empty string starting from the beginning. Keyset rather than `OFFSET`, so paging costs the same at any depth and does not shift under a concurrent write.
+- **`list_items_page(collection, after, limit)`** returns a keyset page of the collection's live items **in link-id order**; `:after` is the exclusive lower bound on `link_id`, the empty string starting from the beginning. Keyset rather than `OFFSET`, so paging costs the same at any depth and does not shift under a concurrent write. Link-id order means nothing to a reader: this is the page for a sweep that must see every item exactly once (an export, a re-projection), and a reader presenting a list wants one of the two below.
+- **`list_items_page_asc(collection, after_key, after_seq, limit)`** and **`list_items_page_desc(...)`** return a keyset page in the collection's natural order (§9.3): earliest or newest first for mail and calendars, A to Z or Z to A for contacts. The cursor is the pair `(sort_key, seq)`, since a sort key is not unique and `seq` is what makes the page total. An implementation SHOULD expose the first page as "no cursor" rather than have a caller invent a sentinel.
 - **`get_item(collection, seq)`** returns one live item.
 - **`count_items(collection)`** counts the collection's live items.
 - **`seq_by_link(collection, link_id)`** resolves the public id of an item whose link id the caller already holds, typically one it just staged through the queue.
@@ -271,6 +309,8 @@ A reader detects change cheaply by polling `PRAGMA data_version`, which moves wh
 
 The store never parses `meta` (§11): it is an opaque, application-defined summary blob. But the *writer* of a collection (a sync connector) and its *readers* (a client rendering a list) must agree on its shape per `kind`, so a reader can display an item without fetching its body. These conventions are **informative**, not enforced by the store, and each is JSON with a leading integer `v` for versioning. Absent optional fields mean "unknown".
 
+Each kind also fixes what its `sort_key` (§9.3) holds. That is a separate column rather than a field of `meta`, but it is agreed here for the same reason and by the same two parties.
+
 ### `message/rfc822` (`v: 1`)
 
 ```json
@@ -286,6 +326,10 @@ The store never parses `meta` (§11): it is an opaque, application-defined summa
 ```
 
 Flags are **not** in `meta`; they are the item's `flags` (§11). It is written by the sync connector on both the enumerate/`Meta` and the streamed/`Full` paths, and read by any client projecting the collection.
+
+**`sort_key`**: the `Date:` header, normalised to RFC 3339 in UTC at seconds precision (`2026-08-01T10:00:00Z`), so byte order is chronological order. Read descending for the usual newest-first listing. A message with no parseable date keeps `''` and lands at the end of that listing.
+
+Mail is the kind where the two derivations must agree (see the note above): the `Meta` path formats the envelope's date and the `Full` path formats the parsed body's, and a key that differs between them re-sorts the same message when it is hydrated.
 
 ### `text/vcard` (`v: 1`)
 
@@ -303,7 +347,11 @@ Unlike mail, a card has **one** derivation: a CardDAV `sync-collection` REPORT r
 
 Cards are **mutable**, which mail is not: the same card is edited in place under a changing ETag, so its `revision` (§11) moves while its `link_id` does not.
 
-The other kinds (`text/calendar`) define their own `v: 1` convention the same way when they are first written.
+**`sort_key`**: the display name (`fn`), normalised for ordering rather than for display: casefolded, with leading and trailing whitespace removed. Read ascending. A card with no `FN` keeps `''` and sorts to the head, where a nameless contact is visible rather than buried.
+
+Normalising is what makes the order stable across writers: two connectors that disagree about whether to keep the original casing would otherwise interleave `alice` and `Alice` differently in the same address book.
+
+The other kinds (`text/calendar`) define their own `v: 1` convention the same way when they are first written. Its `sort_key` will be `DTSTART`, normalised exactly as mail's `Date:` is, which is what lets a date-range read page a calendar with the same statements.
 
 ## 14. Action queue
 
