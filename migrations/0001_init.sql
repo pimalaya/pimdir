@@ -33,8 +33,21 @@ CREATE TABLE store_meta (
 
 -- Collections: mailboxes, address books, calendars. Hierarchy is by `parent`,
 -- never by nesting rows.
+--
+-- `account` is the multi-account axis (SPEC.md §9.2): NULL in a single-account
+-- store, an opaque owner-chosen id when one store holds several. It groups; it
+-- neither keys nor partitions. `id` stays unique store-wide, so an owner filing
+-- two accounts here namespaces their collection ids (`work/INBOX`,
+-- `home/INBOX`) and records the grouping in this column rather than leaving
+-- readers to parse it back out of the id.
+--
+-- No identifier is scoped by it: an identity or a body occurring in two
+-- accounts is a fact the store reports (list_link_placements,
+-- list_object_placements) and an interface interprets. Mail lists the
+-- placements, contacts may merge them; the store decides neither.
 CREATE TABLE collections (
-    id          TEXT PRIMARY KEY,          -- stable id (base32 uuid or backend id)
+    id          TEXT PRIMARY KEY,          -- stable id (base32 uuid or backend id), unique store-wide
+    account     TEXT,                      -- owning account id, or NULL in a single-account store
     kind        TEXT NOT NULL,             -- media type: message/rfc822, text/vcard, text/calendar, text/plain
     name        TEXT NOT NULL,             -- logical name (INBOX, Contacts)
     parent      TEXT REFERENCES collections(id) ON DELETE SET NULL,
@@ -49,6 +62,11 @@ CREATE TABLE collections (
     -- (SPEC.md §15).
     generation  INTEGER NOT NULL DEFAULT 1
 ) STRICT;
+
+-- "Every collection of this account", the merged view's filter axis and the
+-- scope of the seq lookup below. Partial: a single-account store writes no
+-- account and pays for no index.
+CREATE INDEX collections_by_account ON collections(account) WHERE account IS NOT NULL;
 
 -- One row per source that syncs a collection (a server, a phone). A
 -- single-source collection has one row here; the sync cursor is per source.
@@ -76,7 +94,7 @@ CREATE TABLE objects (
 CREATE TABLE items (
     collection      TEXT NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
     link_id         TEXT NOT NULL,         -- cross-source identity (Message-ID / vCard-iCal UID), internal
-    seq             INTEGER NOT NULL,      -- the message's public id: store-global, one per link_id (shared across its mailboxes), never reused
+    seq             INTEGER NOT NULL,      -- the message's public id: store-global, one per link_id (shared across its mailboxes and accounts), never reused
     flags           TEXT,                  -- JSON array of flag strings (shared mutable state)
     object_hash     TEXT REFERENCES objects(hash),  -- current body; NULL until hydrated
     meta            TEXT,                  -- opaque summary (envelope); NULL until Meta-fetched
@@ -94,7 +112,9 @@ CREATE TABLE items (
 CREATE UNIQUE INDEX items_by_seq ON items(collection, seq);
 -- The same link id can occur in several collections (a message filed in two
 -- mailboxes); this indexes the "does this message already have a seq?" lookup that
--- makes all its placements share one id.
+-- makes all its placements share one id. Also services list_link_placements,
+-- the read that reports every collection and account an identity occurs in
+-- (SPEC.md §9.2).
 CREATE INDEX items_by_link ON items(link_id);
 -- Retained (soft-deleted) items: the purge sweep and the trash listing scan only these.
 CREATE INDEX items_retained ON items(collection, retained_at) WHERE retained_at IS NOT NULL;

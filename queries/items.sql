@@ -23,7 +23,13 @@ DELETE FROM items WHERE collection = :collection AND retained_at IS NULL;
 
 -- name: seq_for_link_any
 -- The message's existing public id, if any placement of this link_id already has
--- one (in any collection), so all placements of a message share one id.
+-- one (in any collection, of any account), so all placements of one link id
+-- share one id.
+--
+-- Deliberately unscoped (SPEC.md §9.2): the seq is the short form of the link
+-- id, so equal link ids share it wherever they sit. That is a restatement of a
+-- fact the content carries, not a claim that the placements are one thing;
+-- whether they are is the interface's call, made from list_link_placements.
 SELECT seq FROM items WHERE link_id = :link_id LIMIT 1;
 
 -- name: bump_next_seq
@@ -56,6 +62,30 @@ WHERE collection = :collection AND seq = :seq AND deleted = 0;
 -- name: count_items
 -- A collection's live item count (tombstones excluded).
 SELECT count(*) FROM items WHERE collection = :collection AND deleted = 0;
+
+-- The multiplicity reads (SPEC.md §9.2): where one identity, or one body, sits
+-- across the whole store. They report a fact and take no position on it: a mail
+-- view lists the placements, a contact view may offer to merge them, and both
+-- read the same rows.
+
+-- name: list_link_placements
+-- Every live placement of one link id, with the collection and account it sits
+-- in. The same vCard UID in two address books of two accounts returns two rows;
+-- what that means is the caller's to decide.
+SELECT i.collection, c.account, i.seq, i.object_hash, i.flags, i.level
+FROM items i JOIN collections c ON c.id = i.collection
+WHERE i.link_id = :link_id AND i.deleted = 0 AND i.retained_at IS NULL
+ORDER BY c.account IS NULL, c.account, i.collection;
+
+-- name: list_object_placements
+-- Every live placement of one body, by content hash. The dedup axis rather than
+-- the identity one (SPEC.md §9): identical bytes, whoever received them, so
+-- this finds the same message delivered to two accounts even when the two
+-- servers rewrote its link id.
+SELECT i.collection, c.account, i.seq, i.link_id, i.flags, i.level
+FROM items i JOIN collections c ON c.id = i.collection
+WHERE i.object_hash = :hash AND i.deleted = 0 AND i.retained_at IS NULL
+ORDER BY c.account IS NULL, c.account, i.collection;
 
 -- name: seq_by_link
 -- Resolves an item's public id from its internal link id: the inverse of

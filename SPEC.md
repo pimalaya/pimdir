@@ -23,6 +23,7 @@ Restricting to SQLite specifically (not "any SQL database") is deliberate: the p
 - **Store**: a directory holding one database file and one blob directory.
 - **Database**: the SQLite file pimdir.db holding collections, items and their per-source bindings, objects (index rows) and checkpoints.
 - **Collection**: a mailbox, address book or calendar; a row in `collections`.
+- **Account**: the identity a collection belongs to (a mail account, a CardDAV login). An opaque owner-chosen id in `collections.account`, `NULL` when the store holds one account. It groups collections for reading and filtering; it partitions no identifier, and the store never interprets it (§9.2).
 - **Item**: one message, event, task or contact.
 - **Placement**: one item's presence in one collection: its handle, mutable state (flags), detail level, sync base, and a pointer to its object. The same logical item in two collections is two placements sharing one object.
 - **Object**: a content-addressed, immutable item body. Index row in `objects`; bytes in a blob file.
@@ -65,7 +66,7 @@ While this spec is `draft`, version 1 is **edited in place** (§6): a schema cha
 The canonical schema is migrations/0001_init.sql; it is normative and this section is its prose companion.
 
 - **`store_meta`** (one row): `format`, `version`, `hash_algo` (the hash used for every object: `blake3` RECOMMENDED, or `sha256-128`; recorded here so it is discoverable and swappable by a future migration), `created_at`.
-- **`collections`**: `id`, `kind` (the media type shared by every item in it), `name`, `parent` (hierarchy by reference, never by row nesting), optional presentation (`color`, `description`, `sort_order`), the cross-source content-conflict `conflict` policy, and the handle-space `generation` (§15).
+- **`collections`**: `id`, the owning `account` (§9.2, `NULL` in a single-account store), `kind` (the media type shared by every item in it), `name`, `parent` (hierarchy by reference, never by row nesting), optional presentation (`color`, `description`, `sort_order`), the cross-source content-conflict `conflict` policy, and the handle-space `generation` (§15).
 - **`sources`**: one row per source that syncs a collection (a server, a phone), keyed `(collection, source)`, carrying that source's opaque `checkpoint`. A single-source collection has one row.
 - **`objects`**: `hash` (primary key, under `hash_algo`), `size`, and `refcount` (§5, §8). The bytes are *not* stored here.
 - **`items`**: the shared truth of one logical item, keyed `(collection, link_id)`. Carries the mutable `flags` (a JSON array of strings), the current `object_hash`, the opaque `meta` summary, the detail `level` (0 probed → 1 meta → 2 full), and the cross-source state `deleted` / `conflicted` / `conflict_object`. It also carries `seq`, the item's store-global **public id** (§9.1): the `link_id` is the internal cross-source identity, but a client shows `seq` and resolves it back to `link_id`. Finally it carries the retention stamps `retained_at` (the RFC 3339 instant the item's last source binding vanished, `NULL` while it is live) and `retained_by` (the source whose removal retired it, diagnostic only): a non-`NULL` `retained_at` is the persisted form of "no source holds this any more, and the store kept it anyway" (§16). The partial index `items_retained` scopes the trash listing and the purge sweep to those rows.
@@ -141,13 +142,38 @@ Four identifiers, kept distinct:
 
 Deduplication keys on equal **hash**, so a message filed in two mailboxes, or a body already fetched by another collection, is stored once. Opening it in a second collection costs no network. Merging keys on **link id**, conservatively: a missed dedup is harmless, a wrong merge hides data.
 
+All four are store-wide, and stay so when one store holds several accounts (§9.2). An identity or a body occurring in more than one collection, or more than one account, is a fact the store reports rather than a merge it performs: §12.1's `list_link_placements` and `list_object_placements` return where, and the consumer decides what that means for its kind.
+
 ### 9.1 The public id (`seq`)
 
 The `link_id` is the right *internal* key (stable, cross-source) but the wrong thing to show a user: it is a long `Message-ID`/`UID` string. Each item therefore carries a `seq`: a small integer a consumer displays and accepts wherever it would otherwise take a link id (read, flag, move, delete). It is a property of the **message**, not of a mailbox placement, consistent with dedup and a merged view:
 
-- **One id per message, store-global.** A message filed in several mailboxes (the same `link_id`) keeps the **same** `seq` in every one of them, so a merged / cross-mailbox view shows it once under one id and ids never clash between mailboxes. The `seq` is drawn from a single store-wide counter (`store_meta.next_seq`), not a per-collection one.
+- **One id per link id, store-global.** A message filed in several mailboxes (the same `link_id`) keeps the **same** `seq` in every one of them, so a merged / cross-mailbox view shows it once under one id and ids never clash between mailboxes. The `seq` is drawn from a single store-wide counter (`store_meta.next_seq`), not a per-collection one. This holds across accounts too (§9.2): the `seq` is the short form of the `link_id`, so equal link ids share it wherever they sit, which reports their equality without asserting that the placements are one thing.
 - **Assigned once, monotonic, never reused.** The store assigns a message's `seq` the first time it inserts an item with that `link_id` (in any collection) and reuses it for every later placement of the same `link_id`. The counter only ever increases, so a `seq` is not reused even after the message is deleted everywhere. A stale id never silently addresses a different message.
 - **Resolved back to `link_id`.** A consumer reads/edits by `(collection, seq)`; the store maps it to the `link_id` and operates on the link id internally. `(collection, seq)` is unique (one placement per message per collection).
+
+### 9.2 Accounts
+
+One store MAY hold the collections of several accounts. `collections.account` carries an opaque, owner-chosen account id (an address, a config name); it is `NULL` in a single-account store, which is the shape everything below degenerates to.
+
+**What the column is.** A grouping and scoping key, not an addressing one. `collections.id` stays unique store-wide, so an owner filing two accounts in one store namespaces their collection ids (`work/INBOX`, `home/INBOX`) exactly as it would have without this column. The column's job is to make the grouping a query rather than a parse: "every collection of this account", the filter axis of a merged view, is an indexed `WHERE`, not a prefix match a reader has to know the owner's naming convention to perform.
+
+**What it scopes: nothing.** The account partitions no identifier. Link ids, hashes and `seq`s all keep the meaning §9 gives them, store-wide, whatever account a collection belongs to. The store reports multiplicity and takes no position on it:
+
+- The same `link_id` in two accounts' collections is **two placements sharing one `seq`**, because `seq` is the short form of the link id (§9.1) and the link id is genuinely equal. That is a restatement of what the content carries, not a claim that the two are one thing.
+- The same body in two accounts is **one object, two placements**, refcounted twice (§5). Bodies carry no account, so dedup never did.
+
+**Deciding what multiplicity means is the interface's job, not the store's.** The store's contract is to make it visible: `list_link_placements(link_id)` and `list_object_placements(hash)` (§12.1) return every collection and account an identity or a body occurs in. A mail view reads those and lists the placements, because two receipts of a newsletter have two read states and two servers. A contact view reads the same rows and may offer to merge them, because one person in two address books is usually one person. Neither behaviour is baked in, so both remain possible, and a kind the spec has not anticipated is not pre-judged.
+
+This is the same discipline the rest of the store follows: `kind` is declared and never derived (§12), `conflict` is a policy the collection carries rather than one the engine assumes, and `meta` is opaque. A store that decided merges would be a store that had to be right about mail, contacts, calendars and whatever comes next.
+
+**What the account does not change.**
+
+- **Ownership** (§7). A store has one writing owner whatever it holds, so one store for several accounts means one owner process for all of them. An owner wanting to sync accounts in parallel processes MUST give each account its own store; that is the trade this column does not remove.
+- **Sources** (§10), keyed `(collection, source)` and therefore already inside one account. Two accounts syncing against the same server are two accounts.
+- **Collision risk on `link_id`.** Two unrelated servers may mint the same vCard `UID`, and those placements will then share a `seq` while being different people. This is a property of `link_id` itself, present long before accounts shared a store, and §9 already answers it: merging keys on link id **conservatively**, and a consumer that cannot tolerate a false pairing compares bodies (`list_object_placements`) rather than identities.
+
+**Configuration lives outside.** The store records which account a collection belongs to and nothing else about it: no credentials, no endpoints, no display name, no enabled flag. Those belong to whatever configures the owner. A consequence worth stating: the store learns an account only through its collections, so an account with no collection yet does not appear in a listing, and one whose collections are all removed stops appearing. A consumer needing the full roster reads it from its own configuration and uses the store for content.
 
 ## 10. Sync model
 
@@ -210,17 +236,23 @@ An implementation MAY skip the refcount/GC steps on a batch that stored or dropp
 
 Three further operations belong to the §14 queue: **`enqueue(collection, action, payload)`**, the producer's only write, **`drain(collection)`**, the owner's application of pending actions, and **`cancel(id)`**, the withdrawal of a queued or parked one (§14.5). Retention adds two more, both owner writes: **`purge(collection, seq)`** and **`purge_retained_before(cutoff)`** (§16.2).
 
-A collection's `kind` (§4.3) is **declared, never derived**: which media type a collection holds is configuration (this store's mailboxes, that store's address books), not something a sync layer can infer from the items it pulls. Whoever configures the store declares it with **`set_collection_kind(collection, kind)`**, out of band from `write`, and any process reads it back with `load_kind`. The two creation paths coexist safely: `ensure_collection`, the lazy one a write runs to guarantee its foreign-key target, inserts an empty kind and MUST NOT overwrite a declared one, so either may run first. An empty `kind` therefore means "created lazily by a sync, never declared", which is distinct from a collection the store has never seen at all.
+A collection's `kind` (§4.3) is **declared, never derived**: which media type a collection holds is configuration (this store's mailboxes, that store's address books), not something a sync layer can infer from the items it pulls. Whoever configures the store declares it with **`set_collection_kind(collection, account, kind)`**, out of band from `write`, and any process reads it back with `load_kind`. The two creation paths coexist safely: `ensure_collection`, the lazy one a write runs to guarantee its foreign-key target, inserts an empty kind and MUST NOT overwrite a declared one, so either may run first. An empty `kind` therefore means "created lazily by a sync, never declared", which is distinct from a collection the store has never seen at all.
+
+The collection's `account` (§9.2) is configuration in exactly the same sense, and both creation paths therefore bind it. Neither overwrites it: `ensure_collection` inserts or does nothing, and `set_collection_kind` updates the `kind` alone, so a collection cannot change accounts as a side effect of a sync declaring its media type. Re-accounting a collection is the deliberate **`set_collection_account(collection, account)`**. Because the account partitions no identifier (§9.2), moving a collection regroups it and disturbs nothing: `seq`s, link ids and objects are unaffected.
 
 ### 12.1 Reading the store
 
 The operations above serve the store's **owner**. A **reader** (§7) opens the database read-only and projects it as a local backend: listing collections, paging items, resolving one of them. These reads are kind-agnostic, the same statements serving mail, contacts and calendars, and they are keyed by the public `seq` (§9.1), never by the internal `link_id`. Each one below is named after the reference statement that services it (§4.4), with its parameters.
 
-- **`list_collections()`** returns every collection with its display metadata and its `generation` (§15), ordered by `sort_order` then `id`.
+- **`list_collections()`** returns every collection with its owning `account` (§9.2), display metadata and `generation` (§15), ordered by `sort_order` then `id`.
+- **`list_collections_by_account(account)`** returns one account's collections, the same shape, and is the filter axis of a merged view; binding `NULL` selects the collections of a single-account store.
+- **`list_accounts()`** returns the accounts owning at least one collection. A store knows an account only through its collections (§9.2), so this is not a configured roster and a consumer holding one reads it from its own configuration instead.
 - **`list_items_page(collection, after, limit)`** returns a keyset page of the collection's live items; `:after` is the exclusive lower bound on `link_id`, the empty string starting from the beginning. Keyset rather than `OFFSET`, so paging costs the same at any depth and does not shift under a concurrent write.
 - **`get_item(collection, seq)`** returns one live item.
 - **`count_items(collection)`** counts the collection's live items.
 - **`seq_by_link(collection, link_id)`** resolves the public id of an item whose link id the caller already holds, typically one it just staged through the queue.
+- **`list_link_placements(link_id)`** returns every live placement of one identity, each with its collection and account. The multiplicity read (§9.2): the store reports where a link id occurs and takes no position on whether the placements are one thing, so a mail view can list them and a contact view can offer to merge them off the same rows.
+- **`list_object_placements(hash)`** does the same on the dedup axis, by body rather than identity, so it pairs placements two servers gave different link ids.
 - **`list_retained_page(collection, after, limit)`** returns a keyset page of the collection's **retained** items (§16), the same shape as the live page plus `retained_at`, `retained_by` and the body's `size`. Same `:after` contract. It is the only read that returns them: a trash view, never merged into the live listing.
 - **`count_retained(collection)`** counts them, the counterpart of `count_items`.
 - **`retained_bytes()`** totals, store-wide, the size of the distinct bodies retained items hold. It is an upper bound on what a full purge would reclaim: a body a live item also points at keeps a reference and survives the sweep (§5).
@@ -253,7 +285,25 @@ The store never parses `meta` (§11): it is an opaque, application-defined summa
 }
 ```
 
-Flags are **not** in `meta`; they are the item's `flags` (§11). It is written by the sync connector on both the enumerate/`Meta` and the streamed/`Full` paths, and read by any client projecting the collection. Other kinds (`text/vcard`, `text/calendar`) define their own `v: 1` convention the same way when they are first written.
+Flags are **not** in `meta`; they are the item's `flags` (§11). It is written by the sync connector on both the enumerate/`Meta` and the streamed/`Full` paths, and read by any client projecting the collection.
+
+### `text/vcard` (`v: 1`)
+
+```json
+{
+  "v": 1,
+  "uid": "urn:uuid:4fbe8971-0bc3",  // string, optional, the vCard UID verbatim
+  "fn": "Jane Doe",                 // string, required (may be empty), display name
+  "emails": ["jane@example.org"],   // array of strings, optional, every EMAIL
+  "size": 421                       // integer, optional, raw card octets
+}
+```
+
+Unlike mail, a card has **one** derivation: a CardDAV `sync-collection` REPORT returns hrefs and ETags but no `UID`, so a card resolves at `Full` only and there is no cheap summary tier to keep in agreement with it. A card also carries no flags, so its `flags` is a known-empty `'[]'` rather than `NULL`.
+
+Cards are **mutable**, which mail is not: the same card is edited in place under a changing ETag, so its `revision` (§11) moves while its `link_id` does not.
+
+The other kinds (`text/calendar`) define their own `v: 1` convention the same way when they are first written.
 
 ## 14. Action queue
 

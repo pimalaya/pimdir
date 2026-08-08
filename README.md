@@ -19,6 +19,7 @@ This repository is the specification only, with no reference implementation. Imp
 ## Features
 
 - **Generic**: one store for any text-based item kind (mail, calendar, contacts, notes, tasks), keyed by media type rather than one store per domain.
+- **Multi-account**: optionally one store for several accounts too, so a merged view across all of them is a query rather than a fan-out. The account groups collections and partitions nothing: where one identity or one body occurs across collections and accounts is a fact the store reports, and what that means (a mail list showing every placement, a contact view offering to merge them) is the interface's to decide.
 - **Scalable and indexed**: hundreds of thousands of items with real secondary indexes, not a file open per item.
 - **Portable**: one SQLite file, byte-identical across every OS and architecture, with none of the case-sensitivity, forbidden-character or path-length pitfalls of file-per-item layouts.
 - **Transactional**: a whole flag-set change or a multi-item move is one atomic commit a reader never catches half-done.
