@@ -2,7 +2,7 @@
 
 A portable SQLite-plus-blobs store format for text-based personal-information items (mail, calendar events, contacts, notes, tasks)
 
-This repository is the specification only, with no reference implementation. Implementations may use any language with a SQLite binding; the shared, canonical part is the schema and its migration scripts, so every implementation reads and writes the same store.
+The specification only, with no reference implementation: any language with a SQLite binding can implement it. The canonical part is the schema and its migrations, so every implementation reads and writes the same store.
 
 ## Table of contents
 
@@ -19,19 +19,23 @@ This repository is the specification only, with no reference implementation. Imp
 ## Features
 
 - **Generic**: one store for any text-based item kind (mail, calendar, contacts, notes, tasks), keyed by media type rather than one store per domain.
-- **Multi-account**: optionally one store for several accounts too, so a merged view across all of them is a query rather than a fan-out. The account groups collections and partitions nothing: where one identity or one body occurs across collections and accounts is a fact the store reports, and what that means (a mail list showing every placement, a contact view offering to merge them) is the interface's to decide.
+- **Multi-account**: several accounts in one store, so a merged view is a query rather than a fan-out. The account groups collections and partitions no identifier: the store reports where an identity or a body occurs, and the interface decides what that means.
 - **Scalable and indexed**: hundreds of thousands of items with real secondary indexes, not a file open per item.
 - **Portable**: one SQLite file, byte-identical across every OS and architecture, with none of the case-sensitivity, forbidden-character or path-length pitfalls of file-per-item layouts.
 - **Transactional**: a whole flag-set change or a multi-item move is one atomic commit a reader never catches half-done.
-- **Deduplicated**: bodies are stored once by content hash, so a message filed in two mailboxes costs a single copy.
-- **Retentive**: an item the last source dropped is retained rather than erased, so an expunge upstream never destroys the local copy; purging is explicit, and restoring one costs no network.
-- **Rebuildable**: the database is a derived index over the authoritative bodies and the remote, so corruption is survivable by re-sync.
+- **Deduplicated**: bodies are stored once by content hash, so a message filed in two mailboxes costs one copy.
+- **Retentive**: an item the last source dropped is retained rather than erased, so an upstream expunge never destroys the local copy. Purging is explicit, and restoring costs no network.
+- **Rebuildable**: the database is a derived index over the bodies and the remote, so corruption is survivable by re-sync.
 
 ## Specification
 
-The complete, normative specification is [SPEC.md](./SPEC.md), written to RFC 2119. A pimdir store is a SQLite database (the queryable index and mutable state) plus a content-addressed blob directory (the item bodies, each stored as an immutable blob): it keeps the scale, indexing and cross-OS uniformity of SQLite while keeping large bodies beside the database rather than inside it. A blob is never rewritten; editing a mutable-content item (a CardDAV contact, a CalDAV event) writes a new blob and repoints the item at it, and the old blob is collected once unreferenced. The canonical schema and its forward-only migration scripts live under migrations/, so every implementation converges on the same on-disk store.
+The normative specification is [SPEC.md](./SPEC.md), written to RFC 2119.
 
-Two properties are worth knowing before reading further. Removal is a **soft delete**: when the last source that held an item drops it, the store retains the row (keeping its body pinned) and hides it from the sync seam and from the live reads, so nothing re-derives it and nothing loses it; only an explicit purge, by id or by cutoff, truly deletes. And the **action queue** is the write door for every process that does not own the store: a producer appends a kind plus a versioned JSON payload, the owner applies it in append order, and an owner that does not recognise a kind, or cannot perform it, skips the row rather than parking it, so one queue carries store mutations any owner can apply beside intents only a particular tool can carry out.
+A store is a SQLite database (the queryable index and mutable state) plus a content-addressed blob directory (the bodies), which keeps SQLite's scale and cross-OS uniformity without putting large bodies inside it. A blob is never rewritten: editing a mutable item writes a new one and repoints the item, and the old one is collected once unreferenced.
+
+Two properties are worth knowing before reading. Removal is a **soft delete**: when the last source drops an item, the store keeps the row and its body, hidden from the sync seam and from the live reads, and only an explicit purge deletes it.
+
+And the **action queue** is the write door for every process that does not own the store: a producer appends a kind plus a versioned JSON payload, the owner applies it in append order. An owner that cannot perform a kind skips the row rather than parking it, so one queue carries ordinary mutations beside intents only a particular tool can carry out.
 
 ## Layout
 
@@ -47,11 +51,13 @@ LICENSE-MIT           dual license
 LICENSE-APACHE
 ```
 
-The history follows [Cairn](https://github.com/pimalaya/cairn), as everywhere else in the organisation, with one deviation while the format is draft: SPEC.md is the living spec, so cairn/spec/ stays empty rather than restating it, and a landed change is recorded by its log entry alone. [AGENTS.md](./AGENTS.md) states both rules and what ends them.
+The history follows [Cairn](https://github.com/pimalaya/cairn), with one deviation while the format is draft: SPEC.md is the living spec, so cairn/spec/ stays empty rather than restating it, and a landed change is recorded by its log entry alone. [AGENTS.md](./AGENTS.md) states what ends that.
 
 ## Status
 
-Draft. Schema version 1 is defined and stable in shape; there is no conformance suite yet. While the spec is draft, version 1 is edited in place rather than superseded: a schema change folds into 0001_init.sql, the version stays 1, and a store created by an earlier draft is recreated rather than migrated. Once the spec leaves draft, breaking changes bump the schema version and ship as a new migration script.
+Draft, with no conformance suite yet. Schema version 1 is defined and stable in shape.
+
+While the spec is draft, version 1 is edited in place: a change folds into 0001_init.sql, the version stays 1, and a store created by an earlier draft is recreated rather than migrated. After the freeze, a breaking change bumps the version and ships as a new migration.
 
 ## License
 
