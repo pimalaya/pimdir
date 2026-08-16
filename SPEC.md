@@ -223,7 +223,7 @@ Two implementations produce byte-identical stores only if they encode the model 
 - **`object_hash` / `base_object` / `conflict_object`** (TEXT): a content hash under `store_meta.hash_algo`, base32, or `NULL`.
 - **`link_id`** (TEXT): the cross-source identity (an item is keyed by it).
 - **`meta`** (TEXT): an opaque application-defined summary blob, or `NULL` until a `Meta` fetch. The store never parses it.
-- **`sort_key`** (TEXT): the item's position in its collection's natural order (§9.3), written by the same writer that writes `meta` and never derived by the store. `''` means *unknown*, and is the default, so an item is orderable from the moment it exists. Its ordering is SQLite's default `BINARY` collation, so a writer MUST encode the key so that byte order **is** the intended order: a timestamp as RFC 3339 in UTC at a fixed width (`2026-08-01T10:00:00Z`), never a local offset, since `+02:00` and `Z` sort apart while naming the same instant.
+- **`sort_key`** (TEXT): the item's position in its collection's natural order (§9.3), written by the same writer that writes `meta` and never derived by the store. `''` means *unknown*, and is the default, so an item is orderable from the moment it exists. Its ordering is SQLite's default `BINARY` collation, so a writer MUST encode the key so that byte order **is** the intended order: a timestamp as RFC 3339 in UTC at a fixed width (`2026-08-01T10:00:00Z`), never a local offset, since `+02:00` and `Z` sort apart while naming the same instant. It is also the one column exempt from the byte-identical rule opening this section: a key derived from a zoned timestamp resolves through a time zone database, so two correct writers running different tzdb versions may write different keys for the same item. §9.3 is what makes that harmless rather than a divergence to reconcile: a key is a presentation fact, nothing in §10 reads it, and a wrong key mis-sorts a list and loses nothing.
 - **`base_revision`** (TEXT): an opaque etag/modseq for mutable-content backends, or `NULL`.
 - **`conflicted`** (INTEGER, on a binding): `0` or `1` — whether *this source* and its own remote diverged and the sync layer left the placement unresolved. Distinct from `items.conflicted`, the cross-source divergence (§10).
 - **`conflict_revision`** (TEXT): the remote revision observed when the binding was marked conflicted, or `NULL`. Non-`NULL` only while `conflicted` is `1`; a binding that is not conflicted MUST NOT carry one, so a resolved binding cannot hand a stale revision to the next sync.
@@ -351,7 +351,45 @@ Cards are **mutable**, which mail is not: the same card is edited in place under
 
 Normalising is what makes the order stable across writers: two connectors that disagree about whether to keep the original casing would otherwise interleave `alice` and `Alice` differently in the same address book.
 
-The other kinds (`text/calendar`) define their own `v: 1` convention the same way when they are first written. Its `sort_key` will be `DTSTART`, normalised exactly as mail's `Date:` is, which is what lets a date-range read page a calendar with the same statements.
+### `text/calendar` (`v: 1`)
+
+**The item is the calendar object resource, not the component.** RFC 4791 §4.1 requires the components sharing a `UID` to be contained in the same calendar object resource, so that a recurrence set stays whole, and requires that `UID` to be unique within the collection holding it. A recurring series and its modified instances are therefore **one** item: one blob carrying the master, every `RECURRENCE-ID` override and the `VTIMEZONE`s they reference, under one `link_id`. `(collection, link_id)` is then exactly the uniqueness CalDAV itself enforces, an override is a body edit of the resource rather than an item of its own, and the resource keeps the one href and the one ETag a binding records. A connector to an instance-granular source (a JSON calendar API handing each modified instance over separately) MUST reassemble the set into one resource before writing it, or two stores of the same calendar disagree about how many items it holds.
+
+```json
+{
+  "v": 1,
+  "uid": "event-1@example.org",       // string, optional, the iCalendar UID verbatim
+  "component": "VEVENT",              // string, optional: VEVENT, VTODO or VJOURNAL
+  "summary": "Stand-up",              // string, required (may be empty)
+  "dtstart": "20190107T090000",       // string, optional, the value verbatim
+  "dtstart_tzid": "America/New_York", // string, optional, the TZID parameter
+  "dtstart_value": "date-time",       // string, optional: date-time or date
+  "dtend": "20190107T093000",         // string, optional, the value verbatim
+  "due": null,                        // string, optional, VTODO only
+  "recurring": true,                  // bool, optional: carries an RRULE or an RDATE
+  "size": 421                         // integer, optional, raw item octets
+}
+```
+
+The `link_id` is the `UID`, which is what identifies the same object across sources (RFC 5545 §3.8.4.7); content carrying no usable `UID` falls back to a writer-derived id rather than being refused. `component` names what a reader renders the resource as, and a resource may hold only one component type anyway (RFC 4791 §4.1, `VTIMEZONE` aside), so it is a fact about the resource rather than a choice among several. `due` belongs to a `VTODO` alone, `dtend` to the components that have an end, and both are absent otherwise rather than merely unknown. A summary describes the master, the component carrying no `RECURRENCE-ID`, since that is the item as a reader lists it.
+
+Times are carried **verbatim**, with the `TZID` parameter and the `VALUE` type beside them, rather than as resolved instants. A reader holding a time zone database re-derives an instant in its own zone without fetching the body, which is what `meta` exists for; a reader holding none displays the wall time the calendar actually wrote instead of a UTC claim a writer fabricated, and one writer's tzdb version stays out of the summary. The single resolved projection is the `sort_key` below, under one stated policy, so the store never carries two answers to the same question.
+
+Like a card and unlike mail, a calendar object is **mutable**: the same resource is edited in place under a changing ETag, so its `revision` (§11) moves while its `link_id` does not. It carries no flags either, so its `flags` is a known-empty `'[]'` rather than `NULL`, as for `text/vcard`.
+
+**`sort_key`**: the item's start, normalised to RFC 3339 in UTC at seconds precision (`2026-08-14T09:00:00Z`), read ascending for a chronological agenda. Which property that is depends on the component: `DTSTART` for a `VEVENT` or a `VJOURNAL`, and `DUE` then `DTSTART` for a `VTODO`, which is scheduled by its due date (RFC 5545 §3.8.2.3) and need not carry a `DTSTART` at all. A task list keyed on a property most of its items lack would order on nothing.
+
+Only one of the shapes a start may take (RFC 5545 §3.3.4, §3.3.5) is an instant already, so the others normalise by convention:
+
+- a **UTC** date-time is taken verbatim;
+- a **zoned** date-time is resolved through its `VTIMEZONE`, taking the earlier offset when the local time is ambiguous (the hour a fall-back repeats) and the offset after the transition when it does not exist (the hour a spring-forward skips), since a local time at a transition names two instants or none;
+- a zoned date-time whose zone **will not resolve** (no `VTIMEZONE` in the document, an unknown `TZID`) is read as floating rather than left unknown: the error is bounded by the offset and keeps the item near its place, where dropping the key moves every such item to the far end of the listing;
+- a **date-only** value has no time at all and is read as `T00:00:00Z`;
+- a **floating** date-time is zone-less by design and its wall time is read as UTC.
+
+The last three are conventions rather than facts, and the date-only case is the visible one: an all-day item on the 11th sorts before an 08:00 item for a reader east of UTC and after it for one west of it, and the writer cannot know the reader's zone. An item with nothing parseable at all keeps `''` and lands at the head of an ascending listing, where an undated item is visible rather than buried.
+
+A recurring item keys on its **first** occurrence, which is what `DTSTART` holds (RFC 5545 §3.8.2.4) and is fixed for the life of the series: a weekly stand-up that began in 2019 sorts in 2019 however long it keeps occurring. A date-range read over recurring items therefore needs the recurrence expanded above the store, since expansion is a function of when you ask and no stored column answers it. That keeps the key what §9.3 says it is, a presentation fact that is deterministic and stable, and leaves time-dependence to the layer that has a clock.
 
 ## 14. Action queue
 
