@@ -406,6 +406,7 @@ Each kind also fixes what its `sort_key` (§9.3) holds: a separate column, agree
 {
   "v": 1,
   "message_id": "abc@host",        // string, optional, bare Message-ID (no <>)
+  "in_reply_to": ["def@host"],     // array of strings, optional, bare msg-ids
   "subject": "Hello",              // string, required (may be empty)
   "from": "alice@example.org",     // string, optional, first sender address
   "to": "bob@example.org",         // string, optional, first recipient address
@@ -415,6 +416,8 @@ Each kind also fixes what its `sort_key` (§9.3) holds: a separate column, agree
 ```
 
 Flags are **not** in `meta`; they are the item's `flags` (§13). The summary is written by the sync connector on both the enumerate/`Meta` and the streamed/`Full` paths.
+
+`in_reply_to` is the `In-Reply-To:` header (RFC 5322 §3.6.4), which the grammar makes `1*msg-id`, so it is an array even though one id is the common case. Each id is stripped of its angle brackets exactly as `message_id` is, so the two compare byte-for-byte and a reader can pair a reply with its parent without fetching either body. That pairing is the reason it is carried at all: an offline store is where a body read is most expensive, and the IMAP `ENVELOPE` a connector already fetched carries the header at no extra cost. `References:` is deliberately absent, being the field a full threading algorithm needs and the one no `ENVELOPE` returns.
 
 **`sort_key`**: the `Date:` header, normalised to RFC 3339 in UTC at seconds precision (`2026-08-01T10:00:00Z`), so byte order is chronological order. Read descending for the usual newest-first listing. A message with no parseable date keeps `''` and lands at the end of it.
 
