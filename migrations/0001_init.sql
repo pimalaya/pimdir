@@ -9,13 +9,13 @@
 -- base). A single-source store is the degenerate case of one binding per item;
 -- a two-source store (two servers, or a server and a phone) keeps two.
 --
--- The store has a single writing owner (SPEC.md §7). The QUEUE is how every
+-- The store has a single writing owner (SPEC.md §8). The QUEUE is how every
 -- other process mutates anyway: a producer appends an action row (with, at
 -- most, the object upsert pinning its body), and the owner applies pending
 -- actions to the items and bindings, deleting each in the same transaction as
 -- its effects, so an action is applied exactly once. Payloads are versioned
 -- JSON per action kind, and kinds are extensible: an owner that cannot apply a
--- kind skips the row, leaving it pending for one that can (SPEC.md §14).
+-- kind skips the row, leaving it pending for one that can (SPEC.md §15).
 --
 -- Requires SQLite >= 3.37 (STRICT tables, DROP COLUMN).
 
@@ -59,7 +59,7 @@ CREATE TABLE collections (
     -- Collection generation: bumped by the owner whenever it rebuilds the
     -- collection's handle space (a backend identity reset), so a reader can derive
     -- epoch-dependent protocol values (an IMAP UIDVALIDITY) from the store alone
-    -- (SPEC.md §15).
+    -- (SPEC.md §12).
     generation  INTEGER NOT NULL DEFAULT 1
 ) STRICT;
 
@@ -90,7 +90,7 @@ CREATE TABLE objects (
 -- it too — the cross-source delete memory that a single-source store never needs.
 -- Once the last source has dropped it, the row is RETAINED rather than deleted
 -- (`retained_at` non-NULL): it keeps its object_hash, so the body stays pinned
--- and its blob survives GC, and only an explicit purge removes it (SPEC.md §16).
+-- and its blob survives GC, and only an explicit purge removes it (SPEC.md §11).
 CREATE TABLE items (
     collection      TEXT NOT NULL REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
     link_id         TEXT NOT NULL,         -- cross-source identity (Message-ID / vCard-iCal UID), internal
@@ -125,6 +125,12 @@ CREATE INDEX items_retained ON items(collection, retained_at) WHERE retained_at 
 -- `seq`, neither of which means anything to a reader: a mail client cannot ask
 -- for the newest messages and a calendar cannot ask for a date range.
 CREATE INDEX items_by_sort ON items(collection, sort_key, seq);
+-- `seq` is the store-global public id (SPEC.md §9.1): a consumer displays it
+-- and accepts it back, without naming the collection it came from. Resolving one
+-- against items_by_seq above means scanning that whole index, since it leads
+-- with the collection, so the store-global read the spec promises needs a
+-- store-global index.
+CREATE INDEX items_by_seq_global ON items(seq);
 
 -- One source's binding of an item: its handle there, the base last synced with
 -- it (the three-way-merge baseline), and whether that source's own sync is
@@ -144,19 +150,19 @@ CREATE TABLE bindings (
     PRIMARY KEY (collection, link_id, source),
     -- ON UPDATE CASCADE as well as ON DELETE: renaming a collection cascades
     -- into items.collection, which is this composite key's parent, so without it
-    -- the rename is refused one level down (SPEC.md §12).
+    -- the rename is refused one level down (SPEC.md §14).
     FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
 ) STRICT;
 
--- The action queue (SPEC.md §14): mutations requested by processes that are not
+-- The action queue (SPEC.md §15): mutations requested by processes that are not
 -- the store owner, applied by the owner in append order.
 CREATE TABLE queue (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,  -- global append order
     created_at  TEXT    NOT NULL,                   -- RFC 3339 timestamp
     producer    TEXT    NOT NULL,                   -- enqueuing process, diagnostic only
     collection  TEXT    NOT NULL REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
-    action      TEXT    NOT NULL,                   -- 'add' | 'set-flags' | 'remove' | 'move' | 'copy' | 'update' | app-defined (SPEC.md §14.3)
-    payload     TEXT    NOT NULL,                   -- versioned JSON, shape per action (SPEC.md §14)
+    action      TEXT    NOT NULL,                   -- 'add' | 'set-flags' | 'remove' | 'move' | 'copy' | 'update' | app-defined (SPEC.md §15.3)
+    payload     TEXT    NOT NULL,                   -- versioned JSON, shape per action (SPEC.md §15)
     object_hash TEXT    REFERENCES objects(hash),   -- pins the payload's body against GC, or NULL
     attempts    INTEGER NOT NULL DEFAULT 0,         -- apply attempts so far
     error       TEXT                                -- last failure; non-NULL means parked
@@ -168,3 +174,17 @@ CREATE INDEX queue_by_collection ON queue(collection, id);
 -- Cross-source identity lookup (dedup, thread stitching) and refcount navigation.
 CREATE INDEX items_by_object ON items(object_hash);
 CREATE INDEX bindings_by_object ON bindings(base_object);
+-- The sweep of unreferenced objects (SPEC.md §5, §14). Partial, so it holds only
+-- what is about to be collected and is empty at rest: without it both the list
+-- and the delete scan the whole objects table, on every write transaction.
+CREATE INDEX objects_garbage ON objects(refcount) WHERE refcount <= 0;
+-- The other two pointers at an object, so recompute_refcounts (queries/objects.sql)
+-- can reach every reference by index rather than by scanning items and queue once
+-- per object row.
+CREATE INDEX items_by_conflict_object ON items(conflict_object);
+CREATE INDEX queue_by_object ON queue(object_hash);
+-- Resolves one source handle back to the link id it is bound to (link_for_handle,
+-- queries/bindings.sql), which is what a batch dropping a placement needs: a drop
+-- names a handle and the shared item is keyed by link id. Without it, folding a
+-- drop into the hub means scanning every item of the collection.
+CREATE INDEX bindings_by_handle ON bindings(collection, source, handle);

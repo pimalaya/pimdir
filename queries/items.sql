@@ -1,29 +1,39 @@
 -- pimdir items: the shared per-item truth of a collection (flags, body pointer,
 -- summary, detail level, cross-source state), plus public-id (`seq`) allocation
--- and retention, the soft delete every removal lands in (SPEC.md §16).
+-- and retention, the soft delete every removal lands in (SPEC.md §11).
 --
--- Canonical reference statements servicing the store operations (SPEC.md §12).
+-- Canonical reference statements servicing the store operations (SPEC.md §14).
 -- An implementation SHOULD use them verbatim and MAY substitute an equivalent
--- that preserves the same invariants (SPEC.md §8). Column encodings are in
--- SPEC.md §11. Named parameters use `:name`.
+-- that preserves the same invariants (SPEC.md §7). Column encodings are in
+-- SPEC.md §13. Named parameters use `:name`.
 
 -- name: load_items
 -- Every shared item of a collection, retained ones excluded: the sync seam sees
 -- live items only. Hiding a retained row here is what keeps it from ever being
--- re-derived, on a delta or on a full sync (SPEC.md §16).
+-- re-derived, on a delta or on a full sync (SPEC.md §11).
 --
 -- `sort_key` rides along although the sync layer has no use for it, because the
--- reference write is a replace-all (SPEC.md §12): load, merge, delete, insert.
+-- reference write is a replace-all (SPEC.md §14): load, merge, delete, insert.
 -- Without it here, insert_item would have nothing to bind and every sync would
 -- silently reset the ordering of every item it touched.
 SELECT link_id, flags, object_hash, meta, sort_key, level, deleted, conflicted, conflict_object
 FROM items WHERE collection = :collection AND retained_at IS NULL;
 
+-- name: load_items_by_link
+-- The same rows, narrowed to the link ids one write batch touches (SPEC.md §14).
+-- A write folds its batch into the collection and persists the difference, and
+-- that difference only ever names rows the batch named: reading the rest costs a
+-- full pass over the collection to compute nothing. It is the whole cost of a
+-- small write, and it grows with the mailbox rather than with the batch.
+SELECT link_id, flags, object_hash, meta, sort_key, level, deleted, conflicted, conflict_object
+FROM items WHERE collection = :collection AND retained_at IS NULL
+  AND link_id IN (SELECT value FROM json_each(:links));
+
 -- name: delete_items
 -- Clears a collection's items before it is re-saved (bindings cascade).
 -- Retained items are spared, exactly as load_items skips them: the merged
 -- result never contains one, so a replace-all that took them would purge by
--- accident (SPEC.md §16).
+-- accident (SPEC.md §11).
 DELETE FROM items WHERE collection = :collection AND retained_at IS NULL;
 
 -- name: seq_for_link_any
@@ -48,7 +58,7 @@ RETURNING next_seq - 1;
 INSERT INTO items(collection, link_id, seq, flags, object_hash, meta, sort_key, level, deleted, conflicted, conflict_object)
 VALUES(:collection, :link_id, :seq, :flags, :object_hash, :meta, :sort_key, :level, :deleted, :conflicted, :conflict_object);
 
--- The client read surface (SPEC.md §12.1): live-only reads keyed by the public
+-- The client read surface (SPEC.md §14.1): live-only reads keyed by the public
 -- id (`seq`), never by the internal link id.
 
 -- name: list_items_page
@@ -66,7 +76,7 @@ ORDER BY link_id LIMIT :limit;
 
 -- name: list_items_page_asc
 -- A keyset page of a collection's live items in the kind's own ascending order
--- (SPEC.md §12.1): A to Z for contacts, earliest first for mail and calendars.
+-- (SPEC.md §14.1): A to Z for contacts, earliest first for mail and calendars.
 --
 -- The cursor is the pair (:after_key, :after_seq), because a sort key is not
 -- unique: two messages share a timestamp, two contacts share a name. `seq`
@@ -133,7 +143,7 @@ ORDER BY c.account IS NULL, c.account, i.collection;
 -- get_item, for a consumer that just staged an add and wants the new id.
 SELECT seq FROM items WHERE collection = :collection AND link_id = :link_id;
 
--- Retention (SPEC.md §16): an item whose last source binding vanished is
+-- Retention (SPEC.md §11): an item whose last source binding vanished is
 -- retained, never deleted; purge is the only true delete.
 
 -- name: retain_item
@@ -183,7 +193,7 @@ SELECT coalesce(sum(o.size), 0) FROM objects o WHERE o.hash IN
 -- name: purge_item
 -- Purge one retained item by its public id: the only true delete. Its bindings
 -- cascade, and the body it released is unlinked by the ordinary refcount sweep
--- (list_garbage_objects / delete_garbage_objects, SPEC.md §5, §12). Guarded on
+-- (list_garbage_objects / delete_garbage_objects, SPEC.md §5, §14). Guarded on
 -- retained_at so a purge can never take a live item.
 DELETE FROM items
 WHERE collection = :collection AND seq = :seq AND retained_at IS NOT NULL;

@@ -1,10 +1,10 @@
 -- pimdir collections: the container rows (mailboxes, address books, calendars)
 -- and their cross-source conflict policy.
 --
--- Canonical reference statements servicing the store operations (SPEC.md §12).
+-- Canonical reference statements servicing the store operations (SPEC.md §14).
 -- An implementation SHOULD use them verbatim and MAY substitute an equivalent
--- that preserves the same invariants (SPEC.md §8). Column encodings are in
--- SPEC.md §11. Named parameters use `:name`.
+-- that preserves the same invariants (SPEC.md §7). Column encodings are in
+-- SPEC.md §13. Named parameters use `:name`.
 
 -- name: ensure_collection
 -- Guarantee the FK target exists before a source, item or checkpoint write.
@@ -16,7 +16,7 @@ VALUES(:collection, :account, '', :collection)
 ON CONFLICT(id) DO NOTHING;
 
 -- name: set_collection_kind
--- Declare a collection's media type (SPEC.md §12), creating the row if the
+-- Declare a collection's media type (SPEC.md §14), creating the row if the
 -- store has not seen it yet. Unlike ensure_collection this is deliberate, so
 -- it does overwrite a previously declared kind; the row's name is untouched.
 INSERT INTO collections(id, account, kind, name)
@@ -34,7 +34,7 @@ UPDATE collections SET account = :account WHERE id = :collection;
 -- Give a collection a new id, carrying its whole contents with it: every
 -- foreign key onto collections(id) is ON UPDATE CASCADE, so the items, sources,
 -- bindings, queue rows and child collections follow in the same statement
--- (SPEC.md §12).
+-- (SPEC.md §14).
 --
 -- This is the only safe way to change an id. Deleting and recreating the
 -- collection instead destroys the cache: the ON DELETE CASCADE takes every item
@@ -51,7 +51,7 @@ SELECT account FROM collections WHERE id = :collection;
 
 -- name: load_kind
 -- A collection's declared media type; the empty string means the row was
--- created lazily by a sync and no kind was ever declared (SPEC.md §12).
+-- created lazily by a sync and no kind was ever declared (SPEC.md §14).
 SELECT kind FROM collections WHERE id = :collection;
 
 -- name: set_conflict
@@ -61,7 +61,7 @@ UPDATE collections SET conflict = :conflict WHERE id = :collection;
 SELECT conflict FROM collections WHERE id = :collection;
 
 -- name: bump_generation
--- The owner's handle-space reset marker (SPEC.md §15): run in the same
+-- The owner's handle-space reset marker (SPEC.md §12): run in the same
 -- transaction as the rebuild it records.
 UPDATE collections SET generation = generation + 1 WHERE id = :collection
 RETURNING generation;
@@ -69,7 +69,7 @@ RETURNING generation;
 -- name: load_generation
 SELECT generation FROM collections WHERE id = :collection;
 
--- The client read surface (SPEC.md §12.1).
+-- The client read surface (SPEC.md §14.1).
 
 -- name: list_collections
 -- Every collection with its account, display metadata and handle-space

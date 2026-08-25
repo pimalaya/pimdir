@@ -113,9 +113,9 @@ The named, parameterised statements servicing the operations (§14) live under q
 
 Object bytes live under objects/, one file per hash, **sharded two levels by hash prefix** (`objects/<hash[0:2]>/<hash[2:4]>/<hash>`) to keep any one directory small. The hash is encoded in lowercase base32 (RFC 4648, no padding), so the path is valid on every target filesystem.
 
-- **Write** is atomic: write a temporary period-prefixed file in the same shard directory, `fsync`, then `rename` into place. The name being the content hash, a file is never rewritten.
+- **Write** is atomic: write a temporary period-prefixed file in the same shard directory, `fsync`, then `rename` into place, then **`fsync` the shard directory**. The name being the content hash, a file is never rewritten. The directory sync is not optional bookkeeping: syncing the file makes its bytes durable and says nothing about the name that reaches them, while the database commit *is* durable, so without it a power loss can leave a committed row pointing at a body that never arrived. That is the one asymmetry the write order of §14 exists to prevent, the reverse leaving at worst an orphan file.
 - **Reference counting**: `objects.refcount` MUST equal the number of pointers at that hash, counting an item's `object_hash` and `conflict_object`, a binding's `base_object`, and a queue row's `object_hash` (§15). A body waiting in the queue is pinned exactly like a referenced one, and so is the body of a retained item (§11). Refcounts are maintained in the same transaction as the writes that change them.
-- **Garbage collection**: an object whose refcount reaches zero MAY be deleted, its blob file removed after the row. A store MAY instead recompute refcounts from the pointer columns and sweep orphans: O(placements), and immune to bookkeeping drift.
+- **Garbage collection**: an object whose refcount reaches zero MAY be deleted, its blob file removed after the row. The sweep tests `refcount <= 0` rather than `= 0`, so a count a double release drove negative is still collected instead of leaking for good with nothing reporting it, and it matches the partial index `objects_garbage` exactly: without that index both halves of the sweep scan the whole `objects` table, on every write transaction. A store MAY instead recompute refcounts from the pointer columns and sweep orphans: O(placements), and immune to bookkeeping drift.
 - Bodies are content-addressed, so an identical body in two collections is stored once, and copy, move and undelete are pointer edits rather than byte copies.
 
 Keeping bodies out of the database is what makes the database a *rebuildable cache* (§6): the irreplaceable data survives any index corruption.
@@ -304,6 +304,8 @@ A store is opened *as one source*. `load` projects the collection's shared items
 
      Placement upserts and drops are merged into the shared items and bindings, and the merged result is persisted, `set_conflict` carrying the collection's policy. The reference form is a load-all / replace-all per touched collection (`retain_item` for every item the result no longer holds, then `delete_items`, then `insert_item` / `insert_binding`). An implementation MAY instead persist the diff: §4.4 permits it because the persisted state is identical.
 
+     An implementation persisting the diff SHOULD also **read** by the batch rather than by the collection: `load_items_by_link` and `load_bindings_by_link` bound to the link ids the batch names, resolving each dropped handle to its link id with `link_for_handle` first. The batch only ever produces writes for the items it names, so the rest of the collection is read and merged to conclude that nothing changed, and that read, not the writes, is what a small write actually costs: it grows with the mailbox instead of with the batch. Measured on the reference implementation, one flag on one message went from 3.5 ms at a thousand items and 59 ms at sixteen thousand, cleanly linear, to a flat 150 to 175 µs across the same range.
+
      An item the merge leaves with no binding at all is **retained, not deleted** (§11). Both forms agree on it: `delete_items` spares retained rows and `load_items` never returns one, so a retained item is outside the replace-all cycle and a reappearing link id revives its row rather than colliding with it.
   2. Bring the refcount of every object the batch touched back in line with the §5 invariant, in the same transaction. The reference form is `recompute_refcounts`, O(items+bindings+queue); an implementation MAY instead adjust each affected hash by the batch's net change (`adjust_refcount`, O(changes)).
   3. Run `list_garbage_objects`, remembering the hashes; run `delete_garbage_objects`.
@@ -362,6 +364,8 @@ A producer enqueues in **one transaction**: `ensure_collection`, then, when the 
 ### 15.2 Applying
 
 The owner drains each collection's pending actions in ascending `id`. An action is applied to the items and bindings and its row deleted **in the same transaction**, so application is exactly-once and never partially visible; because applying is a pure store mutation, that transaction never spans network I/O.
+
+The delete is `claim_action`, and it runs **first** in that transaction, not last. `load_pending_actions` is read outside any transaction, so a second owner may hold the same list: deleting at the end has both apply the row, and `add` and `copy` are not idempotent. Claiming it first makes exactly-once a property of the statement rather than a convention about who runs the drain, and it is what §8's advisory lock would otherwise be load-bearing for. A claim that deletes no row means another owner got there first, and there is nothing left to apply: the transaction ends without touching anything.
 
 An action that fails is retried (`bump_attempts`, leaving the row pending). One the owner judges permanently unappliable is **parked**: `error` is set, the action skipped, later actions proceeding. Parked actions are left for operators, and the owner MUST NOT delete them silently.
 
@@ -453,12 +457,14 @@ Cards are **mutable**, which mail is not: the same card is edited in place under
   "uid": "event-1@example.org",       // string, optional, the iCalendar UID verbatim
   "component": "VEVENT",              // string, optional: VEVENT, VTODO or VJOURNAL
   "summary": "Stand-up",              // string, required (may be empty)
+  "location": "Room 2",               // string, optional, the LOCATION verbatim
   "dtstart": "20190107T090000",       // string, optional, the value verbatim
   "dtstart_tzid": "America/New_York", // string, optional, the TZID parameter
   "dtstart_value": "date-time",       // string, optional: date-time or date
   "dtend": "20190107T093000",         // string, optional, the value verbatim
   "due": null,                        // string, optional, VTODO only
   "recurring": true,                  // bool, optional: carries an RRULE or an RDATE
+  "until": "20261231T235959Z",        // string, optional, the RRULE's UNTIL verbatim
   "size": 421                         // integer, optional, raw item octets
 }
 ```
@@ -482,3 +488,5 @@ Only one of the shapes a start may take (RFC 5545 §3.3.4, §3.3.5) is an instan
 The last three are conventions rather than facts, the date-only case visibly so: an all-day item on the 11th sorts before an 08:00 item for a reader east of UTC and after it for one west, and the writer cannot know the reader's zone. An item with nothing parseable keeps `''` and lands at the head of an ascending listing.
 
 A recurring item keys on its **first** occurrence, which is what `DTSTART` holds (RFC 5545 §3.8.2.4) and is fixed for the life of the series. A date-range read over recurring items therefore needs the recurrence expanded above the store, since expansion is a function of when you ask and no stored column answers it. That keeps the key deterministic and stable, and leaves time-dependence to the layer that has a clock.
+
+`until` is what makes that expansion affordable. It carries the `UNTIL` of the `RRULE` verbatim, so `dtstart` and `until` bound the whole series and a reader can drop an item from a date range without materialising a single occurrence. Absent means the bound is unknown rather than absent: a rule bounded by `COUNT` states no `UNTIL`, and an unbounded one has none to state, so a reader that finds none expands to decide.
