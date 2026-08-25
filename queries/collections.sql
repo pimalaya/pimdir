@@ -1,57 +1,44 @@
 -- pimdir collections: the container rows (mailboxes, address books, calendars)
 -- and their cross-source conflict policy.
 --
--- Canonical reference statements servicing the store operations (SPEC.md §14).
--- An implementation SHOULD use them verbatim and MAY substitute an equivalent
--- that preserves the same invariants (SPEC.md §7). Column encodings are in
--- SPEC.md §13. Named parameters use `:name`.
+-- Reference statements for the store operations (SPEC.md §4.4, §14); column
+-- encodings in §13, named parameters `:name`.
 
 -- name: ensure_collection
--- Guarantee the FK target exists before a source, item or checkpoint write.
--- Binds the account (NULL in a single-account store) so the row is grouped from
--- the moment it exists; a collection that appears without one is invisible to
--- every by-account read until it is set.
+-- Guarantees the FK target exists before a source, item or checkpoint write.
+-- Binds the account too, since a collection that appears without one is
+-- invisible to every by-account read until it is set.
 INSERT INTO collections(id, account, kind, name)
 VALUES(:collection, :account, '', :collection)
 ON CONFLICT(id) DO NOTHING;
 
 -- name: set_collection_kind
--- Declare a collection's media type (SPEC.md §14), creating the row if the
--- store has not seen it yet. Unlike ensure_collection this is deliberate, so
--- it does overwrite a previously declared kind; the row's name is untouched.
+-- Unlike ensure_collection this is deliberate, so it does overwrite a kind
+-- already declared; the row's name is untouched.
 INSERT INTO collections(id, account, kind, name)
 VALUES(:collection, :account, :kind, :collection)
 ON CONFLICT(id) DO UPDATE SET kind = excluded.kind;
 
 -- name: set_collection_account
--- Move a collection into an account, or out of one with a NULL. Rare: the
--- account is normally set when the collection is first ensured. Safe at any
--- time, because the account partitions no identifier (SPEC.md §9.2): the move
+-- Rare: the account is normally set when the collection is first ensured. Safe
+-- at any time, because the account partitions no identifier (§9.2): the move
 -- regroups the collection and leaves its seqs, link ids and objects alone.
 UPDATE collections SET account = :account WHERE id = :collection;
 
 -- name: rename_collection
--- Give a collection a new id, carrying its whole contents with it: every
--- foreign key onto collections(id) is ON UPDATE CASCADE, so the items, sources,
--- bindings, queue rows and child collections follow in the same statement
--- (SPEC.md §14).
---
--- This is the only safe way to change an id. Deleting and recreating the
--- collection instead destroys the cache: the ON DELETE CASCADE takes every item
--- and binding with it, so a rename would silently become a full re-download and
--- would drop any staged local change that had not been pushed yet.
---
--- Two things make an id change: a server renaming the collection (an IMAP
--- RENAME, a DAV move), and an owner renaming the account whose name it
--- namespaced the id with (§9.2). Both land here.
+-- The only safe way to change an id, and where both a server-side rename and an
+-- account rename that renamespaced it land (§9.2). Every foreign key onto
+-- collections(id) is ON UPDATE CASCADE, so items, sources, bindings, queue rows
+-- and children follow in one statement; deleting and recreating instead
+-- cascades the delete, turning a rename into a full re-download (§14).
 UPDATE collections SET id = :new_id WHERE id = :collection;
 
 -- name: load_account
 SELECT account FROM collections WHERE id = :collection;
 
 -- name: load_kind
--- A collection's declared media type; the empty string means the row was
--- created lazily by a sync and no kind was ever declared (SPEC.md §14).
+-- The empty string means the row was created lazily by a sync and no kind was
+-- ever declared (§14).
 SELECT kind FROM collections WHERE id = :collection;
 
 -- name: set_conflict
@@ -61,33 +48,29 @@ UPDATE collections SET conflict = :conflict WHERE id = :collection;
 SELECT conflict FROM collections WHERE id = :collection;
 
 -- name: bump_generation
--- The owner's handle-space reset marker (SPEC.md §12): run in the same
--- transaction as the rebuild it records.
+-- Run in the same transaction as the handle-space rebuild it records (§12).
 UPDATE collections SET generation = generation + 1 WHERE id = :collection
 RETURNING generation;
 
 -- name: load_generation
 SELECT generation FROM collections WHERE id = :collection;
 
--- The client read surface (SPEC.md §14.1).
+-- The client read surface (§14.1).
 
 -- name: list_collections
--- Every collection with its account, display metadata and handle-space
--- generation, ordered by sort_order then id, the ones carrying no sort order
--- coming last. The merged view reads exactly this and groups on `account`.
+-- Ordered by sort_order then id, the ones carrying no sort order last. The
+-- merged view reads exactly this and groups on `account`.
 SELECT id, account, kind, name, parent, color, description, sort_order, generation
 FROM collections ORDER BY sort_order IS NULL, sort_order, id;
 
 -- name: list_collections_by_account
--- One account's collections, the filter axis of a merged view (SPEC.md §9.2).
 -- `IS` so binding NULL selects the collections of a single-account store.
 SELECT id, account, kind, name, parent, color, description, sort_order, generation
 FROM collections WHERE account IS :account
 ORDER BY sort_order IS NULL, sort_order, id;
 
 -- name: list_accounts
--- The accounts that own at least one collection. A store knows an account only
--- through its collections: account configuration (credentials, endpoints,
--- display name) lives outside the store (SPEC.md §9.2), so an account with no
--- collection yet is invisible here and that is deliberate.
+-- A store knows an account only through its collections, account configuration
+-- living outside the store (§9.2), so an account with no collection yet is
+-- invisible here and that is deliberate.
 SELECT DISTINCT account FROM collections WHERE account IS NOT NULL ORDER BY account;

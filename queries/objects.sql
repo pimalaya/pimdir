@@ -1,31 +1,21 @@
 -- pimdir objects: the content-addressed body index and its reference counting.
--- The bytes live in blob files (SPEC.md §5); these rows are the index + refcount.
+-- The bytes live in blob files (SPEC.md §5); these rows are the index.
 --
--- Canonical reference statements servicing the store operations (SPEC.md §14).
--- An implementation SHOULD use them verbatim and MAY substitute an equivalent
--- that preserves the same invariants (SPEC.md §7). Column encodings are in
--- SPEC.md §13. Named parameters use `:name`.
+-- Reference statements for the store operations (SPEC.md §4.4, §14); column
+-- encodings in §13, named parameters `:name`.
 
 -- name: store_object
--- Index an object (write-op StoreObject). Its bytes live in the blob file
--- (SPEC.md §5), written either by this batch or, for a byteless StoreObject,
--- already streamed there by the consumer before the op was emitted. The
--- refcount is settled later in the batch (SPEC.md §14).
+-- The bytes are in the blob file already, written by this batch or streamed
+-- there beforehand; the refcount is settled later in the batch (§14).
 INSERT INTO objects(hash, size, refcount) VALUES(:hash, :size, 0)
 ON CONFLICT(hash) DO UPDATE SET size = excluded.size;
 
 -- name: lookup_objects
--- Resolve link ids to a hydrated body hash. :links is a JSON array of link ids.
---
--- Scoped to one account (:account, the caller's own, NULL in a single-account
--- store), which is the axis a link id is trustworthy on. Across collections the
--- answer is exactly what this read exists for: one message filed in two
--- mailboxes is one body, downloaded once. Across accounts it is not a fact at
--- all, since two unrelated servers may mint the same vCard UID (SPEC.md §9.2),
--- and answering with the other account's body hands one account's content to the
--- other's sync, which then believes the item is hydrated and never fetches the
--- real one. A single-account store writes no account, so the filter is a no-op
--- and the dedup is whole-store.
+-- Resolve link ids (a JSON array) to a hydrated body hash, scoped to the
+-- caller's account, the only axis a link id is trustworthy on: two unrelated
+-- servers may mint the same vCard UID (§9.2), and answering across accounts
+-- hands one account's body to the other's sync. A single-account store binds
+-- NULL and dedups whole-store.
 SELECT i.link_id, i.object_hash FROM items i
 JOIN collections c ON c.id = i.collection
 WHERE i.object_hash IS NOT NULL
@@ -33,21 +23,12 @@ WHERE i.object_hash IS NOT NULL
   AND c.account IS :account;
 
 -- name: recompute_refcounts
--- Recompute every object's refcount from the pointers that pin it: an item's
--- shared or conflict body, a source's base, or a pending queue action's body
--- (SPEC.md §15). O(items+bindings+queue), run once at the end of a write batch.
---
--- The four pointer columns are gathered into one stream and counted in a single
--- grouped pass, which is what makes the complexity above true. Counting instead
--- with a correlated subquery per object row costs O(objects x items): the OR
--- across object_hash and conflict_object is a disjunction no single index
--- serves, so the planner scans items once per object row. On a store of twenty
--- thousand items that form took 80 seconds, and this one 121 ms.
---
--- The left join is what settles an object no pointer names any more: it counts
--- zero rather than going unvisited, which is how a released body reaches the
--- sweep below. A row already holding its true count is left alone, so the
--- statement writes only the drift it found.
+-- Recount from the four pointers that pin an object, in one grouped pass, so
+-- O(items+bindings+queue). The correlated-subquery form is O(objects x items),
+-- since the OR across object_hash and conflict_object is a disjunction no index
+-- serves: on twenty thousand items it took 80 seconds against this one's 121 ms.
+-- The left join is what settles an object no pointer names any more, counting
+-- zero rather than leaving it unvisited (§5).
 UPDATE objects SET refcount = counted.n
 FROM (
   SELECT o.hash AS hash, count(r.hash) AS n FROM objects o
@@ -62,55 +43,39 @@ FROM (
 WHERE counted.hash = objects.hash AND objects.refcount != counted.n;
 
 -- name: adjust_refcount
--- Adjust one object's refcount by the net change in pointers a batch made to
--- it (SPEC.md §14): the O(changes) alternative to recompute_refcounts, for an
--- implementation that diffs its writes. Preserves the same §5 invariant.
+-- The O(changes) alternative to recompute_refcounts, for an implementation that
+-- diffs its writes (§14).
 UPDATE objects SET refcount = refcount + :delta WHERE hash = :hash;
 
 -- name: list_garbage_objects
--- Objects no item, binding or queue row pins: what the collector takes
--- (SPEC.md §5). Not a write's business — a write leaves an unreferenced object
--- alone, since the batch that attaches a body may not be the one that indexed
--- it. The predicate is `<= 0` rather than `= 0` to match the partial index
--- objects_garbage exactly, so neither statement scans the table. Under the
--- refcount floor (SPEC.md §7) the two select the same rows; the wider one is for
--- the reader that cannot apply the floor, since it opens read-only and a store
--- written before the constraint may still carry a negative count.
+-- What the collector takes (§5), and no write's business: the batch that
+-- attaches a body may not be the one that indexed it. `<= 0` matches the
+-- partial index objects_garbage, so neither statement scans, and it keeps the
+-- read-only reader honest, since it cannot apply the refcount floor (§7).
 SELECT hash FROM objects WHERE refcount <= 0;
 
 -- name: delete_garbage_objects
--- The collector's delete, in one transaction; the blob files go after the
--- commit, so a crash leaves at worst an orphan and never a row without a body.
+-- The blob files go after the commit, so a crash leaves at worst an orphan and
+-- never a row without a body.
 DELETE FROM objects WHERE refcount <= 0;
 
 -- name: object_exists
--- Whether the index still holds a body, asked once per file as the collector
--- walks the blob directory: a file this answers nothing for is an orphan, and
--- reading the directory is the only way to find one (SPEC.md §5).
---
--- Run after delete_garbage_objects has committed, so the bodies of the rows it
--- just dropped answer nothing too and one pass over the tree reclaims both the
--- collected and the orphaned. A point lookup on the primary key rather than
--- list_object_hashes below, because a collector that reads every hash first
--- holds the whole index in memory to answer a question about one file.
+-- Asked once per file as the collector walks the blob directory, after
+-- delete_garbage_objects has committed, so one pass reclaims the collected and
+-- the orphaned together. A point lookup rather than list_object_hashes, which
+-- would hold the whole index in memory to answer about one file (§5).
 SELECT 1 FROM objects WHERE hash = :hash;
 
 -- name: list_object_hashes
--- Every hash the index holds. For the diagnosis that has to visit every row
--- anyway (SPEC.md §7: an object row whose blob is missing is a read that will
--- fail, and only a pass over the rows finds one), never for the collector,
--- which asks about the file in front of it with object_exists above.
+-- For the diagnosis that visits every row anyway (§7: an object row whose blob
+-- is missing is a read that will fail), never for the collector.
 SELECT hash FROM objects;
 
 -- name: release_pins
--- Release one reference from each of :hashes (a JSON array): the set-based form
--- of adjust_refcount at -1, for a caller settling many at once (a purge sweeping
--- retained items releases each row's body and its conflict body).
---
--- A hash listed twice releases twice, which is what makes it the same operation
--- as the per-hash loop it replaces. Expressing a set operation as one point
--- update per element costs a hundred thousand statements inside one transaction
--- on a fifty-thousand-item purge.
+-- adjust_refcount at -1, set-based, for a caller settling many at once. A hash
+-- listed twice releases twice, which is what makes it the same operation as the
+-- loop it replaces: that loop costs a hundred thousand statements in one
+-- transaction on a fifty-thousand-item purge.
 UPDATE objects SET refcount = refcount -
   (SELECT count(*) FROM json_each(:hashes) WHERE value = objects.hash)
 WHERE hash IN (SELECT value FROM json_each(:hashes));

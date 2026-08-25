@@ -1,21 +1,18 @@
 -- pimdir bindings: one source's binding of an item, its handle there, the
--- three-way-merge base (the last state agreed with that source), and whether
--- that source's own sync is stuck on an unresolved content conflict.
+-- three-way-merge base, and whether that source's own sync is stuck on an
+-- unresolved content conflict.
 --
--- Canonical reference statements servicing the store operations (SPEC.md §14).
--- An implementation SHOULD use them verbatim and MAY substitute an equivalent
--- that preserves the same invariants (SPEC.md §7). Column encodings are in
--- SPEC.md §13. Named parameters use `:name`.
+-- Reference statements for the store operations (SPEC.md §4.4, §14); column
+-- encodings in §13, named parameters `:name`.
 
 -- name: load_bindings
--- Every per-source binding of a collection, attached to its item by link id.
 SELECT link_id, source, handle, base_flags, base_object, base_revision,
        base_present, conflicted, conflict_revision, ambiguous_handles
 FROM bindings WHERE collection = :collection;
 
 -- name: load_bindings_by_link
--- The same rows, narrowed to the link ids one write batch touches: the binding
--- half of load_items_by_link (queries/items.sql).
+-- Narrowed to the link ids one write batch touches: the binding half of
+-- load_items_by_link (queries/items.sql).
 SELECT link_id, source, handle, base_flags, base_object, base_revision,
        base_present, conflicted, conflict_revision, ambiguous_handles
 FROM bindings WHERE collection = :collection
@@ -30,36 +27,28 @@ VALUES(:collection, :link_id, :source, :handle, :base_flags, :base_object,
        :ambiguous_handles);
 
 -- name: update_binding
--- One existing binding's columns, its primary key unchanged.
---
--- `handle` is NOT among them: a binding pins one handle, and repointing it to a
--- different one is how the fact that a source holds an identity twice used to be
--- destroyed, silently, at the write. A second copy is recorded in
--- `ambiguous_handles` instead, which freezes the item until the source holds the
--- identity once again (SPEC.md §10). Rebinding a handle legitimately, after a
--- handle-space change, goes through the rebuild that drops the old spine and
--- inserts the new one, never through this statement.
+-- `handle` is deliberately absent: repointing it is how a source holding one
+-- identity twice used to be destroyed, silently, at the write. The second copy
+-- goes to `ambiguous_handles` instead, freezing the item until the source holds
+-- the identity once again (§10); a legitimate rebind goes through the
+-- handle-space rebuild.
 UPDATE bindings SET base_flags = :base_flags, base_object = :base_object,
        base_revision = :base_revision, base_present = :base_present,
        conflicted = :conflicted, conflict_revision = :conflict_revision,
        ambiguous_handles = :ambiguous_handles
 WHERE collection = :collection AND link_id = :link_id AND source = :source;
 
--- The client read surface (SPEC.md §14.1).
+-- The client read surface (§14.1).
 
 -- name: list_sources
--- The distinct source names the store has synced, across every collection, so
--- a consumer can discover which source to attribute its writes to. Read from
--- bindings rather than sources: a source appears here as soon as it holds one
--- item, without waiting for a checkpoint row.
+-- Read from bindings rather than sources, so a source appears as soon as it
+-- holds one item, without waiting for a checkpoint row.
 SELECT DISTINCT source FROM bindings ORDER BY source;
 
 -- name: link_for_handle
--- The link id one source's handle is bound to. A write batch that drops a
--- placement names a handle, while the shared item it belongs to is keyed by
--- link id, so folding that drop in needs this resolution first. Served by the
--- bindings_by_handle index, so it is a seek: answering it by loading the
--- collection instead is what makes a one-row write cost a whole-mailbox read
--- (SPEC.md §14).
+-- A write batch dropping a placement names a handle, while the shared item is
+-- keyed by link id. Rides bindings_by_handle, so it is a seek: answering it by
+-- loading the collection is what makes a one-row write cost a whole-mailbox
+-- read (§14).
 SELECT link_id FROM bindings
 WHERE collection = :collection AND source = :source AND handle = :handle;

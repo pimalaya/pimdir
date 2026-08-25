@@ -65,7 +65,7 @@
     },
     {
       "label": "abc",
-      "note": "SHA-256 of the three bytes 616263 is a published NIST vector, checkable by hand",
+      "note": "SHA-256 of 616263 is a published NIST vector, checkable by hand",
       "body_len": 3,
       "body_hex": "616263",
       "blake3": { "digest_hex": "6437b3ac38465133ffb63b75273a8db548c558465d79db03fd359c6cd5bd9d85", "name": "mq33hlbyizith75whn2soounwvemkwcglv45wa75gwogzvn5twcq", "path": "objects/mq/33/mq33hlbyizith75whn2soounwvemkwcglv45wa75gwogzvn5twcq" },

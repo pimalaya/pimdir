@@ -44,6 +44,9 @@ SPEC.md               the store specification (normative, RFC 2119)
 migrations/           canonical, forward-only schema migrations (SQL)
   0001_init.sql       schema version 1
 queries/              the reference statements, one file per concern
+vectors/              the normative test data (SPEC.md §16)
+checks/               what a push checks, needing no implementation
+flake.nix             the toolchain those checks run under
 cairn/                the dated history of what the spec did and why (log/)
 AGENTS.md             how a contributing agent records a change here
 README.md             this file
