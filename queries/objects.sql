@@ -83,12 +83,23 @@ SELECT hash FROM objects WHERE refcount <= 0;
 -- commit, so a crash leaves at worst an orphan and never a row without a body.
 DELETE FROM objects WHERE refcount <= 0;
 
+-- name: object_exists
+-- Whether the index still holds a body, asked once per file as the collector
+-- walks the blob directory: a file this answers nothing for is an orphan, and
+-- reading the directory is the only way to find one (SPEC.md §5).
+--
+-- Run after delete_garbage_objects has committed, so the bodies of the rows it
+-- just dropped answer nothing too and one pass over the tree reclaims both the
+-- collected and the orphaned. A point lookup on the primary key rather than
+-- list_object_hashes below, because a collector that reads every hash first
+-- holds the whole index in memory to answer a question about one file.
+SELECT 1 FROM objects WHERE hash = :hash;
+
 -- name: list_object_hashes
--- Every hash the index holds, for the collector to diff the blob directory
--- against: a file this does not name is an orphan, and reading the directory is
--- the only way to find one (SPEC.md §5). Run after delete_garbage_objects, in
--- the same transaction, so the bodies of the rows it just dropped fall out as
--- orphans too and one pass over the tree reclaims both.
+-- Every hash the index holds. For the diagnosis that has to visit every row
+-- anyway (SPEC.md §7: an object row whose blob is missing is a read that will
+-- fail, and only a pass over the rows finds one), never for the collector,
+-- which asks about the file in front of it with object_exists above.
 SELECT hash FROM objects;
 
 -- name: release_pins

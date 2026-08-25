@@ -59,6 +59,8 @@ SQLite specifically, not "any SQL database": the portability comes from the file
 - **Hash**: a cryptographic content hash of an object's bytes: its integrity value, dedup key and blob filename.
 - **Checkpoint**: an opaque per-source cursor recording the last point synced with the remote (QRESYNC state, JMAP state string, DAV sync-token).
 - **Retained item**: an item no source holds any more, kept instead of deleted and hidden from the sync seam and the live reads until it is purged (§11).
+- **Owner lock**: the exclusive advisory lock on owner.lock that makes the single-owner rule enforceable, held by the owning process for as long as it owns the store (§8).
+- **Staging lock**: the advisory lock on objects.lock delimiting the window in which a body is written but not yet referenced. Producers hold it shared across that window; the collector takes it exclusively, which is how it knows no writer is inside one (§5, §8).
 
 ## 3. Store layout
 
@@ -67,8 +69,8 @@ A store is a directory containing exactly:
 ```
 mystore/
   pimdir.db            the SQLite database (may be accompanied by -wal / -shm)
-  owner.lock           the owner's exclusive advisory lock (§8)
-  objects.lock         the producers' shared advisory lock (§8)
+  owner.lock           the owner lock, held exclusively (§8)
+  objects.lock         the staging lock, held shared by producers (§8)
   objects/             the content-addressed blob directory (§5)
     ab/cd/abcd…         a body, at objects/<h[0:2]>/<h[2:4]>/<hash>
 ```
@@ -130,7 +132,11 @@ An **object name** is fully determined by these rules, and every part of them is
 - **An unreferenced object is not a deleted one**: an object whose refcount reaches zero is unreferenced, and it stays. A write MUST NOT delete such a row and MUST NOT unlink its blob. A consumer MAY index a body in one batch and attach it in a later one, which §14 step 1 explicitly invites for a body streamed to its sharded path without being held whole, and a sweep at the end of the first batch destroys what the second was about to reference: silently, bytes included. Reclamation is a separate operation, below.
 - **The collector**: reclamation is one operation, run when it is asked for. It deletes the object rows at refcount zero and unlinks every blob file no `objects` row names: those rows' own bodies and the **orphans** a crash left, which are one case rather than two once the rows are gone. The predicate is `refcount <= 0` rather than `= 0`, which matches the partial index `objects_garbage` exactly, and the wider form is what keeps a **reader** honest: a reader opens read-only (§8), so it cannot apply §7's floor to a store written before that constraint existed, and a negative count there must still read as collectable rather than as live.
 
+  Its statements are `list_garbage_objects` and `delete_garbage_objects` for the rows, and `object_exists` for the files: the collector walks the blob directory and asks that one about the file in front of it, on the primary key. It does **not** read `list_object_hashes` first, which would hold the whole index in memory to answer a question about one file, and which exists for the diagnosis that has to visit every row anyway (§7's missing-body check).
+
   The collector MUST **read the directory**, since an orphan is by construction a file the database holds no evidence of. Orphans are ordinary rather than exceptional: every crash between a commit and its unlink leaves one, and so does every body written for a batch that then failed. A store therefore needs the collector run periodically, and the format states it because a store that never runs it grows without bound and reports nothing, every check it has passing.
+
+  Running it is the **owner's** to schedule, and the format says so because nothing else will: no write reclaims, so a store whose owner never collects keeps every dereferenced body for ever. An owner that purges (§11.2) is releasing bodies by definition and is the natural place to run it.
 
   The collector MUST hold the store's **exclusive owner lock** and take its **staging lock exclusively** (§8), and those two are what an earlier draft's grace period was standing in for. A body is written before the row that references it, and MAY be written before the transaction opens, so a file that has just appeared is indistinguishable by inspection from an orphan: the only question is whether a writer is in flight, and the locks answer it, where a timer only guessed at it. A period-prefixed temporary file (the write above) is not an orphan and MUST be left alone: it belongs to a writer that has not renamed it into place.
 
@@ -180,6 +186,8 @@ An owner that cannot take the lock MUST fail immediately, naming the store, rath
 
 The rule is about **processes**. An implementation opening several handles over one store, one per source or one per account, is one owner: it takes the lock once and shares it, rather than contending with itself.
 
+That sharing is also the lock's limit, and it has to be said because §5 leans on it: **the owner lock excludes other processes and nothing inside its own.** An owner running the collector on one handle while another writes on a second is not stopped by a lock both are holding, and the collector's whole safety argument is that no writer is in flight. An owner that runs the two concurrently MUST therefore serialise them itself. Sharing the lock is what makes the acquisition and the release one operation too: an implementation that lets a handle be observed released while the file description it named is still open will refuse itself the store, reporting a conflict with no other process in it.
+
 Two lesser roles exist beside it, both local-host only:
 
 - **Readers** open the database read-only and see consistent WAL snapshots; any number may run concurrently, including while an owner holds the store. A reader MUST NOT take either lock.
@@ -207,7 +215,7 @@ All four are store-wide, and stay so when one store holds several accounts (§9.
 `link_id` is the right internal key and the wrong thing to show a user. Each item therefore carries a `seq`, a small integer a consumer displays and accepts wherever it would otherwise take a link id. It is a property of the item, not of a placement:
 
 - **One id per link id, store-global.** The same `link_id` keeps the same `seq` in every collection it is filed in, drawn from one store-wide counter (`store_meta.next_seq`), so a merged view shows the item once and ids never clash between collections. This holds across accounts too (§9.2): equal link ids share a `seq` wherever they sit, which reports their equality without asserting the placements are one thing.
-- **Assigned once, monotonic, never reused.** The store assigns a `seq` the first time it inserts an item with that `link_id`, in any collection, and reuses it afterwards. The counter only increases, so a stale id never silently addresses a different item.
+- **Assigned once, monotonic, never reused.** The store assigns a `seq` the first time it inserts an item with that `link_id`, in any collection, and reuses it afterwards (`seq_for_link_any` finds an existing one, `bump_next_seq` draws the next). The counter only increases, so a stale id never silently addresses a different item.
 - **Resolved back to `link_id`.** A consumer reads and edits by `(collection, seq)`, which is unique, and the store maps it to the link id internally.
 
 ### 9.2 Accounts
@@ -283,7 +291,9 @@ Retention is **unconditional**: no switch, no per-store flag, no per-collection 
 - **Stamped by SQLite.** `retained_at` SHALL be written by the retiring statement itself (§13), so no implementation plumbs a clock through to reach it. The *cutoff* of a time-based purge is by contrast the caller's parameter (§11.2), which keeps a purge deterministic and testable.
 - **Hidden from the sync seam.** A retained row SHALL be absent from the load that feeds the merge: `load_items` filters `retained_at IS NULL`. A store that retained rows *and* returned them from `load` would re-upload every one of them on the next run, so hiding them is the condition of correctness rather than an optimisation. The sync engine publishes the matching contract (io-replica's storage spec: a removal reaches storage as a drop the storage MAY retain, and the merge reconciles only what a `load` returns). The same filter is why `delete_items` spares retained rows (§14).
 - **Hidden from the read surface by default.** A retained item SHALL NOT appear in the live reads, and no new rule is needed for it: the row carries `deleted = 1` and §14.1's live-only rule already excludes it. `list_retained_page` and `count_retained` are the deliberate exception, a trash view a reader MUST present as retained.
-- **Purge is the only true delete.** A row leaves the store only through `purge_item` or `purge_retained_before`. The item row goes, its bindings cascade, and the body it released is unlinked by the collector (§5) whenever that next runs, so a purge reports the rows it retired and never bytes: it releases a body, it does not reclaim one. A purge MUST NOT take a live item: both statements are guarded on `retained_at IS NOT NULL`.
+- **Purge is the only true delete.** A row leaves the store only through `purge_item` or `purge_retained_before`. The item row goes, its bindings cascade, and the body it released is unlinked by the collector (§5) whenever that next runs, so a purge reports the rows it **removed** and never bytes: it releases a body, it does not reclaim one. A purge MUST NOT take a live item: both statements are guarded on `retained_at IS NOT NULL`.
+
+  Both `RETURN` each removed row's `object_hash` and `conflict_object`, and the caller settles them with `release_pins` in the same transaction. The pins have to be released by whoever deletes the rows, and asking for them beforehand visits every swept row twice for an answer the delete already has.
 - **A reappearing link id revives.** A link id that comes back while a retained row holds its primary key SHALL **revive** that row (`revive_item`: stamps cleared, `deleted` back to `0`) and adopt the new content, rather than conflict on the key. One branch serves both a source-side resurrection and a client `add` (§15.3). The revived row keeps its `seq` (§9.1) and whatever `object_hash`, `flags` and `meta` retention preserved, so a restore costs no network.
 - **Retention is not durable state a source can observe.** `retained_by` is diagnostic and nothing keys on it. A retained item has no bindings, so it participates in no merge and pushes nothing; reviving it stages it as an ordinary local creation.
 
@@ -296,7 +306,9 @@ Retention is **unconditional**: no switch, no per-store flag, no per-collection 
 
 ## 12. Collection generation
 
-`collections.generation` is the collection's **handle-space epoch**: the owner MUST bump it, in the same transaction as the rebuild, whenever it discards and re-learns the collection's handles (an identity reset such as an IMAP UIDVALIDITY change). Readers exposing epoch-dependent protocol values derive them from it (an IMAP frontend maps `generation` to the UIDVALIDITY it advertises), so "the ids you cached are void" survives the process split without a side channel.
+`collections.generation` is the collection's **handle-space epoch**: the owner MUST bump it (`bump_generation`), in the same transaction as the rebuild, whenever it discards and re-learns the collection's handles (an identity reset such as an IMAP UIDVALIDITY change). Readers exposing epoch-dependent protocol values derive them from it with `load_generation` (an IMAP frontend maps `generation` to the UIDVALIDITY it advertises), so "the ids you cached are void" survives the process split without a side channel.
+
+A rebuild's write batch is what makes it one: the old spine is dropped and the same items are upserted under their new handles, so a binding's `handle` **does** move, which is the one case §10's rule against repointing does not cover. An implementation persisting the batch as a diff cannot tell the two apart from the rows alone, since a rebuilt spine and a source reporting one identity under a second handle produce the same before and after. What separates them is the drop: a rebuild supersedes a handle, a removal deletes one, and only the first licenses the rebind, for the handle it names and no other. Reading it as a duplicate instead freezes every item of the collection under handles the server has just voided.
 
 Ordinary syncs, full resyncs from an expired checkpoint, and content changes MUST NOT bump it.
 
@@ -345,7 +357,7 @@ A store is opened *as one source*. `load` projects the collection's shared items
 
      A `SetCheckpoint` runs `ensure_collection` then `upsert_checkpoint` for this source.
 
-     Placement upserts and drops are merged into the shared items and bindings, and the merged result is persisted, `set_conflict` carrying the collection's policy. The reference form is a load-all / replace-all per touched collection (`retain_item` for every item the result no longer holds, then `delete_items`, then `insert_item` / `insert_binding`). An implementation MAY instead persist the diff: §4.4 permits it because the persisted state is identical.
+     Placement upserts and drops are merged into the shared items and bindings, and the merged result is persisted, `set_conflict` carrying the collection's policy. The reference form is a load-all / replace-all per touched collection (`retain_item` for every item the result no longer holds, then `delete_items`, then `insert_item` / `insert_binding`). An implementation MAY instead persist the diff, with `update_binding` for a binding whose base or conflict moved: §4.4 permits it because the persisted state is identical.
 
      An implementation persisting the diff SHOULD also **read** by the batch rather than by the collection: `load_items_by_link` and `load_bindings_by_link` bound to the link ids the batch names, resolving each dropped handle to its link id with `link_for_handle` first. The batch only ever produces writes for the items it names, so the rest of the collection is read and merged to conclude that nothing changed, and that read, not the writes, is what a small write actually costs: it grows with the mailbox instead of with the batch. Measured on the reference implementation, one flag on one message went from 3.5 ms at a thousand items and 59 ms at sixteen thousand, cleanly linear, to a flat 150 to 175 µs across the same range.
 
@@ -355,13 +367,13 @@ A store is opened *as one source*. `load` projects the collection's shared items
 
 An implementation MAY skip the refcount step on a batch that stored or dropped no objects.
 
-Three further operations belong to the §15 queue: **`enqueue(collection, action, payload)`**, **`drain(collection)`** and **`cancel(id)`** (§15.5). Retention adds **`purge(collection, seq)`** and **`purge_retained_before(cutoff)`** (§11.2), both owner writes, and both report the rows they retired rather than bytes: the bytes are the collector's to report, since it is what frees them.
+Three further operations belong to the §15 queue: **`enqueue(collection, action, payload)`**, **`drain(collection)`** and **`cancel(id)`** (§15.5). Retention adds **`purge(collection, seq)`** and **`purge_retained_before(cutoff)`** (§11.2), both owner writes, and both report the rows they removed rather than bytes: the bytes are the collector's to report, since it is what frees them.
 
 **`collect_garbage()`** is that collector (§5): an owner operation, holding the owner lock it already has and taking the staging lock exclusively, deleting the unreferenced rows in one transaction and unlinking the files after it, in the order every write uses for the same reason. It reports the rows it dropped, the files it unlinked and the bytes they freed.
 
 A collection's `kind` is **declared, never derived**: which media type a collection holds is configuration, not something a sync layer can infer from what it pulls. Whoever configures the store declares it with **`set_collection_kind(collection, account, kind)`**, out of band from `write`, and any process reads it back with `load_kind`. The lazy path a write runs to guarantee its foreign-key target, `ensure_collection`, inserts an empty kind and MUST NOT overwrite a declared one, so either may run first. An empty `kind` means "created by a sync, never declared", which is distinct from a collection the store has never seen.
 
-The `account` (§9.2) is configuration in the same sense, and both creation paths bind it without overwriting, so a collection cannot change accounts as a side effect of a sync declaring its media type. Re-accounting is the deliberate **`set_collection_account(collection, account)`**, and because the account partitions no identifier it disturbs nothing.
+The `account` (§9.2) is configuration in the same sense, and both creation paths bind it without overwriting, so a collection cannot change accounts as a side effect of a sync declaring its media type. Re-accounting is the deliberate **`set_collection_account(collection, account)`**, and because the account partitions no identifier it disturbs nothing. `load_account` reads it back, which is what a scoped `lookup_objects` binds.
 
 **Renaming a collection** is **`rename_collection(collection, new_id)`**, the *only* safe way to change an id. Every foreign key onto `collections(id)` is `ON UPDATE CASCADE`, so items, bindings, sources, queue rows and child collections follow the id in the same statement. Deleting the row and recreating it under the new id is destructive and silently so: `ON DELETE CASCADE` takes every item and binding with it, turning a rename into a full re-download and discarding staged local changes. A bare `UPDATE` is refused instead, since dependent rows default to `NO ACTION`.
 
@@ -406,11 +418,11 @@ A producer enqueues in **one transaction**: `ensure_collection`, then, when the 
 
 ### 15.2 Applying
 
-The owner drains each collection's pending actions in ascending `id`. An action is applied to the items and bindings and its row deleted **in the same transaction**, so application is exactly-once and never partially visible; because applying is a pure store mutation, that transaction never spans network I/O.
+The owner drains each collection's pending actions in ascending `id`, finding which collections have any with `list_queued_collections`. An action is applied to the items and bindings and its row deleted **in the same transaction**, so application is exactly-once and never partially visible; because applying is a pure store mutation, that transaction never spans network I/O.
 
 The delete is `claim_action`, and it runs **first** in that transaction, not last. `load_pending_actions` is read outside any transaction, so a second owner may hold the same list: deleting at the end has both apply the row, and `add` and `copy` are not idempotent. Claiming it first makes exactly-once a property of the statement rather than a convention about who runs the drain, and it is what §8's advisory lock would otherwise be load-bearing for. A claim that deletes no row means another owner got there first, and there is nothing left to apply: the transaction ends without touching anything.
 
-An action that fails is retried (`bump_attempts`, leaving the row pending). One the owner judges permanently unappliable is **parked**: `error` is set, the action skipped, later actions proceeding. Parked actions are left for operators, and the owner MUST NOT delete them silently.
+An action that fails is retried (`bump_attempts`, leaving the row pending). One the owner judges permanently unappliable is **parked** (`park_action`): `error` is set, the action skipped, later actions proceeding. Parked actions are left for operators, who read them back store-wide with `load_parked_actions`, and the owner MUST NOT delete them silently.
 
 **Skipping is not parking.** Kinds are extensible (§15.3), so one queue legitimately holds store mutations any owner can apply beside capability-bound intents only a particular process can perform (a mail submission needs a send channel this format knows nothing about). An owner that does not recognise a kind, **or recognises it but lacks the capability**, SHALL skip the row: it stays pending, untouched, `error` still `NULL`, and the owner MUST NOT park it, since parking asserts a permanence that is false about work another process will do. A skipped action MUST NOT block later actions and its `attempts` SHOULD NOT be bumped, a skip being no attempt. The row keeps its `id`, so the owner that can perform it still sees it in append order.
 

@@ -1,0 +1,51 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+# This repository holds no implementation, so nothing here can be run on its
+# own: what binds is SPEC.md, the canonical schema under migrations/ and the
+# reference statements under queries/, plus the vectors under vectors/. The
+# reference implementation is where the only toolchain lives, and its spec
+# suites read this checkout rather than a vendored copy, so running them
+# against a pull request is what checks the format against itself.
+jobs:
+  fidelity:
+    name: schema + statements + vectors
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: pimdir
+      - uses: actions/checkout@v4
+        with:
+          repository: pimalaya/io-pimdir
+          path: io-pimdir
+      # NOTE: io-pimdir depends on io-replica by path until the release
+      # carrying the duplicate-link-id freeze is published.
+      - uses: actions/checkout@v4
+        with:
+          repository: pimalaya/io-replica
+          path: io-replica
+      - uses: dtolnay/rust-toolchain@stable
+
+      # The canonical schema applies, every canonical statement prepares
+      # against it, the reference implementation's inlined copy still matches,
+      # and its object names and Annex A derivations still match the vectors.
+      - name: The format against its reference implementation
+        working-directory: io-pimdir
+        run: cargo test --all-features --test spec_drift --test objects --test conventions
+
+      # Those suites skip silently when this checkout is absent, so a green run
+      # proves nothing unless they actually ran.
+      - name: The suites ran rather than skipped
+        working-directory: io-pimdir
+        run: |
+          set -eu
+          for suite in spec_drift objects conventions; do
+            if cargo test --all-features --test "$suite" -- --nocapture 2>&1 | grep -q "skipped: no pimdir spec checkout"; then
+              echo "::error::$suite skipped: this checkout was not found beside it"
+              exit 1
+            fi
+          done

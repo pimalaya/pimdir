@@ -200,15 +200,26 @@ SELECT coalesce(sum(o.size), 0) FROM objects o WHERE o.hash IN
 
 -- name: purge_item
 -- Purge one retained item by its public id: the only true delete. Its bindings
--- cascade, and the body it released is unlinked by the ordinary refcount sweep
--- (list_garbage_objects / delete_garbage_objects, SPEC.md §5, §14). Guarded on
--- retained_at so a purge can never take a live item.
+-- cascade, and the body it released is unlinked by the collector once nothing
+-- else references it (SPEC.md §5, §14). Guarded on retained_at so a purge can
+-- never take a live item.
+--
+-- It RETURNS the two hashes the row pinned, so the caller settles them with
+-- release_pins in the same transaction without reading the row first: the pins
+-- have to be released by whoever deletes the row, and asking for them
+-- separately visits it twice and races nothing but itself.
 DELETE FROM items
-WHERE collection = :collection AND seq = :seq AND retained_at IS NOT NULL;
+WHERE collection = :collection AND seq = :seq AND retained_at IS NOT NULL
+RETURNING object_hash, conflict_object;
 
 -- name: purge_retained_before
 -- The time-based sweep: every item retired before :cutoff (RFC 3339). The
 -- cutoff is the caller's parameter, not the store's clock, so the boundary is
 -- deterministic even though the stamp is SQLite's. Store-wide, since how long
 -- to keep is the owner's policy rather than a collection's.
-DELETE FROM items WHERE retained_at IS NOT NULL AND retained_at < :cutoff;
+--
+-- RETURNS each purged row's two pinned hashes, on the same terms as purge_item
+-- above: the sweep is where reading the rows twice costs most, since it is the
+-- one that takes fifty thousand of them at once.
+DELETE FROM items WHERE retained_at IS NOT NULL AND retained_at < :cutoff
+RETURNING object_hash, conflict_object;
