@@ -64,6 +64,13 @@ for case in objects["objects"]:
 
 for case in meta["cases"]:
     bytes_ = (root / case["fixture"]).read_bytes()
+
+    # Named before the lengths and the digests it would otherwise break, since
+    # a checkout that converted the line endings breaks all three at once.
+    if bytes_.count(b"\n") != bytes_.count(b"\r\n"):
+        failures.append(f"{case['fixture']}: not CRLF throughout, so something converted it")
+        continue
+
     check(f"{case['fixture']} length", len(bytes_), case["body"]["len"])
     check(f"{case['fixture']} meta.size", case["meta"]["size"], case["body"]["len"])
 
