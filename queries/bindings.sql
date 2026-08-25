@@ -10,22 +10,40 @@
 -- name: load_bindings
 -- Every per-source binding of a collection, attached to its item by link id.
 SELECT link_id, source, handle, base_flags, base_object, base_revision,
-       conflicted, conflict_revision
+       base_present, conflicted, conflict_revision, ambiguous_handles
 FROM bindings WHERE collection = :collection;
 
 -- name: load_bindings_by_link
 -- The same rows, narrowed to the link ids one write batch touches: the binding
 -- half of load_items_by_link (queries/items.sql).
 SELECT link_id, source, handle, base_flags, base_object, base_revision,
-       conflicted, conflict_revision
+       base_present, conflicted, conflict_revision, ambiguous_handles
 FROM bindings WHERE collection = :collection
   AND link_id IN (SELECT value FROM json_each(:links));
 
 -- name: insert_binding
 INSERT INTO bindings(collection, link_id, source, handle, base_flags, base_object,
-                     base_revision, conflicted, conflict_revision)
+                     base_revision, base_present, conflicted, conflict_revision,
+                     ambiguous_handles)
 VALUES(:collection, :link_id, :source, :handle, :base_flags, :base_object,
-       :base_revision, :conflicted, :conflict_revision);
+       :base_revision, :base_present, :conflicted, :conflict_revision,
+       :ambiguous_handles);
+
+-- name: update_binding
+-- One existing binding's columns, its primary key unchanged.
+--
+-- `handle` is NOT among them: a binding pins one handle, and repointing it to a
+-- different one is how the fact that a source holds an identity twice used to be
+-- destroyed, silently, at the write. A second copy is recorded in
+-- `ambiguous_handles` instead, which freezes the item until the source holds the
+-- identity once again (SPEC.md §10). Rebinding a handle legitimately, after a
+-- handle-space change, goes through the rebuild that drops the old spine and
+-- inserts the new one, never through this statement.
+UPDATE bindings SET base_flags = :base_flags, base_object = :base_object,
+       base_revision = :base_revision, base_present = :base_present,
+       conflicted = :conflicted, conflict_revision = :conflict_revision,
+       ambiguous_handles = :ambiguous_handles
+WHERE collection = :collection AND link_id = :link_id AND source = :source;
 
 -- The client read surface (SPEC.md §14.1).
 

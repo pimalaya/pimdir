@@ -38,5 +38,17 @@ A first-time reading of SPEC.md, the migration, the canonical statements and the
 
 ## Verification
 
-- io-pimdir: 76 tests green, `cargo clippy --all-targets --all-features` clean. Its spec-fidelity suite compares the inlined DDL against `migrations/0001_init.sql` through SQLite's own pragmas and every canonical statement name against the constants, so the schema and statement changes here are checked against the implementation on both axes.
+- io-pimdir: 84 tests green, `cargo clippy --all-targets --all-features` clean. Its spec-fidelity suite compares the inlined DDL against `migrations/0001_init.sql` through SQLite's own pragmas and every canonical statement name against the constants, so the schema and statement changes here are checked against the implementation on both axes.
 - The scaling figures above were measured with a throwaway release-mode probe against the reference store, before and after, and are not kept as a test: a timing assertion would be flaky where the query plan is the thing that actually changed.
+
+## Addendum, same day
+
+Three of the findings this entry left open were settled once `duplicate-link-id-freeze` had moved the implementation repos together.
+
+- **`lookup_objects` is scoped, by account rather than by collection (§14).** The audit asked for a collection scope and that would have been wrong: across collections the answer is exactly what the read exists for, one message filed in two mailboxes being one body downloaded once. The account is the axis a link id is trustworthy on, and the one §9.2 already names. A single-account store writes no account, so the filter is a no-op there. No seam change was needed, so the reason this was blocked turned out not to hold.
+
+- **§13 no longer infers a base's presence from three nullable columns.** `bindings.base_present` states it, the value columns remaining a witness only for rows written before the column existed. The shape that was unrepresentable, a source reporting no revision, no body and markers nobody has read, is a real agreement, and losing it had the placement read as never-agreed for ever.
+
+- **`release_pins` joins the canonical statements**, the set-based form of `adjust_refcount` at -1, so settling many pins at once is one statement rather than one per hash.
+
+Still open, unchanged: the concurrency envelope (§8's advisory lock is still unimplemented, though the drain no longer depends on it); the disagreement between §5 and §14 about an object indexed with no referrer; `recompute_refcounts`' false complexity claim and the `UNION ALL` rewrite that fixes it; and `CHECK (refcount >= 0)`.

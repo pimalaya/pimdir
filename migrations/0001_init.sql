@@ -143,10 +143,25 @@ CREATE TABLE bindings (
     base_flags        TEXT,                -- JSON array of strings, or NULL
     base_object       TEXT REFERENCES objects(hash),
     base_revision     TEXT,                -- etag/modseq for mutable-content backends
+    -- Whether a base exists at all, which its three value columns cannot say:
+    -- a source reporting no revision, no body and markers nobody has read still
+    -- agreed, and that agreement is what tells a pending push from a settled
+    -- one. Inferring presence from the three loses exactly that shape, and the
+    -- placement then reads as never-agreed for ever (SPEC.md §13).
+    base_present      INTEGER NOT NULL DEFAULT 0,
     -- This source and its OWN remote diverged (§10). Distinct from
     -- items.conflicted, which is the cross-source divergence.
     conflicted        INTEGER NOT NULL DEFAULT 0,
     conflict_revision TEXT,                -- the remote revision observed when it did, or NULL
+    -- The OTHER handles this source holds this identity under, as a JSON array,
+    -- or NULL. The identity-axis twin of `conflicted`: a source may hold one
+    -- link id twice (a double delivery, a retried APPEND, a restore, a
+    -- migration), and a binding pins one handle, so the second has nowhere to
+    -- live. Recording it here is what keeps the write from silently repointing
+    -- the binding and destroying the evidence, and what makes the resulting
+    -- freeze survive a restart: the second copy appears in exactly one
+    -- enumeration, and an incremental one never mentions it again (SPEC.md §10).
+    ambiguous_handles TEXT,
     PRIMARY KEY (collection, link_id, source),
     -- ON UPDATE CASCADE as well as ON DELETE: renaming a collection cascades
     -- into items.collection, which is this composite key's parent, so without it
