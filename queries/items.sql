@@ -166,15 +166,23 @@ UPDATE items SET deleted = 0, retained_at = NULL, retained_by = NULL
 WHERE collection = :collection AND link_id = :link_id;
 
 -- name: list_retained_page
--- A keyset page of a collection's retained items: the trash listing beside
--- list_items_page, and the only read that returns them. Same :after contract,
--- the exclusive lower bound on link_id, so paging rides the items primary key.
+-- A keyset page of a collection's retained items: the trash listing, and the
+-- only read that returns them. :after is the exclusive lower bound on `seq`,
+-- and 0 starts from the beginning, since seq is handed out from 1.
+--
+-- On seq rather than on link_id, unlike list_items_page above. That one is the
+-- sweep read, where an arbitrary total order is what is wanted; this one is a
+-- listing a reader presents, so its cursor is the public id the reader already
+-- speaks (SPEC.md §9.1, §14.1) rather than the internal key. It also rides
+-- items_retained, which leads with seq for this read: ordering by anything else
+-- sorts every retained row in the collection to return one page.
+--
 -- The body size comes from the object the row still pins, NULL when unhydrated.
 SELECT i.seq, i.link_id, i.flags, i.object_hash, i.meta, i.sort_key, i.level,
        i.retained_at, i.retained_by, o.size
 FROM items i LEFT JOIN objects o ON o.hash = i.object_hash
-WHERE i.collection = :collection AND i.retained_at IS NOT NULL AND i.link_id > :after
-ORDER BY i.link_id LIMIT :limit;
+WHERE i.collection = :collection AND i.retained_at IS NOT NULL AND i.seq > :after
+ORDER BY i.seq LIMIT :limit;
 
 -- name: count_retained
 -- A collection's retained item count, the counterpart of count_items. Rides the

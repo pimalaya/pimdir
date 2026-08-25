@@ -9,8 +9,14 @@
 -- name: enqueue_action
 -- A producer's append. Runs after ensure_collection, in one transaction with
 -- the store_object upsert when the payload references a body (SPEC.md §15).
+--
+-- created_at is stamped by SQLite, like retained_at (SPEC.md §13), so every
+-- implementation writes the same shape and no producer plumbs a clock through
+-- to reach it. It is also the better clock: a producer is a different process
+-- from the owner and may be differently skewed, while the database has one.
+-- Ordering is unaffected either way, being `id`.
 INSERT INTO queue(created_at, producer, collection, action, payload, object_hash)
-VALUES(:created_at, :producer, :collection, :action, :payload, :object_hash);
+VALUES(strftime('%Y-%m-%dT%H:%M:%fZ','now'), :producer, :collection, :action, :payload, :object_hash);
 
 -- name: list_queued_collections
 -- The collections with pending work, for the owner's drain loop.

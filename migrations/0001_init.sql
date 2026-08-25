@@ -127,8 +127,14 @@ CREATE UNIQUE INDEX items_by_seq ON items(collection, seq);
 -- the read that reports every collection and account an identity occurs in
 -- (SPEC.md §9.2).
 CREATE INDEX items_by_link ON items(link_id);
--- Retained (soft-deleted) items: the purge sweep and the trash listing scan only these.
-CREATE INDEX items_retained ON items(collection, retained_at) WHERE retained_at IS NOT NULL;
+-- Retained (soft-deleted) items: every retained read rides this one index. It
+-- leads with `seq` rather than `retained_at` because the trash listing pages on
+-- the public id (list_retained_page, SPEC.md §14.1), and ordering by anything
+-- this index does not lead with costs a sort of every retained row in the
+-- collection to return one page. count_retained rides the collection prefix,
+-- and the store-wide purge scans the index whole, which is O(retained) because
+-- the index is partial and holds nothing else.
+CREATE INDEX items_retained ON items(collection, seq) WHERE retained_at IS NOT NULL;
 -- Orders a collection by the kind's own sort key, with `seq` as the tiebreaker
 -- that makes a keyset page over a non-unique key well defined. Without this the
 -- only orderings a store can serve are by `link_id` (the primary key) or by
