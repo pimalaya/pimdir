@@ -1,0 +1,122 @@
+{
+  "v": 1,
+  "base32": {
+    "alphabet": "abcdefghijklmnopqrstuvwxyz234567",
+    "rfc": "RFC 4648 section 6, lowercased; NOT section 7 base32hex",
+    "padding": false,
+    "cases": [
+      { "input_utf8": "", "input_hex": "", "base32": "" },
+      { "input_utf8": "f", "input_hex": "66", "base32": "my" },
+      { "input_utf8": "fo", "input_hex": "666f", "base32": "mzxq" },
+      { "input_utf8": "foo", "input_hex": "666f6f", "base32": "mzxw6" },
+      { "input_utf8": "foob", "input_hex": "666f6f62", "base32": "mzxw6yq" },
+      { "input_utf8": "fooba", "input_hex": "666f6f6261", "base32": "mzxw6ytb" },
+      { "input_utf8": "foobar", "input_hex": "666f6f626172", "base32": "mzxw6ytboi" }
+    ]
+  },
+  "algorithms": {
+    "blake3": { "digest_bytes": 32, "name_chars": 52, "derivation": "BLAKE3 at its default 32-byte output length" },
+    "sha256-128": { "digest_bytes": 16, "name_chars": 26, "derivation": "the leading 16 bytes of the SHA-256 digest" }
+  },
+  "objects": [
+    {
+      "label": "empty",
+      "note": "the empty body is a real object, not a special case",
+      "body_len": 0,
+      "body_hex": "",
+      "blake3": { "digest_hex": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262", "name": "v4jutopv7gq2nicajxvdnxgjjgn4wjojvxarfn6mtkj4vza7gjra", "path": "objects/v4/ju/v4jutopv7gq2nicajxvdnxgjjgn4wjojvxarfn6mtkj4vza7gjra" },
+      "sha256-128": { "digest_hex": "e3b0c44298fc1c149afbf4c8996fb924", "name": "4oymiquy7qobjgx36tejs35zeq", "path": "objects/4o/ym/4oymiquy7qobjgx36tejs35zeq" }
+    },
+    {
+      "label": "len-1",
+      "note": "one byte, and that byte a NUL: a body is bytes, never text",
+      "body_len": 1,
+      "body_hex": "00",
+      "blake3": { "digest_hex": "2d3adedff11b61f14c886e35afa036736dcd87a74d27b5c1510225d0f592e213", "name": "fu5n5x7rdnq7cteiny227ibwonw43b5hjut3lqkrais5b5ms4ijq", "path": "objects/fu/5n/fu5n5x7rdnq7cteiny227ibwonw43b5hjut3lqkrais5b5ms4ijq" },
+      "sha256-128": { "digest_hex": "6e340b9cffb37a989ca544e6bb780a2c", "name": "ny2axhh7wn5jrhffittlw6akfq", "path": "objects/ny/2a/ny2axhh7wn5jrhffittlw6akfq" }
+    },
+    {
+      "label": "len-2",
+      "body_len": 2,
+      "body_hex": "0001",
+      "blake3": { "digest_hex": "7b7015bb92cf0b318037702a6cdd81dee41224f734684c2c122cd6359cb1ee63", "name": "pnyblo4sz4ftdabxoavgzxmb33sbejhxgrueylasftldlhfr5zrq", "path": "objects/pn/yb/pnyblo4sz4ftdabxoavgzxmb33sbejhxgrueylasftldlhfr5zrq" },
+      "sha256-128": { "digest_hex": "b413f47d13ee2fe6c845b2ee141af81d", "name": "wqj7i7it5yx6nscfwlxbigxydu", "path": "objects/wq/j7/wqj7i7it5yx6nscfwlxbigxydu" }
+    },
+    {
+      "label": "len-3",
+      "body_len": 3,
+      "body_hex": "000102",
+      "blake3": { "digest_hex": "e1be4d7a8ab5560aa4199eea339849ba8e293d55ca0a81006726d184519e647f", "name": "4g7e26ukwvlavjazt3vdhgcjxkhcspkvzificadhe3iyium6mr7q", "path": "objects/4g/7e/4g7e26ukwvlavjazt3vdhgcjxkhcspkvzificadhe3iyium6mr7q" },
+      "sha256-128": { "digest_hex": "ae4b3280e56e2faf83f414a6e3dabe9d", "name": "vzftfahfnyx27a7ucstohwv6tu", "path": "objects/vz/ft/vzftfahfnyx27a7ucstohwv6tu" }
+    },
+    {
+      "label": "len-4",
+      "body_len": 4,
+      "body_hex": "00010203",
+      "blake3": { "digest_hex": "f30f5ab28fe047904037f77b6da4fea1e27241c5d132638d8bedce9d40494f32", "name": "6mhvvmup4bdzaqbx655w3jh6uhrheqof2ezghdml5xhj2qcjj4za", "path": "objects/6m/hv/6mhvvmup4bdzaqbx655w3jh6uhrheqof2ezghdml5xhj2qcjj4za" },
+      "sha256-128": { "digest_hex": "054edec1d0211f624fed0cbca9d4f940", "name": "avhn5qoqeepwet7nbs6ktvhzia", "path": "objects/av/hn/avhn5qoqeepwet7nbs6ktvhzia" }
+    },
+    {
+      "label": "len-5",
+      "body_len": 5,
+      "body_hex": "0001020304",
+      "blake3": { "digest_hex": "b40b44dfd97e7a84a996a91af8b85188c66c126940ba7aad2e7ae6b385402aa2", "name": "wqfujx6zpz5ijkmwvenprocrrddgyetjic5hvljopltlhbkafkra", "path": "objects/wq/fu/wqfujx6zpz5ijkmwvenprocrrddgyetjic5hvljopltlhbkafkra" },
+      "sha256-128": { "digest_hex": "08bb5e5d6eaac1049ede0893d30ed022", "name": "bc5v4xlovlaqjhw6bcj5gdwqei", "path": "objects/bc/5v/bc5v4xlovlaqjhw6bcj5gdwqei" }
+    },
+    {
+      "label": "abc",
+      "note": "SHA-256 of the three bytes 616263 is a published NIST vector, checkable by hand",
+      "body_len": 3,
+      "body_hex": "616263",
+      "blake3": { "digest_hex": "6437b3ac38465133ffb63b75273a8db548c558465d79db03fd359c6cd5bd9d85", "name": "mq33hlbyizith75whn2soounwvemkwcglv45wa75gwogzvn5twcq", "path": "objects/mq/33/mq33hlbyizith75whn2soounwvemkwcglv45wa75gwogzvn5twcq" },
+      "sha256-128": { "digest_hex": "ba7816bf8f01cfea414140de5dae2223", "name": "xj4bnp4pahh6uqkbidpf3lrcem", "path": "objects/xj/4b/xj4bnp4pahh6uqkbidpf3lrcem" }
+    },
+    {
+      "label": "high-bytes",
+      "note": "bytes above 0x7f, which a writer treating the body as UTF-8 would mangle",
+      "body_len": 5,
+      "body_hex": "fffe00807f",
+      "blake3": { "digest_hex": "363130099be3a1393ef621b49a7827b518e9c82e0dada732f00ce32eddfbef9e", "name": "gyytacm34oqtspxweg2ju6bhwumotsbobww2omxqbtrs5xp356pa", "path": "objects/gy/yt/gyytacm34oqtspxweg2ju6bhwumotsbobww2omxqbtrs5xp356pa" },
+      "sha256-128": { "digest_hex": "ac3d6c9d9d884347e5f967d55c989520", "name": "vq6wzhm5rbbupzpzm7kvzgevea", "path": "objects/vq/6w/vq6wzhm5rbbupzpzm7kvzgevea" }
+    },
+    {
+      "label": "len-63",
+      "body_len": 63,
+      "body_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e",
+      "blake3": { "digest_hex": "e9bc37a594daad83be9470df7f7b3798297c3d834ce80ba85d6e207627b7db7b", "name": "5g6dpjmu3kwyhpuuodpx66zxtauxypmdjtuaxkc5nyqhmj5x3n5q", "path": "objects/5g/6d/5g6dpjmu3kwyhpuuodpx66zxtauxypmdjtuaxkc5nyqhmj5x3n5q" },
+      "sha256-128": { "digest_hex": "29af2686fd53374a36b0846694cc3421", "name": "fgxsnbx5km3uunvqqrtjjtbuee", "path": "objects/fg/xs/fgxsnbx5km3uunvqqrtjjtbuee" }
+    },
+    {
+      "label": "len-64",
+      "note": "the SHA-256 block boundary",
+      "body_len": 64,
+      "body_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "blake3": { "digest_hex": "4eed7141ea4a5cd4b788606bd23f46e212af9cacebacdc7d1f4c6dc7f2511b98", "name": "j3wxcqpkjjonjn4imbv5ep2g4ijk7hfm5owny7i7jrw4p4srdoma", "path": "objects/j3/wx/j3wxcqpkjjonjn4imbv5ep2g4ijk7hfm5owny7i7jrw4p4srdoma" },
+      "sha256-128": { "digest_hex": "fdeab9acf3710362bd2658cdc9a29e8f", "name": "7xvltlhtoebwfpjgldg4tiu6r4", "path": "objects/7x/vl/7xvltlhtoebwfpjgldg4tiu6r4" }
+    },
+    {
+      "label": "len-1023",
+      "note": "one byte below the BLAKE3 chunk boundary",
+      "body_len": 1023,
+      "body_pattern": "byte i is (i mod 251)",
+      "blake3": { "digest_hex": "10108970eeda3eb932baac1428c7a2163b0e924c9a9e25b35bba72b28f70bd11", "name": "caiis4ho3i7lsmv2vqkcrr5ccy5q5esmtkpclm23xjzlfd3qxuiq", "path": "objects/ca/ii/caiis4ho3i7lsmv2vqkcrr5ccy5q5esmtkpclm23xjzlfd3qxuiq" },
+      "sha256-128": { "digest_hex": "1c5e88a585b61754df6137d66632a734", "name": "drpirjmfwylvjx3bg7lgmmvhgq", "path": "objects/dr/pi/drpirjmfwylvjx3bg7lgmmvhgq" }
+    },
+    {
+      "label": "len-1024",
+      "note": "exactly one BLAKE3 chunk, where a streaming hasher most often breaks",
+      "body_len": 1024,
+      "body_pattern": "byte i is (i mod 251)",
+      "blake3": { "digest_hex": "42214739f095a406f3fc83deb889744ac00df831c10daa55189b5d121c855af7", "name": "iiquoopqswsan474qpplrclujlaa36bryeg2uviytnorehefll3q", "path": "objects/ii/qu/iiquoopqswsan474qpplrclujlaa36bryeg2uviytnorehefll3q" },
+      "sha256-128": { "digest_hex": "2bce1ba628720664be4b9fdd77aae067", "name": "fphbxjrioidgjpslt7oxpkxam4", "path": "objects/fp/hb/fphbxjrioidgjpslt7oxpkxam4" }
+    },
+    {
+      "label": "len-1025",
+      "note": "one byte above it, so the second chunk holds a single byte",
+      "body_len": 1025,
+      "body_pattern": "byte i is (i mod 251)",
+      "blake3": { "digest_hex": "d00278ae47eb27b34faecf67b4fe263f82d5412916c1ffd97c8cb7fb814b8444", "name": "2abhrlsh5mt3gt5oz5t3j7rgh6bnkqjjc3a77wl4rs37xaklqrca", "path": "objects/2a/bh/2abhrlsh5mt3gt5oz5t3j7rgh6bnkqjjc3a77wl4rs37xaklqrca" },
+      "sha256-128": { "digest_hex": "bc0b6b10b89b9487a12fda2a8cc13194", "name": "xqfwwefytokipijp3ivizqjrsq", "path": "objects/xq/fw/xqfwwefytokipijp3ivizqjrsq" }
+    }
+  ]
+}

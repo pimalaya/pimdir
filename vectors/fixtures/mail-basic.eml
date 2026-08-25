@@ -1,0 +1,10 @@
+Message-ID: <basic-1@example.org>
+In-Reply-To: <parent-1@example.org>
+Subject: Stand-up notes
+From: Alice Example <alice@example.org>
+To: bob@example.org, carol@example.org
+Date: Sat, 01 Aug 2026 12:00:00 +0200
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Nothing to report.

@@ -68,8 +68,10 @@ WHERE counted.hash = objects.hash AND objects.refcount != counted.n;
 UPDATE objects SET refcount = refcount + :delta WHERE hash = :hash;
 
 -- name: list_garbage_objects
--- Objects no item/binding pins; blob files unlinked before the rows go. The
--- predicate is `<= 0` rather than `= 0` to match the partial index
+-- Objects no item, binding or queue row pins: what the collector takes
+-- (SPEC.md §5). Not a write's business — a write leaves an unreferenced object
+-- alone, since the batch that attaches a body may not be the one that indexed
+-- it. The predicate is `<= 0` rather than `= 0` to match the partial index
 -- objects_garbage exactly, so neither statement scans the table. Under the
 -- refcount floor (SPEC.md §7) the two select the same rows; the wider one is for
 -- the reader that cannot apply the floor, since it opens read-only and a store
@@ -77,7 +79,17 @@ UPDATE objects SET refcount = refcount + :delta WHERE hash = :hash;
 SELECT hash FROM objects WHERE refcount <= 0;
 
 -- name: delete_garbage_objects
+-- The collector's delete, in one transaction; the blob files go after the
+-- commit, so a crash leaves at worst an orphan and never a row without a body.
 DELETE FROM objects WHERE refcount <= 0;
+
+-- name: list_object_hashes
+-- Every hash the index holds, for the collector to diff the blob directory
+-- against: a file this does not name is an orphan, and reading the directory is
+-- the only way to find one (SPEC.md §5). Run after delete_garbage_objects, in
+-- the same transaction, so the bodies of the rows it just dropped fall out as
+-- orphans too and one pass over the tree reclaims both.
+SELECT hash FROM objects;
 
 -- name: release_pins
 -- Release one reference from each of :hashes (a JSON array): the set-based form

@@ -1,0 +1,6 @@
+Message-ID: <bare-1@example.org>
+From: alice@example.org
+To: bob@example.org
+Date: Sat, 01 Aug 2026 10:00:00 GMT
+
+No subject header at all.

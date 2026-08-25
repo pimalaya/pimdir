@@ -1,7 +1,7 @@
 ---
 cairn: change
 id: cross-implementation-vectors
-status: active
+status: landed
 created: 2026-08-24
 ---
 

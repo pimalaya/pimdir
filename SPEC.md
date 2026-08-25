@@ -27,6 +27,7 @@ The store first, then the model it holds, then the API over it.
 13. [Encodings](#13-encodings)
 14. [Operations](#14-operations): [reading the store](#141-reading-the-store)
 15. [Action queue](#15-action-queue): [producing](#151-producing), [applying](#152-applying), [actions](#153-actions), [reading the queue](#154-reading-the-queue), [cancelling and acknowledging](#155-cancelling-and-acknowledging)
+16. [Test vectors](#16-test-vectors)
 
 [Annex A](#annex-a-application-meta-conventions-informative) holds the per-kind `meta` and `sort_key` conventions, which are informative rather than part of the format.
 
@@ -66,11 +67,13 @@ A store is a directory containing exactly:
 ```
 mystore/
   pimdir.db            the SQLite database (may be accompanied by -wal / -shm)
+  owner.lock           the owner's exclusive advisory lock (§8)
+  objects.lock         the producers' shared advisory lock (§8)
   objects/             the content-addressed blob directory (§5)
     ab/cd/abcd…         a body, at objects/<h[0:2]>/<h[2:4]>/<hash>
 ```
 
-A directory is a pimdir store if and only if it contains a pimdir.db whose `store_meta.format` is `'pimdir'`. The database *is* the marker; there is no separate marker file.
+A directory is a pimdir store if and only if it contains a pimdir.db whose `store_meta.format` is `'pimdir'`. The database *is* the marker; there is no separate marker file: the lock files are empty, created by the first handle that takes one, and hold no state of their own (§8), so a store that has only ever been read has neither.
 
 ## 4. The database
 
@@ -113,9 +116,25 @@ The named, parameterised statements servicing the operations (§14) live under q
 
 Object bytes live under objects/, one file per hash, **sharded two levels by hash prefix** (`objects/<hash[0:2]>/<hash[2:4]>/<hash>`) to keep any one directory small. The hash is encoded in lowercase base32 (RFC 4648, no padding), so the path is valid on every target filesystem.
 
-- **Write** is atomic: write a temporary period-prefixed file in the same shard directory, `fsync`, then `rename` into place, then **`fsync` the shard directory**. The name being the content hash, a file is never rewritten. The directory sync is not optional bookkeeping: syncing the file makes its bytes durable and says nothing about the name that reaches them, while the database commit *is* durable, so without it a power loss can leave a committed row pointing at a body that never arrived. That is the one asymmetry the write order of §14 exists to prevent, the reverse leaving at worst an orphan file.
+An **object name** is fully determined by these rules, and every part of them is normative, because a store whose two writers name the same body differently does not report a mismatch: it silently stops deduplicating and stops finding the blob the other side wrote.
+
+- The digest is taken over the body's **raw bytes**, whole, with no length prefix, framing or transformation.
+- **`blake3`** is BLAKE3 in its default 32-byte output length, giving a 52-character name. **`sha256-128`** is the **leading 16 bytes** of the SHA-256 digest, giving a 26-character name; it exists for a runtime whose standard library has SHA-256 and no BLAKE3, and truncating a digest to half its width is sound where the second preimage is not the threat. Which one a store uses is `store_meta.hash_algo` (§4.2), and it MUST NOT be inferred from a name's length.
+- The alphabet is RFC 4648 **§6** (`abcdefghijklmnopqrstuvwxyz234567`), lowercased, **not** §7's base32hex, which shares the length and none of the characters. Padding is omitted (RFC 4648 §3.2), so a name carries no `=`.
+- The shard directories are the first two and the next two characters **of that encoded name**, never of the digest's hex.
+
+§16's vectors are what an implementation checks itself against; the empty body is in them, and it is a real object rather than a special case.
+
+- **Write** is atomic: write a temporary period-prefixed file in the same shard directory, `fsync`, then `rename` into place, then **`fsync` the shard directory**. The name being the content hash, a file is never rewritten. The directory sync is not optional bookkeeping: syncing the file makes its bytes durable and says nothing about the name that reaches them, while the database commit *is* durable, so without it a power loss can leave a committed row pointing at a body that never arrived. That is the one asymmetry the write order of §14 exists to prevent, the reverse leaving at worst an orphan blob, which the collector below reclaims and nothing else does.
 - **Reference counting**: `objects.refcount` MUST equal the number of pointers at that hash, counting an item's `object_hash` and `conflict_object`, a binding's `base_object`, and a queue row's `object_hash` (§15). A body waiting in the queue is pinned exactly like a referenced one, and so is the body of a retained item (§11). Refcounts are maintained in the same transaction as the writes that change them.
-- **Garbage collection**: an object whose refcount reaches zero MAY be deleted, its blob file removed after the row. The sweep tests `refcount <= 0` rather than `= 0`, which matches the partial index `objects_garbage` exactly: without that index both halves of the sweep scan the whole `objects` table, on every write transaction. Under §7's floor the two predicates select the same rows, and the wider one is what keeps a **reader** honest: a reader opens read-only (§8), so it cannot apply the floor to a store written before the constraint existed, and a negative count there must still read as collectable rather than as live. A store MAY instead recompute refcounts from the pointer columns and sweep orphans: O(placements), and immune to bookkeeping drift.
+- **An unreferenced object is not a deleted one**: an object whose refcount reaches zero is unreferenced, and it stays. A write MUST NOT delete such a row and MUST NOT unlink its blob. A consumer MAY index a body in one batch and attach it in a later one, which §14 step 1 explicitly invites for a body streamed to its sharded path without being held whole, and a sweep at the end of the first batch destroys what the second was about to reference: silently, bytes included. Reclamation is a separate operation, below.
+- **The collector**: reclamation is one operation, run when it is asked for. It deletes the object rows at refcount zero and unlinks every blob file no `objects` row names: those rows' own bodies and the **orphans** a crash left, which are one case rather than two once the rows are gone. The predicate is `refcount <= 0` rather than `= 0`, which matches the partial index `objects_garbage` exactly, and the wider form is what keeps a **reader** honest: a reader opens read-only (§8), so it cannot apply §7's floor to a store written before that constraint existed, and a negative count there must still read as collectable rather than as live.
+
+  The collector MUST **read the directory**, since an orphan is by construction a file the database holds no evidence of. Orphans are ordinary rather than exceptional: every crash between a commit and its unlink leaves one, and so does every body written for a batch that then failed. A store therefore needs the collector run periodically, and the format states it because a store that never runs it grows without bound and reports nothing, every check it has passing.
+
+  The collector MUST hold the store's **exclusive owner lock** and take its **staging lock exclusively** (§8), and those two are what an earlier draft's grace period was standing in for. A body is written before the row that references it, and MAY be written before the transaction opens, so a file that has just appeared is indistinguishable by inspection from an orphan: the only question is whether a writer is in flight, and the locks answer it, where a timer only guessed at it. A period-prefixed temporary file (the write above) is not an orphan and MUST be left alone: it belongs to a writer that has not renamed it into place.
+
+  A store MAY recompute refcounts from the pointer columns before collecting: O(placements), and immune to bookkeeping drift (§7).
 - Bodies are content-addressed, so an identical body in two collections is stored once, and copy, move and undelete are pointer edits rather than byte copies.
 
 Keeping bodies out of the database is what makes the database a *rebuildable cache* (§6): the irreplaceable data survives any index corruption.
@@ -148,19 +167,25 @@ Migrations are **forward-only**. There are no down-migrations because the databa
 
 - A store is self-checking: `PRAGMA integrity_check` on the database, plus recomputing an object's hash and comparing it to its `objects.hash` and blob filename, detects corruption with no external manifest.
 - The refcount invariant (§5) and the schema's foreign keys are the structural invariants; an implementation MAY verify and repair refcounts by recomputation, with `recompute_refcounts` (§14). It settles every object in one grouped pass over the four columns that pin one (an item's body, an item's conflict body, a binding's base, a pending queue action's body), so it is linear in those pointers rather than in their product with the object table, and it counts zero for an object none of them names any more.
-- **The refcount has a floor**: `objects.refcount` carries `CHECK (refcount >= 0)`, so the count cannot go negative at all. A double release is a bookkeeping error whose two outcomes both hide it. If a pointer remains, the sweep tries to delete a row four foreign keys still reference, and the write transaction fails on `FOREIGN KEY constraint failed`, naming neither the object nor the release that miscounted it, and failing the same way on every write from then on. If none remains, the sweep takes the row and nothing is left to notice. The constraint moves the failure to the statement that caused it. It is checked per statement, never deferred to the commit, so a transaction cannot net a dip below zero back out: a correct batch never dips, since it releases no more pointers than the hash holds, and one that does had the error before the constraint reported it.
+- **The refcount has a floor**: `objects.refcount` carries `CHECK (refcount >= 0)`, so the count cannot go negative at all. A double release is a bookkeeping error whose two outcomes both hide it. If a pointer remains, the collector tries to delete a row four foreign keys still reference, and its transaction fails on `FOREIGN KEY constraint failed`, naming neither the object nor the release that miscounted it, and failing the same way on every write from then on. If none remains, the collector takes the row and nothing is left to notice. The constraint moves the failure to the statement that caused it. It is checked per statement, never deferred to the commit, so a transaction cannot net a dip below zero back out: a correct batch never dips, since it releases no more pointers than the hash holds, and one that does had the error before the constraint reported it.
 - The order of trust is **blob bytes > database row**. A body whose recomputed hash disagrees with its row is authoritative, and the row is repaired from it.
 
 ## 8. Concurrency and ownership
 
-The store has a **single-owner** rule: at most one process, on one host, owns pimdir.db at a time, and only the owner mutates collections, items, bindings, sources and objects (beyond the producer upsert below). Owners SHOULD take an advisory lock on the store directory, so a second owner waits or exits instead of racing.
+The store has a **single-owner** rule: at most one process, on one host, owns pimdir.db at a time, and only the owner mutates collections, items, bindings, sources and objects (beyond the producer upsert below).
+
+An owner MUST take an **exclusive advisory lock** on `owner.lock`, beside pimdir.db, and hold it for as long as it owns the store. The lock belongs to the open file, not to the file's existence: the operating system releases it when the process dies, so a crashed owner leaves a lock file that locks nothing and there is nothing to recover. A lock file whose *existence* is the lock cannot say that, and the escape hatch it then needs for a stale one puts the race back.
+
+An owner that cannot take the lock MUST fail immediately, naming the store, rather than waiting for it. The wait would have to outlast a whole sync transaction, which is a stall with no signal rather than either an answer or a failure, and what to do instead — retry, back off, queue the intent through §15, tell the user — is the calling program's to choose. The database's own busy timeout is unaffected: owners and producers still contend on the write lock, and that contention is worth waiting out.
+
+The rule is about **processes**. An implementation opening several handles over one store, one per source or one per account, is one owner: it takes the lock once and shares it, rather than contending with itself.
 
 Two lesser roles exist beside it, both local-host only:
 
-- **Readers** open the database read-only and see consistent WAL snapshots; any number may run concurrently.
-- **Producers** request mutations without owning the store. Their only permitted write is the §15 enqueue transaction; they MUST NOT touch any other table, and MUST NOT assume when the owner will apply the action.
+- **Readers** open the database read-only and see consistent WAL snapshots; any number may run concurrently, including while an owner holds the store. A reader MUST NOT take either lock.
+- **Producers** request mutations without owning the store. Their only permitted write is the §15 enqueue transaction; they MUST NOT touch any other table, and MUST NOT assume when the owner will apply the action. A producer MUST take a **shared advisory lock** on `objects.lock` across the blob write and the enqueue that pins it (§15.1), and hold it until both are done. Any number of producers hold it at once, and it is deliberately not the owner's lock: producers exist to append while the owner syncs. What it delimits is the one window in which a body is written but not yet referenced, which is the window a collector must not run inside.
 
-On a **network filesystem** (NFS/SMB), SQLite's cross-host locking is unreliable, so a store on a share MUST be owned by exactly one process on one host, typically a front daemon clients talk to rather than opening the file themselves. Two owners MUST NOT run, and an implementation SHOULD enforce single-instance with a lease. Such an owner MUST NOT rely on WAL's shared-memory (`-shm`) file or on `mmap`, both of which assume a local filesystem: it MUST use rollback-journal mode or `PRAGMA locking_mode = EXCLUSIVE`.
+On a **network filesystem** (NFS/SMB), neither SQLite's cross-host locking nor the advisory locks above are reliable, so a store on a share MUST be owned by exactly one process on one host, typically a front daemon clients talk to rather than opening the file themselves. Two owners MUST NOT run, and an implementation SHOULD enforce single-instance with a lease. Such an owner MUST NOT rely on WAL's shared-memory (`-shm`) file or on `mmap`, both of which assume a local filesystem: it MUST use rollback-journal mode or `PRAGMA locking_mode = EXCLUSIVE`.
 
 Because writes are transactional, a reconciled flag set or a multi-item move commits atomically, and a reader never observes a torn change.
 
@@ -258,14 +283,14 @@ Retention is **unconditional**: no switch, no per-store flag, no per-collection 
 - **Stamped by SQLite.** `retained_at` SHALL be written by the retiring statement itself (§13), so no implementation plumbs a clock through to reach it. The *cutoff* of a time-based purge is by contrast the caller's parameter (§11.2), which keeps a purge deterministic and testable.
 - **Hidden from the sync seam.** A retained row SHALL be absent from the load that feeds the merge: `load_items` filters `retained_at IS NULL`. A store that retained rows *and* returned them from `load` would re-upload every one of them on the next run, so hiding them is the condition of correctness rather than an optimisation. The sync engine publishes the matching contract (io-replica's storage spec: a removal reaches storage as a drop the storage MAY retain, and the merge reconciles only what a `load` returns). The same filter is why `delete_items` spares retained rows (§14).
 - **Hidden from the read surface by default.** A retained item SHALL NOT appear in the live reads, and no new rule is needed for it: the row carries `deleted = 1` and §14.1's live-only rule already excludes it. `list_retained_page` and `count_retained` are the deliberate exception, a trash view a reader MUST present as retained.
-- **Purge is the only true delete.** A row leaves the store only through `purge_item` or `purge_retained_before`. The item row goes, its bindings cascade, and the body it released is unlinked by the ordinary refcount sweep (§5, §14), so purge needs no garbage collection of its own. A purge MUST NOT take a live item: both statements are guarded on `retained_at IS NOT NULL`.
+- **Purge is the only true delete.** A row leaves the store only through `purge_item` or `purge_retained_before`. The item row goes, its bindings cascade, and the body it released is unlinked by the collector (§5) whenever that next runs, so a purge reports the rows it retired and never bytes: it releases a body, it does not reclaim one. A purge MUST NOT take a live item: both statements are guarded on `retained_at IS NOT NULL`.
 - **A reappearing link id revives.** A link id that comes back while a retained row holds its primary key SHALL **revive** that row (`revive_item`: stamps cleared, `deleted` back to `0`) and adopt the new content, rather than conflict on the key. One branch serves both a source-side resurrection and a client `add` (§15.3). The revived row keeps its `seq` (§9.1) and whatever `object_hash`, `flags` and `meta` retention preserved, so a restore costs no network.
 - **Retention is not durable state a source can observe.** `retained_by` is diagnostic and nothing keys on it. A retained item has no bindings, so it participates in no merge and pushes nothing; reviving it stages it as an ordinary local creation.
 
 ### 11.2 Purging
 
 - **`purge_item(collection, seq)`**: one retained item by its public id, an operator emptying one thing out of the trash.
-- **`purge_retained_before(cutoff)`**: every item retired before an RFC 3339 instant, store-wide, the scheduled sweep. The owner computes `cutoff` from its own retention duration and passes it in, so the store neither reads a clock nor holds the policy. Never sweeping reclaims nothing, and a cutoff of *now* reproduces the terminal-delete behaviour of a store that never retained, which is why no on/off switch is needed.
+- **`purge_retained_before(cutoff)`**: every item retired before an RFC 3339 instant, store-wide, the scheduled retirement. The owner computes `cutoff` from its own retention duration and passes it in, so the store neither reads a clock nor holds the policy. Never sweeping reclaims nothing, and a cutoff of *now* reproduces the terminal-delete behaviour of a store that never retained, which is why no on/off switch is needed.
 
 `retained_bytes()` (§14.1) reports what retention is holding, so an operator can see the cost of a policy before choosing a duration.
 
@@ -284,7 +309,7 @@ Two implementations produce byte-identical stores only if they encode the model 
 - **`conflict`** (TEXT): the collection's cross-source content-conflict policy: `'manual'`, `'prefer-incoming'` or `'prefer-existing'`.
 - **`flags` / `base_flags`** (TEXT): a JSON array of the raw flag strings, sorted ascending by code point so the encoding is canonical (e.g. `["$flagged","\\Seen"]`). `NULL` means *unknown* (not yet fetched), `'[]'` means *known-empty*; the two are distinct.
 - **`object_hash` / `base_object` / `conflict_object`** (TEXT): a content hash under `store_meta.hash_algo`, base32, or `NULL`.
-- **`refcount`** (INTEGER, on an object): the number of pointers at that hash, counted across an item's `object_hash`, an item's `conflict_object`, a binding's `base_object` and a queue row's `object_hash` (§5). It is constrained `>= 0` and the constraint is normative, not defensive: a count below zero is a bookkeeping error the store cannot report any other way (§7). `0` is meaningful and not a sentinel, being an indexed body no pointer names yet or none names any more, which is exactly what the sweep collects.
+- **`refcount`** (INTEGER, on an object): the number of pointers at that hash, counted across an item's `object_hash`, an item's `conflict_object`, a binding's `base_object` and a queue row's `object_hash` (§5). It is constrained `>= 0` and the constraint is normative, not defensive: a count below zero is a bookkeeping error the store cannot report any other way (§7). `0` is meaningful and not a sentinel, being an indexed body no pointer names yet or none names any more, which is exactly what the collector takes.
 - **`link_id`** (TEXT): the cross-source identity an item is keyed by.
 - **`meta`** (TEXT): an opaque application-defined summary blob, or `NULL` until a `Meta` fetch. The store never parses it.
 - **`sort_key`** (TEXT): the item's position in its collection's natural order (§9.3), written beside `meta` and never derived by the store. `''` means *unknown*, and is the default. Ordering is the default `BINARY` collation, so a writer MUST encode the key so that byte order **is** the intended order: a timestamp as RFC 3339 in UTC at a fixed width (`2026-08-01T10:00:00Z`), never a local offset, since `+02:00` and `Z` sort apart while naming the same instant.
@@ -314,6 +339,8 @@ A store is opened *as one source*. `load` projects the collection's shared items
 - **`write(ops)`** runs as **one transaction**:
   1. A `StoreObject` carries the object's index row and, **optionally, its bytes**. Carrying bytes, the writer writes them to the blob file first (temporary file → `fsync` → `rename`, §5), then runs `store_object`. Carrying none, the body is already durable at its sharded path, streamed there by a consumer that fetched it without holding it whole, and whoever emits a byteless `StoreObject` MUST have completed that write first. Either form lands the object before the placement referencing it.
 
+     The blob write MAY happen **before** `BEGIN`, and an implementation writing bodies of any size SHOULD do so. A body is content-addressed and immutable, so writing it early can only ever produce a file some later batch also produces identically, and the worst a crash between the two leaves is an orphan blob, which §5's collector exists for. Inside the transaction the same write holds SQLite's write lock across a file write, two `fsync`s and a rename, serialising every other writer behind an I/O path that touches no database page. Between the early blob write and the commit the file is on disk with no row, and indistinguishable from an orphan by inspection; what keeps a collector out of that window is the writer's lock (§8), not the file's age.
+
      A `SetCheckpoint` runs `ensure_collection` then `upsert_checkpoint` for this source.
 
      Placement upserts and drops are merged into the shared items and bindings, and the merged result is persisted, `set_conflict` carrying the collection's policy. The reference form is a load-all / replace-all per touched collection (`retain_item` for every item the result no longer holds, then `delete_items`, then `insert_item` / `insert_binding`). An implementation MAY instead persist the diff: §4.4 permits it because the persisted state is identical.
@@ -322,13 +349,13 @@ A store is opened *as one source*. `load` projects the collection's shared items
 
      An item the merge leaves with no binding at all is **retained, not deleted** (§11). Both forms agree on it: `delete_items` spares retained rows and `load_items` never returns one, so a retained item is outside the replace-all cycle and a reappearing link id revives its row rather than colliding with it.
   2. Bring the refcount of every object the batch touched back in line with the §5 invariant, in the same transaction. The reference form is `recompute_refcounts`, one grouped pass over the four pointer columns, O(items+bindings+queue). That cost is the *store's*, not the batch's, and it is paid whole on a write of one flag, so an implementation MAY instead adjust each affected hash by the batch's net change (`adjust_refcount`, O(changes)) and keep the recompute for the repair §7 describes.
-  3. Run `list_garbage_objects`, remembering the hashes; run `delete_garbage_objects`.
-  4. Commit.
-  5. **After** the commit, unlink the blob files of the garbage hashes, so a crash leaves at worst an orphan file (harmless, swept by the next batch) rather than a row pointing at a missing body.
+  3. Commit. The batch reclaims nothing: an object it left at refcount zero is unreferenced, not deleted (§5), and a body it stops referencing outlives it.
 
-An implementation MAY skip the refcount and GC steps on a batch that stored or dropped no objects.
+An implementation MAY skip the refcount step on a batch that stored or dropped no objects.
 
-Three further operations belong to the §15 queue: **`enqueue(collection, action, payload)`**, **`drain(collection)`** and **`cancel(id)`** (§15.5). Retention adds **`purge(collection, seq)`** and **`purge_retained_before(cutoff)`** (§11.2), both owner writes.
+Three further operations belong to the §15 queue: **`enqueue(collection, action, payload)`**, **`drain(collection)`** and **`cancel(id)`** (§15.5). Retention adds **`purge(collection, seq)`** and **`purge_retained_before(cutoff)`** (§11.2), both owner writes, and both report the rows they retired rather than bytes: the bytes are the collector's to report, since it is what frees them.
+
+**`collect_garbage()`** is that collector (§5): an owner operation, holding the owner lock it already has and taking the staging lock exclusively, deleting the unreferenced rows in one transaction and unlinking the files after it, in the order every write uses for the same reason. It reports the rows it dropped, the files it unlinked and the bytes they freed.
 
 A collection's `kind` is **declared, never derived**: which media type a collection holds is configuration, not something a sync layer can infer from what it pulls. Whoever configures the store declares it with **`set_collection_kind(collection, account, kind)`**, out of band from `write`, and any process reads it back with `load_kind`. The lazy path a write runs to guarantee its foreign-key target, `ensure_collection`, inserts an empty kind and MUST NOT overwrite a declared one, so either may run first. An empty `kind` means "created by a sync, never declared", which is distinct from a collection the store has never seen.
 
@@ -353,7 +380,7 @@ The operations above serve the **owner**. A **reader** (§8) opens the database 
 - **`seq_by_link(collection, link_id)`** resolves the public id of an item whose link id the caller already holds, typically one it just staged through the queue.
 - **`list_link_placements(link_id)`** returns every live placement of one identity with its collection and account, and **`list_object_placements(hash)`** does the same by body, pairing placements two servers gave different link ids (§9.2).
 - **`list_retained_page(collection, after, limit)`** returns a keyset page of **retained** items (§11), the live shape plus `retained_at`, `retained_by` and the body's `size`, under the same `:after` contract. **`count_retained(collection)`** counts them.
-- **`retained_bytes()`** totals, store-wide, the size of the distinct bodies retained items hold: an upper bound on what a full purge would reclaim, since a body a live item also points at survives the sweep (§5).
+- **`retained_bytes()`** totals, store-wide, the size of the distinct bodies retained items hold: an upper bound on what a full purge followed by a collection would reclaim, since a body a live item also points at survives both (§5).
 - **`list_sources()`** returns the distinct source names the store has synced, so a producer can discover which source to attribute its writes to.
 - **`load_kind(collection)`** returns the declared media type, empty when a sync created the row without one.
 
@@ -407,10 +434,31 @@ Readers MAY overlay a collection's pending actions on their projection (`load_pe
 
 A pending or parked row MAY be removed **by request** (`cancel_action`): an operator withdrawing an action, or the process that carried out a capability-bound intent acknowledging it is done. Without it a queued action is unretractable, since only the apply path deletes a row.
 
-- The delete SHALL run in one transaction with the refcount settle (§14), so the row's `object_hash` pin is released in the same commit and an unreferenced body falls to the ordinary sweep (§5).
+- The delete SHALL run in one transaction with the refcount settle (§14), so the row's `object_hash` pin is released in the same commit and an unreferenced body falls to the collector (§5).
 - Cancelling is an owner write (§8), so a producer wanting to withdraw an action asks the process holding the owner role.
 - Cancelling an already-applied action is impossible by construction: application deletes the row with its effects (§15.2), so an id is either queued or gone.
 - Acknowledging is the same delete from the performer's side. An intent whose effect is not a store mutation is therefore **at-least-once**: a crash between the effect and the commit leaves the row pending and it is performed again. Deduplicating, where it matters, is the performer's job.
+
+## 16. Test vectors
+
+The schema is checkable: an implementation can compare its tables against migrations/0001_init.sql through SQLite's own pragmas, and a missing column or a wrong foreign-key action fails. Every *value* this format fixes was checkable by nobody, and that gap has a shape worth stating, because it is not the shape a mismatch usually has.
+
+A store whose two writers name the same body differently **reports nothing**. It does not error, it does not warn, and no read returns a wrong answer. It silently never deduplicates, and silently never finds the blob the other side wrote. The same is true of a `meta` field spelled differently and of a `sort_key` derived differently: the list is merely emptier, or in the wrong order, and no process is in a position to notice. Prose cannot close that, because two readers of the same prose are exactly what produced it.
+
+**vectors/** is therefore part of the format, alongside migrations/ and queries/. It holds the values every implementation must agree on, as data:
+
+- **vectors/objects.json**: bodies to object names under both `hash_algo` values, with the shard path §5 derives from each, and the RFC 4648 §10 encoding vectors the names are built on.
+- **vectors/meta.json** and **vectors/fixtures/**: bodies to the `link_id`, `meta` and `sort_key` Annex A's conventions produce, including the cases that annex has to hedge.
+
+Three rules bind:
+
+- An implementation **MUST** pass vectors/objects.json. Object naming is the one place a disagreement destroys data rather than presentation: two stores that name bodies differently cannot share a blob directory, and a store re-opened by the other implementation re-downloads every body it already holds.
+- An implementation **SHOULD** pass vectors/meta.json for each `kind` it writes. These follow Annex A, which is informative, so the vectors bind an implementation to the conventions it claims to implement rather than to conventions it does not.
+- A consumer **MUST** compare parsed structures, never JSON text. Key order is not fixed here, and pinning one would pin an accident of whichever serialiser wrote the file rather than a rule of the format.
+
+The expected values are authored from the algorithm and prose specifications rather than produced by running an implementation, so that no implementation is the reference and two can genuinely disagree with the file rather than agreeing with each other. Each file records how its values were derived and what independently published vectors they were anchored to.
+
+An implementation that cannot read vectors/ from its own build (it is not checked out beside this repository, or it builds from a package registry) MAY vendor the files, provided it records their digests and re-checks them against this repository in CI. Vendoring without that check is worse than not vendoring: it turns a moving format into a frozen copy that keeps passing.
 
 ## Annex A. Application meta conventions (informative)
 
@@ -428,10 +476,12 @@ Each kind also fixes what its `sort_key` (§9.3) holds: a separate column, agree
   "subject": "Hello",              // string, required (may be empty)
   "from": "alice@example.org",     // string, optional, first sender address
   "to": "bob@example.org",         // string, optional, first recipient address
-  "date": "2026-08-01T10:00:00Z",  // string, optional, RFC 3339
+  "date": "2026-08-01T10:00:00Z",  // string, optional, RFC 3339 in UTC
   "size": 1234                     // integer, optional, raw message octets
 }
 ```
+
+`from` and `to` carry the **bare `addr-spec`**, the display name stripped, so `Alice Example <alice@example.org>` is written `alice@example.org`. `date` is normalised to **UTC**, like the `sort_key` below and for the same reason: a writer east of the sender and one west of it would otherwise record the same message differently, and a reader comparing two accounts would see two dates.
 
 Flags are **not** in `meta`; they are the item's `flags` (§13). The summary is written by the sync connector on both the enumerate/`Meta` and the streamed/`Full` paths.
 
@@ -457,7 +507,7 @@ Unlike mail, a card has **one** derivation: a CardDAV `sync-collection` REPORT r
 
 Cards are **mutable**, which mail is not: the same card is edited in place under a changing ETag, so its `revision` (§13) moves while its `link_id` does not.
 
-**`sort_key`**: the display name (`fn`), normalised for ordering rather than display: casefolded, leading and trailing whitespace removed. Read ascending. A card with no `FN` keeps `''` and sorts to the head, where a nameless contact is visible rather than buried. Normalising is what keeps the order stable across writers, which would otherwise interleave `alice` and `Alice` differently.
+**`sort_key`**: the display name (`fn`), normalised for ordering rather than display: lowercased by the **Unicode simple lowercase mapping**, locale-independent (never the Turkish dotless-i tailoring a default locale may apply), then leading and trailing whitespace removed. `meta.fn` keeps the `FN` value verbatim, whitespace and case included, since it is what a reader displays; only the key is normalised. Read ascending. A card with no `FN` keeps `''` and sorts to the head, where a nameless contact is visible rather than buried. Normalising is what keeps the order stable across writers, which would otherwise interleave `alice` and `Alice` differently.
 
 ### A.3 `text/calendar` (`v: 1`)
 
@@ -476,7 +526,7 @@ Cards are **mutable**, which mail is not: the same card is edited in place under
   "dtstart_tzid": "America/New_York", // string, optional, the TZID parameter
   "dtstart_value": "date-time",       // string, optional: date-time or date
   "dtend": "20190107T093000",         // string, optional, the value verbatim
-  "due": null,                        // string, optional, VTODO only
+  "due": null,                        // string, optional, VTODO only; omitted, not null, on other components
   "recurring": true,                  // bool, optional: carries an RRULE or an RDATE
   "until": "20261231T235959Z",        // string, optional, the RRULE's UNTIL verbatim
   "size": 421                         // integer, optional, raw item octets
@@ -494,7 +544,7 @@ Like a card, a calendar object is **mutable**, so its `revision` moves while its
 Only one of the shapes a start may take (RFC 5545 §3.3.4, §3.3.5) is an instant already, so the others normalise by convention:
 
 - a **UTC** date-time is taken verbatim;
-- a **zoned** date-time resolves through its `VTIMEZONE`, taking the earlier offset when the local time is ambiguous (the hour a fall-back repeats) and the offset after the transition when it does not exist (the hour a spring-forward skips), since a local time at a transition names two instants or none;
+- a **zoned** date-time resolves through its `VTIMEZONE`, since a local time at a transition names two instants or none. When the local time is **ambiguous** (the hour a fall-back repeats) it takes the offset in effect *before* the transition, which is the earlier of the two instants; note that this is the numerically *greater* offset, so "earlier" is about the instant and never about the number. When the local time **does not exist** (the hour a spring-forward skips) it takes the offset in effect *after* the transition;
 - a zoned date-time whose zone **will not resolve** (no `VTIMEZONE`, an unknown `TZID`) is read as floating rather than left unknown: the error is bounded by the offset, where dropping the key moves the item to the far end of the listing;
 - a **date-only** value is read as `T00:00:00Z`;
 - a **floating** date-time has its wall time read as UTC.
@@ -502,5 +552,7 @@ Only one of the shapes a start may take (RFC 5545 §3.3.4, §3.3.5) is an instan
 The last three are conventions rather than facts, the date-only case visibly so: an all-day item on the 11th sorts before an 08:00 item for a reader east of UTC and after it for one west, and the writer cannot know the reader's zone. An item with nothing parseable keeps `''` and lands at the head of an ascending listing.
 
 A recurring item keys on its **first** occurrence, which is what `DTSTART` holds (RFC 5545 §3.8.2.4) and is fixed for the life of the series. A date-range read over recurring items therefore needs the recurrence expanded above the store, since expansion is a function of when you ask and no stored column answers it. That keeps the key deterministic and stable, and leaves time-dependence to the layer that has a clock.
+
+`recurring` is written by any writer that parsed the body, as `true` or `false`; a writer leaves it out only when it did not look, which is what "absent means unknown" covers. It is the one optional field here whose `false` is worth writing, because a reader planning an expansion needs to tell "no rule" from "not examined".
 
 `until` is what makes that expansion affordable. It carries the `UNTIL` of the `RRULE` verbatim, so `dtstart` and `until` bound the whole series and a reader can drop an item from a date range without materialising a single occurrence. Absent means the bound is unknown rather than absent: a rule bounded by `COUNT` states no `UNTIL`, and an unbounded one has none to state, so a reader that finds none expands to decide.
