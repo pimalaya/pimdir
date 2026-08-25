@@ -69,9 +69,11 @@ UPDATE objects SET refcount = refcount + :delta WHERE hash = :hash;
 
 -- name: list_garbage_objects
 -- Objects no item/binding pins; blob files unlinked before the rows go. The
--- predicate is `<= 0` rather than `= 0` so a refcount driven negative by a
--- double release is still swept rather than leaked for good, and it matches the
--- partial index objects_garbage exactly, so neither statement scans the table.
+-- predicate is `<= 0` rather than `= 0` to match the partial index
+-- objects_garbage exactly, so neither statement scans the table. Under the
+-- refcount floor (SPEC.md §7) the two select the same rows; the wider one is for
+-- the reader that cannot apply the floor, since it opens read-only and a store
+-- written before the constraint may still carry a negative count.
 SELECT hash FROM objects WHERE refcount <= 0;
 
 -- name: delete_garbage_objects

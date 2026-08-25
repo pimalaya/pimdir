@@ -1,7 +1,7 @@
 ---
 cairn: change
 id: refcount-floor
-status: active
+status: landed
 created: 2026-08-25
 ---
 

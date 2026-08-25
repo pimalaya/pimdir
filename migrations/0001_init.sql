@@ -79,10 +79,20 @@ CREATE TABLE sources (
 
 -- Objects: content-addressed item bodies. The BYTES live in blob files at
 -- objects/<hash> (SPEC.md §5); this table is the index + refcount.
+--
+-- The refcount floor is a real constraint, not a tidy one. A count driven
+-- negative by a double release has exactly two futures, and neither reports the
+-- release that caused it: if a live pointer remains, the sweep tries to delete a
+-- row four foreign keys still reference and the whole write transaction fails on
+-- "FOREIGN KEY constraint failed", which names neither the object nor the
+-- miscount and repeats on every write from then on; if none remains, the sweep
+-- takes the row and the bookkeeping error leaves no trace at all. CHECK moves
+-- the failure back to the statement that made it (SPEC.md §7).
 CREATE TABLE objects (
     hash     TEXT PRIMARY KEY,             -- content hash under store_meta.hash_algo, base32
     size     INTEGER NOT NULL,             -- body length in bytes
-    refcount INTEGER NOT NULL DEFAULT 0    -- placements/bindings referencing it (live, base or conflict)
+    -- placements/bindings referencing it (live, base or conflict); never negative
+    refcount INTEGER NOT NULL DEFAULT 0 CHECK (refcount >= 0)
 ) STRICT;
 
 -- The shared truth of one logical item, keyed by its cross-source link id.
