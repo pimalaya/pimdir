@@ -55,7 +55,7 @@ SQLite specifically, not "any SQL database": the portability comes from the file
 - **Placement**: one item's presence in one collection: its handle, mutable state (flags), detail level, sync base, and a pointer to its object. The same item in two collections is two placements sharing one object.
 - **Object**: a content-addressed, immutable item body. Index row in `objects`, bytes in a blob file.
 - **Handle**: the backend's id for a placement within its collection (an IMAP UID, a JMAP id, a server file id).
-- **Link id**: the item's cross-collection identity (`Message-ID`, vCard/iCal `UID`), the dedup and threading key. Never a byte size, which drifts on per-copy header rewrites.
+- **Link id**: the item's key in its collection, assigned from the **identity hint** the content states (`Message-ID`, vCard/iCal `UID`) and equal to that hint unless the collection already holds it (§9). Never a byte size, which drifts on per-copy header rewrites.
 - **Hash**: a cryptographic content hash of an object's bytes: its integrity value, dedup key and blob filename.
 - **Checkpoint**: an opaque per-source cursor recording the last point synced with the remote (QRESYNC state, JMAP state string, DAV sync-token).
 - **Retained item**: an item no source holds any more, kept instead of deleted and hidden from the sync seam and the live reads until it is purged (§11).
@@ -103,7 +103,7 @@ The canonical schema is migrations/0001_init.sql. It is normative and this secti
 - **`items`**: the shared truth of one logical item, keyed `(collection, link_id)`. Carries the mutable `flags` (a JSON array), the current `object_hash`, the opaque `meta` summary, the `sort_key` ordering it within its collection (§9.3), the detail `level` (0 probed → 1 meta → 2 full), and the cross-source state `deleted` / `conflicted` / `conflict_object`.
 
   It also carries `seq`, the store-global **public id** a client shows in place of the internal `link_id` (§9.1), and the retention stamps `retained_at` / `retained_by` (§11), a non-`NULL` `retained_at` being the persisted form of "no source holds this any more, and the store kept it anyway". The partial index `items_retained` scopes the trash listing and the purge sweep to those rows.
-- **`bindings`**: one source's binding of an item, keyed `(collection, link_id, source)`. Carries the item's `handle` on that source, the three-way-merge base (`base_flags`, `base_object`, `base_revision`), the unresolved-conflict pair `conflicted` / `conflict_revision`, and `ambiguous_handles`, the other handles that source holds the identity under (§10).
+- **`bindings`**: one source's binding of an item, keyed `(collection, link_id, source)`. Carries the item's `handle` on that source, the three-way-merge base (`base_flags`, `base_object`, `base_revision`), and the unresolved-conflict pair `conflicted` / `conflict_revision`. The handle is bound once and never repointed (§10).
 - **`queue`**: the action queue (§15). Carries the append `id`, `created_at`, the diagnostic `producer`, the target `collection`, the `action` kind, the versioned JSON `payload`, the GC-pinning `object_hash`, and the `attempts` / `error` parking state.
 
 An item plus a base per source is the whole model: **single-source is the N=1 case**, one binding. The only thing N≥2 adds is `deleted`, a removal that must linger until every source has dropped it.
@@ -202,11 +202,19 @@ Because writes are transactional, a reconciled flag set or a multi-item move com
 Four identifiers, kept distinct:
 
 - **handle**: the backend's per-collection id (IMAP UID, DAV href). It changes if the backend reassigns it, so it is never the cross-collection key.
-- **link id**: the item's stable cross-collection identity (`Message-ID`, vCard/iCal `UID`), the dedup and threading key. **Internal**: a consumer keys reads and edits by `seq`.
+- **link id**: the item's key in its collection (`items.link_id`), assigned from the **identity hint** the content states (a bare `Message-ID`, a vCard or iCalendar `UID`, per kind in Annex A) and equal to that hint in every ordinary case. **Internal**: a consumer keys reads and edits by `seq`.
 - **hash**: content state and blob key; changes when the content changes (mutable-content backends only, mail bodies being immutable).
 - **seq**: the store-global **public id** (`items.seq`), a small integer a consumer shows in place of the long link id, the same in every collection the item is filed in (§9.1).
 
-Deduplication keys on equal **hash**, so a message filed in two mailboxes, or a body another collection already fetched, is stored once and opening it costs no network. Merging keys on **link id**, conservatively: a missed dedup is harmless, a wrong merge hides data.
+**Annex A derives the hint, this section assigns the key.** The two are the same string until one collection holds one hint twice, which a server hands over however firmly its protocol forbids it (§A.3). A writer resolving an item's identity in a collection SHALL assign its `link_id` from the first of these that applies:
+
+- the content states **no usable hint**: the kind's fallback, unchanged, a writer-derived id under the kind's prefix (`alt:` for a message, `hash:` for a DAV resource);
+- the hint is **free in this collection**: the hint verbatim, which is every item written before this rule and all but a handful after it;
+- the hint is already carried by an item **this source binds under a different handle**: a **minted** key, the four parts `dup:`, the hint, `#` and that handle, concatenated verbatim in that order and nothing else (`dup:abc@host#1174`, `dup:event-1@example.org#event-1%2540example.org.ics`).
+
+The minted form carries no digest, so whatever mints it depends on nothing that hashes; it is deterministic, so a store rebuilt from the same collection mints the same key; and it is prefixed like the kind fallbacks, so the rule that a prefixed id is never pushed as a protocol `UID` covers it with no new case. It is **opaque**: a reader MUST NOT parse it and a store MUST NOT re-canonicalise one, so a minted item keeps its key for ever, the deletion of the copy holding the bare hint included. Rewriting it would change a `seq` a consumer has already shown (§9.1).
+
+Deduplication keys on equal **hash**, so a message filed in two mailboxes, or a body another collection already fetched, is stored once and opening it costs no network. Merging keys on the **hint**, conservatively: a missed dedup is harmless, a wrong merge hides data. The key is neither of those two, and the asymmetry is deliberate: `lookup_objects` (§14) is keyed on the assigned `link_id`, so a minted item finds no body there and fetches its own, which is a missed dedup rather than a wrong merge.
 
 All four are store-wide, and stay so when one store holds several accounts (§9.2). An identity or a body occurring in more than one collection or account is a fact the store reports (`list_link_placements`, `list_object_placements`, §14.1) rather than a merge it performs.
 
@@ -217,6 +225,7 @@ All four are store-wide, and stay so when one store holds several accounts (§9.
 - **One id per link id, store-global.** The same `link_id` keeps the same `seq` in every collection it is filed in, drawn from one store-wide counter (`store_meta.next_seq`), so a merged view shows the item once and ids never clash between collections. This holds across accounts too (§9.2): equal link ids share a `seq` wherever they sit, which reports their equality without asserting the placements are one thing.
 - **Assigned once, monotonic, never reused.** The store assigns a `seq` the first time it inserts an item with that `link_id`, in any collection, and reuses it afterwards (`seq_for_link_any` finds an existing one, `bump_next_seq` draws the next). The counter only increases, so a stale id never silently addresses a different item.
 - **Resolved back to `link_id`.** A consumer reads and edits by `(collection, seq)`, which is unique, and the store maps it to the link id internally.
+- **A minted key is a different item.** A copy filed under a minted `link_id` (§9) draws its own `seq`, `seq_for_link_any` finding none for a key nothing else holds, and the copy holding the bare hint keeps the store-global one it already had. The cross-collection guarantee is therefore unchanged: one message filed in two mailboxes still shows once in a merged view, and what shows twice is two resources one collection genuinely holds.
 
 ### 9.2 Accounts
 
@@ -232,7 +241,7 @@ One store MAY hold the collections of several accounts. `collections.account` ca
 
 - **Ownership** (§8): one store still has one writing owner, so an owner wanting to sync accounts in parallel processes MUST give each account its own store.
 - **Sources** (§10), keyed `(collection, source)` and therefore already inside one account.
-- **Collision risk on `link_id`**: two unrelated servers may mint the same vCard `UID`, and those placements then share a `seq` while being different people. §9 already answers it: merging is conservative, and a consumer that cannot tolerate a false pairing compares bodies rather than identities.
+- **Collision risk on `link_id`**: two unrelated servers may mint the same vCard `UID`, and those placements then share a `seq` while being different people. §9 already answers it: merging is conservative, and a consumer that cannot tolerate a false pairing compares bodies rather than identities. Minting (§9) does not touch that case either, since it separates two resources **one collection** holds under one hint, and two collections legitimately sharing a hint still share a key and a `seq`.
 
 **Configuration lives outside.** The store records which account a collection belongs to and nothing else: no credentials, no endpoints, no display name. It therefore learns an account only through its collections, so one with no collection does not appear in a listing, and a consumer needing the full roster reads it from its own configuration. That also keeps the store from becoming a second register of what accounts exist.
 
@@ -271,9 +280,9 @@ Two content divergences are recorded, and they are **not the same fact**:
 
 A store MUST persist both independently, and neither MUST set the other. A sync layer that cannot read its unresolved conflicts back re-derives on every run the push the remote already rejected and never converges, and a client cannot tell which items need a human. A binding's conflict MUST be cleared when the sync layer writes any resolved state for it, so resolving is an ordinary edit rather than a dedicated operation.
 
-A third divergence is recorded beside them, on the **identity** axis rather than the content one: `bindings.ambiguous_handles`, the other handles one source holds this item's identity under. A binding pins one `handle`, so a source holding one link id twice (a double delivery, a retried append, a restore, a migration from another provider) has nowhere to put the second, and a store that repointed the binding to it would destroy the fact at that write, before any layer above could act on it. Such a store MUST NOT repoint an existing binding's `handle`: the bound handle stays and the incoming one is recorded here. Rebinding legitimately, after a handle-space change (§12), goes through the rebuild that drops the old spine and inserts the new one.
+Nothing is recorded on the **identity** axis, and one rule keeps it that way: a write resolving an existing `(collection, link_id, source)` binding to a **different handle** SHALL be refused, and the store SHALL record no trace of the incoming handle. A binding pins one `handle`, so applying such a write would repoint it from the copy it held to another, destroying the fact at that write, before any layer above could act on it. Rebinding legitimately, after a handle-space change (§12), goes through the rebuild that drops the old spine and inserts the new one, which licenses the rebind for the handle its drop names and no other.
 
-Recording it is what makes the resulting freeze survive, and it has to survive: the second copy appears in exactly one enumeration, the one that discovers it, and an incremental one never mentions it again. A sync layer reading a binding that carries any derives nothing for that item, in either direction, until the source reports the identity once again; the alternative is guessing which copy a delete or a flag change refers to, and guessing wrongly destroys mail on every source that holds it. Two copies of one message is redundancy, not corruption: RFC 5322 §3.6.4 binds the generator of a `Message-ID` and says nothing about what a store may hold, so the store records the fact and judges nothing.
+A source holding one identity twice (a double delivery, a retried append, a restore, a migration from another provider, two resources a server let share one `UID`) never reaches that refusal, because the second copy resolves to a minted key of its own (§9) before the write. It is stored as an item beside the first, with its own binding, its own `seq`, its own body and its own place in every listing, which is what an offline replica of a collection owes the collection: what the source holds, held. Two copies of one identity is redundancy, not corruption. RFC 5322 §3.6.4 binds the generator of a `Message-ID` and says nothing about what a store may hold, and RFC 4791 §4.1, RFC 6352 §5.1 and RFC 6352 §6.3.2 bind a DAV server whose collection the store reads as it finds it. The store holds both copies and judges neither: it picks no survivor, merges nothing, deletes nothing and warns about nothing. Two items is the report.
 
 Deriving pushes, merging and resolving conflicts belong to the sync layer, not to the store.
 
@@ -308,7 +317,7 @@ Retention is **unconditional**: no switch, no per-store flag, no per-collection 
 
 `collections.generation` is the collection's **handle-space epoch**: the owner MUST bump it (`bump_generation`), in the same transaction as the rebuild, whenever it discards and re-learns the collection's handles (an identity reset such as an IMAP UIDVALIDITY change). Readers exposing epoch-dependent protocol values derive them from it with `load_generation` (an IMAP frontend maps `generation` to the UIDVALIDITY it advertises), so "the ids you cached are void" survives the process split without a side channel.
 
-A rebuild's write batch is what makes it one: the old spine is dropped and the same items are upserted under their new handles, so a binding's `handle` **does** move, which is the one case §10's rule against repointing does not cover. An implementation persisting the batch as a diff cannot tell the two apart from the rows alone, since a rebuilt spine and a source reporting one identity under a second handle produce the same before and after. What separates them is the drop: a rebuild supersedes a handle, a removal deletes one, and only the first licenses the rebind, for the handle it names and no other. Reading it as a duplicate instead freezes every item of the collection under handles the server has just voided.
+A rebuild's write batch is what makes it one: the old spine is dropped and the same items are upserted under their new handles, so a binding's `handle` **does** move, which is the one case §10's rule against repointing does not cover. An implementation persisting the batch as a diff cannot tell the two apart from the rows alone, since a rebuilt spine and a source reporting one identity under a second handle produce the same before and after. What separates them is the drop: a rebuild supersedes a handle, a removal deletes one, and only the first licenses the rebind, for the handle it names and no other. Reading it as a duplicate instead refuses the write for every item of the collection, under handles the server has just voided.
 
 Ordinary syncs, full resyncs from an expired checkpoint, and content changes MUST NOT bump it.
 
@@ -322,7 +331,7 @@ Two implementations produce byte-identical stores only if they encode the model 
 - **`flags` / `base_flags`** (TEXT): a JSON array of the raw flag strings, sorted ascending by code point so the encoding is canonical (e.g. `["$flagged","\\Seen"]`). `NULL` means *unknown* (not yet fetched), `'[]'` means *known-empty*; the two are distinct.
 - **`object_hash` / `base_object` / `conflict_object`** (TEXT): a content hash under `store_meta.hash_algo`, base32, or `NULL`.
 - **`refcount`** (INTEGER, on an object): the number of pointers at that hash, counted across an item's `object_hash`, an item's `conflict_object`, a binding's `base_object` and a queue row's `object_hash` (§5). It is constrained `>= 0` and the constraint is normative, not defensive: a count below zero is a bookkeeping error the store cannot report any other way (§7). `0` is meaningful and not a sentinel, being an indexed body no pointer names yet or none names any more, which is exactly what the collector takes.
-- **`link_id`** (TEXT): the cross-source identity an item is keyed by.
+- **`link_id`** (TEXT): the key an item is filed under in its collection (§9): the identity hint verbatim, the kind's fallback for content stating none, or a minted `dup:<hint>#<handle>` for a hint the collection already holds. Opaque, so the store never parses one and never rewrites one.
 - **`meta`** (TEXT): an opaque application-defined summary blob, or `NULL` until a `Meta` fetch. The store never parses it.
 - **`sort_key`** (TEXT): the item's position in its collection's natural order (§9.3), written beside `meta` and never derived by the store. `''` means *unknown*, and is the default. Ordering is the default `BINARY` collation, so a writer MUST encode the key so that byte order **is** the intended order: a timestamp as RFC 3339 in UTC at a fixed width (`2026-08-01T10:00:00Z`), never a local offset, since `+02:00` and `Z` sort apart while naming the same instant.
 
@@ -330,7 +339,6 @@ Two implementations produce byte-identical stores only if they encode the model 
 - **`base_revision`** (TEXT): an opaque etag/modseq for mutable-content backends, or `NULL`.
 - **`conflicted`** (INTEGER, on a binding): whether *this source* and its own remote diverged and were left unresolved. Distinct from `items.conflicted` (§10).
 - **`conflict_revision`** (TEXT): the remote revision observed when the binding was marked conflicted, or `NULL`. A binding that is not conflicted MUST NOT carry one, so a resolved binding cannot hand a stale revision to the next sync.
-- **`ambiguous_handles`** (TEXT, on a binding): a JSON array of the *other* handles this source holds the item's identity under, or `NULL` in the ordinary case of none (§10). The empty array MUST NOT be written: `NULL` is "the source holds it once", and a list is the freeze. A column an implementation cannot decode reads as `NULL`, on the same terms as a flag set: it is not evidence of a duplicate, and freezing an item on an unreadable column would strand it.
 - **`created_at`** (TEXT, on `store_meta` and on `queue`): the RFC 3339 instant the row was written, in the same form and by the same rule as `retained_at` below: `strftime('%Y-%m-%dT%H:%M:%fZ','now')`, stamped by SQLite. RFC 3339 alone is not a shape, since it admits any offset and any sub-second precision, so three conformant writers produce three strings that do not sort together. `enqueue_action` stamps the queue's; `store_meta`'s is covered by no canonical statement, so whoever creates the store writes that expression itself.
 - **`retained_at`** (TEXT):
  the RFC 3339 instant the item's last source binding vanished, or `NULL` while it is live (§11). It is stamped by SQLite itself (`strftime('%Y-%m-%dT%H:%M:%fZ','now')`) in the retiring update, so every implementation writes the same shape and none plumbs a clock through to reach it. It records when the last binding *went*, not when a source deleted the item, which is unknowable; a revive clears it.
@@ -357,7 +365,7 @@ A store is opened *as one source*. `load` projects the collection's shared items
 
      A `SetCheckpoint` runs `ensure_collection` then `upsert_checkpoint` for this source.
 
-     Placement upserts and drops are merged into the shared items and bindings, and the merged result is persisted, `set_conflict` carrying the collection's policy. The reference form is a load-all / replace-all per touched collection (`retain_item` for every item the result no longer holds, then `delete_items`, then `insert_item` / `insert_binding`). An implementation MAY instead persist the diff, with `update_binding` for a binding whose base or conflict moved: §4.4 permits it because the persisted state is identical.
+     Placement upserts and drops are merged into the shared items and bindings, and the merged result is persisted, `set_conflict` carrying the collection's policy. The reference form is a load-all / replace-all per touched collection (`retain_item` for every item the result no longer holds, then `delete_items`, then `insert_item` / `insert_binding`). An implementation MAY instead persist the diff, with `update_binding` for a binding whose base or conflict moved: §4.4 permits it because the persisted state is identical. `update_binding` carries no `handle` and cannot: a write resolving an existing binding to a different handle is refused (§10), and the one rebind the format licenses is §12's rebuild, which drops the binding and inserts it under the new handle.
 
      An implementation persisting the diff SHOULD also **read** by the batch rather than by the collection: `load_items_by_link` and `load_bindings_by_link` bound to the link ids the batch names, resolving each dropped handle to its link id with `link_for_handle` first. The batch only ever produces writes for the items it names, so the rest of the collection is read and merged to conclude that nothing changed, and that read, not the writes, is what a small write actually costs: it grows with the mailbox instead of with the batch. Measured on the reference implementation, one flag on one message went from 3.5 ms at a thousand items and 59 ms at sixteen thousand, cleanly linear, to a flat 150 to 175 µs across the same range.
 
@@ -392,7 +400,7 @@ The operations above serve the **owner**. A **reader** (§8) opens the database 
 - **`list_items_page_asc(collection, after_key, after_seq, limit)`** and **`list_items_page_desc(...)`** return a keyset page in the collection's natural order (§9.3). The cursor is `(sort_key, seq)`, since a key is not unique and `seq` is what makes the page total. An implementation SHOULD expose the first page as "no cursor" rather than have a caller invent a sentinel.
 - **`get_item(collection, seq)`** returns one live item, **`count_items(collection)`** counts them.
 - **`seq_by_link(collection, link_id)`** resolves the public id of an item whose link id the caller already holds, typically one it just staged through the queue.
-- **`list_link_placements(link_id)`** returns every live placement of one identity with its collection and account, and **`list_object_placements(hash)`** does the same by body, pairing placements two servers gave different link ids (§9.2).
+- **`list_link_placements(link_id)`** returns every live placement of one `link_id` with its collection and account, and **`list_object_placements(hash)`** does the same by body, pairing placements two servers gave different link ids (§9.2). The first pairs by key rather than by hint, so a minted copy (§9) is not listed beside the item holding the bare hint, and the body read is what pairs the two whenever their bytes agree.
 - **`list_retained_page(collection, after, limit)`** returns a keyset page of **retained** items (§11), the live shape plus `retained_at`, `retained_by` and the body's `size`. Its `:after` is the exclusive lower bound on **`seq`**, not on `link_id`, with `0` starting from the beginning. It is a listing a reader presents, so its cursor is the public id the reader already speaks, where `list_items_page` above is the sweep read whose arbitrary total order is the point. **`count_retained(collection)`** counts them.
 - **`retained_bytes()`** totals, store-wide, the size of the distinct bodies retained items hold: an upper bound on what a full purge followed by a collection would reclaim, since a body a live item also points at survives both (§5).
 - **`list_sources()`** returns the distinct source names the store has synced, so a producer can discover which source to attribute its writes to.
@@ -432,7 +440,7 @@ A drain therefore has three outcomes per row: applied, parked and skipped.
 
 The format carries two things about an action: a **kind** and a **versioned JSON payload**, one shape per kind. Existing items are addressed by their public id `seq` (§9.1). At `v: 1`:
 
-- **`add`**: `{ "v": 1, "link_id": …?, "flags": […], "object": hash?, "meta": {…}?, "handle": …? }`. Creates an item, staged as a local creation for the sync layer to push; `object` matches the row's `object_hash`. A duplicate `link_id` parks the action **unless the row holding it is retained**, in which case the action revives it (§11), so restoring needs no action kind of its own.
+- **`add`**: `{ "v": 1, "link_id": …?, "flags": […], "object": hash?, "meta": {…}?, "handle": …? }`. Creates an item, staged as a local creation for the sync layer to push; `object` matches the row's `object_hash`. A duplicate `link_id` parks the action **unless the row holding it is retained**, in which case the action revives it (§11), so restoring needs no action kind of its own. Parking is the opposite answer to §9's minting, and deliberately: reading a source means taking the collection it actually holds, so a hint another item already carries is minted a key and stored, while authoring locally means a producer named a key the collection already holds and got it wrong, which is worth telling it about rather than filing under a key it never asked for. The store is liberal in what it accepts from a source and strict in what a producer may create.
 - **`set-flags`**: `{ "v": 1, "seq": n, "flags": […] }`. Replaces the flag set, absolute rather than a delta, so reapplication is idempotent.
 - **`remove`**: `{ "v": 1, "seq": n }`. Removes the item from the collection; already-absent is success.
 - **`move`**: `{ "v": 1, "seq": n, "to": collection }`. Refiles the item; `copy` is the same shape without the removal.
@@ -462,12 +470,12 @@ A store whose two writers name the same body differently **reports nothing**. It
 **vectors/** is therefore part of the format, alongside migrations/ and queries/. It holds the values every implementation must agree on, as data:
 
 - **vectors/objects.json**: bodies to object names under both `hash_algo` values, with the shard path §5 derives from each, and the RFC 4648 §10 encoding vectors the names are built on.
-- **vectors/meta.json** and **vectors/fixtures/**: bodies to the `link_id`, `meta` and `sort_key` Annex A's conventions produce, including the cases that annex has to hedge.
+- **vectors/meta.json** and **vectors/fixtures/**: bodies to the `link_id`, `meta` and `sort_key` Annex A's conventions produce, including the cases that annex has to hedge, and the minted `link_id` §9 assigns to a body whose hint the collection already holds.
 
 Three rules bind:
 
 - An implementation **MUST** pass vectors/objects.json. Object naming is the one place a disagreement destroys data rather than presentation: two stores that name bodies differently cannot share a blob directory, and a store re-opened by the other implementation re-downloads every body it already holds.
-- An implementation **SHOULD** pass vectors/meta.json for each `kind` it writes. These follow Annex A, which is informative, so the vectors bind an implementation to the conventions it claims to implement rather than to conventions it does not.
+- An implementation **SHOULD** pass vectors/meta.json for each `kind` it writes. These follow Annex A, which is informative, so the vectors bind an implementation to the conventions it claims to implement rather than to conventions it does not. Its minted cases are the exception, restating §9 rather than a convention: an implementation that mints a key at all **MUST** mint the one they give, since two implementations minting differently file the same second copy under two keys and neither can read the other's store.
 - A consumer **MUST** compare parsed structures, never JSON text. Key order is not fixed here, and pinning one would pin an accident of whichever serialiser wrote the file rather than a rule of the format.
 
 The expected values are authored from the algorithm and prose specifications rather than produced by running an implementation, so that no implementation is the reference and two can genuinely disagree with the file rather than agreeing with each other. Each file records how its values were derived and what independently published vectors they were anchored to.
@@ -495,6 +503,8 @@ Each kind also fixes what its `sort_key` (§9.3) holds: a separate column, agree
 }
 ```
 
+**Identity hint**: the bare `Message-ID` (RFC 5322 §3.6.4), its angle brackets stripped, exactly as `meta.message_id` carries it. A message stating none, or one no parser accepts, falls back to a writer-derived `alt:` id. This annex derives the hint; §9 assigns the `link_id` the item is filed under, which is the hint verbatim unless the collection already holds it under another handle.
+
 `from` and `to` carry the **bare `addr-spec`**, the display name stripped, so `Alice Example <alice@example.org>` is written `alice@example.org`. `date` is normalised to **UTC**, like the `sort_key` below and for the same reason: a writer east of the sender and one west of it would otherwise record the same message differently, and a reader comparing two accounts would see two dates.
 
 Flags are **not** in `meta`; they are the item's `flags` (§13). The summary is written by the sync connector on both the enumerate/`Meta` and the streamed/`Full` paths.
@@ -517,6 +527,8 @@ Mail is the kind where the two derivations must agree: the `Meta` path formats t
 }
 ```
 
+**Identity hint**: the vCard `UID` verbatim, exactly as `meta.uid` carries it; a card stating none falls back to a writer-derived `hash:` id over its bytes. This annex derives the hint; §9 assigns the key. RFC 6352 §5.1 requires that `UID` to be unique within its address book collection and §6.3.2 lets a server refuse a write that would break it, so a collection holding one `UID` twice is something the server handed over: both cards are stored (§9), and offering one back is a write the server is free to refuse.
+
 Unlike mail, a card has **one** derivation: a CardDAV `sync-collection` REPORT returns hrefs and ETags but no `UID`, so a card resolves at `Full` only. A card carries no flags either, so its `flags` is a known-empty `'[]'` rather than `NULL`.
 
 Cards are **mutable**, which mail is not: the same card is edited in place under a changing ETag, so its `revision` (§13) moves while its `link_id` does not.
@@ -527,7 +539,9 @@ Cards are **mutable**, which mail is not: the same card is edited in place under
 
 **The item is the calendar object resource, not the component.** RFC 4791 §4.1 requires the components sharing a `UID` to live in the same resource, so a recurrence set stays whole, and requires that `UID` to be unique within its collection. A recurring series and its modified instances are therefore **one** item: one blob carrying the master, every `RECURRENCE-ID` override and the `VTIMEZONE`s they reference, under one `link_id`.
 
-`(collection, link_id)` is then exactly the uniqueness CalDAV itself enforces, an override is a body edit rather than an item of its own, and the resource keeps the one href and ETag a binding records. A connector to an instance-granular source (a JSON calendar API handing each modified instance over separately) MUST reassemble the set into one resource before writing it, or two stores of the same calendar disagree about how many items it holds.
+An override is therefore a body edit rather than an item of its own, and the resource keeps the one href and ETag a binding records. A connector to an instance-granular source (a JSON calendar API handing each modified instance over separately) MUST reassemble the set into one resource before writing it, or two stores of the same calendar disagree about how many items it holds.
+
+**The format does not assume the server enforced that uniqueness.** RFC 4791 §4.1 requires it of a calendar collection, as RFC 6352 §5.1 and §6.3.2 do of an address book one, and collections holding two resources under one `UID` are handed over anyway: two resources one client wrote under names differing only in an escape, a restore, a migration. `(collection, link_id)` is therefore the store's own uniqueness and not the protocol's restated (§9): the second resource is filed under a minted key and kept, where trusting the requirement stored it nowhere.
 
 ```json
 {
@@ -547,7 +561,7 @@ Cards are **mutable**, which mail is not: the same card is edited in place under
 }
 ```
 
-The `link_id` is the `UID`, which identifies the same object across sources (RFC 5545 §3.8.4.7); content carrying no usable `UID` falls back to a writer-derived id rather than being refused. `component` names what a reader renders the resource as, and a resource may hold only one component type anyway (RFC 4791 §4.1, `VTIMEZONE` aside). `due` belongs to a `VTODO` alone and `dtend` to the components that have an end, both absent otherwise rather than merely unknown. The summary describes the master, the component carrying no `RECURRENCE-ID`.
+The **identity hint** is the `UID`, which identifies the same object across sources (RFC 5545 §3.8.4.7); content carrying no usable `UID` falls back to a writer-derived `hash:` id rather than being refused, and §9 turns the hint into the key the item is filed under. `component` names what a reader renders the resource as, and a resource may hold only one component type anyway (RFC 4791 §4.1, `VTIMEZONE` aside). `due` belongs to a `VTODO` alone and `dtend` to the components that have an end, both absent otherwise rather than merely unknown. The summary describes the master, the component carrying no `RECURRENCE-ID`.
 
 Times are carried **verbatim**, with the `TZID` parameter and the `VALUE` type beside them, rather than as resolved instants. A reader holding a time zone database re-derives an instant in its own zone without fetching the body, and one holding none displays the wall time the calendar wrote instead of a UTC claim a writer fabricated. The single resolved projection is the `sort_key` below, so the store never carries two answers to the same question.
 

@@ -65,8 +65,6 @@ for case in objects["objects"]:
 for case in meta["cases"]:
     bytes_ = (root / case["fixture"]).read_bytes()
 
-    # Named before the lengths and the digests it would otherwise break, since
-    # a checkout that converted the line endings breaks all three at once.
     if bytes_.count(b"\n") != bytes_.count(b"\r\n"):
         failures.append(f"{case['fixture']}: not CRLF throughout, so something converted it")
         continue
@@ -77,12 +75,17 @@ for case in meta["cases"]:
     for algorithm, digest_of in ALGORITHMS.items():
         check(f"{case['fixture']} {algorithm}", name(digest_of(bytes_)), case["body"][algorithm])
 
+    if "hint" in case:
+        minted = f"dup:{case['hint']}#{case['handle']}"
+        check(f"{case['label']} minted link_id", minted, case["link_id"])
+
 if failures:
     print("\n".join(failures), file=sys.stderr)
     sys.exit(1)
 
 print(
     f"{len(objects['base32']['cases'])} base32 cases, "
-    f"{len(objects['objects'])} object names and "
-    f"{len(meta['cases'])} fixtures re-derive"
+    f"{len(objects['objects'])} object names, "
+    f"{len(meta['cases'])} fixtures and "
+    f"{sum('hint' in case for case in meta['cases'])} minted link ids re-derive"
 )

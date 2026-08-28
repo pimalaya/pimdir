@@ -7,6 +7,8 @@ Normative test data for the pimdir format (SPEC.md §16), part of it alongside m
 - **objects.json**: bodies to object names under both `hash_algo` values, with the shard path §5 derives from each. An implementation **MUST** pass this: object naming is where a disagreement costs data rather than presentation.
 - **meta.json** and **fixtures/**: bodies to the `link_id`, `meta` and `sort_key` Annex A's conventions produce, including every case that annex has to hedge. An implementation **SHOULD** pass the cases for each `kind` it writes; Annex A is informative, so these bind an implementation to the conventions it claims to implement.
 
+Three of meta.json's cases pin the **minted** `link_id` (SPEC.md §9): a hint the collection already holds under another handle is filed under `dup:`, the hint, `#` and the handle, concatenated verbatim in that order. Each reuses the fixture of the case above it, since minting depends on the hint and the handle and never on the body, and each carries the `hint` and `handle` its key was built from, so a consumer rebuilds the key rather than pattern-matching the string. The kind fallbacks (`alt:` for a message with no usable `Message-ID`, `hash:` for a DAV resource stating no `UID`) are untouched by them, `event-no-uid.ics` still pinning that an id was derived rather than what it equals: minting is a third trigger, not a replacement for either.
+
 ## How the expected values were derived
 
 From the algorithm and prose specifications, never by running an implementation. That is the whole point: values taken out of one implementation would record what it does rather than what the format says, and nothing could then meaningfully disagree with it.

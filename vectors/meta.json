@@ -14,6 +14,18 @@
       "sort_key": "2026-08-01T10:00:00Z"
     },
     {
+      "label": "mail, Message-ID already claimed in the collection",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-basic.eml",
+      "note": "the same body the case above holds, met a second time in one mailbox under another IMAP UID: the hint is taken, so the key is minted (SPEC \u00a79). Same fixture on purpose, minting depending on the hint and the handle and never on the body; the two items share one object, refcounted twice",
+      "body": { "len": 299, "blake3": "vmrssbttugq3lthad7jpxm73flnmmuqq3vvdsxj2ghqy6bfwdbra", "sha256-128": "dh4uthikps6rrobtyfukbuo6sy" },
+      "hint": "basic-1@example.org",
+      "handle": "1174",
+      "link_id": "dup:basic-1@example.org#1174",
+      "meta": { "v": 1, "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "from": "alice@example.org", "to": "bob@example.org", "date": "2026-08-01T10:00:00Z", "size": 299 },
+      "sort_key": "2026-08-01T10:00:00Z"
+    },
+    {
       "label": "mail, unparseable Date",
       "kind": "message/rfc822",
       "fixture": "fixtures/mail-unparseable-date.eml",
@@ -54,6 +66,18 @@
       "sort_key": "jane doe"
     },
     {
+      "label": "card, UID already claimed in the collection",
+      "kind": "text/vcard",
+      "fixture": "fixtures/card-basic.vcf",
+      "note": "an address book holding one UID under two resources, which RFC 6352 \u00a75.1 forbids and a server hands over anyway: the second one mints its key. The handle is the resource name, the last segment of the href exactly as the server returned it, percent-escapes included and nothing re-encoded or decoded",
+      "body": { "len": 175, "blake3": "jzdvgikvarbxigs4ftfdtylxeob4thxg5duq33poxaewcatc7fkq", "sha256-128": "ktd57fdjcfrevbf6r32xxtziwy" },
+      "hint": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40",
+      "handle": "urn%3Auuid%3A4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40.vcf",
+      "link_id": "dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#urn%3Auuid%3A4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40.vcf",
+      "meta": { "v": 1, "uid": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "fn": "Jane Doe", "emails": ["jane@example.org", "j.doe@example.com"], "size": 175 },
+      "sort_key": "jane doe"
+    },
+    {
       "label": "card, no FN",
       "kind": "text/vcard",
       "fixture": "fixtures/card-no-fn.vcf",
@@ -80,6 +104,18 @@
       "note": "a UTC date-time is already an instant, so the key is the value read straight through",
       "body": { "len": 249, "blake3": "lpbw5ts77nl5al5zzgb6cunoojn5mpxfk2ujnlla3vfmvspkwoaa", "sha256-128": "x5iw4outbvkoeul7roys6aecma" },
       "link_id": "event-utc@example.org",
+      "meta": { "v": 1, "uid": "event-utc@example.org", "component": "VEVENT", "summary": "Stand-up", "location": "Room 2", "dtstart": "20260814T090000Z", "dtstart_value": "date-time", "dtend": "20260814T093000Z", "recurring": false, "size": 249 },
+      "sort_key": "2026-08-14T09:00:00Z"
+    },
+    {
+      "label": "event, UID already claimed in the collection",
+      "kind": "text/calendar",
+      "fixture": "fixtures/event-utc.ics",
+      "note": "the observed shape (SPEC \u00a7A.3): one calendar holding one UID under two resources one client wrote, named event-utc%40example.org.ics and event-utc%2540example.org.ics. Those are two different names and not one name spelled twice, the second literally containing the characters % 2 5 4 0. The first binds the free hint and keeps the bare key, the second mints; the handle is the name as the server returned it, decoded by nobody",
+      "body": { "len": 249, "blake3": "lpbw5ts77nl5al5zzgb6cunoojn5mpxfk2ujnlla3vfmvspkwoaa", "sha256-128": "x5iw4outbvkoeul7roys6aecma" },
+      "hint": "event-utc@example.org",
+      "handle": "event-utc%2540example.org.ics",
+      "link_id": "dup:event-utc@example.org#event-utc%2540example.org.ics",
       "meta": { "v": 1, "uid": "event-utc@example.org", "component": "VEVENT", "summary": "Stand-up", "location": "Room 2", "dtstart": "20260814T090000Z", "dtstart_value": "date-time", "dtend": "20260814T093000Z", "recurring": false, "size": 249 },
       "sort_key": "2026-08-14T09:00:00Z"
     },

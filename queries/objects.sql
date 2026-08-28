@@ -16,6 +16,9 @@ ON CONFLICT(hash) DO UPDATE SET size = excluded.size;
 -- servers may mint the same vCard UID (§9.2), and answering across accounts
 -- hands one account's body to the other's sync. A single-account store binds
 -- NULL and dedups whole-store.
+-- Keyed on the assigned link id, never on the identity hint it was assigned
+-- from, so a minted key (§9) finds no body here and fetches its own: a missed
+-- dedup rather than a wrong merge.
 SELECT i.link_id, i.object_hash FROM items i
 JOIN collections c ON c.id = i.collection
 WHERE i.object_hash IS NOT NULL

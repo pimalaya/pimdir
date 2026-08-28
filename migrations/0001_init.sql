@@ -71,7 +71,7 @@ CREATE TABLE objects (
 -- `retained_at`), keeping its body pinned until an explicit purge (§11).
 CREATE TABLE items (
     collection      TEXT NOT NULL REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
-    link_id         TEXT NOT NULL,         -- cross-source identity (Message-ID, vCard/iCal UID), internal
+    link_id         TEXT NOT NULL,         -- the key the item is filed under: the identity hint, a kind fallback, or a minted dup:<hint>#<handle> (§9)
     seq             INTEGER NOT NULL,      -- public id, shared by every placement of the link id (§9.1)
     flags           TEXT,                  -- JSON array of flag strings
     object_hash     TEXT REFERENCES objects(hash),  -- current body, NULL until hydrated
@@ -109,7 +109,10 @@ CREATE TABLE bindings (
     collection        TEXT NOT NULL,
     link_id           TEXT NOT NULL,
     source            TEXT NOT NULL,
-    handle            TEXT NOT NULL,       -- the item's backend id on this source (IMAP UID, DAV href)
+    -- The item's backend id on this source (IMAP UID, DAV href). Bound once:
+    -- a write resolving this binding to another handle is refused, and the one
+    -- licensed rebind is the handle-space rebuild (§10, §12).
+    handle            TEXT NOT NULL,
     base_flags        TEXT,                -- JSON array of strings, or NULL
     base_object       TEXT REFERENCES objects(hash),
     base_revision     TEXT,                -- etag/modseq for mutable-content backends
@@ -121,11 +124,6 @@ CREATE TABLE bindings (
     -- which is the cross-source divergence.
     conflicted        INTEGER NOT NULL DEFAULT 0,
     conflict_revision TEXT,                -- the remote revision observed when it did, or NULL
-    -- The other handles this source holds this identity under, JSON array or
-    -- NULL. A binding pins one handle, so a second copy is recorded here and
-    -- freezes the item, rather than silently repointing the binding and
-    -- destroying the evidence (§10).
-    ambiguous_handles TEXT,
     PRIMARY KEY (collection, link_id, source),
     -- ON UPDATE as well as ON DELETE: renaming a collection cascades into
     -- items.collection, this composite key's parent, so without it the rename
