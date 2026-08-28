@@ -124,6 +124,20 @@ CREATE TABLE bindings (
     -- which is the cross-source divergence.
     conflicted        INTEGER NOT NULL DEFAULT 0,
     conflict_revision TEXT,                -- the remote revision observed when it did, or NULL
+    -- The diverging remote body at that revision, so a resolver reads base,
+    -- local and remote from the store and needs no credentials (§13). Pinned
+    -- like any other reference while the binding stays conflicted.
+    conflict_object   TEXT REFERENCES objects(hash),
+    -- The shared body this source last reconciled against, the base of the
+    -- cross-source merge (§10, §13). base_object answers to the source's own
+    -- remote and only a sync moves it, so a body this source folded in and has
+    -- not pushed yet leaves it behind; read as the shared base it would have
+    -- the source disagree with itself. Meaningful whether or not the binding
+    -- is conflicted. It names an object and pins none, hence no REFERENCES and
+    -- no refcount: the value is only ever compared for equality, never read as
+    -- bytes, and a content hash compares the same after the body it named has
+    -- been swept.
+    shared_object     TEXT,
     PRIMARY KEY (collection, link_id, source),
     -- ON UPDATE as well as ON DELETE: renaming a collection cascades into
     -- items.collection, this composite key's parent, so without it the rename
@@ -154,10 +168,16 @@ CREATE INDEX bindings_by_object ON bindings(base_object);
 -- The collector's scan (§5). Partial, so it holds only what is about to be
 -- collected and is empty at rest.
 CREATE INDEX objects_garbage ON objects(refcount) WHERE refcount <= 0;
--- The other two pointers at an object, so recompute_refcounts reaches every
--- reference by index rather than scanning items and queue once per object.
+-- The other three pointers at an object, so recompute_refcounts reaches every
+-- reference by index rather than scanning items, bindings and queue once per
+-- object.
 CREATE INDEX items_by_conflict_object ON items(conflict_object);
+CREATE INDEX bindings_by_conflict_object ON bindings(conflict_object);
 CREATE INDEX queue_by_object ON queue(object_hash);
+-- The bindings waiting for a decision (list_conflicted_bindings). Partial, so
+-- it holds only what is outstanding and is empty at rest: a run reports that
+-- count on every invocation, and without it the report scans every binding.
+CREATE INDEX bindings_conflicted ON bindings(collection, link_id, source) WHERE conflicted = 1;
 -- Resolves a source handle back to its link id (link_for_handle), which is what
 -- a batch dropping a placement needs: a drop names a handle, the shared item is
 -- keyed by link id.

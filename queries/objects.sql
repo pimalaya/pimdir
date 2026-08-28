@@ -26,7 +26,7 @@ WHERE i.object_hash IS NOT NULL
   AND c.account IS :account;
 
 -- name: recompute_refcounts
--- Recount from the four pointers that pin an object, in one grouped pass, so
+-- Recount from the five pointers that pin an object, in one grouped pass, so
 -- O(items+bindings+queue). The correlated-subquery form is O(objects x items),
 -- since the OR across object_hash and conflict_object is a disjunction no index
 -- serves: on twenty thousand items it took 80 seconds against this one's 121 ms.
@@ -39,6 +39,7 @@ FROM (
     SELECT object_hash AS hash FROM items WHERE object_hash IS NOT NULL
     UNION ALL SELECT conflict_object FROM items WHERE conflict_object IS NOT NULL
     UNION ALL SELECT base_object FROM bindings WHERE base_object IS NOT NULL
+    UNION ALL SELECT conflict_object FROM bindings WHERE conflict_object IS NOT NULL
     UNION ALL SELECT object_hash FROM queue WHERE object_hash IS NOT NULL
   ) r ON r.hash = o.hash
   GROUP BY o.hash
