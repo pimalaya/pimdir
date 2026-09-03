@@ -1,0 +1,21 @@
+{
+  "v": 1,
+  "note": "the fixture store every search case is asked against (SEARCH.md §11). seq is store-global: the message filed in both accounts' INBOX shares seq 1, which is what pins hits being keyed (account, seq). Item 8 is bodiless and indexed from its summary alone",
+  "collections": [
+    { "id": "home/INBOX", "account": "home", "kind": "message/rfc822" },
+    { "id": "home/Contacts", "account": "home", "kind": "text/vcard" },
+    { "id": "home/Calendar", "account": "home", "kind": "text/calendar" },
+    { "id": "work/INBOX", "account": "work", "kind": "message/rfc822" }
+  ],
+  "items": [
+    { "collection": "home/INBOX", "seq": 1, "link_id": "basic-1@example.org", "flags": ["\\Seen"], "fixture": "fixtures/mail-basic.eml" },
+    { "collection": "work/INBOX", "seq": 1, "link_id": "basic-1@example.org", "flags": ["\\Seen"], "fixture": "fixtures/mail-basic.eml" },
+    { "collection": "home/INBOX", "seq": 2, "link_id": "encoded-1@example.org", "flags": [], "fixture": "fixtures/mail-encoded.eml" },
+    { "collection": "home/INBOX", "seq": 3, "link_id": "multi-1@example.org", "flags": ["\\Seen"], "fixture": "fixtures/mail-multi-reply.eml" },
+    { "collection": "home/Contacts", "seq": 4, "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "flags": [], "fixture": "fixtures/card-basic.vcf" },
+    { "collection": "home/Contacts", "seq": 5, "link_id": "urn:uuid:9e8d7c6b-5a49-4837-9261-0f1e2d3c4b5a", "flags": [], "fixture": "fixtures/card-escaped.vcf" },
+    { "collection": "home/Calendar", "seq": 6, "link_id": "event-series@example.org", "flags": [], "fixture": "fixtures/event-recurring.ics" },
+    { "collection": "home/Calendar", "seq": 7, "link_id": "todo-due@example.org", "flags": [], "fixture": "fixtures/todo-due-only.ics" },
+    { "collection": "home/INBOX", "seq": 8, "link_id": "budget-1@example.net", "flags": [], "summary": { "table": "mail_summary", "row": { "message_id": "budget-1@example.net", "in_reply_to": [], "subject": "Budget", "sender": "dan@example.net", "sender_name": "Dan", "date": "2026-08-10T08:00:00Z", "size": 4096, "attachment": null }, "addresses": [{ "role": "from", "position": 0, "address": "dan@example.net", "name": "Dan" }, { "role": "to", "position": 0, "address": "bob@example.org", "name": null }], "sort_key": "2026-08-10T08:00:00Z" } }
+  ]
+}

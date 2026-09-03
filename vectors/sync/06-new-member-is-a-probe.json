@@ -1,0 +1,25 @@
+{
+  "label": "a newly listed handle is a probe row until a fetch names it",
+  "note": "an enumeration yields a handle and markers and no identity, so the member is a probes row, not an item (STORAGE §4.3, SYNC.md §3); the checkpoint advances in the same run, which is why the row must be durable",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {},
+    "items": [],
+    "bindings": [],
+    "probes": [],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c0" }]
+  },
+  "run": { "verb": "sync", "collection": "INBOX", "source": "imap", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual", "delete": "revert" } },
+  "remote": { "snapshot": { "items": [{ "handle": "11", "flags": [], "revision": null }], "vanished": [], "complete": true, "checkpoint": "c1" }, "fetch": {} },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [{ "kind": "Added", "handle": "11" }],
+    "store": {
+      "items": [],
+      "bindings": [],
+      "probes": [{ "collection": "INBOX", "source": "imap", "handle": "11", "flags": [] }],
+      "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+    }
+  }
+}

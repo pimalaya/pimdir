@@ -1,7 +1,7 @@
 -- pimdir queue: the action queue, the write door for every process that is not
--- the store owner (SPEC.md §8, §15).
+-- the store owner (STORAGE.md §8, §15).
 --
--- Reference statements for the store operations (SPEC.md §4.4, §14); column
+-- Reference statements for the store operations (STORAGE.md §4.4, §14); column
 -- encodings in §13, named parameters `:name`.
 
 -- name: enqueue_action

@@ -1,0 +1,23 @@
+{
+  "v": 1,
+  "now": "2026-08-20T12:00:00Z",
+  "horizon": { "start": "2025-08-20T12:00:00Z", "end": "2028-08-20T12:00:00Z" },
+  "coverage": { "message/rfc822": 1 },
+  "note": "hits are (account, seq) pairs compared as a set unless the case says ordered (SEARCH.md §8.2); coverage is the bodiless live items in scope, here item 8 whenever mail is in scope",
+  "cases": [
+    { "query": "stand-up", "hits": [["home", 1], ["work", 1]], "note": "free text over title; one message in two accounts is two hits" },
+    { "query": "reunion", "hits": [["home", 2]], "note": "remove_diacritics 2: the accented subject matches the bare word" },
+    { "query": "from:alice@example.org", "hits": [["home", 1], ["work", 1], ["home", 3]], "note": "an address seek on the from role" },
+    { "query": "with:jane.doe@example.com", "hits": [["home", 5]], "note": "the card's EMAIL, lowercased whole on the way in" },
+    { "query": "with:@example.net", "hits": [["home", 2], ["home", 8]], "note": "a domain token: a cc on a full body and a sender on a bodiless summary" },
+    { "query": "is:unread kind:mail", "hits": [["home", 2], ["home", 8]], "note": "the absence of \\Seen, kind narrowing to mail" },
+    { "query": "date:2026-08-14..2026-08-15", "hits": [["home", 6]], "note": "the series' first occurrence; no mail is dated in the range" },
+    { "query": "date:2026-11-06", "hits": [["home", 6]], "note": "the twelfth Friday of the series, which only an expanded occurrence answers" },
+    { "query": "kind:task date:..2026-10", "hits": [["home", 7]], "note": "a task compares its DUE" },
+    { "query": "person:jane", "hits": [["home", 4], ["home", 5]], "note": "cards whose title matches; no mail names their addresses, so nothing expands" },
+    { "query": "\"stand-up notes\" not tag:\\Seen", "hits": [], "note": "both placements carry the flag, so the union rule excludes the hit in both accounts" },
+    { "query": "thread:multi-1@example.org", "hits": [["home", 3]], "note": "a thread whose parents the store never held is named by its only member" },
+    { "query": "33612345678", "hits": [["home", 5]], "note": "a telephone number matches by its digits alone" },
+    { "query": "budget", "hits": [["home", 8]], "note": "a bodiless item matches on its summary, and the hit says so" }
+  ]
+}

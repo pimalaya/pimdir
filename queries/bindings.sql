@@ -3,7 +3,7 @@
 -- reconciled against), and whether that source's own sync is stuck on an
 -- unresolved content conflict.
 --
--- Reference statements for the store operations (SPEC.md §4.4, §14); column
+-- Reference statements for the store operations (STORAGE.md §4.4, §14); column
 -- encodings in §13, named parameters `:name`.
 
 -- name: load_bindings

@@ -1,0 +1,11 @@
+BEGIN:VCARD
+VERSION:4.0
+UID:urn:uuid:9e8d7c6b-5a49-4837-9261-0f1e2d3c4b5a
+FN:Doe\, Jane
+N:Doe;Jane;;;
+ORG:Example\, Inc.;Research
+EMAIL;LABEL="Work: main":Jane.Doe@Example.COM
+TEL;TYPE=cell:+33 6 12 34 56 78
+NOTE:First line
+ continued.
+END:VCARD

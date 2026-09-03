@@ -1,0 +1,25 @@
+{
+  "label": "a member the source no longer lists is retained, not deleted",
+  "note": "a complete enumeration without the handle is a remote delete; the last binding goes and the row is retained with its body (STORAGE §11, SYNC.md §10). retained_at is stamped by the clock and not compared",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },
+    "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+    "bindings": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }],
+    "probes": [],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c0" }]
+  },
+  "run": { "verb": "sync", "collection": "INBOX", "source": "imap", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual", "delete": "revert" } },
+  "remote": { "snapshot": { "items": [], "vanished": [], "complete": true, "checkpoint": "c1" }, "fetch": {} },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [{ "kind": "Vanished", "handle": "10" }],
+    "store": {
+      "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 1, "retained": true, "retained_by": "imap" }],
+      "bindings": [],
+      "probes": [],
+      "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+    }
+  }
+}

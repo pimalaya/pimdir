@@ -1,58 +1,92 @@
 -- pimdir items: the shared per-item truth of a collection (flags, body pointer,
--- summary, detail level, cross-source state), plus public-id allocation and
--- retention, the soft delete every removal lands in (SPEC.md §11).
+-- detail level, cross-source state), plus public-id allocation, the change
+-- feed and retention, the soft delete every removal lands in (STORAGE.md §11).
+-- What the item says about itself lives in its kind's summary table
+-- (queries/summaries.sql).
 --
--- Reference statements for the store operations (SPEC.md §4.4, §14); column
+-- Reference statements for the store operations (STORAGE.md §4.4, §14); column
 -- encodings in §13, named parameters `:name`.
 
 -- name: load_items
 -- Retained items excluded: the sync seam sees live items only, and hiding them
 -- here is what keeps one from being re-derived on a later sync (§11).
--- `sort_key` rides along although the sync layer has no use for it, because the
--- reference write is a replace-all: without it insert_item has nothing to bind
--- and every sync resets the ordering of every item it touched (§14).
-SELECT link_id, flags, object_hash, meta, sort_key, level, deleted, conflicted, conflict_object
+-- `sort_key` rides along although the sync layer has no use for it: a write
+-- carries it back unchanged unless it restates it (§9.3).
+SELECT link_id, flags, object_hash, sort_key, level, deleted, conflicted, conflict_object
 FROM items WHERE collection = :collection AND retained_at IS NULL;
 
 -- name: load_items_by_link
 -- Narrowed to the link ids one write batch touches. Reading the rest costs a
 -- full pass over the collection to compute nothing, and that cost grows with
 -- the mailbox rather than with the batch (§14).
-SELECT link_id, flags, object_hash, meta, sort_key, level, deleted, conflicted, conflict_object
+SELECT link_id, flags, object_hash, sort_key, level, deleted, conflicted, conflict_object
 FROM items WHERE collection = :collection AND retained_at IS NULL
   AND link_id IN (SELECT value FROM json_each(:links));
 
--- name: delete_items
--- Clears a collection before it is re-saved (bindings cascade). Retained items
--- are spared, exactly as load_items skips them, so a replace-all cannot purge
--- by accident (§11).
-DELETE FROM items WHERE collection = :collection AND retained_at IS NULL;
-
 -- name: seq_for_link_any
 -- The public id this link id already has, so all its placements share one.
--- Deliberately unscoped (§9.2): the seq is the short form of the link id, which
--- restates a fact the content carries and claims nothing about whether the
--- placements are one thing.
+-- Unscoped by account (§9.2): the seq restates what the content states. A
+-- writer-derived key states nothing and never shares (§9), so the caller runs
+-- this for a stated hint only.
 SELECT seq FROM items WHERE link_id = :link_id LIMIT 1;
 
 -- name: bump_next_seq
--- Run only when the item has no id yet (seq_for_link_any returned nothing).
+-- Run only when the item has no id yet.
 UPDATE store_meta SET next_seq = next_seq + 1 WHERE id = 1
 RETURNING next_seq - 1;
 
 -- name: insert_item
-INSERT INTO items(collection, link_id, seq, flags, object_hash, meta, sort_key, level, deleted, conflicted, conflict_object)
-VALUES(:collection, :link_id, :seq, :flags, :object_hash, :meta, :sort_key, :level, :deleted, :conflicted, :conflict_object);
+-- The stamp is the trigger's (§4.5); a writer never binds it.
+INSERT INTO items(collection, link_id, seq, flags, object_hash, sort_key, level, deleted, conflicted, conflict_object)
+VALUES(:collection, :link_id, :seq, :flags, :object_hash, :sort_key, :level, :deleted, :conflicted, :conflict_object);
 
--- The client read surface (§14.1): live-only reads keyed by the public id
--- (`seq`), never by the internal link id.
+-- name: update_item
+-- The diff writer's row update (§14); the trigger stamps it only when a
+-- column moved.
+UPDATE items SET flags = :flags, object_hash = :object_hash, sort_key = :sort_key,
+       level = :level, deleted = :deleted, conflicted = :conflicted,
+       conflict_object = :conflict_object
+WHERE collection = :collection AND link_id = :link_id;
+
+-- name: delete_items
+-- Clears a collection before it is re-saved, sparing retained rows as
+-- load_items skips them (§11). No longer the reference form (§14): it
+-- re-inserts every row and so stamps the whole collection on every sync.
+DELETE FROM items WHERE collection = :collection AND retained_at IS NULL;
+
+-- name: stamp_item
+-- Stamps an item whose summary or addresses moved while its own columns did
+-- not (§4.5); the triggers cannot see those tables.
+UPDATE items SET changed = (SELECT next_change FROM store_meta WHERE id = 1)
+WHERE collection = :collection AND link_id = :link_id;
+
+-- name: bump_next_change
+-- Run once after stamp_item, which consumed the stamp it read.
+UPDATE store_meta SET next_change = next_change + 1 WHERE id = 1;
+
+-- The change feed (§4.5): what moved since a stamp a consumer recorded.
+
+-- name: list_items_changed_since
+-- Every item stamped above :since, retained ones included: a retention is a
+-- change a mirror has to see (§11).
+SELECT collection, link_id, seq, changed, deleted, retained_at
+FROM items WHERE changed > :since
+ORDER BY changed LIMIT :limit;
+
+-- name: load_change_cursor
+-- What a consumer records beside what it derived (§4.5): every stamp below
+-- next_change is drawn, and purges says whether a row left without one.
+SELECT next_change, purges FROM store_meta WHERE id = 1;
+
+-- The client read surface (§14.1): live-only, keyed by the public id. The
+-- kind's own page, summary joined, is in queries/summaries.sql.
 
 -- name: list_items_page
 -- A keyset page in link-id order, riding the primary key with no extra index;
 -- the empty string starts from the beginning, a link_id never being empty. That
 -- order means nothing to a reader: it is the page for a sweep that must see
 -- every item exactly once, and a listing wants a sort-key page below.
-SELECT seq, link_id, flags, object_hash, meta, sort_key, level FROM items
+SELECT seq, link_id, flags, object_hash, sort_key, level FROM items
 WHERE collection = :collection AND deleted = 0 AND link_id > :after
 ORDER BY link_id LIMIT :limit;
 
@@ -61,7 +95,7 @@ ORDER BY link_id LIMIT :limit;
 -- earliest first for mail and calendars. The cursor is a pair because a sort
 -- key is not unique; `seq` breaks the tie and, being unique per collection,
 -- makes the page total. The empty string with seq 0 starts from the beginning.
-SELECT seq, link_id, flags, object_hash, meta, sort_key, level FROM items
+SELECT seq, link_id, flags, object_hash, sort_key, level FROM items
 WHERE collection = :collection AND deleted = 0
   AND (sort_key, seq) > (:after_key, :after_seq)
 ORDER BY sort_key, seq LIMIT :limit;
@@ -70,7 +104,7 @@ ORDER BY sort_key, seq LIMIT :limit;
 -- The same page descending. Start by binding the largest key the store can
 -- hold; an implementation SHOULD expose that as "no cursor" rather than make a
 -- caller invent a sentinel.
-SELECT seq, link_id, flags, object_hash, meta, sort_key, level FROM items
+SELECT seq, link_id, flags, object_hash, sort_key, level FROM items
 WHERE collection = :collection AND deleted = 0
   AND (sort_key, seq) < (:after_key, :after_seq)
 ORDER BY sort_key DESC, seq DESC LIMIT :limit;
@@ -82,7 +116,7 @@ UPDATE items SET sort_key = :sort_key
 WHERE collection = :collection AND link_id = :link_id;
 
 -- name: get_item
-SELECT seq, link_id, flags, object_hash, meta, sort_key, level FROM items
+SELECT seq, link_id, flags, object_hash, sort_key, level FROM items
 WHERE collection = :collection AND seq = :seq AND deleted = 0;
 
 -- name: count_items
@@ -139,7 +173,7 @@ WHERE collection = :collection AND link_id = :link_id;
 -- is handed out from 1: the cursor is the public id a reader already speaks
 -- (§9.1), unlike the sweep page above, and it rides items_retained, which leads
 -- with seq for this read. The size comes from the object the row still pins.
-SELECT i.seq, i.link_id, i.flags, i.object_hash, i.meta, i.sort_key, i.level,
+SELECT i.seq, i.link_id, i.flags, i.object_hash, i.sort_key, i.level,
        i.retained_at, i.retained_by, o.size
 FROM items i LEFT JOIN objects o ON o.hash = i.object_hash
 WHERE i.collection = :collection AND i.retained_at IS NOT NULL AND i.seq > :after
@@ -158,10 +192,9 @@ SELECT coalesce(sum(o.size), 0) FROM objects o WHERE o.hash IN
      WHERE retained_at IS NOT NULL AND object_hash IS NOT NULL);
 
 -- name: purge_item
--- The only true delete, guarded on retained_at so it can never take a live
--- item. It returns the two hashes the row pinned, so whoever deletes the row
--- settles them with release_pins in the same transaction rather than visiting
--- it twice; the bodies then fall to the collector (§5, §14).
+-- The only true delete, guarded on retained_at so it never takes a live item.
+-- It returns the pinned hashes for release_pins in the same transaction, and
+-- the delete trigger counts the purge (§4.5, §14).
 DELETE FROM items
 WHERE collection = :collection AND seq = :seq AND retained_at IS NOT NULL
 RETURNING object_hash, conflict_object;

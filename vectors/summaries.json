@@ -1,0 +1,311 @@
+{
+  "v": 2,
+  "conventions": "Annex A of STORAGE.md, which is normative: an implementation MUST derive these rows for each kind it writes",
+  "fixtures_are_crlf": true,
+  "cases": [
+    {
+      "label": "mail, every field present",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-basic.eml",
+      "note": "the Date carries a +02:00 offset, so the key and the date column are the UTC instant with the Z designator, never the local reading. attachment is 0 because the writer walked the one text part; the Meta tier, which walks nothing, writes NULL there and agrees on every other column",
+      "body": { "len": 299, "blake3": "vmrssbttugq3lthad7jpxm73flnmmuqq3vvdsxj2ghqy6bfwdbra", "sha256-128": "dh4uthikps6rrobtyfukbuo6sy" },
+      "link_id": "basic-1@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0 },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "alice@example.org", "name": "Alice Example" },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": null },
+        { "role": "to", "position": 1, "address": "carol@example.org", "name": null }
+      ],
+      "sort_key": "2026-08-01T10:00:00Z"
+    },
+    {
+      "label": "mail, Message-ID already claimed in the collection",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-basic.eml",
+      "note": "the same body the case above holds, met a second time in one mailbox under another IMAP UID: the hint is taken, so the key is minted (STORAGE §9). Same fixture on purpose, minting depending on the hint and the handle and never on the body; the two items share one object, refcounted twice, and carry identical rows",
+      "body": { "len": 299, "blake3": "vmrssbttugq3lthad7jpxm73flnmmuqq3vvdsxj2ghqy6bfwdbra", "sha256-128": "dh4uthikps6rrobtyfukbuo6sy" },
+      "hint": "basic-1@example.org",
+      "handle": "1174",
+      "link_id": "dup:basic-1@example.org#1174",
+      "table": "mail_summary",
+      "summary": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0 },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "alice@example.org", "name": "Alice Example" },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": null },
+        { "role": "to", "position": 1, "address": "carol@example.org", "name": null }
+      ],
+      "sort_key": "2026-08-01T10:00:00Z"
+    },
+    {
+      "label": "mail, encoded headers",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-encoded.eml",
+      "note": "the case that split three writers: an RFC 2047 subject and display name are decoded, a quoted phrase with a comma is one name, and the addr-spec is lowercased whole (Annex A.6) while the name keeps its case. No In-Reply-To gives '[]', never NULL",
+      "body": { "len": 348, "blake3": "bjkoehoowohmcp62f3lzzvicdmaavmhoey2jvlaxxhr5z4576zla", "sha256-128": "h6ijrtjfprfscqgxcqov2brhre" },
+      "link_id": "encoded-1@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": "encoded-1@example.org", "in_reply_to": [], "subject": "Réunion de rentrée", "sender": "zoe.bruck@example.org", "sender_name": "Zöe Brück", "date": "2026-08-04T09:15:00Z", "size": 348, "attachment": 0 },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "zoe.bruck@example.org", "name": "Zöe Brück" },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": "Bob, Jr." },
+        { "role": "cc", "position": 0, "address": "carol@example.org", "name": null },
+        { "role": "cc", "position": 1, "address": "dan@example.net", "name": "Dan" }
+      ],
+      "sort_key": "2026-08-04T09:15:00Z"
+    },
+    {
+      "label": "mail, unparseable Date",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-unparseable-date.eml",
+      "note": "date is NULL rather than guessed, and the empty key lands the message last in a descending listing",
+      "body": { "len": 165, "blake3": "c6y4qvc2bvpf3bntujlfu6wijelnkjaeprt6afqstbdms7fi2gga", "sha256-128": "rviotkynhqei4k6i7yiofpohsm" },
+      "link_id": "nodate-1@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": "nodate-1@example.org", "in_reply_to": [], "subject": "When?", "sender": "alice@example.org", "sender_name": "Alice Example", "date": null, "size": 165, "attachment": 0 },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "alice@example.org", "name": "Alice Example" },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sort_key": ""
+    },
+    {
+      "label": "mail, no Subject header",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-no-subject.eml",
+      "note": "subject is NOT NULL and may be empty, so it is empty rather than NULL; the obsolete GMT zone reads as +0000",
+      "body": { "len": 146, "blake3": "sof74dppzba7w5pyaob6zzc3bk7witzwpduhrn6qo4xknqquzfpq", "sha256-128": "7iivjcylgtutffe2bskjktv2du" },
+      "link_id": "bare-1@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": "bare-1@example.org", "in_reply_to": [], "subject": "", "sender": "alice@example.org", "sender_name": null, "date": "2026-08-01T10:00:00Z", "size": 146, "attachment": 0 },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "alice@example.org", "name": null },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sort_key": "2026-08-01T10:00:00Z"
+    },
+    {
+      "label": "mail, two In-Reply-To ids",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-multi-reply.eml",
+      "note": "In-Reply-To is 1*msg-id (RFC 5322), hence an array; each id loses its angle brackets, like message_id",
+      "body": { "len": 240, "blake3": "6p5wwi7wm3bwgd6wvkfexm66mqyxxxvylw44wubrjtceiys3vmnq", "sha256-128": "u52kp67wyed4p7xiv4ayp46vpm" },
+      "link_id": "multi-1@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": "multi-1@example.org", "in_reply_to": ["one@example.org", "two@example.org"], "subject": "Re: two parents", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 240, "attachment": 0 },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "alice@example.org", "name": "Alice Example" },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sort_key": "2026-08-01T10:00:00Z"
+    },
+    {
+      "label": "card, every field present",
+      "kind": "text/vcard",
+      "fixture": "fixtures/card-basic.vcf",
+      "note": "every EMAIL is an address row in document order; a card's addresses carry no name of their own",
+      "body": { "len": 175, "blake3": "jzdvgikvarbxigs4ftfdtylxeob4thxg5duq33poxaewcatc7fkq", "sha256-128": "ktd57fdjcfrevbf6r32xxtziwy" },
+      "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40",
+      "table": "contact_summary",
+      "summary": { "uid": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "fn": "Jane Doe", "kind": null, "org": null },
+      "addresses": [
+        { "role": "email", "position": 0, "address": "jane@example.org", "name": null },
+        { "role": "email", "position": 1, "address": "j.doe@example.com", "name": null }
+      ],
+      "sort_key": "jane doe"
+    },
+    {
+      "label": "card, UID already claimed in the collection",
+      "kind": "text/vcard",
+      "fixture": "fixtures/card-basic.vcf",
+      "note": "an address book holding one UID under two resources, which RFC 6352 §5.1 forbids and a server hands over anyway: the second one mints its key. The handle is the resource name, the last segment of the href exactly as the server returned it, percent-escapes included and nothing re-encoded or decoded",
+      "body": { "len": 175, "blake3": "jzdvgikvarbxigs4ftfdtylxeob4thxg5duq33poxaewcatc7fkq", "sha256-128": "ktd57fdjcfrevbf6r32xxtziwy" },
+      "hint": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40",
+      "handle": "urn%3Auuid%3A4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40.vcf",
+      "link_id": "dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#urn%3Auuid%3A4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40.vcf",
+      "table": "contact_summary",
+      "summary": { "uid": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "fn": "Jane Doe", "kind": null, "org": null },
+      "addresses": [
+        { "role": "email", "position": 0, "address": "jane@example.org", "name": null },
+        { "role": "email", "position": 1, "address": "j.doe@example.com", "name": null }
+      ],
+      "sort_key": "jane doe"
+    },
+    {
+      "label": "card, escaped values and a quoted parameter",
+      "kind": "text/vcard",
+      "fixture": "fixtures/card-escaped.vcf",
+      "note": "the case that split two writers: FN and ORG are unescaped (RFC 6350 §3.4), the EMAIL's LABEL parameter is quoted around a colon so the property splits on the colon after it (§3.3), the addr-spec is lowercased whole, and the folded NOTE is one line. The key is the unescaped name lowercased",
+      "body": { "len": 257, "blake3": "afmrjez5twmnq2dr5lusoevvyrvcf56fzf6hrvq2gaaaw7xcip2a", "sha256-128": "jctxep2kea3jbvrifjkkrwdlzu" },
+      "link_id": "urn:uuid:9e8d7c6b-5a49-4837-9261-0f1e2d3c4b5a",
+      "table": "contact_summary",
+      "summary": { "uid": "urn:uuid:9e8d7c6b-5a49-4837-9261-0f1e2d3c4b5a", "fn": "Doe, Jane", "kind": null, "org": "Example, Inc." },
+      "addresses": [
+        { "role": "email", "position": 0, "address": "jane.doe@example.com", "name": null }
+      ],
+      "sort_key": "doe, jane"
+    },
+    {
+      "label": "card, no FN",
+      "kind": "text/vcard",
+      "fixture": "fixtures/card-no-fn.vcf",
+      "note": "fn is NOT NULL and may be empty; the empty key sorts a nameless contact first rather than burying it",
+      "body": { "len": 132, "blake3": "ftnn53dltua34v7xm33m46hkatteiavbhk3tozhshvefjys6weiq", "sha256-128": "upfzsyqsgpki5hripgvykwdiyi" },
+      "link_id": "urn:uuid:8c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f",
+      "table": "contact_summary",
+      "summary": { "uid": "urn:uuid:8c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f", "fn": "", "kind": null, "org": null },
+      "addresses": [
+        { "role": "email", "position": 0, "address": "nameless@example.org", "name": null }
+      ],
+      "sort_key": ""
+    },
+    {
+      "label": "card, FN needing case and space normalisation",
+      "kind": "text/vcard",
+      "fixture": "fixtures/card-casefold.vcf",
+      "note": "fn keeps FN verbatim, surrounding spaces included, since it is what a reader displays; only the key is lowercased and trimmed. ASCII on purpose (README)",
+      "body": { "len": 140, "blake3": "dicrwyaj2vdqyaisvhmxhnzegtcflos4wccophyz6aissod37gtq", "sha256-128": "uz7r2drr62sobqgjmo5jegku6a" },
+      "link_id": "urn:uuid:1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+      "table": "contact_summary",
+      "summary": { "uid": "urn:uuid:1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d", "fn": "  ALICE Zimmermann  ", "kind": null, "org": null },
+      "addresses": [
+        { "role": "email", "position": 0, "address": "alice.z@example.org", "name": null }
+      ],
+      "sort_key": "alice zimmermann"
+    },
+    {
+      "label": "event, UTC DTSTART",
+      "kind": "text/calendar",
+      "fixture": "fixtures/event-utc.ics",
+      "note": "a UTC date-time is already an instant, so the key is the value read straight through",
+      "body": { "len": 249, "blake3": "lpbw5ts77nl5al5zzgb6cunoojn5mpxfk2ujnlla3vfmvspkwoaa", "sha256-128": "x5iw4outbvkoeul7roys6aecma" },
+      "link_id": "event-utc@example.org",
+      "table": "event_summary",
+      "summary": { "uid": "event-utc@example.org", "summary": "Stand-up", "location": "Room 2", "dtstart": "20260814T090000Z", "dtstart_tzid": null, "dtstart_value": "date-time", "dtend": "20260814T093000Z", "recurring": 0, "until": null },
+      "addresses": [],
+      "sort_key": "2026-08-14T09:00:00Z"
+    },
+    {
+      "label": "event, UID already claimed in the collection",
+      "kind": "text/calendar",
+      "fixture": "fixtures/event-utc.ics",
+      "note": "the observed shape (STORAGE §A.3): one calendar holding one UID under two resources one client wrote, named event-utc%40example.org.ics and event-utc%2540example.org.ics. Those are two different names and not one name spelled twice, the second literally containing the characters % 2 5 4 0. The first binds the free hint and keeps the bare key, the second mints; the handle is the name as the server returned it, decoded by nobody",
+      "body": { "len": 249, "blake3": "lpbw5ts77nl5al5zzgb6cunoojn5mpxfk2ujnlla3vfmvspkwoaa", "sha256-128": "x5iw4outbvkoeul7roys6aecma" },
+      "hint": "event-utc@example.org",
+      "handle": "event-utc%2540example.org.ics",
+      "link_id": "dup:event-utc@example.org#event-utc%2540example.org.ics",
+      "table": "event_summary",
+      "summary": { "uid": "event-utc@example.org", "summary": "Stand-up", "location": "Room 2", "dtstart": "20260814T090000Z", "dtstart_tzid": null, "dtstart_value": "date-time", "dtend": "20260814T093000Z", "recurring": 0, "until": null },
+      "addresses": [],
+      "sort_key": "2026-08-14T09:00:00Z"
+    },
+    {
+      "label": "event, zoned DTSTART on a fall-back fold",
+      "kind": "text/calendar",
+      "fixture": "fixtures/event-zoned-fold.ics",
+      "note": "local 01:30 happens twice in America/New_York; the rule takes the offset in effect BEFORE the transition, EDT at -04:00, the earlier instant. EST would give 06:30:00Z",
+      "body": { "len": 625, "blake3": "xdzlnjpo5s2vvlwq4tjtepzdzudhs6pku5f4ej7jtrt3o2xan4la", "sha256-128": "muxnwmqeyp6ich7mhynx4oluwy" },
+      "link_id": "event-fold@example.org",
+      "table": "event_summary",
+      "summary": { "uid": "event-fold@example.org", "summary": "Ambiguous hour", "location": null, "dtstart": "20261101T013000", "dtstart_tzid": "America/New_York", "dtstart_value": "date-time", "dtend": "20261101T020000", "recurring": 0, "until": null },
+      "addresses": [],
+      "sort_key": "2026-11-01T05:30:00Z"
+    },
+    {
+      "label": "event, zoned DTSTART in a spring-forward gap",
+      "kind": "text/calendar",
+      "fixture": "fixtures/event-zoned-gap.ics",
+      "note": "local 02:30 never happens in America/New_York; the rule takes the offset in effect AFTER the transition, EDT at -04:00",
+      "body": { "len": 626, "blake3": "qxnjzfzsbwd4v7tuwivbfv4djawxvqagab6kt34zszizj7oocpwq", "sha256-128": "6gtjklsjclgkhgpgw2bnxm43k4" },
+      "link_id": "event-gap@example.org",
+      "table": "event_summary",
+      "summary": { "uid": "event-gap@example.org", "summary": "Nonexistent hour", "location": null, "dtstart": "20260308T023000", "dtstart_tzid": "America/New_York", "dtstart_value": "date-time", "dtend": "20260308T033000", "recurring": 0, "until": null },
+      "addresses": [],
+      "sort_key": "2026-03-08T06:30:00Z"
+    },
+    {
+      "label": "event, date-only DTSTART",
+      "kind": "text/calendar",
+      "fixture": "fixtures/event-date-only.ics",
+      "note": "read as T00:00:00Z by convention: an all-day item sorts differently either side of UTC and the writer cannot know which",
+      "body": { "len": 240, "blake3": "vw2ago4qfaj7trph7dwuclu3gkfzpx4pqougx3hnlwazdczermiq", "sha256-128": "hfyff62d2z3vbid64lh7vmt4ni" },
+      "link_id": "event-allday@example.org",
+      "table": "event_summary",
+      "summary": { "uid": "event-allday@example.org", "summary": "All day", "location": null, "dtstart": "20260811", "dtstart_tzid": null, "dtstart_value": "date", "dtend": "20260812", "recurring": 0, "until": null },
+      "addresses": [],
+      "sort_key": "2026-08-11T00:00:00Z"
+    },
+    {
+      "label": "event, floating DTSTART",
+      "kind": "text/calendar",
+      "fixture": "fixtures/event-floating.ics",
+      "note": "no Z and no TZID, so the wall time is read as UTC",
+      "body": { "len": 235, "blake3": "yhtuhxquxz457r4shemecm3lppo3hwha476vpiows5uczypgf6dq", "sha256-128": "iuah5ggv6l7h4nnkatx5l6h6xi" },
+      "link_id": "event-floating@example.org",
+      "table": "event_summary",
+      "summary": { "uid": "event-floating@example.org", "summary": "Floating", "location": null, "dtstart": "20260811T090000", "dtstart_tzid": null, "dtstart_value": "date-time", "dtend": "20260811T100000", "recurring": 0, "until": null },
+      "addresses": [],
+      "sort_key": "2026-08-11T09:00:00Z"
+    },
+    {
+      "label": "event, TZID that will not resolve",
+      "kind": "text/calendar",
+      "fixture": "fixtures/event-unknown-tzid.ics",
+      "note": "the TZID names no VTIMEZONE and no known zone, so the time is read as floating rather than dropped: an offset of error, where an empty key would move the item to the far end. dtstart_tzid keeps the parameter verbatim",
+      "body": { "len": 282, "blake3": "hx6gqyqfldmr6dada24xmakrzrtj34oacrhwqmrwgj553gojzcha", "sha256-128": "epdwizu2bls3eelmxe7xbb6sne" },
+      "link_id": "event-unknown-tz@example.org",
+      "table": "event_summary",
+      "summary": { "uid": "event-unknown-tz@example.org", "summary": "Unresolvable zone", "location": null, "dtstart": "20260811T090000", "dtstart_tzid": "Mars/Olympus", "dtstart_value": "date-time", "dtend": "20260811T100000", "recurring": 0, "until": null },
+      "addresses": [],
+      "sort_key": "2026-08-11T09:00:00Z"
+    },
+    {
+      "label": "event, recurring with an UNTIL",
+      "kind": "text/calendar",
+      "fixture": "fixtures/event-recurring.ics",
+      "note": "the key is the first occurrence, fixed for the life of the series; until carries the RRULE's UNTIL verbatim, so a reader bounds the series without expanding it",
+      "body": { "len": 692, "blake3": "6ifuaaj2udafgu7s3apdpjpv2fyozqt77pc2e2arlobjfko6p6rq", "sha256-128": "2afnl6o7wee6izzg7spmv5rwjm" },
+      "link_id": "event-series@example.org",
+      "table": "event_summary",
+      "summary": { "uid": "event-series@example.org", "summary": "Weekly sync", "location": "Room 2", "dtstart": "20260814T090000", "dtstart_tzid": "America/New_York", "dtstart_value": "date-time", "dtend": "20260814T093000", "recurring": 1, "until": "20261231T235959Z" },
+      "addresses": [],
+      "sort_key": "2026-08-14T13:00:00Z"
+    },
+    {
+      "label": "todo, DUE and no DTSTART",
+      "kind": "text/calendar",
+      "fixture": "fixtures/todo-due-only.ics",
+      "note": "a VTODO is scheduled by DUE and need not carry a DTSTART; the row is task_summary's, and the columns it does not state are NULL",
+      "body": { "len": 208, "blake3": "epf4hp2yp6jpiggtqcpmceuzhapqn5ujhpdi4yv2uhknelprhhha", "sha256-128": "456og4jtmdgomjse6axlr3hcny" },
+      "link_id": "todo-due@example.org",
+      "table": "task_summary",
+      "summary": { "uid": "todo-due@example.org", "summary": "File the return", "dtstart": null, "dtstart_tzid": null, "dtstart_value": null, "due": "20260930T170000Z", "due_tzid": null, "due_value": "date-time", "status": null, "completed": null, "percent": null, "recurring": 0, "until": null },
+      "addresses": [],
+      "sort_key": "2026-09-30T17:00:00Z"
+    },
+    {
+      "label": "todo, both DUE and DTSTART",
+      "kind": "text/calendar",
+      "fixture": "fixtures/todo-dtstart-and-due.ics",
+      "note": "pins the precedence: for a VTODO the key is DUE then DTSTART, so DTSTART is carried but does not decide it",
+      "body": { "len": 229, "blake3": "4olk7xdnk65jl5vlujf5t64nb73gy2hibzqlagwcnlkdopd36m3q", "sha256-128": "3kjp5xj5p6zc3lqoyvx2vk5iri" },
+      "link_id": "todo-both@example.org",
+      "table": "task_summary",
+      "summary": { "uid": "todo-both@example.org", "summary": "Long task", "dtstart": "20260901T090000Z", "dtstart_tzid": null, "dtstart_value": "date-time", "due": "20260930T170000Z", "due_tzid": null, "due_value": "date-time", "status": null, "completed": null, "percent": null, "recurring": 0, "until": null },
+      "addresses": [],
+      "sort_key": "2026-09-30T17:00:00Z"
+    },
+    {
+      "label": "event, no UID",
+      "kind": "text/calendar",
+      "fixture": "fixtures/event-no-uid.ics",
+      "note": "pins what is NOT fixed: content with no usable UID gets a writer-derived hash: link_id rather than a refusal (Annex A.2). Check that a hash: id was derived, never that it equals one",
+      "body": { "len": 186, "blake3": "ipzyjzxhgd4ju76apiklas5uwwdbhm67fs3w2immk3tonovuhaaq", "sha256-128": "uwubjzngsqc5iv66r2bmby7uvm" },
+      "link_id": null,
+      "table": "event_summary",
+      "summary": { "uid": null, "summary": "No UID at all", "location": null, "dtstart": "20260814T090000Z", "dtstart_tzid": null, "dtstart_value": "date-time", "dtend": null, "recurring": 0, "until": null },
+      "addresses": [],
+      "sort_key": "2026-08-14T09:00:00Z"
+    }
+  ]
+}

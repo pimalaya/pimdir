@@ -1,7 +1,7 @@
 -- pimdir sources: one row per source syncing a collection, carrying that
 -- source's opaque sync cursor.
 --
--- Reference statements for the store operations (SPEC.md §4.4, §14); column
+-- Reference statements for the store operations (STORAGE.md §4.4, §14); column
 -- encodings in §13, named parameters `:name`.
 
 -- name: load_checkpoint

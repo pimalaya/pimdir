@@ -1,0 +1,30 @@
+{
+  "label": "a Meta upgrade turns a probe into an item, a binding, a summary and its addresses",
+  "note": "the fetch carries the hint, so the key is assigned (STORAGE §9), the row is inserted at level 1 with a base equal to what the source reported, the summary and address rows are derived under Annex A.1, and the probe goes in the same transaction (SYNC.md §6, STORAGE §14)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {},
+    "items": [],
+    "bindings": [],
+    "probes": [{ "collection": "INBOX", "source": "imap", "handle": "11", "flags": [] }],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+  },
+  "run": { "verb": "upgrade", "collection": "INBOX", "source": "imap", "tier": "Meta", "handles": ["11"] },
+  "remote": { "snapshot": null, "fetch": { "11": { "Meta": { "body": "fixtures/mail-no-subject.eml", "revision": null } } } },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [{ "collection": "INBOX", "link_id": "bare-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" }],
+      "bindings": [{ "collection": "INBOX", "link_id": "bare-1@example.org", "source": "imap", "handle": "11", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1 }],
+      "probes": [],
+      "summaries": [{ "table": "mail_summary", "collection": "INBOX", "link_id": "bare-1@example.org", "row": { "message_id": "bare-1@example.org", "in_reply_to": [], "subject": "", "sender": "alice@example.org", "sender_name": null, "date": "2026-08-01T10:00:00Z", "size": 146, "attachment": null } }],
+      "addresses": [
+        { "collection": "INBOX", "link_id": "bare-1@example.org", "role": "from", "position": 0, "address": "alice@example.org", "name": null },
+        { "collection": "INBOX", "link_id": "bare-1@example.org", "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+    }
+  }
+}

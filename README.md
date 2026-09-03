@@ -1,8 +1,8 @@
 # 📁 Pimdir [![Matrix](https://img.shields.io/badge/chat-%23pimalaya-blue?style=flat&logo=matrix&logoColor=white)](https://matrix.to/#/#pimalaya:matrix.org) [![Mastodon](https://img.shields.io/badge/news-%40pimalaya-blue?style=flat&logo=mastodon&logoColor=white)](https://fosstodon.org/@pimalaya) [![Sponsor](https://img.shields.io/badge/sponsor-pink?style=flat&logo=github-sponsors&logoColor=white)](https://pimalaya.org/sponsor/)
 
-A portable SQLite-plus-blobs store format for text-based personal-information items (mail, calendar events, contacts, notes, tasks)
+A local-first standard for personal information (mail, contacts, calendars): a portable SQLite-plus-blobs store, the sync model that keeps it a replica of every source, and the search index and query language over it
 
-The specification only, with no reference implementation: any language with a SQLite binding can implement it. The canonical part is the schema and its migrations, so every implementation reads and writes the same store.
+The specification only, with no reference implementation: any language with a SQLite binding can implement it. The canonical part is the schema, the reference statements and the test vectors, so every implementation reads, writes, reconciles and searches the same store.
 
 ## Table of contents
 
@@ -18,33 +18,45 @@ The specification only, with no reference implementation: any language with a SQ
 
 ## Features
 
-- **Generic**: one store for any text-based item kind (mail, calendar, contacts, notes, tasks), keyed by media type rather than one store per domain.
-- **Multi-account**: several accounts in one store, so a merged view is a query rather than a fan-out. The account groups collections and partitions no identifier: the store reports where an identity or a body occurs, and the interface decides what that means.
-- **Scalable and indexed**: hundreds of thousands of items with real secondary indexes, not a file open per item.
-- **Portable**: one SQLite file, byte-identical across every OS and architecture, with none of the case-sensitivity, forbidden-character or path-length pitfalls of file-per-item layouts.
+- **Cross-domain**: one store for mail, contacts, events, tasks and journals, keyed by media type, with typed summaries per kind and one address table across all of them, so "everything about this person" is one seek.
+- **Multi-account**: several accounts in one store, so a merged view is a query rather than a fan-out. The account groups collections and partitions no identifier.
+- **Scalable and indexed**: hundreds of thousands of items with real secondary indexes, a change feed for anything derived from the store, and keyset pages that cost the same at any depth.
+- **Portable**: one SQLite file, byte-identical across every OS and architecture, with none of the pitfalls of file-per-item layouts.
 - **Transactional**: a whole flag-set change or a multi-item move is one atomic commit a reader never catches half-done.
 - **Deduplicated**: bodies are stored once by content hash, so a message filed in two mailboxes costs one copy.
 - **Retentive**: an item the last source dropped is retained rather than erased, so an upstream expunge never destroys the local copy. Purging is explicit, and restoring costs no network.
-- **Rebuildable**: the database is a derived index over the bodies and the remote, so corruption is survivable by re-sync.
+- **Offline-first**: every edit is staged locally and reconciled by a three-way merge against each source, several sources propagating through one item without a cross-merge.
+- **Searchable**: a full-text index over the bodies, calendar occurrences and threads, and a query language every client answers alike.
+- **Rebuildable**: the database is a derived index over the bodies and the remote, and the search index is derived from both, so corruption is survivable by re-sync and a dropped index costs a rebuild.
 
 ## Specification
 
-The normative specification is [SPEC.md](./SPEC.md), written to RFC 2119.
+The standard is three normative parts, each written to RFC 2119 and each with a status of its own, framed by two informative documents:
 
-A store is a SQLite database (the queryable index and mutable state) plus a content-addressed blob directory (the bodies), which keeps SQLite's scale and cross-OS uniformity without putting large bodies inside it. A blob is never rewritten: editing a mutable item writes a new one and repoints the item, and the old one is collected once unreferenced.
+- [OVERVIEW.md](./OVERVIEW.md), the **model**: what a store is, the entities, the identifiers, the roles and how sync, retention, the queue and search fit together, with no table, column or statement named. Read it first.
+- [STORAGE.md](./STORAGE.md), the **store**: a SQLite database (the queryable index and mutable state) plus a content-addressed blob directory (the bodies), the per-kind summaries and addresses, the change feed, retention and the action queue.
+- [SYNC.md](./SYNC.md), the **sync** part: how one or more sources are reconciled through the store, the five verbs, the merge rules and what a connector hands the engine.
+- [SEARCH.md](./SEARCH.md), the **search** part: the derived index beside the store, extraction per kind, calendar time, threads and the query language. An implementation may omit it, and must conform to it when it has one.
+- [GUIDE.md](./GUIDE.md), the **implementation guide**: the parts' rules as numbered procedures and decision tables naming the statements and vectors at each step, and a conformance checklist.
 
-Two properties are worth knowing before reading. Removal is a **soft delete**: when the last source drops an item, the store keeps the row and its body, hidden from the sync seam and from the live reads, and only an explicit purge deletes it.
+The overview and the guide restate and never rule: where either disagrees with a part, the part wins.
 
-And the **action queue** is the write door for every process that does not own the store: a producer appends a kind plus a versioned JSON payload, the owner applies it in append order. An owner that cannot perform a kind skips the row rather than parking it, so one queue carries ordinary mutations beside intents only a particular tool can carry out.
+Two properties are worth knowing before reading. Removal is a **soft delete**: when the last source drops an item, the store keeps the row and its body, hidden from the sync seam and from the live reads, and only an explicit purge deletes it. And the **action queue** is the write door for every process that does not own the store: a producer appends a kind plus a versioned JSON payload, the owner applies it in append order.
 
 ## Layout
 
 ```
-SPEC.md               the store specification (normative, RFC 2119)
+OVERVIEW.md           the model (informative, read first)
+STORAGE.md            the store (normative, RFC 2119)
+SYNC.md               the sync part
+SEARCH.md             the search part
+GUIDE.md              the implementation guide (informative procedures)
 migrations/           canonical, forward-only schema migrations (SQL)
-  0001_init.sql       schema version 1
+  0001_init.sql       store schema version 1
+  index/0001_init.sql search index schema version 1
 queries/              the reference statements, one file per concern
-vectors/              the normative test data (SPEC.md §16)
+  index/search.sql    the search index's, prepared with the store attached
+vectors/              the normative test data (STORAGE.md §16, SYNC.md §11, SEARCH.md §11)
 checks/               what a push checks, needing no implementation
 flake.nix             the toolchain those checks run under
 cairn/                the dated history of what the spec did and why (log/)
@@ -54,13 +66,13 @@ LICENSE-MIT           dual license
 LICENSE-APACHE
 ```
 
-The history follows [Cairn](https://github.com/pimalaya/cairn), with one deviation while the format is draft: SPEC.md is the living spec, so cairn/spec/ stays empty rather than restating it, and a landed change is recorded by its log entry alone. [AGENTS.md](./AGENTS.md) states what ends that.
+The history follows [Cairn](https://github.com/pimalaya/cairn), with one deviation while the format is draft: the three documents are the living spec, so cairn/spec/ stays empty rather than restating them, and a landed change is recorded by its log entry alone. [AGENTS.md](./AGENTS.md) states what ends that.
 
 ## Status
 
-Draft, with no conformance suite yet. Schema version 1 is defined and stable in shape.
+Draft. Store schema version 1 and index schema version 1 are defined and stable in shape; the sync and search parts are draft and edited in place.
 
-While the spec is draft, version 1 is edited in place: a change folds into 0001_init.sql, the version stays 1, and a store created by an earlier draft is recreated rather than migrated. After the freeze, a breaking change bumps the version and ships as a new migration.
+While a part is draft, its version is edited in place: a change folds into the migration, the version stays 1, and a store or index created by an earlier draft is recreated rather than migrated. After a freeze, a breaking change to the store bumps the version and ships as a new migration; a change to the index is always a rebuild.
 
 ## License
 

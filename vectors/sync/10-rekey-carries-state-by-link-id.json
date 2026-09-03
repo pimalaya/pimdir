@@ -1,0 +1,26 @@
+{
+  "label": "a rekey carries the item onto its new handle and bumps the generation",
+  "note": "the source renumbered 10 into 20; the Meta fetch resolves the same hint, the binding follows the new handle through a Superseded drop, nothing is refetched, and generation moves in the same transaction (SYNC.md §8, STORAGE §12)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual", "generation": 1 }],
+    "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },
+    "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+    "bindings": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }],
+    "probes": [],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c0" }]
+  },
+  "run": { "verb": "rekey", "collection": "INBOX", "source": "imap" },
+  "remote": { "snapshot": { "items": [{ "handle": "20", "flags": ["\\Seen"], "revision": null }], "vanished": [], "complete": true, "checkpoint": "d0" }, "fetch": { "20": { "Meta": { "body": "fixtures/mail-basic.eml", "revision": null } } } },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual", "generation": 2 }],
+      "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+      "bindings": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "20", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }],
+      "probes": [],
+      "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "d0" }]
+    }
+  }
+}

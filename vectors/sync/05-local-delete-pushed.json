@@ -1,0 +1,25 @@
+{
+  "label": "a local delete is pushed, and the accepted remove retains the row",
+  "note": "a tombstone derives a Remove against the bound handle; once accepted the binding goes, and with no binding left the item is retained rather than erased (SYNC.md §5, STORAGE §11)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },
+    "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 1 }],
+    "bindings": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }],
+    "probes": [],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c0" }]
+  },
+  "run": { "verb": "sync", "collection": "INBOX", "source": "imap", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual", "delete": "revert" } },
+  "remote": { "snapshot": { "items": [{ "handle": "10", "flags": ["\\Seen"], "revision": null }], "vanished": [], "complete": true, "checkpoint": "c1" }, "fetch": {} },
+  "expect": {
+    "pushes": [{ "kind": "Remove", "handle": "10", "to": null }],
+    "outcomes": [{ "handle": "10", "outcome": "Accepted" }],
+    "events": [],
+    "store": {
+      "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 1, "retained": true, "retained_by": "imap" }],
+      "bindings": [],
+      "probes": [],
+      "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+    }
+  }
+}

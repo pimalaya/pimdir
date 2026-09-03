@@ -1,0 +1,31 @@
+{
+  "label": "a flag one source folded in reads as dirty for the other and is pushed there",
+  "note": "source a pulled \\Flagged earlier (its base has it); source b's base does not, so b's projection is Dirty and its sync pushes the shared set, with no cross-merge (SYNC.md §9)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },
+    "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Flagged", "\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "a", "handle": "10", "base_flags": ["\\Flagged", "\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1, "shared_object": "m1" },
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "b", "handle": "77", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1, "shared_object": "m1" }
+    ],
+    "probes": [],
+    "sources": [{ "collection": "INBOX", "source": "a", "checkpoint": "a1" }, { "collection": "INBOX", "source": "b", "checkpoint": "b0" }]
+  },
+  "run": { "verb": "sync", "collection": "INBOX", "source": "b", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual", "delete": "keep" } },
+  "remote": { "snapshot": { "items": [{ "handle": "77", "flags": ["\\Seen"], "revision": null }], "vanished": [], "complete": true, "checkpoint": "b1" }, "fetch": {} },
+  "expect": {
+    "pushes": [{ "kind": "SetFlags", "handle": "77", "flags": ["\\Flagged", "\\Seen"] }],
+    "outcomes": [{ "handle": "77", "outcome": "Accepted" }],
+    "events": [],
+    "store": {
+      "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Flagged", "\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "a", "handle": "10", "base_flags": ["\\Flagged", "\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1, "shared_object": "m1" },
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "b", "handle": "77", "base_flags": ["\\Flagged", "\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1, "shared_object": "m1" }
+      ],
+      "probes": [],
+      "sources": [{ "collection": "INBOX", "source": "a", "checkpoint": "a1" }, { "collection": "INBOX", "source": "b", "checkpoint": "b1" }]
+    }
+  }
+}

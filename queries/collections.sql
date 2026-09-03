@@ -1,7 +1,7 @@
 -- pimdir collections: the container rows (mailboxes, address books, calendars)
 -- and their cross-source conflict policy.
 --
--- Reference statements for the store operations (SPEC.md §4.4, §14); column
+-- Reference statements for the store operations (STORAGE.md §4.4, §14); column
 -- encodings in §13, named parameters `:name`.
 
 -- name: ensure_collection
@@ -74,3 +74,10 @@ ORDER BY sort_order IS NULL, sort_order, id;
 -- living outside the store (§9.2), so an account with no collection yet is
 -- invisible here and that is deliberate.
 SELECT DISTINCT account FROM collections WHERE account IS NOT NULL ORDER BY account;
+
+-- The change feed (§4.5): the collections whose row moved since a stamp, a
+-- renamed one included.
+
+-- name: list_collections_changed_since
+SELECT id, account, kind, name, changed FROM collections
+WHERE changed > :since ORDER BY changed LIMIT :limit;
