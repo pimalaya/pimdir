@@ -32,7 +32,7 @@ What a store implementation owes, in the order it is usually built:
 | Step | What | Where |
 | --- | --- | --- |
 | 1 | SQLite 3.37 or later, `STRICT` tables, `PRAGMA foreign_keys = ON` on every connection, WAL on a local store | STORAGE §4.1 |
-| 2 | Apply migrations/0001_init.sql through the runner of §3 | STORAGE §6 |
+| 2 | Apply migrations/storage/0001_init.sql through the runner of §3 | STORAGE §6 |
 | 3 | Pick `hash_algo`, name bodies as §4 says, pass vectors/objects.json | STORAGE §5, §16 |
 | 4 | Take the owner lock before any write; fail at once when it is held | STORAGE §8 |
 | 5 | Run the write transaction of §5 for every batch | STORAGE §14 |
@@ -41,7 +41,7 @@ What a store implementation owes, in the order it is usually built:
 | 8 | Serve the reads of §14 from the named statements, live rows only | STORAGE §14.1 |
 | 9 | Drain the queue with claim-first, park or skip as §13 says | STORAGE §15 |
 
-An engine adds SYNC in full and reproduces every case under vectors/sync/. An index adds SQLite 3.43 with FTS5, migrations/index/0001_init.sql, and answers every case under vectors/search/.
+An engine adds SYNC in full and reproduces every case under vectors/sync/. An index adds SQLite 3.43 with FTS5, migrations/search/0001_init.sql, and answers every case under vectors/search/.
 
 Use the statements verbatim. Every one of them prepares against the canonical schema, which checks/schema.sh proves on every push, and a substitute is yours to keep equivalent under STORAGE §7's invariants.
 
@@ -62,7 +62,7 @@ Use the statements verbatim. Every one of them prepares against the canonical sc
 ## 3. The migration runner
 
 1. Read `PRAGMA user_version`; `0` is a fresh database.
-2. List migrations/NNNN_*.sql ascending. For every NNNN above the current version: `BEGIN`, execute the script, `PRAGMA user_version = NNNN`, `COMMIT`. A failure rolls back and stops.
+2. List migrations/storage/NNNN_*.sql ascending. For every NNNN above the current version: `BEGIN`, execute the script, `PRAGMA user_version = NNNN`, `COMMIT`. A failure rolls back and stops.
 3. While the store part is draft, version 1 is edited in place, so a store stamped `1` may still lack a column. Reconcile on open, in one transaction: for every column of the canonical schema absent from `PRAGMA table_info`, `ALTER TABLE … ADD COLUMN`, then backfill where `NULL` contradicts existing rows (`backfill_shared_object` for `bindings.shared_object`). Refusing the store with a message telling the operator to recreate it is the other permitted answer; failing a query later is not.
 4. A missing constraint is reconciled by a table rebuild in the same transaction: repair the data first (`recompute_refcounts` before adding the refcount floor), `PRAGMA foreign_keys = OFF`, create the constrained table under a temporary name, copy, drop the old one, rename, recreate the table's indexes, `PRAGMA foreign_key_check`, commit, `PRAGMA foreign_keys = ON`. Detect the constraint from `sqlite_schema`, since `table_info` never reports one.
 
@@ -256,7 +256,7 @@ Never present a deleted row as live outside the trash view.
 
 **Refresh**, as the indexer, holding an exclusive advisory lock on index.lock and no store lock:
 
-1. Open index.db read-write and attach pimdir.db read-only as `store`. `load_index_meta`; on a version or tokenizer mismatch, delete index.db, apply migrations/index/0001_init.sql, `init_index_meta`.
+1. Open index.db read-write and attach pimdir.db read-only as `store`. `load_index_meta`; on a version or tokenizer mismatch, delete index.db, apply migrations/search/0001_init.sql, `init_index_meta`.
 2. `load_change_cursor` from the store before the pass.
 3. `load_changed_items` above `store_change`, in stamp order, in bounded batches, one index transaction each. Per row: `object_indexed`, else extract the body under SEARCH §6 and `insert_object` plus `insert_object_text`; `upsert_placement`; `insert_summary_text` for a bodiless row and `delete_summary_text` once it has a body; `replace_flags` then `insert_flag`; `replace_occurrences` then `insert_occurrence` within the horizon when the body changed; `upsert_message` and `upsert_thread` for mail, re-keying a thread on join by its lowest `(sort_key, link_id)` member. A deleted or retained row: `delete_placement`, which takes its flags, occurrences and summary text.
 4. When `purges` or a collection stamp moved: `placements_gone` and `objects_gone`, then `delete_placement` for each placement, and `delete_object` (the FTS row, by rowid) then `delete_object_row` for each body.

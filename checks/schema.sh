@@ -16,8 +16,8 @@ apply() {
     done
 }
 
-apply "$db" "$root/migrations"
-apply "$index" "$root/migrations/index"
+apply "$db" "$root/migrations/storage"
+apply "$index" "$root/migrations/search"
 
 expect() {
     local got
@@ -60,11 +60,11 @@ prepare() {
 
 statements=0
 
-for file in "$root"/queries/*.sql; do
+for file in "$root"/queries/storage/*.sql; do
     prepare "$db" "$file" ""
 done
 
-for file in "$root"/queries/index/*.sql; do
+for file in "$root"/queries/search/*.sql; do
     prepare "$index" "$file" "ATTACH '$db' AS store;"
 done
 

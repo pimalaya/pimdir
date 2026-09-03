@@ -96,11 +96,11 @@ The index is derived and droppable. No other file belongs in the directory; an i
 
 The schema version is `PRAGMA user_version`, mirrored in `store_meta.version`. The two MUST agree; a store where they disagree is corrupt.
 
-Version 1 is [migrations/0001_init.sql](./migrations/0001_init.sql). While this part is `draft`, version 1 is edited in place (§6) and `user_version` stays `1`; a store at any other version, or created by an earlier draft, is recreated rather than migrated.
+Version 1 is [migrations/storage/0001_init.sql](./migrations/storage/0001_init.sql). While this part is `draft`, version 1 is edited in place (§6) and `user_version` stays `1`; a store at any other version, or created by an earlier draft, is recreated rather than migrated.
 
 ### 4.3 Tables
 
-The canonical schema is migrations/0001_init.sql, which is normative. This section is its prose companion.
+The canonical schema is migrations/storage/0001_init.sql, which is normative. This section is its prose companion.
 
 - **`store_meta`** (one row): `format`, `version`, `hash_algo` (`blake3` RECOMMENDED, or `sha256-128`), `created_at`, and the counters `next_seq` (§9.1), `next_change` and `purges` (§4.5).
 - **`collections`**: `id`, `account` (§9.2), `kind` (the media type every item shares), `name`, `parent` (hierarchy by reference), the presentation columns `color`, `description`, `sort_order`, the cross-source `conflict` policy, `generation` (§12) and `changed` (§4.5).
@@ -121,11 +121,11 @@ Flags stay a JSON array: the set is small and `json_each` answers an ordinary qu
 
 ### 4.4 Queries
 
-The named, parameterised statements servicing §14 live under queries/, one file per concern:
+The named, parameterised statements servicing §14 live under queries/storage/, one file per concern:
 
-[store](./queries/store.sql), [collections](./queries/collections.sql), [items](./queries/items.sql), [summaries](./queries/summaries.sql), [addresses](./queries/addresses.sql), [probes](./queries/probes.sql), [bindings](./queries/bindings.sql), [sources](./queries/sources.sql), [objects](./queries/objects.sql), [queue](./queries/queue.sql).
+[store](./queries/storage/store.sql), [collections](./queries/storage/collections.sql), [items](./queries/storage/items.sql), [summaries](./queries/storage/summaries.sql), [addresses](./queries/storage/addresses.sql), [probes](./queries/storage/probes.sql), [bindings](./queries/storage/bindings.sql), [sources](./queries/storage/sources.sql), [objects](./queries/storage/objects.sql), [queue](./queries/storage/queue.sql).
 
-An implementation SHOULD use them verbatim and MAY substitute an equivalent preserving §7's invariants. The search index's statements are under queries/index/.
+An implementation SHOULD use them verbatim and MAY substitute an equivalent preserving §7's invariants. The search index's statements are under queries/search/.
 
 ### 4.5 The change feed
 
@@ -160,7 +160,7 @@ It MUST hold the owner lock and take the staging lock exclusively (§8), which i
 
 ## 6. Migrations
 
-Schema evolution is ordered, forward-only SQL under migrations/, named NNNN_description.sql. The runner MUST read `PRAGMA user_version` (0 for a fresh database), then for each migration above it, in order, open a transaction, run the script, set `user_version`, commit; a failed script rolls back and stops.
+Schema evolution is ordered, forward-only SQL under migrations/storage/, named NNNN_description.sql. The runner MUST read `PRAGMA user_version` (0 for a fresh database), then for each migration above it, in order, open a transaction, run the script, set `user_version`, commit; a failed script rolls back and stops.
 
 There are no down-migrations. An implementation meeting a newer or corrupt store MAY rebuild from the blobs and a full re-sync, which MAY lose un-pushed local mutation: a migration MUST preserve item and binding state, and rebuild is a last resort.
 

@@ -13,3 +13,7 @@ The standard now has two informative documents around the three normative parts,
 Three documents rather than six: the model is shared across the parts, so one overview serves all three, and one guide is enough since the store's procedures are short and the index's is one loop. Terminology stays in the parts, bound to columns, rather than moving to the overview, which would have cost it the precision that makes it binding.
 
 README.md lists the five documents in reading order, AGENTS.md states what the informative layer may and may not contain and extends the forcing rule to it, and each part points at the sections of the overview and the guide that concern it.
+
+## Addendum, same day: the SQL is filed by part
+
+migrations/ and queries/ each held the store's files at their root and the search index's under index/, and "index" is the word the storage part uses for the database itself. Both directories now hold one subdirectory per part: migrations/storage/ and migrations/search/, queries/storage/ and queries/search/. Every reference in the five documents, vectors/README.md and checks/schema.sh follows; earlier log entries keep the old paths.

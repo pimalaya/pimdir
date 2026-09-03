@@ -36,8 +36,8 @@ The index is derived. Every row is recomputed from the store and the bodies, and
 
 - The index MUST be a SQLite database named index.db in the store directory (STORAGE §3), every table `STRICT`, `PRAGMA foreign_keys = ON`.
 - Implementations MUST require **SQLite ≥ 3.43** with FTS5, for `contentless_delete`. This floor is the index's alone.
-- The schema is [migrations/index/0001_init.sql](./migrations/index/0001_init.sql), its version in the index's own `PRAGMA user_version`, mirrored in `index_meta.version`. An index at another version, or whose `index_meta.tokenizer` differs from §5's, MUST be rebuilt: there are no index migrations.
-- The statements are [queries/index/search.sql](./queries/index/search.sql), prepared with the store attached read-only as `store`.
+- The schema is [migrations/search/0001_init.sql](./migrations/search/0001_init.sql), its version in the index's own `PRAGMA user_version`, mirrored in `index_meta.version`. An index at another version, or whose `index_meta.tokenizer` differs from §5's, MUST be rebuilt: there are no index migrations.
+- The statements are [queries/search/search.sql](./queries/search/search.sql), prepared with the store attached read-only as `store`.
 
 ## 3. The index
 

@@ -52,10 +52,11 @@ SYNC.md               the sync part
 SEARCH.md             the search part
 GUIDE.md              the implementation guide (informative procedures)
 migrations/           canonical, forward-only schema migrations (SQL)
-  0001_init.sql       store schema version 1
-  index/0001_init.sql search index schema version 1
-queries/              the reference statements, one file per concern
-  index/search.sql    the search index's, prepared with the store attached
+  storage/            the store's, 0001_init.sql = schema version 1
+  search/             the search index's, 0001_init.sql = index version 1
+queries/              the reference statements
+  storage/            the store's, one file per concern
+  search/search.sql   the search index's, prepared with the store attached
 vectors/              the normative test data (STORAGE.md §16, SYNC.md §11, SEARCH.md §11)
 checks/               what a push checks, needing no implementation
 flake.nix             the toolchain those checks run under
