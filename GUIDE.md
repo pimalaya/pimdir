@@ -93,7 +93,7 @@ One batch of `UpsertPlacement`, `DropPlacement { handle, reason }`, `StoreObject
 
 1. For every `StoreObject` carrying bytes, write the body (§4). One carrying none is already at its path.
 2. `BEGIN`.
-3. `store_object` for every `StoreObject` (the refcount starts at zero and is settled in step 10).
+3. `store_object` for every `StoreObject` (the refcount starts at zero and is settled in step 11).
 4. `ensure_collection` for the collection, which inserts an undeclared row and never overwrites a declared one. Read the policy with `load_conflict`.
 5. Resolve the batch's keys. Each `DropPlacement` names a handle: `link_for_handle` gives its link id; a handle nothing binds is a probe, `delete_probe`. Each `UpsertPlacement` carries a link id, or none for a probe (`upsert_probe`, and stop here for that placement).
 6. Read what the batch touches and nothing else: `load_items_by_link` and `load_bindings_by_link` bound to a JSON array of the batch's link ids.
@@ -103,10 +103,11 @@ One batch of `UpsertPlacement`, `DropPlacement { handle, reason }`, `StoreObject
    - a moved item or binding: `update_item`, `update_binding`, which carries no handle;
    - a named placement's summary and addresses, derived under Annex A: `upsert_<kind>_summary`, `replace_addresses` then one `insert_address` per row, and `stamp_item` when only those rows moved;
    - a `Deleted` drop of the item's last binding: `retain_item`, which stamps `retained_at` and keeps the body pinned.
-8. `SetCheckpoint`: `upsert_checkpoint` for this source, last in the batch.
-9. Never reorder the batch: a provisional handle superseded by an accepted one is two entries for one handle in one order.
-10. Settle refcounts: `adjust_refcount` per hash by the batch's net change, or `recompute_refcounts` for the whole store. A batch that stored or dropped no object skips this.
-11. `COMMIT`. Reclaim nothing: an object at refcount zero stays for the collector.
+8. A `Superseded` drop anywhere in the batch makes it a rebuild: `bump_generation` for the collection, once, in this transaction.
+9. `SetCheckpoint`: `upsert_checkpoint` for this source, last in the batch.
+10. Never reorder the batch: a provisional handle superseded by an accepted one is two entries for one handle in one order.
+11. Settle refcounts: `adjust_refcount` per hash by the batch's net change, or `recompute_refcounts` for the whole store. A batch that stored or dropped no object skips this.
+12. `COMMIT`. Reclaim nothing: an object at refcount zero stays for the collector.
 
 The stamps of the change feed are written by the schema's triggers; a writer never binds one.
 
@@ -146,7 +147,7 @@ Retention needs no step of its own: `retain_item` in the write transaction (§5 
 
 ## 9. The projection
 
-An engine reads a collection as one source: `load_items`, `load_bindings`, `load_conflict`, `load_probes`, `load_checkpoint`. Placements are derived, never stored. For a collection and a source, emit:
+An engine reads a collection as one source, at the scope the verb needs (SYNC §10): `load_items` and `load_bindings` for `All`, `load_items_by_link` and `load_bindings_by_link` for `Links`, `link_for_handle` then the same two for `Handles`; always `load_conflict`, `load_probes`, `load_checkpoint`. A sync or a rekey asks for `All`, an upgrade for the handles it raises, a mutation for the placement it edits or every holder of the link id an `Add` must not collide with. Returning more than asked is allowed, less is not. Placements are derived, never stored. For a collection and a source, emit:
 
 - one placement per item the source binds;
 - one `Created` placement per item the source does not bind and the store holds a body for, carrying an origin when the same source binds the same link id in another collection;
@@ -172,8 +173,8 @@ The level is `Full` only when a body is present, whatever the row claims. A `NUL
 3. **Choose candidates.** Full snapshot: every projected placement and every listed member. Delta: the changed and vanished handles, plus every projected placement that is not `Clean`. A `Created` placement is a candidate with no remote side.
 4. **Walk both sides in handle order.** Per candidate:
    - flags: merge element-wise over local, base and remote; derive `SetFlags` when the merge differs from the remote; the flag axis withholds its push when the content axis already derived one for the handle, and still writes the merge;
-   - content, mutable kinds only: local body not in the base is an `Update` gated on the base revision; remote revision not in the base is a pull, which drops the local body and lowers the level; both is a conflict, settled by the source's policy: `Manual` marks the binding conflicted and records the observed revision, `PreferRemote` pulls, `PreferLocal` pushes gated on the observed revision, `KeepBoth` pulls and stages the local body as a new `Created` item;
-   - deletes: a `Tombstone` derives `Remove`; a member missing from a complete snapshot, or listed vanished, is a `Deleted` drop; a remote edit over a local tombstone revives and pulls;
+   - content, mutable kinds only: local body not in the base is an `Update` gated on the base revision; remote revision not in the base is a pull, which drops the local body and lowers the level; both is a conflict, settled by the source's policy: `Manual` marks the binding conflicted and records the observed revision, `PreferRemote` pulls, `PreferLocal` pushes gated on the observed revision, `KeepBoth` pulls and stages the local body as a new `Created` item under the provisional handle `<handle>`, `<hash>`, `<revision>` joined by `U+0001` and the key `dup:<hint>#<that handle>`; a `Conflict` placement seeing a newer revision re-records it and clears its diverging body for the next upgrade to refetch;
+   - deletes: a `Tombstone` derives `Remove`; a member missing from a complete snapshot, or listed vanished, is a `Deleted` drop; a remote edit over a local tombstone revives and pulls, and a revision the tombstone's base does not name is such an edit, so a move whose push record was lost is abandoned with the member live in the source;
    - creates: a `Created` derives `Add`, by server-side copy from its origin when it has one;
    - rights: with `push` off nothing is pushed and everything is pulled; a forbidden kind keeps its change pending; a refused delete follows the delete policy, `Revert` (default) or `Keep`, and a source bound beside others is given `Keep`.
 5. **Push in bounded chunks.** Every change carries an idempotency key derived from the collection, the handle, the kind and the state it makes true. After each chunk, write (§5) the outcomes: `Accepted` rebases the placement and, for an `Add`, supersedes the provisional handle in the same batch; `Rejected` or unreported leaves it pending.
@@ -207,7 +208,7 @@ A move is two halves derived by two collections' syncs in either order: `Add` by
 1. Enumerate the new handle space and fetch enough to identify every member.
 2. Match each member to its old placement by link id. A member resolving to an identity already handed out takes the minted key an old copy carried, else a mint over its own handle; pending creates count as taken.
 3. In one batch: a `Superseded` drop of each old handle, an upsert of the same item under its new handle carrying body, summary, level, flags, base and pending state, the sort key preferring the fetch's; a `Deleted` drop of each handle the new space lacks.
-4. `bump_generation` in the same transaction.
+4. The store bumps the generation in the transaction applying that batch, recognising the rebuild by its `Superseded` drops (§5 step 8); the engine emits no op for it.
 
 ## 12. Absorbing a write across sources
 

@@ -21,7 +21,7 @@ The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are to be interpreted a
 7. [Mutate](#7-mutate)
 8. [Rekey](#8-rekey)
 9. [Several sources](#9-several-sources)
-10. [The write](#10-the-write)
+10. [The load and the write](#10-the-load-and-the-write)
 11. [Test vectors](#11-test-vectors)
 
 ## 1. Scope
@@ -90,11 +90,15 @@ It leaves the status alone while the content axis still owes a push, and leaves 
 
 **The content axis** applies to a mutable kind, which reports a revision. A local body the base does not hold is an `Update` gated on the base revision; a remote revision the base does not hold is a pull, which drops the local body and lowers the level; both is a conflict, resolved by the source's policy. Mail reports no revision and never reaches this axis.
 
+A `Conflict` placement meeting a revision newer than its `conflict_revision` records the new one and drops its `conflict_object`, which described the old revision; the upgrade fetches it anew (§6).
+
 **Conflict policy**: `Manual` (default) marks the binding conflicted with the observed revision and asks for the diverging body (§6). `PreferRemote` drops the local edit. `PreferLocal` pushes the local body gated on the observed revision, falling back to `Manual` when content pushes are forbidden.
 
-`KeepBoth` pulls the remote and stages the local body as a new `Created` item keyed on the placement, the body and the revision it forked against. A create colliding with a remote member on the same identity is always kept as a conflict.
+`KeepBoth` pulls the remote and stages the local body as a new `Created` item under a provisional handle made of the placement's handle, the body's hash and the revision it forked against, joined by `U+0001`, and under the minted key `dup:<hint>#<that handle>` (STORAGE §9): a second copy of one identity, kept beside the first. A replay stages the same row. A create colliding with a remote member on the same identity is always kept as a conflict.
 
 **Deletes.** A `Tombstone` derives a `Remove`. A member absent from a complete enumeration, or listed vanished by a delta, is dropped with reason `Deleted` (§10). A remote edit over a local tombstone revives it and pulls: new content beats a delete on both sides.
+
+A revision the tombstone's base does not name is a remote edit, an enumeration carrying no body to say otherwise. A move whose staged edit was pushed ahead of its remove and whose push record was lost is therefore abandoned rather than half-applied: the member stays in the source, live and clean at the pushed revision, and the consumer restages the move.
 
 **Push direction and rights.** A source has a master `push` switch and four rights: `flags`, `content`, `add`, `remove`. With `push` false nothing is pushed and remote changes are still pulled; a forbidden kind keeps its change pending while other kinds propagate. A refused delete follows the **delete policy**:
 
@@ -140,7 +144,9 @@ A source may renumber every member (an IMAP `UIDVALIDITY` bump, a restore). A re
 
 The batch drops each old handle it re-writes with reason `Superseded`, which licenses the binding to move (STORAGE §10, §12), per handle: a genuine duplicate in the same batch is still refused. A handle the new space lacks is dropped `Deleted`.
 
-A member resolving to an identity already handed out takes the minted key an old copy carried, else a mint over its own handle; pending creates' keys count as taken. The sort key is carried, preferring the fetch's. The batch and the epoch bump commit together.
+A member resolving to an identity already handed out takes the minted key an old copy carried, else a mint over its own handle; pending creates' keys count as taken. The sort key is carried, preferring the fetch's.
+
+The batch and the epoch bump commit together, and the batch carries no op for the bump: a batch holding a `Superseded` drop is a rebuild, and the storage bumps the collection's generation in the transaction that applies it (STORAGE §12).
 
 ## 9. Several sources
 
@@ -162,7 +168,9 @@ An upsert leaving a conflicted binding counts as the source having changed its b
 
 A binding with no base is a pending create, and a minted key is an ordinary key: it reconciles, propagates and conflicts like any other, a target's refusal reported as a rejected push.
 
-## 10. The write
+## 10. The load and the write
+
+Every verb begins with a load naming a collection and a **scope**: `All`, `Handles` or `Links`. A mutation asks for the one placement it edits, or for every holder of the link id an `Add` must not collide with; an upgrade asks for the handles it raises; a sync and a rekey ask for the whole collection, being the only verbs that reason about what is missing from it. A `Copy` or a `Move` also loads its target for the identity it carries into it. The scope is a floor: a storage SHALL return at least the placements it names and MAY return more (STORAGE §14).
 
 Every verb ends in a batch applied in order and atomically (STORAGE §14): `UpsertPlacement`, `DropPlacement { handle, reason }`, `StoreObject { hash, size, bytes? }`, `SetCheckpoint`. Order carries meaning (a batch names one handle twice to supersede a provisional one) and a storage MUST NOT reorder. A batch is cut between candidates, never inside one.
 

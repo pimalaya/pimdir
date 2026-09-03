@@ -205,7 +205,7 @@ Annex A derives the **hint**; this section assigns the key. A writer SHALL assig
 
 - the content states no usable hint: the kind's fallback (`alt:` for a message, `hash:` for a DAV resource);
 - the hint is free in this collection: the hint verbatim;
-- this source already binds the hint under another handle: a **minted** key, `dup:`, the hint, `#` and that handle, concatenated verbatim (`dup:abc@host#1174`).
+- this source already binds the hint under another handle: a **minted** key, `dup:`, the hint, `#` and that handle, concatenated verbatim (`dup:abc@host#1174`). A `KeepBoth` fork (SYNC.md §5) is minted the same way over its provisional handle.
 
 The minted form needs no digest, is deterministic, and is prefixed like the fallbacks, so a prefixed id is never pushed as a protocol identity. It is opaque: a reader MUST NOT parse it and a store MUST NOT rewrite it, since rewriting would change a `seq` a consumer has shown.
 
@@ -286,7 +286,7 @@ When an item's last binding vanishes the store retains the row rather than delet
 
 `collections.generation` is the handle-space epoch. The owner MUST bump it (`bump_generation`) in the transaction of the rebuild that re-learns a collection's handles (an IMAP `UIDVALIDITY` change), and readers deriving epoch-dependent protocol values read it with `load_generation`. Ordinary syncs, full resyncs and content changes MUST NOT bump it.
 
-A rebuild's batch drops the old spine and upserts the same items under their new handles, so a binding's handle does move. What licenses it is the drop with reason `Superseded` (SYNC.md §8), per handle; a duplicate in the same batch is still refused.
+A rebuild's batch drops the old spine and upserts the same items under their new handles, so a binding's handle does move. What licenses it is the drop with reason `Superseded` (SYNC.md §8), per handle; a duplicate in the same batch is still refused. The batch carries no op for the bump: a `Superseded` drop is what tells the store the batch is a rebuild, and the store bumps in the transaction applying it.
 
 ## 13. Encodings
 
@@ -318,7 +318,7 @@ Two implementations produce byte-identical stores only with identical encodings.
 
 A store is opened as one source. `load` projects the shared items into that source's placements; `write` folds its changes back. The statements are §4.4's, bound with §13.
 
-- **`load(collection)`**: `load_items`, `load_bindings`, `load_conflict`, projected for the source (SYNC.md §3), plus `load_probes` and `load_checkpoint`.
+- **`load(collection, scope)`**: `load_items`, `load_bindings`, `load_conflict`, projected for the source (SYNC.md §3), plus `load_probes` and `load_checkpoint`. The scope (SYNC.md §10) is a floor: `All` reads the collection; `Links` reads `load_items_by_link` and `load_bindings_by_link` for the link ids named; `Handles` resolves each handle with `link_for_handle` and reads the same two, a handle nothing binds being a probe. A store MAY return more than the scope names and MUST NOT return less.
 - **`lookup_objects(links)`**: `:links` a JSON array of link ids, `:account` the caller's own (§9.2): across collections a link id is one body downloaded once, across accounts it is not a fact. A writer-derived key never matches (§9).
 - **`write(ops)`** runs as one transaction:
   1. A `StoreObject` carries the index row and optionally the bytes. With bytes, write the blob first (§5), then `store_object`; without, the body is already at its sharded path, streamed there by the consumer. The blob write MAY precede `BEGIN` and SHOULD for a body of any size; the writer's lock (§8), not the file's age, keeps a collector out of the window.
