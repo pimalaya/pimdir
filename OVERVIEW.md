@@ -4,7 +4,7 @@ Status: informative
 
 What the pimdir standard is and how its pieces fit, for a reader meeting it for the first time. This document states no requirement: it names no table, column or statement, uses no RFC 2119 word, and where it and a part disagree the part wins. Each section ends with the part that binds.
 
-The standard itself is three documents: [STORAGE.md](./STORAGE.md), the store on disk; [SYNC.md](./SYNC.md), how sources reconcile through it; [SEARCH.md](./SEARCH.md), the index and query language over it. [GUIDE.md](./GUIDE.md) turns their rules into procedures for an implementer.
+The standard itself is a base and two layers: [STORAGE.md](./STORAGE.md), the store on disk, which every implementation provides; [SYNC.md](./SYNC.md), how sources reconcile through it; [SEARCH.md](./SEARCH.md), the index and query language over it. Either layer can be left out, and neither works without the store. [GUIDE.md](./GUIDE.md) turns their rules into procedures for an implementer.
 
 ## Contents
 
@@ -27,6 +27,8 @@ A store is a directory holding one SQLite database and one directory of bodies. 
 A body is never edited. An edit writes a new body and the item points at it; the old body stays until nothing points at it and a collector removes it. That is what makes a body a fact and the database a derived view of the facts: apart from local edits not yet pushed, the whole database can be rebuilt from the bodies and the remotes.
 
 The search index is a third file beside the two, derived from both, and dropping it loses nothing.
+
+Sync and search are layers on the store, and neither stands without it. A sync between two sources needs, per source, what that source last agreed to, else a delete on one side and an add on the other are the same picture; the bindings hold that base, and the state file every two-way tool keeps beside its folders is a store in miniature. A search needs one index with one meaning of a match, which only the store's summaries, addresses and bodies give; a query fanned out to each source's own search answers as slowly as the slowest, offline never, and with no two sources agreeing on what "contains" means. What is optional is the bodies: a store can hold bases and summaries alone and still sync flags and list items.
 
 Normative: STORAGE §1, §3, §5, §6.
 
@@ -102,7 +104,7 @@ Normative: SYNC §9; STORAGE §10.
 
 Removal from every source is not removal from the store. When an item's last binding goes, the row and its body are kept, hidden from sync and from the live reads, and listed in a trash view. Only an explicit purge deletes the row; the body then falls to the collector. An identity that comes back revives the retained row, keeping its public id and body, so a restore costs no network.
 
-Retention has no switch. How long to keep and when to purge is the owner's schedule, and a policy of purging immediately reproduces a store that never retained.
+Retention has no switch. How long to keep and when to purge is the owner's schedule, and a policy of purging immediately reproduces a store that never retained. A move is not a loss: when the item's identity is held live in another collection of the account, the source row is purged at once rather than kept in the trash beside its new home.
 
 Normative: STORAGE §11.
 

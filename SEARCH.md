@@ -4,7 +4,7 @@ Status: draft
 
 The search part of the pimdir standard: a full-text index over a store ([STORAGE.md](./STORAGE.md)) and the query language over it, cross-domain from the first line. A query names people, dates, tags, kinds and text and answers with items of every kind: a person's card, the mail they sent and the meetings they attend are one result set.
 
-An implementation MAY omit search; one that offers it MUST conform, so every client on one store answers `is:unread from:jane` the same way.
+An implementation MAY omit search; one that offers it MUST conform, so every client on one store answers `is:unread from:jane` the same way. The index presupposes the store: it is built from the store's rows and bodies and answers with the store's items.
 
 [OVERVIEW.md](./OVERVIEW.md) §10 explains the model; [GUIDE.md](./GUIDE.md) §15 runs the refresh and the query as procedures. Both are informative and this part wins on any disagreement.
 

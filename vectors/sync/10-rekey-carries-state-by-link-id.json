@@ -1,6 +1,6 @@
 {
   "label": "a rekey carries the item onto its new handle and bumps the generation",
-  "note": "the source renumbered 10 into 20; the Meta fetch resolves the same hint, the binding follows the new handle through a Superseded drop, nothing is refetched, and generation moves in the same transaction (SYNC.md §8, STORAGE §12)",
+  "note": "the source renumbered 10 into 20; the Meta fetch resolves the same hint, the binding follows the new handle through a Rekeyed drop, nothing is refetched, and generation moves in the same transaction (SYNC.md §8, STORAGE §12)",
   "store": {
     "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual", "generation": 1 }],
     "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },

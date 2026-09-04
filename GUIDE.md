@@ -41,7 +41,7 @@ What a store implementation owes, in the order it is usually built:
 | 8 | Serve the reads of §14 from the named statements, live rows only | STORAGE §14.1 |
 | 9 | Drain the queue with claim-first, park or skip as §13 says | STORAGE §15 |
 
-An engine adds SYNC in full and reproduces every case under vectors/sync/. An index adds SQLite 3.43 with FTS5, migrations/search/0001_init.sql, and answers every case under vectors/search/.
+The layers build on those nine steps and on nothing less. An engine adds SYNC in full and reproduces every case under vectors/sync/. An index adds SQLite 3.43 with FTS5, migrations/search/0001_init.sql, and answers every case under vectors/search/.
 
 Use the statements verbatim. Every one of them prepares against the canonical schema, which checks/schema.sh proves on every push, and a substitute is yours to keep equivalent under STORAGE §7's invariants.
 
@@ -99,11 +99,11 @@ One batch of `UpsertPlacement`, `DropPlacement { handle, reason }`, `StoreObject
 6. Read what the batch touches and nothing else: `load_items_by_link` and `load_bindings_by_link` bound to a JSON array of the batch's link ids.
 7. Merge each placement into its shared item and binding under SYNC §9 and §10, then persist the diff:
    - a new item: `seq_for_link_any` for a stated hint, `bump_next_seq` when it returns nothing or the key is derived (`alt:`, `hash:`, `dup:`), then `insert_item`; a retained row under the same key is revived instead, `revive_item`;
-   - a new binding: `insert_binding`; a binding whose handle differs from the incoming one is a refused write unless a `Superseded` drop for the old handle precedes it in the same batch;
+   - a new binding: `insert_binding`; a binding whose handle differs from the incoming one is a refused write unless a `Superseded` or `Rekeyed` drop for the old handle precedes it in the same batch;
    - a moved item or binding: `update_item`, `update_binding`, which carries no handle;
    - a named placement's summary and addresses, derived under Annex A: `upsert_<kind>_summary`, `replace_addresses` then one `insert_address` per row, and `stamp_item` when only those rows moved;
-   - a `Deleted` drop of the item's last binding: `retain_item`, which stamps `retained_at` and keeps the body pinned.
-8. A `Superseded` drop anywhere in the batch makes it a rebuild: `bump_generation` for the collection, once, in this transaction.
+   - a `Deleted` drop of the item's last binding: `retain_item`, which stamps `retained_at` and keeps the body pinned; then, when another collection of the same account holds the link id live, `purge_item` and `release_pins`, since the item moved.
+8. A `Rekeyed` drop anywhere in the batch makes it a rebuild: `bump_generation` for the collection, once, in this transaction.
 9. `SetCheckpoint`: `upsert_checkpoint` for this source, last in the batch.
 10. Never reorder the batch: a provisional handle superseded by an accepted one is two entries for one handle in one order.
 11. Settle refcounts: `adjust_refcount` per hash by the batch's net change, or `recompute_refcounts` for the whole store. A batch that stored or dropped no object skips this.
@@ -126,7 +126,7 @@ Run it on a schedule of the owner's, and after a purge. A store that never colle
 
 ## 7. Retention and purge
 
-Retention needs no step of its own: `retain_item` in the write transaction (§5 step 7) is the whole mechanism, and `load_items` never returns a retained row, so the next sync neither re-uploads nor deletes it.
+Retention needs no step of its own: `retain_item` in the write transaction (§5 step 7) is the whole mechanism, and `load_items` never returns a retained row, so the next sync neither re-uploads nor deletes it. A move is the exception the same step handles: the source row is purged at once, the target holding the item.
 
 **Purge**, an owner write:
 
@@ -150,9 +150,11 @@ Retention needs no step of its own: `retain_item` in the write transaction (§5 
 An engine reads a collection as one source, at the scope the verb needs (SYNC §10): `load_items` and `load_bindings` for `All`, `load_items_by_link` and `load_bindings_by_link` for `Links`, `link_for_handle` then the same two for `Handles`; always `load_conflict`, `load_probes`, `load_checkpoint`. A sync or a rekey asks for `All`, an upgrade for the handles it raises, a mutation for the placement it edits or every holder of the link id an `Add` must not collide with. Returning more than asked is allowed, less is not. Placements are derived, never stored. For a collection and a source, emit:
 
 - one placement per item the source binds;
-- one `Created` placement per item the source does not bind and the store holds a body for, carrying an origin when the same source binds the same link id in another collection;
+- one `Created` placement per item the source does not bind and the store holds a body for;
+- on every `Created` placement, bound or not, an origin when the same source binds the same link id in another collection with a base present and, when the placement has a body, that body as its base;
 - one `Probed` placement per probe row of the source;
-- nothing for a retained item.
+- nothing for a retained item;
+- under a `Links` scope, nothing for an item the source lacks: the offer is for the merge, and a verb reading by key asks who holds it.
 
 The status is the first row that matches:
 
@@ -179,7 +181,7 @@ The level is `Full` only when a body is present, whatever the row claims. A `NUL
    - rights: with `push` off nothing is pushed and everything is pulled; a forbidden kind keeps its change pending; a refused delete follows the delete policy, `Revert` (default) or `Keep`, and a source bound beside others is given `Keep`.
 5. **Push in bounded chunks.** Every change carries an idempotency key derived from the collection, the handle, the kind and the state it makes true. After each chunk, write (§5) the outcomes: `Accepted` rebases the placement and, for an `Add`, supersedes the provisional handle in the same batch; `Rejected` or unreported leaves it pending.
 6. **Write the checkpoint** in the batch after the last chunk, never earlier.
-7. **Report events** per item, in order: `Added`, `FlagsChanged`, `ContentChanged`, `Vanished`, `Conflicted`, `Created`.
+7. **Report events** per item, in order: `Added`, `FlagsChanged`, `ContentChanged` and `Vanished` for what was pulled, `Conflicted`, and `Created` for an accepted add; an accepted flag, body or delete push reports nothing.
 
 A move is two halves derived by two collections' syncs in either order: `Add` by copy in the target, `Remove` with a destination in the source. Neither half is dropped for the other.
 
@@ -207,8 +209,8 @@ A move is two halves derived by two collections' syncs in either order: `Add` by
 
 1. Enumerate the new handle space and fetch enough to identify every member.
 2. Match each member to its old placement by link id. A member resolving to an identity already handed out takes the minted key an old copy carried, else a mint over its own handle; pending creates count as taken.
-3. In one batch: a `Superseded` drop of each old handle, an upsert of the same item under its new handle carrying body, summary, level, flags, base and pending state, the sort key preferring the fetch's; a `Deleted` drop of each handle the new space lacks.
-4. The store bumps the generation in the transaction applying that batch, recognising the rebuild by its `Superseded` drops (§5 step 8); the engine emits no op for it.
+3. In one batch: a `Rekeyed` drop of each old handle, an upsert of the same item under its new handle carrying body, summary, level, flags, base and pending state, the sort key preferring the fetch's; a `Deleted` drop of each handle the new space lacks.
+4. The store bumps the generation in the transaction applying that batch, recognising the rebuild by its `Rekeyed` drops (§5 step 8); the engine emits no op for it.
 
 ## 12. Absorbing a write across sources
 
@@ -217,7 +219,7 @@ When a batch from one source folds into an item other sources bind:
 1. Adopt a known flag set, sort key and summary over the shared one; leave the shared value alone for an unknown one. A tombstone adopts no content. Merge the level as a maximum, under the rule that `Full` needs a body.
 2. Compare bodies from the binding's `shared_object`, falling back to `base_object` until the source has folded once. The incoming body differs from the source's base while the shared body differs from what the source last agreed with: a divergence, settled by the collection's policy, `manual` flagging the item and recording the diverging body in `items.conflict_object`, `prefer-incoming` adopting, `prefer-existing` keeping. Only the source having changed is a fast-forward. Flags never diverge.
 3. Move `shared_object` to whatever the item settled on. Clear the binding's own conflict on an upsert carrying no divergence, releasing the pin its diverging body held.
-4. A `Deleted` drop or a `Tombstone` upsert marks the item deleted; the dropping source loses its binding, a tombstoning one keeps it; a live upsert clears it. With no binding left, `retain_item`. A `Superseded` drop marks nothing.
+4. A `Deleted` drop or a `Tombstone` upsert marks the item deleted; the dropping source loses its binding, a tombstoning one keeps it; a live upsert clears it. With no binding left, `retain_item`, then `purge_item` when the account holds the identity live elsewhere. A `Superseded` or `Rekeyed` drop marks nothing.
 
 Every other source then projects the change as its own `Dirty` or `Tombstone` and pushes it on its next run. A source lacking the item is offered a `Created` only when the body is held.
 

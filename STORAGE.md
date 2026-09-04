@@ -2,9 +2,9 @@
 
 Status: draft
 
-The storage part of the pimdir standard: a **SQLite database** (the index and the mutable state) plus a **content-addressed blob directory** (the bodies). The other parts are [SYNC.md](./SYNC.md), how sources reconcile through the store, and [SEARCH.md](./SEARCH.md), the index and query language over it.
+The storage part of the pimdir standard, and its base: a **SQLite database** (the index and the mutable state) plus a **content-addressed blob directory** (the bodies). The two layers over it are [SYNC.md](./SYNC.md), how sources reconcile through the store, and [SEARCH.md](./SEARCH.md), the index and query language over it.
 
-Each part has its own status and is implemented independently; an implementation of the store MAY omit the others and MUST conform to those it offers.
+Each part has its own status. An implementation MUST provide the store, MAY omit either layer, and MUST conform to those it offers; a layer presupposes the store and is not defined without it.
 
 A blob is immutable. A body edit writes a new blob and repoints the item.
 
@@ -260,17 +260,18 @@ Two divergences are recorded and are not the same fact: `items.conflicted` and `
 
 A binding's conflict MUST be cleared when the sync writes any resolved state for it, releasing the pin its `conflict_object` held.
 
-A write resolving an existing `(collection, link_id, source)` binding to a different handle SHALL be refused, recording no trace of the incoming handle. The one licensed rebind is §12's rebuild. A source holding one identity twice never reaches the refusal: the second copy resolves to a minted key (§9) and is stored as an item beside the first.
+A write resolving an existing `(collection, link_id, source)` binding to a different handle SHALL be refused, recording no trace of the incoming handle. A rebind is licensed only by a drop of the bound handle in the same batch, with reason `Superseded` (a provisional handle an accepted add replaced) or `Rekeyed` (§12). A source holding one identity twice never reaches the refusal: the second copy resolves to a minted key (§9) and is stored as an item beside the first.
 
 Two items is the report; the store picks no survivor and warns about nothing.
 
 ## 11. Retention
 
-When an item's last binding vanishes the store retains the row rather than deleting it, and only an explicit purge removes it. A remote expunge therefore never destroys the local copy. Retention is the terminal state of `deleted`: a retained row carries `deleted = 1`, no bindings, and a non-`NULL` `retained_at`. It is unconditional; how long to keep and when to sweep is the owner's schedule.
+When an item's last binding vanishes the store retains the row rather than deleting it, and only an explicit purge removes it. A remote expunge therefore never destroys the local copy. The one exception is an identity another collection of the same account holds live: the item moved, or was filed twice, and nothing is lost by purging the row in the same transaction, the holder pinning the body. Retention is the terminal state of `deleted`: a retained row carries `deleted = 1`, no bindings, and a non-`NULL` `retained_at`. It is unconditional; how long to keep and when to sweep is the owner's schedule.
 
 ### 11.1 Requirements
 
 - **Retire, do not delete** (`retain_item`): stamp `retained_at` and `retained_by`, keep `object_hash` so the body stays pinned.
+- **A held identity is not kept twice**: when another collection of the same account holds the link id live (`deleted` 0, `retained_at` `NULL`), `retain_item` is followed by `purge_item` and `release_pins` in the same transaction, and the purge counts (§4.5).
 - **Stamped by SQLite**: `retained_at` is written by the statement; the cutoff of a purge is the caller's parameter.
 - **Hidden from the sync seam**: `load_items` filters `retained_at IS NULL`, or the next run re-uploads every retained row. `delete_items` spares them for the same reason.
 - **Hidden from the reads**: a retained row is a tombstone under §14.1's live-only rule; `list_retained_page` and `count_retained` are the trash view.
@@ -286,7 +287,7 @@ When an item's last binding vanishes the store retains the row rather than delet
 
 `collections.generation` is the handle-space epoch. The owner MUST bump it (`bump_generation`) in the transaction of the rebuild that re-learns a collection's handles (an IMAP `UIDVALIDITY` change), and readers deriving epoch-dependent protocol values read it with `load_generation`. Ordinary syncs, full resyncs and content changes MUST NOT bump it.
 
-A rebuild's batch drops the old spine and upserts the same items under their new handles, so a binding's handle does move. What licenses it is the drop with reason `Superseded` (SYNC.md §8), per handle; a duplicate in the same batch is still refused. The batch carries no op for the bump: a `Superseded` drop is what tells the store the batch is a rebuild, and the store bumps in the transaction applying it.
+A rebuild's batch drops the old spine and upserts the same items under their new handles, so a binding's handle does move. What licenses it is the drop with reason `Rekeyed` (SYNC.md §8), per handle; a duplicate in the same batch is still refused. The batch carries no op for the bump: a `Rekeyed` drop is what tells the store the batch is a rebuild, and the store bumps in the transaction applying it.
 
 ## 13. Encodings
 

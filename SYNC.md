@@ -28,7 +28,7 @@ The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are to be interpreted a
 
 An engine reads a store as one source, derives what that source and the store owe each other, and writes the result. Five verbs: **open** (read the projection, no network), **sync** (reconcile against an enumeration), **upgrade** (raise items up the detail ladder), **mutate** (stage a local edit offline), **rekey** (rebuild a collection onto a new handle space).
 
-Every verb is a pure function of the rows it loads and the answers it is given; its only effects are a write batch (§10) and requests to the remote (§4).
+Every verb is a pure function of the rows it loads and the answers it is given; its only effects are a write batch (§10) and requests to the remote (§4). The store is the base of every merge: the bindings hold what each source last agreed to (STORAGE §4.3), and this part defines no reconciliation of two sources against each other.
 
 Nothing here requires a language or a coroutine shape. A conforming engine is one whose runs reproduce §11's vectors.
 
@@ -59,7 +59,7 @@ An unknown flag set (`NULL`) holds no opinion: neither an addition nor a removal
 
 **Level** is `Full` only when `object_hash` is present, whatever `items.level` claims, so an item whose body a remote change dropped projects at most `Meta` and an upgrade refetches it.
 
-**Origin.** A `Created` placement for an item the source lacks carries an origin when the same source binds the same `link_id` in another collection: a server-side copy from that handle rather than an upload. Origins are derived from bindings, never stored.
+**Origin.** A `Created` placement carries an origin when the same source binds the same `link_id` in another collection, with a base present and, when the placement has a body, that body as `base_object`: a server-side copy from that handle rather than an upload. A binding whose base holds another body would copy what the server has, not what the placement intends. Origins are derived from bindings, never stored.
 
 **Probes.** A `probes` row projects as a placement with a handle, the reported flags, no link id, level `Probed` and no base. A `Meta` fetch names it; until then it is a member the engine must not lose (STORAGE §4.3).
 
@@ -110,7 +110,7 @@ An unresolved identity stages the source half alone.
 
 **Push discipline.** A push is confirmed before local state moves: `Accepted` rebases the placement, and for an add supersedes the provisional handle in the same batch; `Rejected` or unreported leaves it pending. Pushes go in bounded chunks, each followed by the write recording its outcomes. The checkpoint lands in the write after the last chunk and in no earlier one.
 
-**Events.** A sync reports per item, in order: `Added`, `FlagsChanged`, `ContentChanged`, `Vanished`, `Conflicted`, `Created` (an accepted add, under its assigned handle).
+**Events.** A sync reports per item, in order, what the remote changed locally and what the run settled: `Added`, `FlagsChanged`, `ContentChanged` and `Vanished` on a pull, `Conflicted` on a divergence, `Created` on an accepted add under its assigned handle. A pushed flag, body or delete reports nothing: the consumer made it.
 
 ## 6. Upgrade
 
@@ -142,11 +142,11 @@ A mutation stages a local edit to one collection with no network, through the sa
 
 A source may renumber every member (an IMAP `UIDVALIDITY` bump, a restore). A rekey re-enumerates the spine and carries each placement's body, summary, level, flags, base and pending state onto its new handle **by link id**, the one identifier that survived. A resync would instead delete the collection and lose every staged edit.
 
-The batch drops each old handle it re-writes with reason `Superseded`, which licenses the binding to move (STORAGE §10, §12), per handle: a genuine duplicate in the same batch is still refused. A handle the new space lacks is dropped `Deleted`.
+The batch drops each old handle it re-writes with reason `Rekeyed`, which licenses the binding to move (STORAGE §10, §12), per handle: a genuine duplicate in the same batch is still refused. A handle the new space lacks is dropped `Deleted`.
 
 A member resolving to an identity already handed out takes the minted key an old copy carried, else a mint over its own handle; pending creates' keys count as taken. The sort key is carried, preferring the fetch's.
 
-The batch and the epoch bump commit together, and the batch carries no op for the bump: a batch holding a `Superseded` drop is a rebuild, and the storage bumps the collection's generation in the transaction that applies it (STORAGE §12).
+The batch and the epoch bump commit together, and the batch carries no op for the bump: a batch holding a `Rekeyed` drop is a rebuild, and the storage bumps the collection's generation in the transaction that applies it (STORAGE §12).
 
 ## 9. Several sources
 
@@ -160,7 +160,7 @@ N sources hold one item per identity and one binding each. A change one source f
 
 An upsert leaving a conflicted binding counts as the source having changed its body. Flags never conflict.
 
-**Deletes propagate.** A `Deleted` drop or a `Tombstone` upsert marks the item deleted; the dropping source loses its binding, a tombstoning one keeps it. Every other source projects a `Tombstone`; a source lacking the item projects nothing. A live upsert clears `deleted`. With no binding left the item is retained (STORAGE §11). A `Superseded` drop marks nothing.
+**Deletes propagate.** A `Deleted` drop or a `Tombstone` upsert marks the item deleted; the dropping source loses its binding, a tombstoning one keeps it. Every other source projects a `Tombstone`; a source lacking the item projects nothing. A live upsert clears `deleted`. With no binding left the item is retained (STORAGE §11). A `Superseded` or `Rekeyed` drop marks nothing.
 
 **Propagation is hydration-safe.** A source lacking an item is offered it only when the store holds the body, and a projection never raises a level. Mirroring is a sync plus an upgrade.
 
@@ -170,11 +170,11 @@ A binding with no base is a pending create, and a minted key is an ordinary key:
 
 ## 10. The load and the write
 
-Every verb begins with a load naming a collection and a **scope**: `All`, `Handles` or `Links`. A mutation asks for the one placement it edits, or for every holder of the link id an `Add` must not collide with; an upgrade asks for the handles it raises; a sync and a rekey ask for the whole collection, being the only verbs that reason about what is missing from it. A `Copy` or a `Move` also loads its target for the identity it carries into it. The scope is a floor: a storage SHALL return at least the placements it names and MAY return more (STORAGE §14).
+Every verb begins with a load naming a collection and a **scope**: `All`, `Handles` or `Links`. A mutation asks for the one placement it edits, or for every holder of the link id an `Add` must not collide with; an upgrade asks for the handles it raises; a sync and a rekey ask for the whole collection, being the only verbs that reason about what is missing from it. A `Copy` or a `Move` also loads its target for the identity it carries into it. The scope is a floor: a storage SHALL return at least the placements it names and MAY return more (STORAGE §14). A `Links` load answers who holds the key: it SHALL NOT return the `Created` placement the projection offers for an item the source lacks, else an upgrade settling a fetched identity reads another source's copy as this source's holding and mints a key over it (§6).
 
-Every verb ends in a batch applied in order and atomically (STORAGE §14): `UpsertPlacement`, `DropPlacement { handle, reason }`, `StoreObject { hash, size, bytes? }`, `SetCheckpoint`. Order carries meaning (a batch names one handle twice to supersede a provisional one) and a storage MUST NOT reorder. A batch is cut between candidates, never inside one.
+Every verb ends in a batch applied in order and atomically (STORAGE §14): `UpsertPlacement`, `DropPlacement { handle, reason }`, `StoreObject { hash, size, bytes? }`, `SetCheckpoint`. A drop's reason says why the row goes: `Deleted`, the member is gone from the source; `Superseded`, a provisional handle an accepted add replaced; `Rekeyed`, a handle a rebuild renumbered (§8). Order carries meaning (a batch names one handle twice to supersede a provisional one) and a storage MUST NOT reorder. A batch is cut between candidates, never inside one.
 
-An unlinked upsert for a handle a binding holds folds into that binding's item; only a handle nothing holds is a probe. An upsert resolving a binding to a different handle is refused, except through a `Superseded` drop in the same batch. A `Deleted` drop of a source's last binding retains the item.
+An unlinked upsert for a handle a binding holds folds into that binding's item; only a handle nothing holds is a probe. An upsert resolving a binding to a different handle is refused, except through a `Superseded` or `Rekeyed` drop of the bound handle in the same batch. A `Deleted` drop of a source's last binding retains the item.
 
 A `StoreObject` carries bytes or references a body already streamed to its blob path; a `Full` fetch MAY stream it there itself. The checkpoint is per source and lands last (§5). Summary and address rows are written with the placement they describe; stamps follow from the rows (STORAGE §4.5).
 
