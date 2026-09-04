@@ -269,12 +269,12 @@ When an item's last binding vanishes the store retains the row rather than delet
 ### 11.1 Requirements
 
 - **Retire, do not delete** (`retain_item`): stamp `retained_at` and `retained_by`, keep `object_hash` so the body stays pinned.
-- **A held identity is not kept twice**: when another collection of the same account holds the link id live (`deleted` 0, `retained_at` `NULL`), `retain_item` is followed by `purge_item` and `release_pins` in the same transaction, and the purge counts (§4.5).
+- **A held identity is not kept twice**: when another collection of the same account holds the link id live (`held_elsewhere`), `retain_item` is followed by `purge_item` on the seq `retained_item` gives and `release_pins`, in the same transaction, and the purge counts (§4.5).
 - **Stamped by SQLite**: `retained_at` is written by the statement; the cutoff of a purge is the caller's parameter.
 - **Hidden from the sync seam**: `load_items` filters `retained_at IS NULL`, or the next run re-uploads every retained row. `delete_items` spares them for the same reason.
 - **Hidden from the reads**: a retained row is a tombstone under §14.1's live-only rule; `list_retained_page` and `count_retained` are the trash view.
 - **Purge is the only true delete**: `purge_item` and `purge_retained_before`, both guarded on `retained_at IS NOT NULL`, both `RETURN` the pinned hashes for `release_pins` in the same transaction. The bodies fall to the collector.
-- **A reappearing link id revives** (`revive_item`): stamps cleared, `deleted` back to 0, content adopted, `seq` kept. One branch serves a source-side resurrection and a queued `add`.
+- **A reappearing link id revives** (`retained_item` then `revive_item`): stamps cleared, `deleted` back to 0, content adopted, the pins the retained row held released, `seq` kept. One branch serves a source-side resurrection and a queued `add`.
 - `retained_by` is diagnostic; a retained item has no binding and pushes nothing.
 
 ### 11.2 Purging
@@ -317,7 +317,7 @@ Two implementations produce byte-identical stores only with identical encodings.
 
 A store is opened as one source. `load` projects the shared items into that source's placements; `write` folds its changes back. The statements are §4.4's, bound with §13.
 
-- **`load(collection, scope)`**: `load_items`, `load_bindings`, `load_conflict`, projected for the source (SYNC.md §3), plus `load_probes` and `load_checkpoint`. The scope (SYNC.md §10) is a floor: `All` reads the collection; `Links` reads `load_items_by_link` and `load_bindings_by_link` for the link ids named; `Handles` resolves each handle with `link_for_handle` and reads the same two, a handle nothing binds being a probe. A store MAY return more than the scope names and MUST NOT return less.
+- **`load(collection, scope)`**: `load_items`, `load_bindings`, `load_conflict`, projected for the source (SYNC.md §3), plus `load_probes` and `load_checkpoint`. The scope (SYNC.md §10) is a floor: `All` reads the collection; `Links` reads `load_items_by_link` and `load_bindings_by_link` for the link ids named; `Handles` resolves each handle with `link_for_handle` and reads the same two, a handle nothing binds being a probe. A `Created` placement's origin is `origin_for_link` (SYNC.md §3). A store MAY return more than the scope names and MUST NOT return less.
 - **`lookup_objects(links)`**: `:links` a JSON array of link ids, `:account` the caller's own (§9.2): across collections a link id is one body downloaded once, across accounts it is not a fact. A writer-derived key never matches (§9).
 - **`write(ops)`** runs as one transaction:
   1. A `StoreObject` carries the index row and optionally the bytes. With bytes, write the blob first (§5), then `store_object`; without, the body is already at its sharded path, streamed there by the consumer. The blob write MAY precede `BEGIN` and SHOULD for a body of any size; the writer's lock (§8), not the file's age, keeps a collector out of the window.
@@ -326,7 +326,7 @@ A store is opened as one source. `load` projects the shared items into that sour
 
      Placement upserts and drops are merged into the shared items and bindings, `set_conflict` carrying the collection's policy. The reference form is the **diff**:
 
-     `load_items_by_link` and `load_bindings_by_link` bound to the batch's link ids, each dropped handle resolved with `link_for_handle`, then `insert_item`, `insert_binding`, `update_item`, `update_binding`, and `retain_item` for an item the result no longer holds. `update_binding` carries no handle: a rebind is refused (§10) except through §12's rebuild.
+     `load_items_by_link`, `load_bindings_by_link`, the kind's `load_<kind>_summaries` and `load_addresses_by_link` bound to the batch's link ids, each dropped handle resolved with `link_for_handle`, then `insert_item`, `insert_binding`, `update_item`, `update_binding`, `delete_binding` for a binding a `Deleted` drop removes, and `delete_item_bindings` with `retain_item` for an item the result no longer holds, purged at once when `held_elsewhere` says the identity moved (§11). `update_binding` carries no handle: a rebind is refused (§10) except through §12's rebuild.
 
      A load-all / replace-all (`delete_items`, then every row inserted) persists the same state and MAY be used, but stamps the whole collection on every sync (§4.5).
 
@@ -355,7 +355,7 @@ A **reader** (§8) opens read-only and projects the store as a local backend. Re
 - **`list_address_placements(address, role)`**: every live placement naming one address, `role` `NULL` for any: the person axis. **`list_domain_placements(domain, role)`**: the same for a domain, by a scan.
 - **`list_items_changed_since`**, **`list_collections_changed_since`**, **`load_change_cursor`**: the feed (§4.5).
 - **`list_retained_page(collection, after, limit)`** (cursor on `seq`, `0` starts), **`count_retained`**, **`retained_bytes()`**: the trash view (§11).
-- **`list_sources()`**, **`list_conflicted_bindings(account)`** (the bindings awaiting a decision with the three bodies the divergence is between, answered by index, never by paging), **`load_kind`**, **`count_probes`**.
+- **`list_sources()`**, **`list_conflicted_bindings(account)`** (the bindings awaiting a decision with the three bodies the divergence is between, answered by index, never by paging), **`list_item_bindings(collection, link_id)`** (where one item lives per source), **`link_for_handle`** and **`handle_for_link`**, **`load_kind`**, **`count_probes`**.
 
 Three rules bind every read:
 
@@ -375,7 +375,7 @@ A producer enqueues in one transaction: `ensure_collection`, at most one `store_
 
 The owner drains each collection's pending actions in ascending `id` (`list_queued_collections`, `load_pending_actions`). An action is applied and its row deleted in one transaction, which spans no network I/O. `claim_action` runs **first** in it: the pending list is read outside any transaction, so a second owner may hold it, and a claim that deletes nothing means another owner applied the row.
 
-A failed action is retried (`bump_attempts`). One the owner judges permanently unappliable is parked (`park_action`): `error` set, the action skipped, later ones proceeding, read back with `load_parked_actions` and never silently deleted.
+A failed action is retried (`bump_attempts`). One the owner judges permanently unappliable is parked (`park_action`): the attempt counted, `error` set, the action skipped, later ones proceeding, read back with `load_parked_actions` and never silently deleted.
 
 **Skipping is not parking.** An owner that does not recognise a kind, or lacks the capability it needs, SHALL leave the row pending and untouched, `error` `NULL`, `attempts` unbumped, and SHALL NOT block later actions on it. A drain has three outcomes per row: applied, parked, skipped.
 
@@ -383,7 +383,7 @@ A failed action is retried (`bump_attempts`). One the owner judges permanently u
 
 Existing items are addressed by `seq`. At `v: 1`:
 
-- **`add`**: `{ "v": 1, "link_id": …?, "flags": […], "object": hash, "handle": …? }`. Creates an item staged as a local creation to push; the owner derives its summary and addresses from `object` (Annex A). A duplicate `link_id` parks the action unless the row holding it is retained, which revives it (§11): a source's duplicate is minted (§9), a producer's is a mistake worth reporting.
+- **`add`**: `{ "v": 1, "link_id": …?, "flags": […], "object": hash, "handle": …? }`. Creates an item staged as a local creation to push; the owner derives its summary and addresses from `object` (Annex A). A duplicate `link_id` (`live_item_for_link`) parks the action unless the row holding it is retained, which revives it (§11): a source's duplicate is minted (§9), a producer's is a mistake worth reporting.
 - **`set-flags`**: `{ "v": 1, "seq": n, "flags": […] }`. Replaces the set, absolutely.
 - **`remove`**: `{ "v": 1, "seq": n }`. Already absent is success.
 - **`move`**: `{ "v": 1, "seq": n, "to": collection }`. `copy` is the same shape without the removal.
@@ -397,7 +397,7 @@ A reader MAY overlay a collection's pending actions (`load_pending_actions`) for
 
 ### 15.5 Cancelling and acknowledging
 
-`cancel_action` removes a pending or parked row by request: an operator withdrawing it, or the performer of a capability-bound intent acknowledging it. It is an owner write and MUST run in one transaction with the refcount settle, releasing the row's pin. An applied action cannot be cancelled: application deleted its row.
+`cancel_action` removes a pending or parked row by request, returning its pin: an operator withdrawing it, or the performer of a capability-bound intent acknowledging it. It is an owner write and MUST run in one transaction with `release_pins` on what it returned. An applied action cannot be cancelled: application deleted its row.
 
 An intent whose effect is not a store mutation is therefore at-least-once, and deduplicating is the performer's.
 

@@ -111,13 +111,13 @@ One batch of `UpsertPlacement`, `DropPlacement { handle, reason }`, `StoreObject
 3. `store_object` for every `StoreObject` (the refcount starts at zero and is settled in step 11).
 4. `ensure_collection` for the collection, which inserts an undeclared row and never overwrites a declared one. Read the policy with `load_conflict`.
 5. Resolve the batch's keys. Each `DropPlacement` names a handle: `link_for_handle` gives its link id; a handle nothing binds is a probe, `delete_probe`. Each `UpsertPlacement` carries a link id, or none for a probe (`upsert_probe`, and stop here for that placement).
-6. Read what the batch touches and nothing else: `load_items_by_link` and `load_bindings_by_link` bound to a JSON array of the batch's link ids.
+6. Read what the batch touches and nothing else: `load_items_by_link`, `load_bindings_by_link`, the kind's `load_<kind>_summaries` and `load_addresses_by_link`, bound to a JSON array of the batch's link ids, so step 7 writes a summary or an address set only when it moved.
 7. Merge each placement into its shared item and binding under SYNC §9 and §10, then persist the diff:
-   - a new item: `seq_for_link_any` for a stated hint, `bump_next_seq` when it returns nothing or the key is derived (`alt:`, `hash:`, `dup:`), then `insert_item`; a retained row under the same key is revived instead, `revive_item`;
+   - a new item: `seq_for_link_any` for a stated hint, `bump_next_seq` when it returns nothing or the key is derived (`alt:`, `hash:`, `dup:`), then `insert_item`; a retained row under the same key (`retained_item`) is revived instead, `revive_item`, its old pins released;
    - a new binding: `insert_binding`; a binding whose handle differs from the incoming one is a refused write unless a `Superseded` or `Rekeyed` drop for the old handle precedes it in the same batch;
    - a moved item or binding: `update_item`, `update_binding`, which carries no handle;
    - a named placement's summary and addresses, derived under Annex A: `upsert_<kind>_summary`, `replace_addresses` then one `insert_address` per row, and `stamp_item` when only those rows moved;
-   - a `Deleted` drop of the item's last binding: `retain_item`, which stamps `retained_at` and keeps the body pinned; then, when another collection of the same account holds the link id live, `purge_item` and `release_pins`, since the item moved.
+   - a `Deleted` drop of a binding: `delete_binding`; of the item's last binding: `delete_item_bindings` and `retain_item`, which stamps `retained_at` and keeps the body pinned; then, when `held_elsewhere` finds the link id live in another collection of the account, `purge_item` on `retained_item`'s seq and `release_pins`, since the item moved.
 8. A `Rekeyed` drop anywhere in the batch makes it a rebuild: `bump_generation` for the collection, once, in this transaction.
 9. `SetCheckpoint`: `upsert_checkpoint` for this source, last in the batch.
 10. Never reorder the batch: a provisional handle superseded by an accepted one is two entries for one handle in one order.
@@ -166,7 +166,7 @@ An engine reads a collection as one source, at the scope the verb needs (SYNC §
 
 - one placement per item the source binds;
 - one `Created` placement per item the source does not bind and the store holds a body for;
-- on every `Created` placement, bound or not, an origin when the same source binds the same link id in another collection with a base present and, when the placement has a body, that body as its base;
+- on every `Created` placement, bound or not, the origin `origin_for_link` gives: the same source binding the same link id in another collection with a base present and, when the placement has a body, that body as its base;
 - one `Probed` placement per probe row of the source;
 - nothing for a retained item;
 - under a `Links` scope, nothing for an item the source lacks: the offer is for the merge, and a verb reading by key asks who holds it.
@@ -249,10 +249,10 @@ Every other source then projects the change as its own `Dirty` or `Tombstone` an
 **Drain**, as the owner:
 
 1. `list_queued_collections`, then per collection `load_pending_actions` outside any transaction.
-2. Per row in ascending id: `BEGIN`; `claim_action` first, and end the transaction touching nothing when it deleted no row, since another owner applied it; apply the action as the corresponding mutation of §11 (`add` derives the summary and addresses from the body, a duplicate link id parks unless the holder is retained, which revives it); settle refcounts, the row's pin included; `COMMIT`. No network inside.
-3. A failure: `bump_attempts`, row left pending. A permanent failure: `park_action` with the error, later rows proceeding. An unrecognised kind, or one this owner lacks the capability for: skip, touching nothing, attempts unbumped, later rows proceeding.
+2. Per row in ascending id: `BEGIN`; `claim_action` first, and end the transaction touching nothing when it deleted no row, since another owner applied it; apply the action as the corresponding mutation of §11 (`add` derives the summary and addresses from the body, a duplicate link id, `live_item_for_link`, parks unless the holder is retained, which revives it); settle refcounts, the row's pin included; `COMMIT`. No network inside.
+3. A failure: `bump_attempts`, row left pending. A permanent failure: `park_action` with the error, which counts the attempt itself, later rows proceeding. An unrecognised kind, or one this owner lacks the capability for: skip, touching nothing, attempts unbumped, later rows proceeding.
 
-**Cancel or acknowledge**, as the owner: `cancel_action` in one transaction with the refcount settle. An intent whose effect is not a store mutation is at least once; the performer deduplicates.
+**Cancel or acknowledge**, as the owner: `cancel_action`, then `release_pins` on the hash it returns, in one transaction. An intent whose effect is not a store mutation is at least once; the performer deduplicates.
 
 Operators read `load_parked_actions` store-wide; a reader overlays `load_pending_actions` for read-your-writes.
 
