@@ -1,10 +1,10 @@
 # Pimdir storage specification
 
-Status: draft, normative
+Status: draft
 
 The storage part of the pimdir standard, and its base: a **SQLite database** (the index and the mutable state) plus a **content-addressed blob directory** (the bodies). The two layers over it are [SYNC.md](./SYNC.md), how sources reconcile through the store, and [SEARCH.md](./SEARCH.md), the index and query language over it.
 
-This part binds every implementation, by the profile it meets: a **reader** opens the store and lists it, a **producer** also appends actions, an **owner** mutates it; [GUIDE.md](./GUIDE.md) §1 lists what each owes and an implementation MUST state which it is. The two layers presuppose the store and are the reference engine's and index's, io-pimdir's, binding for them and descriptive for everyone else, except the query language of SEARCH §8, which binds every client.
+This part binds every implementation, by the profile it meets: a **reader** opens the store and lists it, a **producer** also appends actions, an **owner** mutates it; [GUIDE.md](./GUIDE.md) §1 lists what each owes and an implementation MUST state which it is. The two layers presuppose the store: an implementation MAY omit either and MUST conform to those it offers.
 
 A blob is immutable. A body edit writes a new blob and repoints the item.
 

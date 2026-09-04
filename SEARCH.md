@@ -1,10 +1,10 @@
 # Pimdir search specification
 
-Status: draft; §8 normative, the rest reference
+Status: draft
 
 The search part of the pimdir standard: a full-text index over a store ([STORAGE.md](./STORAGE.md)) and the query language over it, cross-domain from the first line. A query names people, dates, tags, kinds and text and answers with items of every kind: a person's card, the mail they sent and the meetings they attend are one result set.
 
-§8, the query language, binds every client that answers a query on a store, so `is:unread from:jane` means one thing everywhere; vectors/search/ is its conformance. §3 to §7, §9 and §10 specify the reference index, io-pimdir's: binding for it, descriptive for everyone else. An index is derived from the store's rows and bodies and rebuilt at will, so no other promise is needed.
+An implementation MAY omit search; one that offers it MUST conform, so every client on one store answers `is:unread from:jane` the same way, vectors/search/ being the bar. The index presupposes the store: it is built from the store's rows and bodies, and rebuilt at will.
 
 [OVERVIEW.md](./OVERVIEW.md) §10 explains the model; [GUIDE.md](./GUIDE.md) §15 runs the refresh and the query as procedures. Both are informative and this part wins on any disagreement.
 

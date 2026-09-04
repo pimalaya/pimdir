@@ -2,7 +2,7 @@
 
 Status: informative
 
-The procedures an implementation runs, in the order it runs them, naming the statements under queries/ and the vectors under vectors/ at each step. This document restates the rules of [STORAGE.md](./STORAGE.md), [SYNC.md](./SYNC.md) and [SEARCH.md](./SEARCH.md) as steps and tables; it adds none, and where it and a part disagree the part wins. §n of a part is written STORAGE §n, SYNC §n, SEARCH §n. §9 to §12 and §15 describe the reference engine and index; what they owe the store is in §5.
+The procedures an implementation runs, in the order it runs them, naming the statements under queries/ and the vectors under vectors/ at each step. This document restates the rules of [STORAGE.md](./STORAGE.md), [SYNC.md](./SYNC.md) and [SEARCH.md](./SEARCH.md) as steps and tables; it adds none, and where it and a part disagree the part wins. §n of a part is written STORAGE §n, SYNC §n, SEARCH §n. §9 to §12 run the engine, §15 the index; what either owes the store is in §5.
 
 A reader new to the model starts with [OVERVIEW.md](./OVERVIEW.md).
 
@@ -27,7 +27,7 @@ A reader new to the model starts with [OVERVIEW.md](./OVERVIEW.md).
 
 ## 1. Conformance checklist
 
-Three profiles read or write a store, each a superset of the one before, and an implementation states which it meets. Most implementations are readers; the owner is, in practice, the reference store.
+Three profiles read or write a store, each a superset of the one before, and an implementation states which it meets. Most implementations are readers or producers; the owner, the engine and the index are large, and the reference implementation is there to be used for them.
 
 A **reader** opens the store and lists it:
 
@@ -56,7 +56,7 @@ An **owner** is the one process that mutates the store:
 | 11 | Retain rather than delete, purge a moved or requested row only, collect only under both locks | STORAGE §5, §11 |
 | 12 | Drain the queue with claim-first, park or skip as §13 says | STORAGE §15 |
 
-The reference engine (SYNC) is an owner that reproduces every case under vectors/sync/; the reference index (SEARCH §3 to §7, §9, §10) adds SQLite 3.43 with FTS5, migrations/search/ and queries/search/. Every **query client**, whichever index answers it, answers the cases under vectors/search/ alike (SEARCH §8).
+An **engine** (SYNC) is an owner that reproduces every case under vectors/sync/. An **index** (SEARCH) adds SQLite 3.43 with FTS5, migrations/search/ and queries/search/, and every **query client** on it answers the cases under vectors/search/ alike.
 
 Use the statements verbatim. Every one of them prepares against the canonical schema, which checks/schema.sh proves on every push, and a substitute is yours to keep equivalent under STORAGE §7's invariants.
 
