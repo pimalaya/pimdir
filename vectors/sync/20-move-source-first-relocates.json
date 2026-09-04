@@ -1,0 +1,60 @@
+{
+  "label": "the source half of a move carries its destination, and the accepted remove purges the moved row",
+  "note": "the tombstone's destination is derived from the pending create the same source holds in Archive, so the Remove relocates; accepted, the source binding goes and the row is purged at once since the account holds the identity live in Archive (SYNC.md §3, §5; STORAGE §11)",
+  "store": {
+    "collections": [
+      { "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" },
+      { "id": "Archive", "account": null, "kind": "message/rfc822", "conflict": "manual" }
+    ],
+    "objects": {
+      "m1": { "body": "fixtures/mail-basic.eml" }
+    },
+    "items": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 1 },
+      { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }
+    ],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 },
+      { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "tmp-1", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }
+    ],
+    "probes": [],
+    "sources": [
+      { "collection": "INBOX", "source": "imap", "checkpoint": "c0" },
+      { "collection": "Archive", "source": "imap", "checkpoint": "a0" }
+    ]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "INBOX",
+    "source": "imap",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual",
+      "delete": "revert"
+    }
+  },
+  "remote": {
+    "snapshot": {
+      "items": [{ "handle": "10", "flags": ["\\Seen"], "revision": null }],
+      "vanished": [],
+      "complete": true,
+      "checkpoint": "c1"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [{ "kind": "Remove", "handle": "10", "to": "Archive", "link_id": "basic-1@example.org", "if_match": null, "key": "6dc3500bff3aa6fb" }],
+    "outcomes": [{ "handle": "10", "outcome": "Accepted" }],
+    "events": [],
+    "store": {
+      "items": [{ "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+      "bindings": [{ "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "tmp-1", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }],
+      "probes": [],
+      "sources": [
+        { "collection": "Archive", "source": "imap", "checkpoint": "a0" },
+        { "collection": "INBOX", "source": "imap", "checkpoint": "c1" }
+      ]
+    }
+  }
+}

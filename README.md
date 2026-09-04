@@ -2,7 +2,7 @@
 
 A local-first standard for personal information (mail, contacts, calendars): a portable SQLite-plus-blobs store, with a sync layer that keeps it a replica of every source and a search layer that indexes and queries it
 
-Three standards, one store: the format any language with a SQLite binding reads and writes, the engine that keeps it a replica of every source, and the index and query language over it. The canonical part is the schema, the reference statements and the test vectors, so every implementation agrees on the same store. [io-pimdir](https://github.com/pimalaya/io-pimdir) is the reference implementation of all three.
+One standard in three parts, one store: the format any language with a SQLite binding reads and writes, the engine that keeps it a replica of every source, and the index and query language over it. The canonical part is the schema, the reference statements and the test vectors, so every implementation agrees on the same store. [io-pimdir](https://github.com/pimalaya/io-pimdir) is the reference implementation of the store and the sync layer; the search layer has none yet.
 
 ## Table of contents
 

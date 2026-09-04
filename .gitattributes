@@ -1,5 +1,5 @@
 # The fixtures are byte-exact: an object name is taken over the raw bytes
-# (SPEC.md §5), and they are CRLF throughout as RFC 5322 and RFC 5545 require.
+# (STORAGE.md §5), and they are CRLF throughout as RFC 5322 and RFC 5545 require.
 # Without this git normalises them away under core.autocrlf and every recorded
 # digest stops matching what a clone holds.
 vectors/fixtures/** -text

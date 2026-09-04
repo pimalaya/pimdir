@@ -6,10 +6,10 @@ Test data for the pimdir standard (STORAGE.md §16, SYNC.md §11, SEARCH.md §11
 
 - **objects.json**: bodies to object names under both `hash_algo` values, with the shard path §5 derives from each. An implementation **MUST** pass this: object naming is where a disagreement costs data rather than presentation.
 - **summaries.json** and **fixtures/**: bodies to the `link_id`, the summary row, the address rows and the `sort_key` Annex A produces, every case that annex has to hedge included, and the encodings that split earlier writers (an RFC 2047 header, an escaped vCard value, a quoted parameter). An implementation **MUST** pass the cases for each `kind` it writes.
-- **sync/**: one case per file, a store, a run, a remote and what is expected after (SYNC.md §11). Bodies are named by label and resolved to fixtures, so a case reads. An engine conforms by reproducing them.
+- **sync/**: one case per file, a store, a run, a remote and what is expected after (SYNC.md §11). Bodies are named by label and resolved to fixtures, so a case reads, and every expected push carries the idempotency key SYNC.md §4 derives, which checks/vectors.py re-derives. An engine conforms by reproducing them.
 - **search/**: the fixture store and the queries every conforming index answers alike (SEARCH.md §11), hits keyed `(account, seq)`.
 
-Three of summaries.json's cases pin the **minted** `link_id` (STORAGE.md §9): a hint the collection already holds under another handle is filed under `dup:`, the hint, `#` and the handle, concatenated verbatim in that order. Each reuses the fixture of the case above it, since minting depends on the hint and the handle and never on the body, and each carries the `hint` and `handle` its key was built from, so a consumer rebuilds the key rather than pattern-matching the string.
+One case, event-no-uid.ics, pins the **`hash:`** key Annex A.2 derives for content with no usable `UID`, the FNV-1a 64 digest of the bytes, and checks/vectors.py re-derives it. Three of summaries.json's cases pin the **minted** `link_id` (STORAGE.md §9): a hint the collection already holds under another handle is filed under `dup:`, the hint, `#` and the handle, concatenated verbatim in that order. Each reuses the fixture of the case above it, since minting depends on the hint and the handle and never on the body, and each carries the `hint` and `handle` its key was built from, so a consumer rebuilds the key rather than pattern-matching the string.
 
 ## How the expected values were derived
 
@@ -28,6 +28,5 @@ From the algorithm and prose specifications, never by running an implementation.
 
 ## What is deliberately not pinned
 
-- **The `link_id` of content with no usable `UID`.** event-no-uid.ics carries `"link_id": null`: Annex A.2 fixes the `hash:` derivation, but the case checks that a prefixed id was derived rather than which, so a store whose FNV differs by an implementation bug fails on its own vectors, not on this one.
 - **Non-ASCII case folding of a sort key.** card-casefold.vcf is ASCII on purpose. Annex A names the mapping (Unicode simple lowercase, locale-independent), but a non-ASCII vector would pin behaviour the two runtimes have not been checked against each other on. The decoded values of mail-encoded.eml and card-escaped.vcf are pinned, being what split the writers; only the folding of a key is not.
 - **`attachment` at the `Meta` tier.** The mail cases pin the `Full` derivation, where the parts were walked; a summary written from an `ENVELOPE` writes `NULL` there and agrees on every other column.

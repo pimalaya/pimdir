@@ -1,0 +1,58 @@
+{
+  "label": "a rekey carries a minted key onto its new handle rather than minting again",
+  "note": "two members resolve to one hint; the first, in handle order, takes the hint and the second takes the minted key an old copy carried, so the store keeps the same two items and their seqs across the renumbering (SYNC.md §8)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual", "generation": 1 }],
+    "objects": {
+      "m1": { "body": "fixtures/mail-basic.eml" }
+    },
+    "items": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 },
+      { "collection": "INBOX", "link_id": "dup:basic-1@example.org#11", "seq": 2, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }
+    ],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 },
+      { "collection": "INBOX", "link_id": "dup:basic-1@example.org#11", "source": "imap", "handle": "11", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }
+    ],
+    "probes": [],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c0" }]
+  },
+  "run": {
+    "verb": "rekey",
+    "collection": "INBOX",
+    "source": "imap"
+  },
+  "remote": {
+    "snapshot": {
+      "items": [
+        { "handle": "20", "flags": ["\\Seen"], "revision": null },
+        { "handle": "21", "flags": ["\\Seen"], "revision": null }
+      ],
+      "vanished": [],
+      "complete": true,
+      "checkpoint": "d0"
+    },
+    "fetch": {
+      "20": { "Meta": {"body": "fixtures/mail-basic.eml", "revision": null} },
+      "21": { "Meta": {"body": "fixtures/mail-basic.eml", "revision": null} }
+    }
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual", "generation": 2 }],
+      "items": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 },
+        { "collection": "INBOX", "link_id": "dup:basic-1@example.org#11", "seq": 2, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "20", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 },
+        { "collection": "INBOX", "link_id": "dup:basic-1@example.org#11", "source": "imap", "handle": "21", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }
+      ],
+      "probes": [],
+      "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "d0" }]
+    }
+  }
+}

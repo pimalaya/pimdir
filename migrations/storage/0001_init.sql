@@ -359,5 +359,8 @@ CREATE INDEX queue_by_object ON queue(object_hash);
 CREATE INDEX bindings_conflicted ON bindings(collection, link_id, source) WHERE conflicted = 1;
 -- Resolves a source handle back to its link id (link_for_handle), which is what
 -- a batch dropping a placement needs: a drop names a handle, the shared item is
--- keyed by link id.
-CREATE INDEX bindings_by_handle ON bindings(collection, source, handle);
+-- keyed by link id. UNIQUE, because a handle names one item per source (§10):
+-- a write moving a handle onto another link id retires the old binding first,
+-- and one that does not fails here rather than leaving two rows the lookup
+-- answers from at random.
+CREATE UNIQUE INDEX bindings_by_handle ON bindings(collection, source, handle);

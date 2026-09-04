@@ -1,0 +1,42 @@
+{
+  "label": "a rekey meeting a remote edit over a clean placement carries it as a pull",
+  "note": "the fetched revision r2 is not the old base's r1 and the body is the base's; the placement lands on its new handle with the body dropped and the level lowered, the base at r2 with no body, for the upgrade to refetch (SYNC.md §8, §5)",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual", "generation": 1 }],
+    "objects": {
+      "c1": { "body": "fixtures/card-basic.vcf" }
+    },
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0 }],
+    "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1 }],
+    "probes": [],
+    "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d0" }]
+  },
+  "run": {
+    "verb": "rekey",
+    "collection": "Contacts",
+    "source": "dav"
+  },
+  "remote": {
+    "snapshot": {
+      "items": [{ "handle": "b.vcf", "flags": [], "revision": "r2" }],
+      "vanished": [],
+      "complete": true,
+      "checkpoint": "e0"
+    },
+    "fetch": {
+      "b.vcf": { "Meta": {"body": "fixtures/card-basic.vcf", "revision": "r2"} }
+    }
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual", "generation": 2 }],
+      "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": null, "level": 0, "deleted": 0 }],
+      "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "b.vcf", "base_flags": [], "base_object": null, "base_revision": "r2", "base_present": 1 }],
+      "probes": [],
+      "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "e0" }]
+    }
+  }
+}

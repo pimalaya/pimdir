@@ -112,7 +112,7 @@ The canonical schema is migrations/storage/0001_init.sql, which is normative. Th
 - **`mail_summary`**, **`contact_summary`**, **`event_summary`**, **`task_summary`**, **`journal_summary`**: one table per kind, at most one row per item, keyed `(collection, link_id)`, cascading with the item, referencing no object. Their columns are Annex A's, so a writer that disagrees with the shape fails at the write.
 - **`item_address`**: the people an item names, keyed `(collection, link_id, role, position)` (Annex A.6). One table across every kind, so "everything about this address" is one seek on `item_address_by_address`.
 - **`probes`**: the handles a source enumerated whose identity is not read yet, keyed `(collection, source, handle)`, with the flags reported (SYNC.md §3).
-- **`bindings`**: one source's binding of an item, keyed `(collection, link_id, source)`: the `handle`, the sync base (`base_flags`, `base_object`, `base_revision`, `base_present`), the `shared_object` last agreed with the item, and the conflict triple `conflicted`, `conflict_revision`, `conflict_object`. A handle is bound once and never repointed (§10).
+- **`bindings`**: one source's binding of an item, keyed `(collection, link_id, source)`: the `handle`, the sync base (`base_flags`, `base_object`, `base_revision`, `base_present`), the `shared_object` last agreed with the item, and the conflict triple `conflicted`, `conflict_revision`, `conflict_object`. A handle is bound once and never repointed, and names one item per source (§10): `bindings_by_handle` is unique.
 - **`queue`**: the action queue (§15): `id`, `created_at`, `producer`, `collection`, `action`, `payload`, `object_hash`, `attempts`, `error`.
 
 An item plus one binding per source is the whole model. Single-source is the N=1 case; N≥2 adds only `deleted`, a removal that lingers until every source has dropped it.
@@ -262,6 +262,10 @@ A write resolving an existing `(collection, link_id, source)` binding to a diffe
 
 Two items is the report; the store picks no survivor and warns about nothing.
 
+The other direction is a rebind too: a handle names one link id per source. A write resolving a bound handle to a different link id, a `hash:` key that changed under the same DAV resource (§9), SHALL retire the old binding first, in the same transaction, as a `Deleted` drop of that handle would (§11).
+
+The unique index on `(collection, source, handle)` refuses a write that does not.
+
 ## 11. Retention
 
 When an item's last binding vanishes the store retains the row rather than deleting it, and only an explicit purge removes it. A remote expunge therefore never destroys the local copy. The one exception is an identity another collection of the same account holds live: the item moved, or was filed twice, and nothing is lost by purging the row in the same transaction, the holder pinning the body. Retention is the terminal state of `deleted`: a retained row carries `deleted = 1`, no bindings, and a non-`NULL` `retained_at`. It is unconditional; how long to keep and when to sweep is the owner's schedule.
@@ -317,7 +321,7 @@ Two implementations produce byte-identical stores only with identical encodings.
 
 A store is opened as one source. `load` projects the shared items into that source's placements; `write` folds its changes back. The statements are §4.4's, bound with §13.
 
-- **`load(collection, scope)`**: `load_items`, `load_bindings`, `load_conflict`, projected for the source (SYNC.md §3), plus `load_probes` and `load_checkpoint`. The scope (SYNC.md §10) is a floor: `All` reads the collection; `Links` reads `load_items_by_link` and `load_bindings_by_link` for the link ids named; `Handles` resolves each handle with `link_for_handle` and reads the same two, a handle nothing binds being a probe. A `Created` placement's origin is `origin_for_link` (SYNC.md §3). A store MAY return more than the scope names and MUST NOT return less.
+- **`load(collection, scope)`**: `load_items`, `load_bindings`, `load_conflict`, projected for the source (SYNC.md §3), plus `load_probes` and `load_checkpoint`. The scope (SYNC.md §10) is a floor: `All` reads the collection; `Links` reads `load_items_by_link` and `load_bindings_by_link` for the link ids named; `Handles` resolves each handle with `link_for_handle` and reads the same two, a handle nothing binds being a probe. A `Created` placement's origin is `origin_for_link` and a `Tombstone` placement's destination `destination_for_link` (SYNC.md §3). The probes of a `Handles` load are `load_probes_by_handle`, of the others `load_probes`. A store MAY return more than the scope names and MUST NOT return less.
 - **`lookup_objects(links)`**: `:links` a JSON array of link ids, `:account` the caller's own (§9.2): across collections a link id is one body downloaded once, across accounts it is not a fact. A writer-derived key never matches (§9).
 - **`write(ops)`** runs as one transaction:
   1. A `StoreObject` carries the index row and optionally the bytes. With bytes, write the blob first (§5), then `store_object`; without, the body is already at its sharded path, streamed there by the consumer. The blob write MAY precede `BEGIN` and SHOULD for a body of any size; the writer's lock (§8), not the file's age, keeps a collector out of the window.
@@ -326,7 +330,7 @@ A store is opened as one source. `load` projects the shared items into that sour
 
      Placement upserts and drops are merged into the shared items and bindings, `set_conflict` carrying the collection's policy. The reference form is the **diff**:
 
-     `load_items_by_link`, `load_bindings_by_link`, the kind's `load_<kind>_summaries` and `load_addresses_by_link` bound to the batch's link ids, each dropped handle resolved with `link_for_handle`, then `insert_item`, `insert_binding`, `update_item`, `update_binding`, `delete_binding` for a binding a `Deleted` drop removes, and `delete_item_bindings` with `retain_item` for an item the result no longer holds, purged at once when `held_elsewhere` says the identity moved (§11). `update_binding` carries no handle: a rebind is refused (§10) except through §12's rebuild.
+     `load_items_by_link`, `load_bindings_by_link`, the kind's `load_<kind>_summaries` and `load_addresses_by_link` bound to the batch's link ids, each dropped handle resolved with `link_for_handle` and each upserted handle likewise, a handle bound to another link id retiring that binding first (§10), then `insert_item`, `insert_binding`, `update_item`, `update_binding`, `delete_binding` for a binding a `Deleted` drop removes, and `delete_item_bindings` with `retain_item` for an item the result no longer holds, purged at once when `held_elsewhere` says the identity moved (§11). `update_binding` carries no handle: a rebind is refused (§10) except through §12's rebuild.
 
      A load-all / replace-all (`delete_items`, then every row inserted) persists the same state and MAY be used, but stamps the whole collection on every sync (§4.5).
 
@@ -373,9 +377,11 @@ A producer enqueues in one transaction: `ensure_collection`, at most one `store_
 
 ### 15.2 Applying
 
-The owner drains each collection's pending actions in ascending `id` (`list_queued_collections`, `load_pending_actions`). An action is applied and its row deleted in one transaction, which spans no network I/O. `claim_action` runs **first** in it: the pending list is read outside any transaction, so a second owner may hold it, and a claim that deletes nothing means another owner applied the row.
+The owner drains each collection's pending actions in ascending `id` (`list_queued_collections`, `load_pending_actions`). An action is applied and its row deleted in one transaction, which spans no network I/O. `claim_action` runs **first** in it: the pending list is read outside any transaction, so a row it names may be gone by the time its turn comes, cancelled (§15.5) or applied by another handle of the owning process, and a claim that deletes nothing means the row is not this transaction's to apply.
 
 A failed action is retried (`bump_attempts`). One the owner judges permanently unappliable is parked (`park_action`): the attempt counted, `error` set, the action skipped, later ones proceeding, read back with `load_parked_actions` and never silently deleted.
+
+A failure of the store itself (a refused rebind, a constraint) is permanent for the row and MUST park it. Only a failure of the environment (the database busy, a body unreadable) is retried, and neither MUST stop the rows behind it.
 
 **Skipping is not parking.** An owner that does not recognise a kind, or lacks the capability it needs, SHALL leave the row pending and untouched, `error` `NULL`, `attempts` unbumped, and SHALL NOT block later actions on it. A drain has three outcomes per row: applied, parked, skipped.
 
@@ -385,7 +391,7 @@ Existing items are addressed by `seq`. At `v: 1`:
 
 - **`add`**: `{ "v": 1, "link_id": …?, "flags": […], "object": hash, "handle": …? }`. Creates an item staged as a local creation to push; the owner derives its summary and addresses from `object` (Annex A). A duplicate `link_id` (`live_item_for_link`) parks the action unless the row holding it is retained, which revives it (§11): a source's duplicate is minted (§9), a producer's is a mistake worth reporting.
 - **`set-flags`**: `{ "v": 1, "seq": n, "flags": […] }`. Replaces the set, absolutely.
-- **`remove`**: `{ "v": 1, "seq": n }`. Already absent is success.
+- **`remove`**: `{ "v": 1, "seq": n }`. Already absent is success; an item the draining source does not bind is skipped (§15.2), the source that binds it applying the row.
 - **`move`**: `{ "v": 1, "seq": n, "to": collection }`. `copy` is the same shape without the removal.
 - **`update`**: `{ "v": 1, "seq": n, "object": hash }`. Repoints a mutable item's body; the owner re-derives its summary and addresses.
 
@@ -409,7 +415,7 @@ A schema mismatch fails a query; a body named differently, a summary derived dif
 - **vectors/summaries.json** and **vectors/fixtures/**: bodies to the `link_id`, summary row, address rows and `sort_key` Annex A produces, the hedged cases, the encodings that split earlier writers, and the minted keys of §9.
 - vectors/sync/ and vectors/search/ belong to the other parts.
 
-An implementation **MUST** pass objects.json: two stores naming bodies differently cannot share a blob directory. It **MUST** pass summaries.json for each kind it writes, and an implementation that mints MUST mint the key they give. A consumer MUST compare parsed structures, never JSON text. The values are authored from the prose, never from an implementation.
+An implementation **MUST** pass objects.json: two stores naming bodies differently cannot share a blob directory. It **MUST** pass summaries.json for each kind it writes, the minted and the `hash:` keys they give included. A consumer MUST compare parsed structures, never JSON text. The values are authored from the prose, never from an implementation.
 
 An implementation that vendors vectors/ MUST record their digests and re-check them against this repository in CI.
 

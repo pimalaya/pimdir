@@ -15,7 +15,7 @@
   "run": { "verb": "sync", "collection": "INBOX", "source": "b", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual", "delete": "keep" } },
   "remote": { "snapshot": { "items": [{ "handle": "77", "flags": ["\\Seen"], "revision": null }], "vanished": [], "complete": true, "checkpoint": "b1" }, "fetch": {} },
   "expect": {
-    "pushes": [{ "kind": "SetFlags", "handle": "77", "flags": ["\\Flagged", "\\Seen"] }],
+    "pushes": [{ "kind": "SetFlags", "handle": "77", "flags": ["\\Flagged", "\\Seen"], "key": "b2c93c8bc6c517c7" }],
     "outcomes": [{ "handle": "77", "outcome": "Accepted" }],
     "events": [],
     "store": {

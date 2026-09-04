@@ -1,0 +1,40 @@
+{
+  "label": "an accepted add moves the binding onto the assigned handle with the reported revision as its base",
+  "note": "a pending create derives an Add carrying the body; Accepted with an assigned handle and a revision, the provisional handle is superseded in the same batch and the base is what the server now holds (SYNC.md §5, §10)",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
+    "objects": {
+      "c1": { "body": "fixtures/card-basic.vcf" }
+    },
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0 }],
+    "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "tmp-1", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }],
+    "probes": [],
+    "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d0" }]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "Contacts",
+    "source": "dav",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual",
+      "delete": "revert"
+    }
+  },
+  "remote": {
+    "snapshot": { "items": [], "vanished": [], "complete": true, "checkpoint": "d1" },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [{ "kind": "Add", "handle": "tmp-1", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "flags": [], "origin": null, "object": "c1", "key": "a570d4d81491a37e" }],
+    "outcomes": [{ "handle": "tmp-1", "outcome": "Accepted", "assigned": "b.vcf", "revision": "r1" }],
+    "events": [{ "kind": "Created", "handle": "b.vcf" }],
+    "store": {
+      "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0 }],
+      "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "b.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1 }],
+      "probes": [],
+      "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d1" }]
+    }
+  }
+}

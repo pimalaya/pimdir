@@ -1,1 +1,1 @@
-INSERT INTO object(hash, status) VALUES(:hash, :status) RETURNING rowid;
+INSERT INTO object(hash, status) VALUES(:hash, :status) RETURNING id;

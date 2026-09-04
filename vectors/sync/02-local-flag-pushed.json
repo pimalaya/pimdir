@@ -12,7 +12,7 @@
   "run": { "verb": "sync", "collection": "INBOX", "source": "imap", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual", "delete": "revert" } },
   "remote": { "snapshot": { "items": [{ "handle": "10", "flags": ["\\Seen"], "revision": null }], "vanished": [], "complete": true, "checkpoint": "c1" }, "fetch": {} },
   "expect": {
-    "pushes": [{ "kind": "SetFlags", "handle": "10", "flags": ["\\Flagged", "\\Seen"] }],
+    "pushes": [{ "kind": "SetFlags", "handle": "10", "flags": ["\\Flagged", "\\Seen"], "key": "33f66fc5223a52f4" }],
     "outcomes": [{ "handle": "10", "outcome": "Accepted" }],
     "events": [],
     "store": {

@@ -48,6 +48,46 @@ def name(digest):
     return base64.b32encode(digest).decode().lower().rstrip("=")
 
 
+def fnv1a(data):
+    """FNV-1a 64 as sixteen hex digits: the hash: key of Annex A.2 over the
+    bytes whole, the change key of SYNC.md section 4 over fields each
+    followed by one NUL."""
+    digest = 0xCBF29CE484222325
+    for byte in data:
+        digest ^= byte
+        digest = (digest * 0x100000001B3) & 0xFFFFFFFFFFFFFFFF
+    return "%016x" % digest
+
+
+def change_key(collection, push):
+    """The idempotency key SYNC.md section 4 derives for one expected push.
+    An object is keyed by its blake3 name, the algorithm the vectors' stores
+    are built under."""
+
+    def option(value):
+        return [b"1", value.encode()] if value is not None else [b"0"]
+
+    def flags(value):
+        if value is None:
+            return [b"unknown"]
+        return [b"known", str(len(value)).encode()] + [flag.encode() for flag in sorted(value)]
+
+    fields = [collection.encode(), push["handle"].encode()]
+    kind = push["kind"]
+    if kind == "Add":
+        fields += [b"add"] + option(push.get("link_id")) + flags(push.get("flags"))
+        origin = push.get("origin")
+        fields += [b"1", origin["collection"].encode(), origin["handle"].encode()] if origin else [b"0"]
+        fields += option(push.get("object"))
+    elif kind == "Remove":
+        fields += [b"remove"] + option(push.get("to"))
+    elif kind == "SetFlags":
+        fields += [b"set-flags"] + flags(push.get("flags"))
+    elif kind == "Update":
+        fields += [b"update", push["object"].encode()]
+    return fnv1a(b"".join(field + b"\x00" for field in fields))
+
+
 def body(case):
     """A case's bytes, spelled out in hex or generated from its pattern."""
     if "body_hex" in case:
@@ -108,6 +148,9 @@ for case in summaries["cases"]:
         minted = f"dup:{case['hint']}#{case['handle']}"
         check(f"{case['label']} minted link_id", minted, case["link_id"])
 
+    if case["summary"].get("uid") is None and case["table"] != "mail_summary":
+        check(f"{case['label']} hash: link_id", case["link_id"], "hash:" + fnv1a(bytes_))
+
 # The sync cases (SYNC.md section 11): shape and references only.
 sync_cases = sorted((root / "sync").glob("*.json"))
 
@@ -127,6 +170,23 @@ for path in sync_cases:
     for binding in store.get("bindings", []) + case["expect"].get("store", {}).get("bindings", []):
         require(f"{label}: binding {binding['handle']} names a known base", binding.get("base_object") in labels | {None})
     require(f"{label}: run names a verb", case["run"].get("verb") in {"open", "sync", "upgrade", "mutate", "rekey"})
+    if case["run"].get("verb") == "mutate":
+        require(f"{label}: a mutate run carries its mutation", isinstance(case["run"].get("mutation"), dict))
+
+    # Every push is keyed as SYNC.md section 4 says, its object named under
+    # blake3 for the derivation, so an engine's keys are checked against the
+    # prose and never against another engine.
+    names = {object_label: name(blake3((root / spec["body"]).read_bytes()).digest()) for object_label, spec in store.get("objects", {}).items()}
+    for push in case["expect"].get("pushes", []):
+        require(f"{label}: push {push.get('handle')} names a kind", push.get("kind") in {"Add", "Remove", "SetFlags", "Update"})
+        require(f"{label}: push {push.get('handle')} carries a key", "key" in push)
+        resolved = dict(push)
+        if resolved.get("object") is not None:
+            require(f"{label}: push {push['handle']} names a known object", push["object"] in names)
+            resolved["object"] = names.get(push["object"], push["object"])
+        check(f"{label}: push {push.get('handle')} key", push.get("key"), change_key(case["run"]["collection"], resolved))
+    for outcome in case["expect"].get("outcomes", []):
+        require(f"{label}: outcome {outcome.get('handle')} is Accepted or Rejected", outcome.get("outcome") in {"Accepted", "Rejected"})
 
 # The search cases (SEARCH.md section 11): every fixture and placement resolves.
 search = root / "search"

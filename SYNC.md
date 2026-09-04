@@ -10,7 +10,7 @@ It fixes no protocol: what a connector hands the engine is §4, how it gets it o
 
 [OVERVIEW.md](./OVERVIEW.md) §5 and §6 explain the model; [GUIDE.md](./GUIDE.md) §9 to §12 run the verbs as procedures. Both are informative and this part wins on any disagreement.
 
-The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are to be interpreted as in RFC 2119. §n of STORAGE.md is written STORAGE §n.
+The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are to be interpreted as in RFC 2119. §n of STORAGE.md is written STORAGE §n. A sentence carrying none of them describes; one carrying one binds.
 
 ## Contents
 
@@ -30,7 +30,7 @@ The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are to be interpreted a
 
 An engine reads a store as one source, derives what that source and the store owe each other, and writes the result. Five verbs: **open** (read the projection, no network), **sync** (reconcile against an enumeration), **upgrade** (raise items up the detail ladder), **mutate** (stage a local edit offline), **rekey** (rebuild a collection onto a new handle space).
 
-Every verb is a pure function of the rows it loads and the answers it is given; its only effects are a write batch (§10) and requests to the remote (§4). The store is the base of every merge: the bindings hold what each source last agreed to (STORAGE §4.3), and this part defines no reconciliation of two sources against each other.
+Every verb MUST be a pure function of the rows it loads and the answers it is given; its only effects are a write batch (§10) and requests to the remote (§4). The store is the base of every merge: the bindings hold what each source last agreed to (STORAGE §4.3), and this part defines no reconciliation of two sources against each other.
 
 Nothing here requires a language or a coroutine shape. A conforming engine is one whose runs reproduce §11's vectors.
 
@@ -40,14 +40,17 @@ Nothing here requires a language or a coroutine shape. A conforming engine is on
 - **Placement**: one source's view of one item in one collection: handle, flags, object, level, summary, sort key, status, base and conflict columns. Derived by the projection (§3), written back by the write (§10).
 - **Status**: what a placement owes: `Clean`, `Dirty` (a flag or content push), `Tombstone` (a delete), `Conflict` (a decision), `Created` (an append).
 - **Base**: what the source last agreed with its remote: flags, object, revision, and `base_present` (STORAGE §13).
+- **Pending create**: a `Created` placement the source binds under a provisional handle, a binding with no base, waiting for its add to be accepted.
+- **Origin**: where the same source already holds a `Created` placement's identity and body, so its add is a server-side copy (§3).
+- **Destination**: where the same source holds a pending create of a `Tombstone` placement's identity, so its remove is a relocation (§3).
 - **Tier**: what a fetch returns: `Meta`, identity and summary; `Full`, the body too.
 - **Snapshot**: what an enumeration returned: members with handle, flags and revision, vanished handles, whether it is complete, and the checkpoint.
 - **Change**: what the engine asks a source to do: `Add`, `Remove`, `SetFlags`, `Update`, each with an idempotency key (§4).
-- **Outcome**: `Accepted`, with the handle assigned to an `Add`, or `Rejected`.
+- **Outcome**: `Accepted`, with the handle assigned to an `Add` and the revision a mutable kind reports, or `Rejected`.
 
 ## 3. The projection
 
-Placements are read from the store, never stored. For a collection and a source, the projection yields one placement per item the source binds, one `Created` placement per item the source lacks and the store holds a body for, and one `Probed` placement per `probes` row of the source. A retained item (STORAGE §11) is projected for nobody.
+Placements are read from the store, never stored. For a collection and a source, the projection MUST yield one placement per item the source binds, one `Created` placement per item the source lacks and the store holds a body for, and one `Probed` placement per `probes` row of the source. A retained item (STORAGE §11) MUST be projected for nobody.
 
 **Status**, the first that applies:
 
@@ -59,58 +62,74 @@ Placements are read from the store, never stored. For a collection and a source,
 
 An unknown flag set (`NULL`) holds no opinion: neither an addition nor a removal, and an unknown base is no base on the flag axis.
 
-**Level** is `Full` only when `object_hash` is present, whatever `items.level` claims, so an item whose body a remote change dropped projects at most `Meta` and an upgrade refetches it.
+**Level** MUST be `Full` only when `object_hash` is present, whatever `items.level` claims, so an item whose body a remote change dropped projects at most `Meta` and an upgrade refetches it.
 
-**Origin.** A `Created` placement carries an origin when the same source binds the same `link_id` in another collection, with a base present and, when the placement has a body, that body as `base_object`: a server-side copy from that handle rather than an upload. A binding whose base holds another body would copy what the server has, not what the placement intends. Origins are derived from bindings, never stored.
+**Origin.** A `Created` placement carries an origin when the same source binds the same `link_id` in another collection, with a base present and, when the placement has a body, that body as `base_object` (`origin_for_link`): a server-side copy from that handle rather than an upload. A binding whose base holds another body would copy what the server has, not what the placement intends.
 
-**Probes.** A `probes` row projects as a placement with a handle, the reported flags, no link id, level `Probed` and no base. A `Meta` fetch names it; until then it is a member the engine must not lose (STORAGE §4.3).
+**Destination.** A `Tombstone` placement carries a destination when the same source holds a pending create of the same `link_id` in another collection (`destination_for_link`): the relocation its remove offers (§5). Origins and destinations are derived from bindings, never stored, so both read the same after a crash and after a hub folded the item.
+
+**Probes.** A `probes` row projects as a placement with a handle, the reported flags, no link id, level `Probed` and no base. A `Meta` fetch names it; until then it is a member the engine MUST NOT lose (STORAGE §4.3).
 
 ## 4. The remote seam
 
 A connector answers three requests.
 
-**Enumerate** returns a snapshot: `items` (handle, known flags, optional revision), `vanished`, `complete` (every member listed, or only the changed since the checkpoint), and the new `checkpoint`. `items` SHALL be sorted by handle and list each once; an engine sorts an unsorted list and keeps a duplicate's first entry.
+**Enumerate** returns a snapshot: `items` (handle, known flags, optional revision), `vanished`, `complete` (every member listed, or only the changed since the checkpoint), and the new `checkpoint`. `items` SHALL be sorted by handle and list each once; an engine MUST sort an unsorted list and keep a duplicate's first entry.
 
 **Fetch** takes a tier and a batch of handles and returns per handle the identity hint and summary inputs of Annex A, at `Full` a body (inline or already streamed to its blob path, STORAGE §14), and the body's revision. A batch has no order: a connector MAY fetch concurrently and MUST key results by handle; the engine matches by handle.
 
 **Push** takes a batch of changes and returns an outcome each:
 
-- `Add { handle, link_id, flags, origin, object }`: create by server-side copy from `origin` when present, else by uploading `object`; accepted with the assigned handle.
-- `Remove { handle, to, link_id, if_match }`: delete, or relocate into `to` when it does not already hold `link_id` (§5).
+- `Add { handle, link_id, flags, origin, object }`: create by server-side copy from `origin` when present, else by uploading `object`; accepted with the assigned handle. A connector to a mutable kind MUST report the revision the member holds once accepted, else the next enumeration reads its own push as a remote edit and refetches it.
+- `Remove { handle, to, link_id, if_match }`: delete when `to` is absent or already holds `link_id` (§5); relocate into `to` otherwise. A connector that cannot relocate MUST reject the change rather than delete: the destination has not received the member, and a delete would take the only copy.
 - `SetFlags { handle, flags }`: replace the flag set.
-- `Update { handle, object, if_match }`: replace a mutable body, gated on `if_match` where supported.
+- `Update { handle, object, if_match }`: replace a mutable body, gated on `if_match` where supported; accepted with the revision the member holds, on `Add`'s terms.
 
-Every change carries an **idempotency key** derived from the collection, the handle, the kind and the state the change makes true. The same derived change keys the same on every run, so a connector logging keys recognises the replay of a push whose record was lost.
+**The idempotency key.** Every change carries a key naming it, so a connector logging keys recognises the replay of a push whose record was lost, and a chunk replayed after a crash (§5) applies once. The key MUST be derived as follows, so two engines over one store key one change alike:
+
+- FNV-1a, 64 bits (offset basis `cbf29ce484222325`, prime `100000001b3`), over a sequence of fields, each field's bytes followed by one `0x00` byte, rendered as sixteen lowercase hexadecimal digits.
+- The fields, in order: the collection id, the handle, the kind as `add`, `remove`, `set-flags` or `update`, then the kind's own. An optional value is the field `1` followed by the value's field, or the field `0` alone. A flag set is the field `unknown` when unknown, else the field `known`, the count in decimal ASCII, then each flag in code point order.
+- `add`: the link id (optional), the flags, the origin as `1`, its collection and its handle, or `0` alone, then the object hash (optional). `remove`: `to` (optional). `set-flags`: the flags. `update`: the object hash.
+
+A precondition (`if_match`) is not part of the key: a retry of one operation is one operation. §11's vectors carry the key of every push.
 
 ## 5. Sync
 
-A sync reconciles one collection against one enumeration. The **candidates** of a full snapshot are the projected placements and the listed members; of a delta, the changed and vanished handles plus every projected placement that is not `Clean`, whose pending push the delta would never revisit. A `Created` placement is a candidate with no remote side. The engine walks both sides in handle order.
+A sync reconciles one collection against one enumeration. The **candidates** of a full snapshot are the projected placements and the listed members; of a delta, the changed and vanished handles plus every projected placement that is not `Clean`, whose pending push the delta would never revisit. A `Created` placement is a candidate with no remote side. The engine MUST walk both sides in handle order.
 
-**The flag axis** merges element-wise over `(local, base, remote)` and never conflicts. It runs for every placement present on both sides, one whose content axis derived a push included; one handle yields at most one change, so the flag axis then withholds its push and still merges and writes.
+**The flag axis** merges element-wise over `(local, base, remote)` and never conflicts. It MUST run for every placement present on both sides, one whose content axis derived a push included; one handle yields at most one change, so the flag axis then withholds its push and still merges and writes.
+
+A content push accepted in the same run MUST rebase the placement the flag merge wrote, never the one read before it, or the pulled flag is lost until an enumeration happens to relist the item.
 
 It leaves the status alone while the content axis still owes a push, and leaves an unresolved conflict alone.
 
-**The content axis** applies to a mutable kind, which reports a revision. A local body the base does not hold is an `Update` gated on the base revision; a remote revision the base does not hold is a pull, which drops the local body and lowers the level; both is a conflict, resolved by the source's policy. Mail reports no revision and never reaches this axis.
+**The content axis** applies to a mutable kind, which reports a revision. A local body the base does not hold is an `Update` gated on the base revision. A remote revision the base does not hold is a pull, which drops the local body, lowers the level to `Probed` and keeps the summary as that of the body it dropped.
+
+Both is a conflict, resolved by the source's policy. Mail reports no revision and never reaches this axis.
 
 A `Conflict` placement meeting a revision newer than its `conflict_revision` records the new one and drops its `conflict_object`, which described the old revision; the upgrade fetches it anew (§6).
 
-**Conflict policy**: `Manual` (default) marks the binding conflicted with the observed revision and asks for the diverging body (§6). `PreferRemote` drops the local edit. `PreferLocal` pushes the local body gated on the observed revision, falling back to `Manual` when content pushes are forbidden.
+**Conflict policy**, the source's, settling it against its own remote: `Manual` (default) marks the binding conflicted with the observed revision and asks for the diverging body (§6). `PreferRemote` drops the local edit and pulls. `PreferLocal` pushes the local body gated on the observed revision, falling back to `Manual` when content pushes are forbidden.
 
-`KeepBoth` pulls the remote and stages the local body as a new `Created` item under a provisional handle made of the placement's handle, the body's hash and the revision it forked against, joined by `U+0001`, and under the minted key `dup:<hint>#<that handle>` (STORAGE §9): a second copy of one identity, kept beside the first. A replay stages the same row. A create colliding with a remote member on the same identity is always kept as a conflict.
+The collection's `conflict` (STORAGE §4.3) is the other axis, settling the shared item between sources (§9), and the two are named apart on purpose.
 
-**Deletes.** A `Tombstone` derives a `Remove`. A member absent from a complete enumeration, or listed vanished by a delta, is dropped with reason `Deleted` (§10). A remote edit over a local tombstone revives it and pulls: new content beats a delete on both sides.
+`KeepBoth` pulls the remote and stages the local body as a new `Created` item under a provisional handle made of the placement's handle, the body's hash and the revision it forked against, joined by `U+0001`, and under the minted key `dup:<hint>#<that handle>` (STORAGE §9): a second copy of one identity, kept beside the first. A replay stages the same row. A create colliding with a remote member on the same identity MUST be kept as a conflict whatever the policy.
+
+**Deletes.** A `Tombstone` derives a `Remove`, carrying its destination when it has one (§3). A member absent from a complete enumeration, or listed vanished by a delta, is dropped with reason `Deleted` (§10). A remote edit over a local tombstone MUST revive it and pull: new content beats a delete on both sides.
 
 A revision the tombstone's base does not name is a remote edit, an enumeration carrying no body to say otherwise. A move whose staged edit was pushed ahead of its remove and whose push record was lost is therefore abandoned rather than half-applied: the member stays in the source, live and clean at the pushed revision, and the consumer restages the move.
 
 **Push direction and rights.** A source has a master `push` switch and four rights: `flags`, `content`, `add`, `remove`. With `push` false nothing is pushed and remote changes are still pulled; a forbidden kind keeps its change pending while other kinds propagate. A refused delete follows the **delete policy**:
 
-`Revert` (default) undoes the delete alone and lands the placement on what it still owes, since a held tombstone hides a member an incremental source never lists again; `Keep` holds it. A source bound beside other sources (§9) SHALL be given `Keep`, a revert reading as a resurrection there.
+`Revert` undoes the delete alone and lands the placement on what it still owes, since a held tombstone hides a member an incremental source never lists again; `Keep` holds it. A source bound beside other sources (§9) MUST be given `Keep`, a revert reading as a resurrection there, and an engine that knows the binding count SHOULD default to it for such a source.
 
-**A move** is a `Created` placement in the target plus a `Tombstone` in the source, each derived by its own collection's sync in either order and each able to deliver alone: the create by copy from its origin, the remove by relocating into the destination when it does not already hold the identity, by a plain delete when it does. Neither half may be dropped for the other.
+**A move** is a `Created` placement in the target plus a `Tombstone` in the source, each derived by its own collection's sync in either order and each able to deliver alone. Neither half MUST be dropped for the other.
 
-An unresolved identity stages the source half alone.
+The create delivers by copy from its origin, or by upload when the store holds the body. The remove delivers by relocating into its destination, which the connector MUST reject when it cannot relocate (§4), and is a plain delete once the destination holds the identity.
 
-**Push discipline.** A push is confirmed before local state moves: `Accepted` rebases the placement, and for an add supersedes the provisional handle in the same batch; `Rejected` or unreported leaves it pending. Pushes go in bounded chunks, each followed by the write recording its outcomes. The checkpoint lands in the write after the last chunk and in no earlier one.
+A relocated member is listed by the target's next enumeration under a new handle, and the fetch naming it lands the create (§6). A mutation of a `Probed` placement is refused (§7), so every tombstone with a destination carries a link id.
+
+**Push discipline.** A push MUST be confirmed before local state moves: `Accepted` rebases the placement, and for an add supersedes the provisional handle in the same batch; `Rejected` or unreported leaves it pending. Pushes go in bounded chunks, each followed by the write recording its outcomes. The checkpoint MUST land in the write after the last chunk and in no earlier one.
 
 **Events.** A sync reports per item, in order, what the remote changed locally and what the run settled: `Added`, `FlagsChanged`, `ContentChanged` and `Vanished` on a pull, `Conflicted` on a divergence, `Created` on an accepted add under its assigned handle. A pushed flag, body or delete reports nothing: the consumer made it.
 
@@ -118,27 +137,31 @@ An unresolved identity stages the source half alone.
 
 An upgrade raises placements up the ladder `Probed`, `Meta`, `Full` at the tier asked for. Enumeration stops at the first rung; hydration is what a consumer runs for the members it wants.
 
-**Identity is resolved once**, at the first fetch carrying a hint; a later fetch never re-identifies a linked placement. A `Meta` fetch of a probe names it: item and binding inserted, probe dropped, one transaction. The key follows STORAGE §9: the hint when free, a minted `dup:<hint>#<handle>` when this source already binds the hint under another handle, minted again over a held key.
+**Identity is resolved once**, at the first fetch carrying a hint; a later fetch MUST NOT re-identify a linked placement. A `Meta` fetch of a probe names it: item and binding inserted, probe dropped, one transaction. The key follows STORAGE §9: the hint when free, a minted `dup:<hint>#<handle>` when this source already binds the hint under another handle, minted again over a held key.
 
-Minting is decided against the whole collection and from the handles, not reply order, so a rebuild mints the same key.
+Minting MUST be decided against the whole collection and from the handles, not reply order, so a rebuild mints the same key.
 
-**Linking instead of fetching.** A `Full` upgrade of an immutable kind asks `lookup_objects` for the placement's key and adopts a body the store holds, recording it as the base too. A mutable placement, a conflicted one, and one under a writer-derived key are fetched, never linked.
+**A pending create is landed by its arrival.** A fetched hint the collection holds as a pending create of this source (§2) is that create delivered: by a relocation (§5), by an accepted add whose record was lost, or by another client. The engine MUST land it rather than mint; only a hint held by a based binding is minted.
+
+Landing is a `Superseded` drop of the provisional handle in the same batch, the binding moved to the fetched one, and the base set to the flags and body the fetch reported. The flags and body staged on the create stay, so an edit made on it still pushes.
+
+**Linking instead of fetching.** A `Full` upgrade of an immutable kind asks `lookup_objects` for the placement's key and adopts a body the store holds, recording it as the base too. A mutable placement, a conflicted one, and one under a writer-derived key MUST be fetched, never linked.
 
 **Claims are revisited.** A level claiming a tier the row does not hold (`Full` with no object, `Meta` with no summary) is fetched again. A fetch carrying no body writes the level the payload supports, never lower than the row holds. The sort key is adopted from every fetch; the link id is not.
 
-**A conflict's body.** A conflicted placement holding no `conflict_object` is revisited, and the body fetched lands in `conflict_object`, never in its own object.
+**A conflict's body.** A conflicted placement holding no `conflict_object` is revisited, and the body fetched MUST land in `conflict_object`, never in its own object.
 
 **Rows.** Every fetch writes the summary row and address rows Annex A derives, in the batch recording the fetch.
 
 ## 7. Mutate
 
-A mutation stages a local edit to one collection with no network, through the same write as a sync (§10), never by direct row edits. The queue's actions map onto them: `set-flags` to `SetFlags`, `remove` to `Remove`, `move` and `copy` to `Move` and `Copy`, `update` to `Edit`, `add` to `Add`.
+A mutation stages a local edit to one collection with no network, through the same write as a sync (§10), never by direct row edits. The queue's actions map onto them: `set-flags` to `SetFlags`, `remove` to `Remove`, `move` and `copy` to `Move` and `Copy`, `update` to `Edit`, `add` to `Add`. A mutation naming a `Probed` placement MUST be refused: nothing keys it until a `Meta` fetch names it.
 
 - `SetFlags` replaces the flags and marks the placement `Dirty`; a `Created`, `Conflict` or `Tombstone` placement keeps its status.
 - `Remove` tombstones the placement, binding and base kept so the remove is pushed against the right handle.
-- `Edit` stores a new body and repoints the placement, keeping the base. An edit whose object the base holds stages nothing. On a conflicted placement it resolves, the base adopting `conflict_revision` and `conflict_object` together; on a tombstone it revives, `Dirty`, dropping any move destination. It MAY restate the sort key.
-- `Copy` stages a `Created` placement in a target under a provisional handle with the source's origin; `Move` also tombstones the source. Both read the target and mint the key when a live placement there already holds the identity; a tombstoned holder blocks nothing.
-- `Add` stages a new item under a provisional handle at `Full`, no base, no origin. It SHALL fail when a live placement holds the `link_id`; a retained one revives (STORAGE §11); a tombstone does not block.
+- `Edit` stores a new body and repoints the placement, keeping the base. An edit whose object the base holds stages nothing. On a conflicted placement it resolves, the base adopting `conflict_revision` and `conflict_object` together; on a tombstone it revives, `Dirty`, and the destination its tombstone offered no longer derives. It MAY restate the sort key.
+- `Copy` stages a `Created` placement in a target under a provisional handle with the source's origin; `Move` also tombstones the source, whose destination the target's pending create then derives (§3). Both read the target and mint the key when a live placement there already holds the identity; a tombstoned holder blocks nothing.
+- `Add` stages a new item under a provisional handle at `Full`, no base, no origin. It MUST fail when a live placement holds the `link_id`; a retained one revives (STORAGE §11); a tombstone does not block.
 
 ## 8. Rekey
 
@@ -148,15 +171,19 @@ The batch drops each old handle it re-writes with reason `Rekeyed`, which licens
 
 A member resolving to an identity already handed out takes the minted key an old copy carried, else a mint over its own handle; pending creates' keys count as taken. The sort key is carried, preferring the fetch's.
 
+A mutable member whose fetched revision differs from the one its old base held changed on the remote while the handles did. The engine MUST carry it as a pull (§5), or as a `Conflict` at the fetched revision when it also holds a local edit.
+
+A base claiming a revision it never reconciled is the one thing a rekey MUST NOT write: the next sync would read the stale body as current, or push the local edit last-writer-wins.
+
 The batch and the epoch bump commit together, and the batch carries no op for the bump: a batch holding a `Rekeyed` drop is a rebuild, and the storage bumps the collection's generation in the transaction that applies it (STORAGE §12).
 
 ## 9. Several sources
 
 N sources hold one item per identity and one binding each. A change one source folded into the item reads as `Dirty` against every other source's base, and each source's next sync pushes it. There is no cross-merge.
 
-**Absorbing a write** folds a source's batch into the shared item: flags adopted, a body adopted or refused by the rule below, the level merged as a maximum under §3's body rule. A known flag set, sort key or summary replaces a known one; an unknown one leaves the shared value alone. A tombstone adopts no content.
+**Absorbing a write** folds a source's batch into the shared item: flags adopted, a body adopted or refused by the rule below, the level merged as a maximum under §3's body rule. A known flag set, sort key or summary replaces a known one; an unknown one leaves the shared value alone. A tombstone adopts no content and its flags ride along.
 
-**Two bases.** `base_object` is what the source last agreed with its remote and only a sync moves it. `shared_object` is what it last agreed with the shared item and every live upsert moves it. The cross-source comparison is made from `shared_object`, falling back to the sync base until the source has folded once.
+**Two bases.** `base_object` is what the source last agreed with its remote and only a sync moves it. `shared_object` is what it last agreed with the shared item and every live upsert moves it. The cross-source comparison MUST be made from `shared_object`, falling back to the sync base until the source has folded once.
 
 **Cross-source content.** An upsert whose body differs from the source's base while the shared body differs from what the source last agreed with is a divergence, resolved by the collection's `conflict` policy: `manual` flags the item and records the diverging body; `prefer-incoming` adopts; `prefer-existing` keeps. Only the source changing is a fast-forward.
 
@@ -164,7 +191,7 @@ An upsert leaving a conflicted binding counts as the source having changed its b
 
 **Deletes propagate.** A `Deleted` drop or a `Tombstone` upsert marks the item deleted; the dropping source loses its binding, a tombstoning one keeps it. Every other source projects a `Tombstone`; a source lacking the item projects nothing. A live upsert clears `deleted`. With no binding left the item is retained (STORAGE §11). A `Superseded` or `Rekeyed` drop marks nothing.
 
-**Propagation is hydration-safe.** A source lacking an item is offered it only when the store holds the body, and a projection never raises a level. Mirroring is a sync plus an upgrade.
+**Propagation is hydration-safe.** A source lacking an item MUST be offered it only when the store holds the body, and a projection never raises a level. Mirroring is a sync plus an upgrade.
 
 **A per-source conflict is its own fact.** `bindings.conflicted` and `items.conflicted` never set each other. An upsert carrying no divergence clears the binding's and becomes the shared body, so resolving is an ordinary edit. A tombstone projected for a conflicted binding still carries the divergence.
 
@@ -174,14 +201,16 @@ A binding with no base is a pending create, and a minted key is an ordinary key:
 
 Every verb begins with a load naming a collection and a **scope**: `All`, `Handles` or `Links`. A mutation asks for the one placement it edits, or for every holder of the link id an `Add` must not collide with; an upgrade asks for the handles it raises; a sync and a rekey ask for the whole collection, being the only verbs that reason about what is missing from it. A `Copy` or a `Move` also loads its target for the identity it carries into it. The scope is a floor: a storage SHALL return at least the placements it names and MAY return more (STORAGE §14). A `Links` load answers who holds the key: it SHALL NOT return the `Created` placement the projection offers for an item the source lacks, else an upgrade settling a fetched identity reads another source's copy as this source's holding and mints a key over it (§6).
 
-Every verb ends in a batch applied in order and atomically (STORAGE §14): `UpsertPlacement`, `DropPlacement { handle, reason }`, `StoreObject { hash, size, bytes? }`, `SetCheckpoint`. A drop's reason says why the row goes: `Deleted`, the member is gone from the source; `Superseded`, a provisional handle an accepted add replaced; `Rekeyed`, a handle a rebuild renumbered (§8). Order carries meaning (a batch names one handle twice to supersede a provisional one) and a storage MUST NOT reorder. A batch is cut between candidates, never inside one.
+Every verb ends in a batch applied in order and atomically (STORAGE §14): `UpsertPlacement`, `DropPlacement { handle, reason }`, `StoreObject { hash, size, bytes? }`, `SetCheckpoint`. A drop's reason says why the row goes: `Deleted`, the member is gone from the source; `Superseded`, a provisional handle an accepted add or a landed arrival replaced (§6); `Rekeyed`, a handle a rebuild renumbered (§8). Order carries meaning (a batch names one handle twice to supersede a provisional one) and a storage MUST NOT reorder. A batch is cut between candidates, never inside one.
 
-An unlinked upsert for a handle a binding holds folds into that binding's item; only a handle nothing holds is a probe. An upsert resolving a binding to a different handle is refused, except through a `Superseded` or `Rekeyed` drop of the bound handle in the same batch. A `Deleted` drop of a source's last binding retains the item.
+An unlinked upsert for a handle a binding holds folds into that binding's item; only a handle nothing holds is a probe. An upsert resolving a binding to a different handle is refused, except through a `Superseded` or `Rekeyed` drop of the bound handle in the same batch. An upsert resolving a bound handle to a different link id retires the old binding first (STORAGE §10). A `Deleted` drop of a source's last binding retains the item.
 
 A `StoreObject` carries bytes or references a body already streamed to its blob path; a `Full` fetch MAY stream it there itself. The checkpoint is per source and lands last (§5). Summary and address rows are written with the placement they describe; stamps follow from the rows (STORAGE §4.5).
 
 ## 11. Test vectors
 
-vectors/sync/ holds cases every conforming engine MUST reproduce, one JSON file each: `store`, the rows before the run, bodies named by label; `run`, the verb, collection, source and options; `remote`, the snapshot and the fetch answers by handle and tier; `expect`, the pushes in order, the outcomes fed back, and the rows after.
+vectors/sync/ holds cases every conforming engine MUST reproduce, one JSON file each. `store` is the rows before the run, bodies named by label; `run` the verb, collection, source and options, a `mutate` run carrying its `mutation`; `remote` the snapshot and the fetch answers by handle and tier; `expect` the pushes in order, the outcomes fed back, the events, and the rows after.
 
-Rows are compared as parsed structures, `changed` stamps and `retained_at` instants excluded. Chunked pushes or writes are compared concatenated. checks/vectors.py validates shape and references; only an implementation runs one.
+A push is compared on its kind, handle and `key` (§4) and on what the kind carries: `flags`, `to` and `link_id`, `if_match`, `origin` as collection and handle, and `object` by label. An outcome names its handle, `Accepted` or `Rejected`, and for an add the `assigned` handle and the `revision` reported.
+
+Rows are compared as parsed structures, `changed` stamps and `retained_at` instants excluded. Chunked pushes or writes are compared concatenated. checks/vectors.py validates shape, references and every push's key; only an implementation runs one.

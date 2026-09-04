@@ -1,0 +1,38 @@
+{
+  "label": "a fetched identity held by a pending create lands the create instead of minting",
+  "note": "the relocated member is listed under 7 and probed; the Meta fetch names it with the hint the pending create holds, so the provisional handle is superseded, the binding moves to 7 and the base is what the fetch reported, the flags and the body staged on the create kept (SYNC.md §6)",
+  "store": {
+    "collections": [{ "id": "Archive", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {
+      "m1": { "body": "fixtures/mail-basic.eml" }
+    },
+    "items": [{ "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+    "bindings": [{ "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "tmp-1", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }],
+    "probes": [{ "collection": "Archive", "source": "imap", "handle": "7", "flags": ["\\Seen"] }],
+    "sources": [{ "collection": "Archive", "source": "imap", "checkpoint": "a1" }]
+  },
+  "run": {
+    "verb": "upgrade",
+    "collection": "Archive",
+    "source": "imap",
+    "tier": "Meta",
+    "handles": ["7"]
+  },
+  "remote": {
+    "snapshot": null,
+    "fetch": {
+      "7": { "Meta": {"body": "fixtures/mail-basic.eml", "revision": null} }
+    }
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [{ "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+      "bindings": [{ "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "7", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }],
+      "probes": [],
+      "sources": [{ "collection": "Archive", "source": "imap", "checkpoint": "a1" }]
+    }
+  }
+}

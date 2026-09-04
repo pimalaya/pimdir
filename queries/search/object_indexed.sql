@@ -1,1 +1,1 @@
-SELECT rowid, status FROM object WHERE hash = :hash;
+SELECT id, status FROM object WHERE hash = :hash;

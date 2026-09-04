@@ -22,13 +22,18 @@ CREATE TABLE index_meta (
 
 -- One row per indexed body, keyed on the store's object hash. The input is
 -- immutable, so a row is never re-indexed; it goes when the object goes.
+--
+-- `id` is an explicit INTEGER PRIMARY KEY, so it is the rowid and stable: a
+-- table keyed on anything else has an implicit rowid VACUUM may renumber, and
+-- the FTS rows below are joined on it.
 CREATE TABLE object (
-    hash   TEXT PRIMARY KEY,
-    status TEXT NOT NULL                     -- 'ok' | 'encrypted' | 'unparseable' (§6)
+    id     INTEGER PRIMARY KEY,
+    hash   TEXT    NOT NULL UNIQUE,
+    status TEXT    NOT NULL                  -- 'ok' | 'encrypted' | 'unparseable' (§6)
 ) STRICT;
 
 -- The text of a body, by field (§6). Contentless: the bytes stay in the blob,
--- and a snippet is re-read from it. rowid = object.rowid.
+-- and a snippet is re-read from it. rowid = object.id.
 CREATE VIRTUAL TABLE object_text USING fts5(
     title, people, body, attachment, place, org, note,
     content = '', contentless_delete = 1,
@@ -36,20 +41,22 @@ CREATE VIRTUAL TABLE object_text USING fts5(
 );
 
 -- The placements the index knows, so a purge or a rename is reconciled by key
--- (§4) and a mutable item's new body is found (§6).
+-- (§4) and a mutable item's new body is found (§6). `id` is the stable rowid
+-- summary_text joins on, for the reason object.id gives.
 CREATE TABLE placement (
+    id         INTEGER PRIMARY KEY,
     collection TEXT    NOT NULL,
     seq        INTEGER NOT NULL,
     link_id    TEXT    NOT NULL,
     hash       TEXT,                         -- the body indexed for it, or NULL while bodiless
-    PRIMARY KEY (collection, seq)
+    UNIQUE (collection, seq)
 ) STRICT;
 
 CREATE INDEX placement_by_hash ON placement(hash);
 CREATE INDEX placement_by_link ON placement(link_id);
 
 -- The summary of a bodiless placement (§6), so a headers-only replica still
--- searches; dropped when the body arrives. rowid = placement.rowid.
+-- searches; dropped when the body arrives. rowid = placement.id.
 CREATE VIRTUAL TABLE summary_text USING fts5(
     title, people,
     content = '', contentless_delete = 1,
