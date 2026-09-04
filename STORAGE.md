@@ -348,7 +348,7 @@ A **reader** (§8) opens read-only and projects the store as a local backend. Re
 
 - **`list_collections()`**, **`list_collections_by_account(account)`** (`NULL` selects a single-account store's), **`list_accounts()`** (accounts owning at least one collection, not a roster).
 - **`list_items_page(collection, after, limit)`**: a keyset page in link-id order, the sweep that sees every item once; `''` starts from the beginning.
-- **`list_items_page_asc`**, **`list_items_page_desc`** `(collection, after_key, after_seq, limit)`: the natural order (§9.3), cursor `(sort_key, seq)`. An implementation SHOULD expose the first page as no cursor.
+- **`list_items_page_asc`**, **`list_items_page_desc`** `(collection, after_key, after_seq, limit)`: the natural order (§9.3), cursor `(sort_key, seq)`; descending, a `NULL` cursor is the first page.
 - **`list_mail_page_desc`**, **`list_contacts_page_asc`**, **`list_events_page_asc`**, **`list_tasks_page_asc`**, **`list_journals_page_asc`**: the same page joined with the kind's summary; **`get_mail`**, **`get_contact`**, **`get_event`**, **`get_task`**, **`get_journal`** one item. A mixed calendar merges its three pages on `(sort_key, seq)`; `component_of` says which table holds an item.
 - **`get_item(collection, seq)`**, **`count_items(collection)`**, **`seq_by_link(collection, link_id)`**.
 - **`list_link_placements(link_id)`**, **`list_object_placements(hash)`**: every live placement of one key, or one body, with collection and account. The first pairs by key, so a minted copy is paired with its twin by the body read alone.
