@@ -53,12 +53,12 @@ prepare() {
 
 statements=0
 
-for file in "$root"/queries/storage/*.sql; do
+while read -r file; do
     prepare "$db" "$file" ""
-done
+done < <(find "$root/queries/storage" -name '*.sql' | sort)
 
-for file in "$root"/queries/search/*.sql; do
+while read -r file; do
     prepare "$index" "$file" "ATTACH '$db' AS store;"
-done
+done < <(find "$root/queries/search" -name '*.sql' | sort)
 
 echo "store and index schemas apply at version 1, $statements statements prepare against them"

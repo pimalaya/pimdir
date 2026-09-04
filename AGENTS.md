@@ -37,4 +37,4 @@ Check the structure yourself against the strict rules (CAIRN.md §8): a discover
 
 ## Everything else
 
-The repository holds no implementation. What binds an implementation is the three documents, the canonical schema under migrations/, the reference statements under queries/ and the data under vectors/; the Pimalaya standards it follows are in the [organisation guidelines](https://github.com/pimalaya/.github/blob/master/GUIDELINES.md).
+The repository holds no implementation. What binds an implementation is STORAGE.md by the profile it meets, SEARCH.md §8 for a query client, the canonical schema under migrations/, the statements under queries/ and the data under vectors/; SYNC.md and the rest of SEARCH.md bind the reference engine and index, io-pimdir. The Pimalaya standards it follows are in the [organisation guidelines](https://github.com/pimalaya/.github/blob/master/GUIDELINES.md).

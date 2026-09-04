@@ -132,4 +132,4 @@ Normative: SEARCH.
 
 ## 11. What binds an implementation
 
-The three parts, the canonical schema under migrations/, the reference statements under queries/, and the test vectors under vectors/. The vectors exist because the values that matter most fail silently: two implementations naming a body differently never error, they only stop sharing bodies. [GUIDE.md](./GUIDE.md) lists what to pass and in what order to build.
+STORAGE, with the canonical schema under migrations/, the statements under queries/ and the vectors under vectors/, binds every implementation by the profile it meets: reader, producer or owner. SYNC and the index half of SEARCH bind the reference engine and index, io-pimdir, and describe them for everyone else; SEARCH's query language binds every client. The vectors exist because the values that matter most fail silently: two implementations naming a body differently never error, they only stop sharing bodies. [GUIDE.md](./GUIDE.md) §1 lists what each profile owes and in what order to build.

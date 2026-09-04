@@ -1,10 +1,10 @@
 # Pimdir storage specification
 
-Status: draft
+Status: draft, normative
 
 The storage part of the pimdir standard, and its base: a **SQLite database** (the index and the mutable state) plus a **content-addressed blob directory** (the bodies). The two layers over it are [SYNC.md](./SYNC.md), how sources reconcile through the store, and [SEARCH.md](./SEARCH.md), the index and query language over it.
 
-Each part has its own status. An implementation MUST provide the store, MAY omit either layer, and MUST conform to those it offers; a layer presupposes the store and is not defined without it.
+This part binds every implementation, by the profile it meets: a **reader** opens the store and lists it, a **producer** also appends actions, an **owner** mutates it; [GUIDE.md](./GUIDE.md) §1 lists what each owes and an implementation MUST state which it is. The two layers presuppose the store and are the reference engine's and index's, io-pimdir's, binding for them and descriptive for everyone else, except the query language of SEARCH §8, which binds every client.
 
 A blob is immutable. A body edit writes a new blob and repoints the item.
 
@@ -121,7 +121,7 @@ Flags stay a JSON array: the set is small and `json_each` answers an ordinary qu
 
 ### 4.4 Queries
 
-The named, parameterised statements servicing §14 live under [queries/storage/](./queries/storage/), one file per statement named after it, so an implementation reads them by listing the directory. A file's leading comment says what the statement alone cannot; the rules are this document's.
+The named, parameterised statements servicing §14 live under [queries/storage/](./queries/storage/), one file per statement named after it, sorted by the profile that runs it: read/ is the reader's (§14.1), queue/ the producer's (§15.1), owner/ the rest, an owner running all three. An implementation reads them by listing its directories. A file's leading comment says what the statement alone cannot; the rules are this document's.
 
 An implementation SHOULD use them verbatim and MAY substitute an equivalent preserving §7's invariants. The search index's statements are under queries/search/ on the same terms.
 

@@ -2,7 +2,7 @@
 
 A local-first standard for personal information (mail, contacts, calendars): a portable SQLite-plus-blobs store, with a sync layer that keeps it a replica of every source and a search layer that indexes and queries it
 
-The specification only, with no reference implementation: any language with a SQLite binding can implement it. The canonical part is the schema, the reference statements and the test vectors, so every implementation reads, writes, reconciles and searches the same store.
+A store format any language with a SQLite binding reads, and the specification of the reference engine and index that keep it, [io-pimdir](https://github.com/pimalaya/io-pimdir). The canonical part is the schema, the reference statements and the test vectors, so every implementation reads and writes the same store.
 
 ## Table of contents
 
@@ -31,15 +31,15 @@ The specification only, with no reference implementation: any language with a SQ
 
 ## Specification
 
-The standard is a base and two layers, each a normative part written to RFC 2119 with a status of its own, framed by two informative documents:
+The standard is a base and two layers, each written to RFC 2119 with a status of its own, framed by two informative documents:
 
 - [OVERVIEW.md](./OVERVIEW.md), the **model**: what a store is, the entities, the identifiers, the roles and how sync, retention, the queue and search fit together, with no table, column or statement named. Read it first.
-- [STORAGE.md](./STORAGE.md), the **store**, the base every implementation provides: a SQLite database (the queryable index and mutable state) plus a content-addressed blob directory (the bodies), the per-kind summaries and addresses, the change feed, retention and the action queue.
-- [SYNC.md](./SYNC.md), the **sync** layer: how one or more sources are reconciled through the store, the five verbs, the merge rules and what a connector hands the engine.
-- [SEARCH.md](./SEARCH.md), the **search** layer: the derived index beside the store, extraction per kind, calendar time, threads and the query language.
+- [STORAGE.md](./STORAGE.md), the **store**, normative for every implementation by the profile it meets, reader, producer or owner: a SQLite database (the queryable index and mutable state) plus a content-addressed blob directory (the bodies), the per-kind summaries and addresses, the change feed, retention and the action queue.
+- [SYNC.md](./SYNC.md), the **sync** layer, the reference engine's: how one or more sources are reconciled through the store, the five verbs, the merge rules and what a connector hands the engine.
+- [SEARCH.md](./SEARCH.md), the **search** layer: the query language, normative for every client, and the reference index behind it, extraction per kind, calendar time and threads.
 - [GUIDE.md](./GUIDE.md), the **implementation guide**: the parts' rules as numbered procedures and decision tables naming the statements and vectors at each step, and a conformance checklist.
 
-Either layer may be omitted, and an implementation offering one must conform to it. Neither stands without the store: a sync needs a base per source, what that source last agreed to, or a delete on one side and an add on the other are the same picture, and the bindings are that base; a search needs one index with one meaning of a match across sources, which only the store's summaries, addresses and bodies give. The overview and the guide restate and never rule: where either disagrees with a part, the part wins.
+A reader implements a few statements; the engine and the index are meant to be implemented once, in io-pimdir, and described here so their store stays readable by everyone. Neither layer stands without the store: a sync needs a base per source, what that source last agreed to, or a delete on one side and an add on the other are the same picture, and the bindings are that base; a search needs one index with one meaning of a match across sources, which only the store's summaries, addresses and bodies give. The overview and the guide restate and never rule: where either disagrees with a part, the part wins.
 
 Two properties are worth knowing before reading. Removal is a **soft delete**: when the last source drops an item, the store keeps the row and its body, hidden from the sync seam and from the live reads, and only an explicit purge deletes it. And the **action queue** is the write door for every process that does not own the store: a producer appends a kind plus a versioned JSON payload, the owner applies it in append order.
 
@@ -48,14 +48,14 @@ Two properties are worth knowing before reading. Removal is a **soft delete**: w
 ```
 OVERVIEW.md           the model (informative, read first)
 STORAGE.md            the store, the base (normative, RFC 2119)
-SYNC.md               the sync layer (normative, optional)
-SEARCH.md             the search layer (normative, optional)
+SYNC.md               the sync layer (the reference engine's)
+SEARCH.md             the search layer (query language normative, index reference)
 GUIDE.md              the implementation guide (informative procedures)
 migrations/           canonical, forward-only schema migrations (SQL)
   storage/            the store's, 0001_init.sql = schema version 1
   search/             the search index's, 0001_init.sql = index version 1
 queries/              the reference statements, one file per statement named after it
-  storage/            the store's
+  storage/            the store's: read/ the reader's, queue/ the producer's, owner/ the rest
   search/             the search index's, prepared with the store attached
 vectors/              the normative test data (STORAGE.md §16, SYNC.md §11, SEARCH.md §11)
 checks/               what a push checks, needing no implementation

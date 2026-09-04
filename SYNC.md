@@ -1,14 +1,16 @@
 # Pimdir sync specification
 
-Status: draft
+Status: draft, reference
 
 The sync part of the pimdir standard: how one or more sources reconcile through a store ([STORAGE.md](./STORAGE.md)) so that the store is an offline replica of each and every source sees every other's changes. It fixes what an engine derives from the store's rows and a source's answers, and what it writes back.
+
+It is the specification of the reference engine, io-pimdir: binding for it, descriptive for everyone else. What every writer owes the store, whichever engine reconciles it, is STORAGE §10 to §12. A second engine is not expected; one that exists conforms by reproducing §11's vectors.
 
 It fixes no protocol: what a connector hands the engine is §4, how it gets it over IMAP, JMAP or DAV is the connector's.
 
 [OVERVIEW.md](./OVERVIEW.md) §5 and §6 explain the model; [GUIDE.md](./GUIDE.md) §9 to §12 run the verbs as procedures. Both are informative and this part wins on any disagreement.
 
-The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are to be interpreted as in RFC 2119. §n of STORAGE.md is written STORAGE §n.
+The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are to be interpreted as in RFC 2119 and bind the reference engine. §n of STORAGE.md is written STORAGE §n.
 
 ## Contents
 

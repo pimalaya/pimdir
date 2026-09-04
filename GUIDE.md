@@ -2,7 +2,7 @@
 
 Status: informative
 
-The procedures an implementation runs, in the order it runs them, naming the statements under queries/ and the vectors under vectors/ at each step. This document restates the rules of [STORAGE.md](./STORAGE.md), [SYNC.md](./SYNC.md) and [SEARCH.md](./SEARCH.md) as steps and tables; it adds none, and where it and a part disagree the part wins. §n of a part is written STORAGE §n, SYNC §n, SEARCH §n.
+The procedures an implementation runs, in the order it runs them, naming the statements under queries/ and the vectors under vectors/ at each step. This document restates the rules of [STORAGE.md](./STORAGE.md), [SYNC.md](./SYNC.md) and [SEARCH.md](./SEARCH.md) as steps and tables; it adds none, and where it and a part disagree the part wins. §n of a part is written STORAGE §n, SYNC §n, SEARCH §n. §9 to §12 and §15 describe the reference engine and index; what they owe the store is in §5.
 
 A reader new to the model starts with [OVERVIEW.md](./OVERVIEW.md).
 
@@ -27,21 +27,36 @@ A reader new to the model starts with [OVERVIEW.md](./OVERVIEW.md).
 
 ## 1. Conformance checklist
 
-What a store implementation owes, in the order it is usually built:
+Three profiles read or write a store, each a superset of the one before, and an implementation states which it meets. Most implementations are readers; the owner is, in practice, the reference store.
+
+A **reader** opens the store and lists it:
 
 | Step | What | Where |
 | --- | --- | --- |
-| 1 | SQLite 3.37 or later, `STRICT` tables, `PRAGMA foreign_keys = ON` on every connection, WAL on a local store | STORAGE §4.1 |
-| 2 | Apply migrations/storage/0001_init.sql through the runner of §3 | STORAGE §6 |
-| 3 | Pick `hash_algo`, name bodies as §4 says, pass vectors/objects.json | STORAGE §5, §16 |
-| 4 | Take the owner lock before any write; fail at once when it is held | STORAGE §8 |
-| 5 | Run the write transaction of §5 for every batch | STORAGE §14 |
-| 6 | Derive summaries, addresses and sort keys under Annex A for each kind written; pass vectors/summaries.json for that kind | STORAGE Annex A, §16 |
-| 7 | Retain rather than delete, purge only on request, collect only under both locks | STORAGE §5, §11 |
-| 8 | Serve the reads of §14 from the named statements, live rows only | STORAGE §14.1 |
-| 9 | Drain the queue with claim-first, park or skip as §13 says | STORAGE §15 |
+| 1 | SQLite 3.37 or later, `PRAGMA foreign_keys = ON`, a read-only open, no lock | STORAGE §4.1, §8 |
+| 2 | Decode the columns as §13 says | STORAGE §13 |
+| 3 | Serve the reads from queries/storage/read/, live rows only, level-aware, snapshot-consistent | STORAGE §14.1 |
+| 4 | Follow the change feed for anything derived from the store | STORAGE §4.5 |
 
-The layers build on those nine steps and on nothing less. An engine adds SYNC in full and reproduces every case under vectors/sync/. An index adds SQLite 3.43 with FTS5, migrations/search/0001_init.sql, and answers every case under vectors/search/.
+A **producer** is a reader that appends actions:
+
+| Step | What | Where |
+| --- | --- | --- |
+| 5 | Pick `hash_algo` from the store, name and write a body as §4 says under the staging lock; pass vectors/objects.json | STORAGE §5, §8, §16 |
+| 6 | Enqueue in one transaction with queries/storage/queue/, a kind and a versioned payload as §15.3 says | STORAGE §15.1, §15.3 |
+
+An **owner** is the one process that mutates the store:
+
+| Step | What | Where |
+| --- | --- | --- |
+| 7 | `STRICT` tables and WAL on a local store; apply migrations/storage/ through the runner of §3 | STORAGE §4.1, §6 |
+| 8 | Take the owner lock before any write; fail at once when it is held | STORAGE §8 |
+| 9 | Run the write transaction of §5 for every batch, with queries/storage/owner/ | STORAGE §14 |
+| 10 | Derive summaries, addresses and sort keys under Annex A for each kind written; pass vectors/summaries.json for that kind | STORAGE Annex A, §16 |
+| 11 | Retain rather than delete, purge a moved or requested row only, collect only under both locks | STORAGE §5, §11 |
+| 12 | Drain the queue with claim-first, park or skip as §13 says | STORAGE §15 |
+
+The reference engine (SYNC) is an owner that reproduces every case under vectors/sync/; the reference index (SEARCH §3 to §7, §9, §10) adds SQLite 3.43 with FTS5, migrations/search/ and queries/search/. Every **query client**, whichever index answers it, answers the cases under vectors/search/ alike (SEARCH §8).
 
 Use the statements verbatim. Every one of them prepares against the canonical schema, which checks/schema.sh proves on every push, and a substitute is yours to keep equivalent under STORAGE §7's invariants.
 

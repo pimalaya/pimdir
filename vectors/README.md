@@ -1,12 +1,12 @@
 # pimdir test vectors
 
-Normative test data for the pimdir standard (STORAGE.md §16, SYNC.md §11, SEARCH.md §11), part of it alongside migrations/ and queries/. They exist because the values a store fixes are the ones nothing checks: a schema mismatch fails a query, while two writers naming the same body differently produce no error at all, silently never deduplicating and silently never finding the blob the other wrote.
+Test data for the pimdir standard (STORAGE.md §16, SYNC.md §11, SEARCH.md §11), part of it alongside migrations/ and queries/. objects.json binds every writer, summaries.json every owner, search/ every query client; sync/ is the reference engine's regression suite. They exist because the values a store fixes are the ones nothing checks: a schema mismatch fails a query, while two writers naming the same body differently produce no error at all, silently never deduplicating and silently never finding the blob the other wrote.
 
 ## Files
 
 - **objects.json**: bodies to object names under both `hash_algo` values, with the shard path §5 derives from each. An implementation **MUST** pass this: object naming is where a disagreement costs data rather than presentation.
 - **summaries.json** and **fixtures/**: bodies to the `link_id`, the summary row, the address rows and the `sort_key` Annex A produces, every case that annex has to hedge included, and the encodings that split earlier writers (an RFC 2047 header, an escaped vCard value, a quoted parameter). An implementation **MUST** pass the cases for each `kind` it writes.
-- **sync/**: one case per file, a store, a run, a remote and what is expected after (SYNC.md §11). Bodies are named by label and resolved to fixtures, so a case reads.
+- **sync/**: one case per file, a store, a run, a remote and what is expected after (SYNC.md §11). Bodies are named by label and resolved to fixtures, so a case reads. The reference engine reproduces them; another engine, should one exist, conforms the same way.
 - **search/**: the fixture store and the queries every conforming index answers alike (SEARCH.md §11), hits keyed `(account, seq)`.
 
 Three of summaries.json's cases pin the **minted** `link_id` (STORAGE.md §9): a hint the collection already holds under another handle is filed under `dup:`, the hint, `#` and the handle, concatenated verbatim in that order. Each reuses the fixture of the case above it, since minting depends on the hint and the handle and never on the body, and each carries the `hint` and `handle` its key was built from, so a consumer rebuilds the key rather than pattern-matching the string.
