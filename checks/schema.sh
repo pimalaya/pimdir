@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Applies the canonical migrations to an empty store and an empty index, then
-# prepares every named statement in queries/ against them. Needs sqlite3 alone.
+# prepares every statement under queries/ against them. Needs sqlite3 alone.
 set -euo pipefail
 
 root="${1:-$PWD}"
@@ -41,21 +41,14 @@ for target in "$db" "$index"; do
 done
 
 prepare() {
-    local target="$1" file="$2" prelude="$3" name statement
-    while read -r name; do
-        statement="$(awk -v header="-- name: $name" '
-            $0 == header { inside = 1; next }
-            /^-- name: /  { inside = 0 }
-            inside
-        ' "$file")"
+    local target="$1" file="$2" prelude="$3"
 
-        sqlite3 "$target" "$prelude EXPLAIN $statement" > /dev/null || {
-            echo "$(basename "$file"): $name does not prepare against the schema" >&2
-            exit 1
-        }
+    sqlite3 "$target" "$prelude EXPLAIN $(cat "$file")" > /dev/null || {
+        echo "$(basename "$file" .sql) does not prepare against the schema" >&2
+        exit 1
+    }
 
-        statements=$((statements + 1))
-    done < <(sed -n 's/^-- name: //p' "$file")
+    statements=$((statements + 1))
 }
 
 statements=0

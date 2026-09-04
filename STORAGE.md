@@ -121,11 +121,9 @@ Flags stay a JSON array: the set is small and `json_each` answers an ordinary qu
 
 ### 4.4 Queries
 
-The named, parameterised statements servicing §14 live under queries/storage/, one file per concern:
+The named, parameterised statements servicing §14 live under [queries/storage/](./queries/storage/), one file per statement named after it, so an implementation reads them by listing the directory. A file's leading comment says what the statement alone cannot; the rules are this document's.
 
-[store](./queries/storage/store.sql), [collections](./queries/storage/collections.sql), [items](./queries/storage/items.sql), [summaries](./queries/storage/summaries.sql), [addresses](./queries/storage/addresses.sql), [probes](./queries/storage/probes.sql), [bindings](./queries/storage/bindings.sql), [sources](./queries/storage/sources.sql), [objects](./queries/storage/objects.sql), [queue](./queries/storage/queue.sql).
-
-An implementation SHOULD use them verbatim and MAY substitute an equivalent preserving §7's invariants. The search index's statements are under queries/search/.
+An implementation SHOULD use them verbatim and MAY substitute an equivalent preserving §7's invariants. The search index's statements are under queries/search/ on the same terms.
 
 ### 4.5 The change feed
 
