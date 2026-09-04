@@ -1,0 +1,25 @@
+{
+  "label": "an add whose identity the collection already holds lands on the holding handle",
+  "note": "the target of a hydrated move lists the relocated member as a probe and pushes its pending create in the same run; the connector answers with the handle already holding the identity rather than a second copy, and the create lands there, the probe going with it (SYNC.md §4, §5)",
+  "store": {
+    "collections": [{ "id": "Archive", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },
+    "items": [{ "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+    "bindings": [{ "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "tmp-1", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }],
+    "probes": [{ "collection": "Archive", "source": "imap", "handle": "7", "flags": ["\\Seen"] }],
+    "sources": [{ "collection": "Archive", "source": "imap", "checkpoint": "a0" }]
+  },
+  "run": { "verb": "sync", "collection": "Archive", "source": "imap", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual", "delete": "revert" } },
+  "remote": { "snapshot": { "items": [{ "handle": "7", "flags": ["\\Seen"], "revision": null }], "vanished": [], "complete": true, "checkpoint": "a1" }, "fetch": {} },
+  "expect": {
+    "pushes": [{ "kind": "Add", "handle": "tmp-1", "link_id": "basic-1@example.org", "flags": ["\\Seen"], "origin": null, "object": "m1", "key": "e4415c8a76d89374" }],
+    "outcomes": [{ "handle": "tmp-1", "outcome": "Accepted", "assigned": "7" }],
+    "events": [{ "kind": "Created", "handle": "7" }],
+    "store": {
+      "items": [{ "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+      "bindings": [{ "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "7", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }],
+      "probes": [],
+      "sources": [{ "collection": "Archive", "source": "imap", "checkpoint": "a1" }]
+    }
+  }
+}

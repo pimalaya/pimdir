@@ -80,7 +80,7 @@ A connector answers three requests.
 
 **Push** takes a batch of changes and returns an outcome each:
 
-- `Add { handle, link_id, flags, origin, object }`: create by server-side copy from `origin` when present, else by uploading `object`; accepted with the assigned handle. A connector to a mutable kind MUST report the revision the member holds once accepted, else the next enumeration reads its own push as a remote edit and refetches it.
+- `Add { handle, link_id, flags, origin, object }`: create by server-side copy from `origin` when present, else by uploading `object`; accepted with the assigned handle. A collection already holding `link_id` MUST answer `Accepted` with the handle holding it and create nothing: a relocation and the upload it raced are one member. A connector to a mutable kind MUST report the revision the member holds once accepted, else the next enumeration reads its own push as a remote edit and refetches it.
 - `Remove { handle, to, link_id, if_match }`: delete when `to` is absent or already holds `link_id` (§5); relocate into `to` otherwise. A connector that cannot relocate MUST reject the change rather than delete: the destination has not received the member, and a delete would take the only copy.
 - `SetFlags { handle, flags }`: replace the flag set.
 - `Update { handle, object, if_match }`: replace a mutable body, gated on `if_match` where supported; accepted with the revision the member holds, on `Add`'s terms.
@@ -127,7 +127,7 @@ A revision the tombstone's base does not name is a remote edit, an enumeration c
 
 The create delivers by copy from its origin, or by upload when the store holds the body. The remove delivers by relocating into its destination, which the connector MUST reject when it cannot relocate (§4), and is a plain delete once the destination holds the identity.
 
-A relocated member is listed by the target's next enumeration under a new handle, and the fetch naming it lands the create (§6). A mutation of a `Probed` placement is refused (§7), so every tombstone with a destination carries a link id.
+A relocated member is listed by the target's next enumeration under a new handle, and the fetch naming it lands the create (§6). A create pushed before that fetch, the store holding its body, is answered with the handle already holding the identity (§4) and lands the same way. A mutation of a `Probed` placement is refused (§7), so every tombstone with a destination carries a link id.
 
 **Push discipline.** A push MUST be confirmed before local state moves: `Accepted` rebases the placement, and for an add supersedes the provisional handle in the same batch; `Rejected` or unreported leaves it pending. Pushes go in bounded chunks, each followed by the write recording its outcomes. The checkpoint MUST land in the write after the last chunk and in no earlier one.
 
