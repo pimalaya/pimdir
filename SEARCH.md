@@ -1,6 +1,6 @@
 # Pimdir search specification
 
-Status: draft
+Status: draft-01
 
 The search part of the pimdir standard: a full-text index over a store ([STORAGE.md](./STORAGE.md)) and the query language over it, cross-domain from the first line. A query names people, dates, tags, kinds and text and answers with items of every kind: a person's card, the mail they sent and the meetings they attend are one result set.
 

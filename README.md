@@ -83,7 +83,7 @@ The history follows [Cairn](https://github.com/pimalaya/cairn), with one deviati
 
 ## Status
 
-Draft, in the last pass before the store freezes. Store schema version 1 and index schema version 1 are defined and stable in shape; the sync and search parts are draft and edited in place.
+Draft, pinned as **draft-01**: the three normative parts carry `Status: draft-01` and the git tag `draft-01` names the text. An implementation states the draft it conforms to, and a change to a normative part after the tag bumps the number in the three Status lines and here, tagged again; a draft number names a text, never a store. Store schema version 1 and index schema version 1 are defined and stable in shape; the sync and search parts are edited in place between drafts.
 
 The freeze is by profile. STORAGE freezes first, since it is what readers and producers depend on and they are the many; SYNC and SEARCH stay draft behind the reference implementation until their vectors have run against a second implementation. The gate for freezing STORAGE is the reference implementation green on every check and vector in this repository, and the audit ledger under cairn/changes/ with no open item that touches the schema.
 

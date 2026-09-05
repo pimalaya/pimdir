@@ -18,6 +18,8 @@ Fold a change into the document it belongs to exactly as you would fold a delta 
 
 ### 2. While the format is `draft`, the log is the tracker
 
+The text is pinned by a draft number, `draft-01` today, carried by the three normative Status lines, the README and a git tag of the same name. A change to a normative part after the tag bumps the number in those places, the tag being the user's to make; informative documents follow without a number of their own.
+
 The format is not frozen (STORAGE.md §6), the schema is still edited in place, and no store depends on it, so a proposal and a task list per change would cost more than they buy. Until version 1 is frozen:
 
 - **Every landed change gets a log entry**, `cairn/log/YYYY-MM-DD-<change-id>.md`, kebab-case id, frontmatter `cairn: log`. That, and the check §4 asks for, is the whole obligation.

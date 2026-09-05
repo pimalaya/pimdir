@@ -1,6 +1,6 @@
 # Pimdir sync specification
 
-Status: draft
+Status: draft-01
 
 The sync part of the pimdir standard: how one or more sources reconcile through a store ([STORAGE.md](./STORAGE.md)) so that the store is an offline replica of each and every source sees every other's changes. It fixes what an engine derives from the store's rows and a source's answers, and what it writes back.
 
