@@ -122,7 +122,7 @@ A revision the tombstone's base does not name is a remote edit, an enumeration c
 
 **Push direction and rights.** A source has a master `push` switch and four rights: `flags`, `content`, `add`, `remove`. With `push` false nothing is pushed and remote changes are still pulled; a forbidden kind keeps its change pending while other kinds propagate. A rejected push is pending like any other and follows no policy.
 
-**A refused delete**, one the source's rights forbid, is decided per item from the bindings the run loaded. When the item has another binding the tombstone is held, since a revert would read as a resurrection there and the other source pushes the delete; the row stays in the trash view until that source has dropped it (STORAGE §11). When this binding is the item's last, the delete is reverted and the placement lands on what it still owes, since a held tombstone would hide a member an incremental source never lists again.
+**A refused delete**, one the source's rights forbid, is decided per collection from the other sources syncing it, any holding a binding or a checkpoint there (`collection_sources`). Beside another source the tombstone is held, since a revert would read as a resurrection there and the other source pushes the delete; the row stays in the trash view until that source has dropped it (STORAGE §11). A source alone in the collection reverts the delete and the placement lands on what it still owes, since a held tombstone would hide a member an incremental source never lists again.
 
 **A move** is a `Created` placement in the target plus a `Tombstone` in the source, each derived by its own collection's sync in either order and each able to deliver alone. Neither half MUST be dropped for the other.
 
@@ -132,7 +132,7 @@ A relocated member is listed by the target's next enumeration under a new handle
 
 **Push discipline.** A push MUST be confirmed before local state moves: `Accepted` rebases the placement, and for an add supersedes the provisional handle in the same batch; `Rejected` or unreported leaves it pending, and an engine SHOULD report a create rejected on consecutive runs rather than push it for ever. Pushes go in bounded chunks, each followed by the write recording its outcomes, and the owner MUST NOT collect between two chunks (STORAGE §5). The checkpoint MUST land in the write after the last chunk and in no earlier one.
 
-**Events.** A sync reports per item, in order, what the remote changed locally and what the run settled: `Added`, `FlagsChanged`, `ContentChanged` and `Vanished` on a pull, `Conflicted` on a divergence, `Created` on an accepted add under its assigned handle. A pushed flag, body or delete reports nothing: the consumer made it.
+**Events.** A sync reports per item, in order, what the remote changed locally and what the run settled: `Added`, `FlagsChanged`, `ContentChanged` and `Vanished` on a pull, `Conflicted` on a divergence, `Created` on an accepted add under its assigned handle. A pushed flag, body or delete reports nothing: the consumer made it. Only a sync reports events: an upgrade, a mutation and a rekey deliver what the consumer asked for and report none.
 
 ## 6. Upgrade
 
@@ -172,9 +172,9 @@ A source may renumber every member (an IMAP `UIDVALIDITY` bump, a restore). A re
 
 The batch drops each old handle it re-writes with reason `Rekeyed`, which licenses the binding to move (STORAGE §10, §12), per handle: a genuine duplicate in the same batch is still refused. It is one batch, every `Rekeyed` drop preceding every upsert, since a new handle may be an old one another member held. A handle the new space lacks is dropped `Deleted`. A binding with no base is outside the rekey: no space ever held its provisional handle, and it is carried as it is.
 
-A member resolving to an identity already handed out takes the minted key an old copy carried, else a mint over its own handle; pending creates' keys count as taken. Where one hint had several old copies, a member is matched to the old copy holding its body first, and in handle order only among what the bodies cannot tell apart, so a renumbering that swapped two resources under one `UID` carries each one's flags and pending edit onto itself. The sort key is carried, preferring the fetch's.
+A member resolving to an identity already handed out takes the minted key an old copy carried, else a mint over its own handle; pending creates' keys count as taken. Where one hint had several old copies, a member is matched to the old copy whose base names its fetched revision first, then to the one holding its body when the fetch carried one, and in handle order only among what neither can tell apart, so a renumbering that swapped two resources under one `UID` carries each one's flags and pending edit onto itself. The sort key is carried, preferring the fetch's.
 
-A mutable member whose fetched revision differs from the one its old base held changed on the remote while the handles did. The engine MUST carry it as a pull (§5), or as a `Conflict` at the fetched revision when it also holds a local edit.
+A mutable member whose fetched revision differs from the one its old base held changed on the remote while the handles did. The engine MUST carry it as a pull (§5), or as a `Conflict` at the fetched revision when it also holds a local edit. A `Conflict` the old handle held is carried as it is, revision and diverging body kept while the fetched revision is the one recorded; one the item's conflict projects (§3) records no revision and gains none unless the remote moved.
 
 A base claiming a revision it never reconciled is the one thing a rekey MUST NOT write: the next sync would read the stale body as current, or push the local edit last-writer-wins.
 

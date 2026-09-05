@@ -8,8 +8,11 @@
 -- dedup rather than a wrong merge. A writer-derived key (alt:, hash:, dup:)
 -- claims no identity, so two items carrying one may be two bodies, and it is
 -- excluded outright (§9).
-SELECT i.link_id, i.object_hash FROM items i
+-- The size rides along as the witness a link needs (SYNC.md §6): a
+-- summary served with another size is not this body.
+SELECT i.link_id, i.object_hash, o.size FROM items i
 JOIN collections c ON c.id = i.collection
+JOIN objects o ON o.hash = i.object_hash
 WHERE i.object_hash IS NOT NULL
   AND i.link_id IN (SELECT value FROM json_each(:links))
   AND i.link_id NOT LIKE 'alt:%' AND i.link_id NOT LIKE 'hash:%' AND i.link_id NOT LIKE 'dup:%'

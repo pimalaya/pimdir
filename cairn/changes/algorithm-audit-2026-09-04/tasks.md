@@ -81,3 +81,12 @@ A box is ticked when the named change landed the fix and the named check or vect
 - [ ] `WITHOUT ROWID` for `objects` and `sources`, carried over from the Aug 25 ledger, unmeasured.
 - [ ] Reader `?mode=ro` on a WAL store still needs write access to the directory for the shm; a sentence in STORAGE §8 once someone has hit it.
 - [ ] Millisecond stamps against second-precision cutoffs in `purge_retained_before`; a sentence in §11.2 saying the cutoff carries `%f`.
+
+## Sent back by the reference engine (2026-09-05)
+
+- [x] `lookup_objects` answers the size the witness needs: `reference-engine-feedback`.
+- [x] Vector 28 reached through `mutate`, an upgrade fetching nothing an item already holds: `reference-engine-feedback`.
+- [x] Refused delete decided from the collection's sources, checkpoints included: `reference-engine-feedback`, `collection_sources`.
+- [x] Rekey pairs by base revision first and carries a conflict as it is, an item-level one with no revision: `reference-engine-feedback`, SYNC §8.
+- [x] Only a sync reports events: `reference-engine-feedback`, SYNC §5.
+- [x] A store-wide drain applies each action as a source of its item or collection, not the handle draining: `reference-engine-feedback`, STORAGE §15.2.
