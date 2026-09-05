@@ -127,13 +127,11 @@ An implementation SHOULD use them verbatim and MAY substitute an equivalent pres
 
 ### 4.5 The change feed
 
-`items.changed` and `collections.changed` hold the value of `store_meta.next_change` the row took when it last moved. The counter only increases. `PRAGMA data_version` says that something committed; the feed says what.
+`items.changed` and `collections.changed` hold the value of `store_meta.next_change` the row took when it last moved. The counter only increases and every stamp is drawn once, so no two rows share one and a page ordered by `changed` is total. `PRAGMA data_version` says that something committed; the feed says what.
 
-Triggers in the canonical DDL maintain the stamps, so no writer plumbs them. An insert takes the next stamp; an update takes one only when a column a reader can observe moved. A summary or address row has no stamp: a writer changing one under an unchanged item MUST run `stamp_item` in the same transaction.
+Triggers in the canonical DDL draw the stamps, so no writer plumbs one. An insert takes the next stamp; an update takes one only when a column a reader can observe moved. A summary or address row has no stamp: a writer changing one under an unchanged item MUST run `stamp_item` in the same transaction, which requests a stamp the trigger then draws. A renamed collection restamps every item under its new id.
 
-A deleted row cannot carry a stamp, so a purge counts in `store_meta.purges`. A consumer records `(next_change, purges)` from `load_change_cursor`, folds `list_items_changed_since` and `list_collections_changed_since` on its next look, and reconciles its keys against the store only when `purges` moved.
-
-A renamed collection stamps the new id and nothing under the old one, which a consumer keyed on the old id treats as a purge.
+A deleted row cannot carry a stamp, so a purged item and a collected object count in `store_meta.purges`. `load_change_cursor` answers the last stamp drawn and that count; a consumer records both, folds `list_items_changed_since` and `list_collections_changed_since` above the recorded stamp on its next look, and reconciles its keys against the store only when `purges` moved. A cursor is read before a pass and recorded after it, so a crash between the two replays and skips nothing.
 
 ## 5. The blob store
 
@@ -144,17 +142,17 @@ Bytes live under objects/, one file per hash, sharded `objects/<hash[0:2]>/<hash
 - The alphabet is RFC 4648 §6 base32, lowercased, unpadded. The shards are the first two and next two characters of that name.
 - §16's vectors are what an implementation checks itself against; the empty body is a real object.
 
-**Write** is atomic: a period-prefixed temporary file in the shard directory, `fsync`, `rename`, then `fsync` the directory. Without the directory sync a power loss can leave a committed row pointing at a body that never arrived.
+**Write** is atomic: a period-prefixed temporary file in the shard directory, named uniquely to the writer so two processes storing one body never share it, `fsync`, `rename`, then `fsync` the directory. Without the directory sync a power loss can leave a committed row pointing at a body that never arrived; with a shared temporary name one writer renames the other's half-written bytes under a valid hash.
 
-**Reference counting**: `objects.refcount` MUST equal the number of pointers at the hash across `items.object_hash`, `items.conflict_object`, `bindings.base_object`, `bindings.conflict_object` and `queue.object_hash`, maintained in the same transaction as the writes.
+**Reference counting**: `objects.refcount` MUST equal the number of pointers at the hash across `items.object_hash`, `items.conflict_object`, `bindings.base_object`, `bindings.conflict_object` and `queue.object_hash`, maintained in the same transaction as the writes, a producer's enqueue included (`pin_object`, §15.1).
 
 `bindings.shared_object` names a body and MUST NOT be counted: it is compared for equality and never read, and counting it would pin every body a source ever agreed with.
 
 **An unreferenced object is not a deleted one.** A write MUST NOT delete a row at refcount zero nor unlink its blob: a consumer MAY index a body in one batch and attach it in a later one.
 
-**The collector** is one operation, run when asked. It deletes the rows at `refcount <= 0` (`list_garbage_objects`, `delete_garbage_objects`), then walks the blob directory and unlinks every file no row names (`object_exists`, a point lookup per file), orphans from crashes included. A period-prefixed temporary file belongs to a writer and MUST be left alone.
+**The collector** is one operation, run when asked. It MUST `recompute_refcounts` first (§7), so a count a writer left behind is settled before anything is judged by it, then deletes the rows at `refcount <= 0` (`list_garbage_objects`, `delete_garbage_objects`), then walks the blob directory and unlinks every file no row names (`object_exists`, a point lookup per file), orphans from crashes included. A period-prefixed temporary file belongs to a writer and MUST be left alone.
 
-It MUST hold the owner lock and take the staging lock exclusively (§8), which is what proves no writer is between a body and its row. Running it is the owner's to schedule; a store that never collects grows without bound. A store MAY `recompute_refcounts` first (§7).
+It MUST hold the owner lock and take the staging lock exclusively (§8), which is what proves no other process is between a body and its row, and it MUST NOT run while a verb of the owner's own is between two chunks (SYNC.md §5), a body streamed in one chunk and attached in the next being exactly a row no pointer names yet. Running it is the owner's to schedule; a store that never collects grows without bound.
 
 ## 6. Migrations
 
@@ -199,13 +197,12 @@ Four identifiers, kept distinct:
 - **hash**: content state and blob key.
 - **seq**: the store-global public id (§9.1).
 
-Annex A derives the **hint**; this section assigns the key. A writer SHALL assign `link_id` from the first branch that applies:
+Annex A derives the **hint**; this section assigns the key. A hint is usable when it is non-empty once trimmed of whitespace; content stating none takes the kind's fallback in its place (`alt:` for a message, `hash:` for a DAV resource). A writer SHALL then assign `link_id` from the first branch that applies to the hint or the fallback alike:
 
-- the content states no usable hint: the kind's fallback (`alt:` for a message, `hash:` for a DAV resource);
-- the hint is free in this collection: the hint verbatim;
-- this source already binds the hint under another handle: a **minted** key, `dup:`, the hint, `#` and that handle, concatenated verbatim (`dup:abc@host#1174`). A `KeepBoth` fork (SYNC.md §5) is minted the same way over its provisional handle.
+- it is free in this collection: verbatim;
+- this source already binds it under another handle: a **minted** key, `dup:`, the value, `#` and that handle, concatenated verbatim (`dup:abc@host#1174`, `dup:alt:Alert|2026-08-01T10:00:00Z|cron@host#1175`).
 
-The minted form needs no digest, is deterministic, and is prefixed like the fallbacks, so a prefixed id is never pushed as a protocol identity. It is opaque: a reader MUST NOT parse it and a store MUST NOT rewrite it, since rewriting would change a `seq` a consumer has shown.
+A fallback goes through the same two branches because two messages stating no `Message-ID` may share an `alt:` key and two byte-identical UID-less resources one `hash:` key, and the second of each is a row the collection holds. The minted form needs no digest, is deterministic, and is prefixed like the fallbacks, so a prefixed id is never pushed as a protocol identity. It is opaque: a reader MUST NOT parse it and a store MUST NOT rewrite it, since rewriting would change a `seq` a consumer has shown.
 
 Deduplication keys on **hash**: one body in two collections is stored once. Merging keys on the **hint**, conservatively: a missed dedup is harmless, a wrong merge hides data. `lookup_objects` (§14) is keyed on the assigned link id, so a minted item fetches its own body.
 
@@ -254,9 +251,9 @@ A binding records two agreement points and a store MUST keep both: `base_object`
 
 A handle enumerated but not yet named is a `probes` row, not an item. It becomes an item and a binding in the transaction of the fetch that names it.
 
-Two divergences are recorded and are not the same fact: `items.conflicted` and `items.conflict_object`, two sources editing the shared body differently; `bindings.conflicted`, `conflict_revision` and `conflict_object`, one source diverging from its own remote. A store MUST persist both independently.
+Two divergences are recorded and are not the same fact: `items.conflicted` and `items.conflict_object`, two sources editing the shared body differently; `bindings.conflicted`, `conflict_revision` and `conflict_object`, one source diverging from its own remote. A store MUST persist both independently, and the schema holds that neither carries a diverging body without its flag.
 
-A binding's conflict MUST be cleared when the sync writes any resolved state for it, releasing the pin its `conflict_object` held.
+A binding's conflict MUST be cleared when the sync writes any resolved state for it, releasing the pin its `conflict_object` held. An item's conflict MUST be cleared by the write that adopts a body for it (an `Edit`, SYNC.md §7, or an upsert the collection's policy lets through), releasing its pin the same way; while it stands, every binding of the item projects `Conflict` (SYNC.md §3), so no source pushes the disputed body over another. `list_conflicted_items` lists what awaits a decision.
 
 A write resolving an existing `(collection, link_id, source)` binding to a different handle SHALL be refused, recording no trace of the incoming handle. A rebind is licensed only by a drop of the bound handle in the same batch, with reason `Superseded` (a provisional handle an accepted add replaced) or `Rekeyed` (§12). A source holding one identity twice never reaches the refusal: the second copy resolves to a minted key (§9) and is stored as an item beside the first.
 
@@ -268,17 +265,19 @@ The unique index on `(collection, source, handle)` refuses a write that does not
 
 ## 11. Retention
 
-When an item's last binding vanishes the store retains the row rather than deleting it, and only an explicit purge removes it. A remote expunge therefore never destroys the local copy. The one exception is an identity another collection of the same account holds live: the item moved, or was filed twice, and nothing is lost by purging the row in the same transaction, the holder pinning the body. Retention is the terminal state of `deleted`: a retained row carries `deleted = 1`, no bindings, and a non-`NULL` `retained_at`. It is unconditional; how long to keep and when to sweep is the owner's schedule.
+When an item's last binding vanishes the store retains the row rather than deleting it, and only an explicit purge removes it. A remote expunge therefore never destroys the local copy. The one exception is an identity another collection of the same account holds live with the same body: the item moved, or was filed twice, and nothing is lost by purging the row in the same transaction, the holder pinning the body. A holder carrying another body, or none, is not that case and the row is retained. Retention is the terminal state of `deleted`: a retained row carries `deleted = 1`, no bindings, and a non-`NULL` `retained_at`, which the schema holds. It is unconditional; how long to keep and when to sweep is the owner's schedule.
+
+A tombstone a source still binds, because that source may not remove it (SYNC.md §5), never reaches retention: it stays `deleted = 1` with its binding, hidden from the live reads and listed in the trash beside the retained rows, so nothing the user deleted is invisible.
 
 ### 11.1 Requirements
 
 - **Retire, do not delete** (`retain_item`): stamp `retained_at` and `retained_by`, keep `object_hash` so the body stays pinned.
-- **A held identity is not kept twice**: when another collection of the same account holds the link id live (`held_elsewhere`), `retain_item` is followed by `purge_item` on the seq `retained_item` gives and `release_pins`, in the same transaction, and the purge counts (§4.5).
+- **A held identity is not kept twice**: when another collection of the same account holds the link id live with the retiring body, or the retiring row has none (`held_elsewhere`, bound to the retiring `object_hash`), `retain_item` is followed by `purge_item` on the seq `retained_item` gives and `release_pins`, in the same transaction, and the purge counts (§4.5).
 - **Stamped by SQLite**: `retained_at` is written by the statement; the cutoff of a purge is the caller's parameter.
-- **Hidden from the sync seam**: `load_items` filters `retained_at IS NULL`, or the next run re-uploads every retained row. `delete_items` spares them for the same reason.
-- **Hidden from the reads**: a retained row is a tombstone under §14.1's live-only rule; `list_retained_page` and `count_retained` are the trash view.
-- **Purge is the only true delete**: `purge_item` and `purge_retained_before`, both guarded on `retained_at IS NOT NULL`, both `RETURN` the pinned hashes for `release_pins` in the same transaction. The bodies fall to the collector.
-- **A reappearing link id revives** (`retained_item` then `revive_item`): stamps cleared, `deleted` back to 0, content adopted, the pins the retained row held released, `seq` kept. One branch serves a source-side resurrection and a queued `add`.
+- **Hidden from the sync seam**: `load_items` filters `retained_at IS NULL`, or the next run re-uploads every retained row.
+- **Hidden from the reads**: a deleted row is a tombstone under §14.1's live-only rule; `list_retained_page` and `count_retained` are the trash view and list every deleted row, `retained_at` saying whether a source still binds it.
+- **Purge is the only true delete**: `purge_item` and `purge_retained_before`, both guarded on `retained_at IS NOT NULL`, both `RETURN` the pinned hashes for `release_pins` in the same transaction. The bodies fall to the collector. A tombstone a source still binds is not purgeable: its source has not agreed.
+- **A reappearing link id revives** (`retained_item` then `revive_item`): stamps cleared, `deleted` back to 0, `seq` kept. The incoming placement's body is adopted when it carries one; when it carries none, a `Meta` fetch or a queued `add` by copy, the retained body stays and, for an immutable kind, becomes the binding's base, so a restore costs no network. The pins the retained row held are released only for what the revive replaced. One branch serves a source-side resurrection and a queued `add`.
 - `retained_by` is diagnostic; a retained item has no binding and pushes nothing.
 
 ### 11.2 Purging
@@ -303,7 +302,7 @@ Two implementations produce byte-identical stores only with identical encodings.
 - **`refcount`** (INTEGER): the pointer count of §5, `>= 0` by constraint; `0` is a meaningful, collectable count.
 - **`link_id`** (TEXT): the hint verbatim, a kind fallback, or a minted `dup:<hint>#<handle>`; opaque.
 - **`sort_key`** (TEXT): §9.3; `''` unknown; a timestamp as `2026-08-01T10:00:00Z`. The one column exempt from byte-identity: a zoned time resolves through a time zone database two writers may hold at different versions, and a wrong key loses nothing.
-- **`changed`** (INTEGER, on `items` and `collections`): the stamp of §4.5, `0` before the feed existed; `next_change` and `purges` (INTEGER, on `store_meta`) its counters.
+- **`changed`** (INTEGER, on `items` and `collections`): the stamp of §4.5, `0` before the feed existed, `-1` only inside the statement requesting one; `next_change` and `purges` (INTEGER, on `store_meta`) its counters, the second counting every item purged and every object collected.
 - **The summary columns**: Annex A's, decoded or verbatim as it says, an instant with the `Z` designator, `NULL` for absent and unknown unless it says otherwise.
 - **`role`, `address`, `position`** (on `item_address`): a role of Annex A.6, the canonical addr-spec, and the 0-based document order within the role.
 - **`base_revision`** (TEXT): an opaque etag or modseq, or `NULL`.
@@ -332,19 +331,19 @@ A store is opened as one source. `load` projects the shared items into that sour
 
      `load_items_by_link`, `load_bindings_by_link`, the kind's `load_<kind>_summaries` and `load_addresses_by_link` bound to the batch's link ids, each dropped handle resolved with `link_for_handle` and each upserted handle likewise, a handle bound to another link id retiring that binding first (§10), then `insert_item`, `insert_binding`, `update_item`, `update_binding`, `delete_binding` for a binding a `Deleted` drop removes, and `delete_item_bindings` with `retain_item` for an item the result no longer holds, purged at once when `held_elsewhere` says the identity moved (§11). `update_binding` carries no handle: a rebind is refused (§10) except through §12's rebuild.
 
-     A load-all / replace-all (`delete_items`, then every row inserted) persists the same state and MAY be used, but stamps the whole collection on every sync (§4.5).
-
-     A named placement carries its summary and addresses, derived by the writer under Annex A and written with the item (`upsert_<kind>_summary`, `replace_addresses`, `insert_address`). An unnamed one is a probe (`upsert_probe`), dropped (`delete_probe`) in the transaction that names it. An item left with no binding is retained (§11).
-  2. Settle the refcount of every object the batch touched: `recompute_refcounts`, or `adjust_refcount` by the batch's net change, keeping the recompute for repair (§7). A batch that stored or dropped no object MAY skip this.
+     A named placement carries its summary and addresses, derived by the writer under Annex A and written with the item (`upsert_<kind>_summary`, `replace_addresses`, `insert_address`); a calendar resource whose component changed under its key leaves its old table (`delete_event_summary`, `delete_task_summary`, `delete_journal_summary`). An unnamed one is a probe (`upsert_probe`), dropped (`delete_probe`) in the transaction that names it, and a rebuild voids a source's probes at once (`delete_probes`, §12). An item left with no binding is retained (§11).
+  2. Settle the refcount of every object the batch touched: `adjust_refcount` by the batch's net change, or `recompute_refcounts` for the whole store, which is also §7's repair. A batch that stored or dropped no object MAY skip this.
   3. Commit. The batch reclaims nothing (§5).
 
 The queue adds **`enqueue`**, **`drain`** and **`cancel`** (§15); retention adds **`purge`** and **`purge_retained_before`** (§11.2), both reporting rows and never bytes. **`collect_garbage()`** is §5's collector, reporting the rows, files and bytes it freed.
 
 A collection's `kind` is declared, never derived: `set_collection_kind(collection, account, kind)` sets it, `load_kind` reads it, and `ensure_collection` inserts an empty kind it MUST NOT overwrite. The account binds the same way; `set_collection_account` re-accounts a collection, `load_account` reads it.
 
-**`rename_collection(collection, new_id)`** is the only safe way to change an id: every foreign key onto `collections(id)`, and `bindings`' key onto `items(collection, link_id)`, cascades, so items, bindings, sources, queue rows and children follow in one statement. Deleting and recreating the row cascades the delete instead.
+**`rename_collection(collection, new_id)`** is the only safe way to change an id: every foreign key onto `collections(id)`, and `bindings`' key onto `items(collection, link_id)`, cascades, so items, bindings, sources, queue rows and children follow in one statement, and the items are restamped under the new id (§4.5). A pending `move` or `copy` names its target inside its payload, which no key cascades: `rename_queue_targets` MUST run beside it in the same transaction. Deleting and recreating the row cascades the delete instead.
 
 A bare `UPDATE` is refused under `NO ACTION`, and with `PRAGMA foreign_keys` off the rename cascades nothing. An account rename is one `rename_collection` per collection plus `set_collection_account`, in one transaction.
+
+**`delete_collection(collection)`** removes a collection the operator no longer wants, everything under it cascading and retention not applying. The cascade drops pointers no statement returns, so it MUST be followed by `recompute_refcounts` in the same transaction; the bodies then fall to the collector. It is the only sanctioned `DELETE` on `collections`.
 
 ### 14.1 Reading the store
 
@@ -354,16 +353,16 @@ A **reader** (§8) opens read-only and projects the store as a local backend. Re
 - **`list_items_page(collection, after, limit)`**: a keyset page in link-id order, the sweep that sees every item once; `''` starts from the beginning.
 - **`list_items_page_asc`**, **`list_items_page_desc`** `(collection, after_key, after_seq, limit)`: the natural order (§9.3), cursor `(sort_key, seq)`; descending, a `NULL` cursor is the first page.
 - **`list_mail_page_desc`**, **`list_contacts_page_asc`**, **`list_events_page_asc`**, **`list_tasks_page_asc`**, **`list_journals_page_asc`**: the same page joined with the kind's summary; **`get_mail`**, **`get_contact`**, **`get_event`**, **`get_task`**, **`get_journal`** one item. A mixed calendar merges its three pages on `(sort_key, seq)`; `component_of` says which table holds an item.
-- **`get_item(collection, seq)`**, **`count_items(collection)`**, **`seq_by_link(collection, link_id)`**.
+- **`get_item(collection, seq)`**, **`load_addresses(collection, link_id)`** (one item's people by role), **`count_items(collection)`**, **`seq_by_link(collection, link_id)`**.
 - **`list_link_placements(link_id)`**, **`list_object_placements(hash)`**: every live placement of one key, or one body, with collection and account. The first pairs by key, so a minted copy is paired with its twin by the body read alone.
 - **`list_address_placements(address, role)`**: every live placement naming one address, `role` `NULL` for any: the person axis. **`list_domain_placements(domain, role)`**: the same for a domain, by a scan.
 - **`list_items_changed_since`**, **`list_collections_changed_since`**, **`load_change_cursor`**: the feed (§4.5).
-- **`list_retained_page(collection, after, limit)`** (cursor on `seq`, `0` starts), **`count_retained`**, **`retained_bytes()`**: the trash view (§11).
-- **`list_sources()`**, **`list_conflicted_bindings(account)`** (the bindings awaiting a decision with the three bodies the divergence is between, answered by index, never by paging), **`list_item_bindings(collection, link_id)`** (where one item lives per source), **`link_for_handle`** and **`handle_for_link`**, **`load_kind`**, **`count_probes`**.
+- **`list_retained_page(collection, after, limit)`** (cursor on `seq`, `0` starts), **`count_retained`**, **`retained_bytes()`**: the trash view (§11), every deleted row, `retained_at` `NULL` on one a source still binds.
+- **`list_sources()`**, **`list_conflicted_bindings(account)`** (the bindings awaiting a decision with the three bodies the divergence is between, answered by index, never by paging), **`list_conflicted_items(account)`** (the items two sources disagree on, the same way), **`list_item_bindings(collection, link_id)`** (where one item lives per source), **`link_for_handle`** and **`handle_for_link`**, **`load_kind`**, **`count_probes`**.
 
 Three rules bind every read:
 
-- **Live only.** A tombstone (`deleted = 1`) is never presented as live; the retained reads are the exception and present their rows as retained.
+- **Live only.** A tombstone (`deleted = 1`) is never presented as live; the trash reads are the exception and present their rows as deleted.
 - **Level-aware.** `level` says the tier reached, `object_hash` whether a body is there. A reader renders a list from the summary and treats an absent body, or a blob file gone under a purge, as not yet hydrated, never as an error.
 - **Snapshot-consistent.** A reader sees a WAL snapshot and may run beside the owner. It detects change by `PRAGMA data_version` or the feed, and MAY overlay pending actions (§15.4).
 
@@ -373,15 +372,17 @@ Only the owner mutates (§8), yet other processes originate mutations. The `queu
 
 ### 15.1 Producing
 
-A producer enqueues in one transaction: `ensure_collection`, at most one `store_object` when the payload names a body (the blob written first, §5), then `enqueue_action` carrying the hash in `object_hash` so the body is pinned. `created_at` is stamped by the statement. This is the only write a non-owner may perform, and a producer MUST NOT rely on any application deadline.
+A producer enqueues in one transaction: `ensure_collection`, at most one `store_object` and its `pin_object` when the payload names a body (the blob written first, §5), then `enqueue_action` carrying the hash in `object_hash`, the pin being the count of that pointer (§5). `created_at` is stamped by the statement. This is the only write a non-owner may perform, and a producer MUST NOT rely on any application deadline.
 
 ### 15.2 Applying
 
-The owner drains each collection's pending actions in ascending `id` (`list_queued_collections`, `load_pending_actions`). An action is applied and its row deleted in one transaction, which spans no network I/O. `claim_action` runs **first** in it: the pending list is read outside any transaction, so a row it names may be gone by the time its turn comes, cancelled (§15.5) or applied by another handle of the owning process, and a claim that deletes nothing means the row is not this transaction's to apply.
+The owner drains the pending actions store-wide in ascending `id` (`list_pending_actions`), which is the append order a producer relied on when it queued a `move` into a collection and then an edit of the item there. An action is applied and its row deleted in one transaction, which spans no network I/O. `claim_action` runs **first** in it: the pending list is read outside any transaction, so a row it names may be gone by the time its turn comes, cancelled (§15.5) or applied by another handle of the owning process, and a claim that deletes nothing means the row is not this transaction's to apply.
 
-A failed action is retried (`bump_attempts`). One the owner judges permanently unappliable is parked (`park_action`): the attempt counted, `error` set, the action skipped, later ones proceeding, read back with `load_parked_actions` and never silently deleted.
+A failed apply MUST roll its transaction back before anything else, which restores the claimed row; a park or a retry then runs in a transaction of its own. A statement failure aborts the statement and not the transaction, so a park issued inside the failed transaction updates a row the claim already deleted and the commit loses the action.
 
-A failure of the store itself (a refused rebind, a constraint) is permanent for the row and MUST park it. Only a failure of the environment (the database busy, a body unreadable) is retried, and neither MUST stop the rows behind it.
+A failed action is retried (`bump_attempts`), a bounded number of times the owner chooses, then parked. One the owner judges permanently unappliable is parked at once (`park_action`): the attempt counted, `error` set, the action skipped, later ones proceeding, read back with `load_parked_actions` and never silently deleted.
+
+A failure of the store itself (a refused rebind, a constraint, a target collection with no declared kind) is permanent for the row and MUST park it. Only a failure of the environment (the database busy, a body unreadable) is retried, and neither MUST stop the rows behind it.
 
 **Skipping is not parking.** An owner that does not recognise a kind, or lacks the capability it needs, SHALL leave the row pending and untouched, `error` `NULL`, `attempts` unbumped, and SHALL NOT block later actions on it. A drain has three outcomes per row: applied, parked, skipped.
 
@@ -389,10 +390,10 @@ A failure of the store itself (a refused rebind, a constraint) is permanent for 
 
 Existing items are addressed by `seq`. At `v: 1`:
 
-- **`add`**: `{ "v": 1, "link_id": …?, "flags": […], "object": hash, "handle": …? }`. Creates an item staged as a local creation to push; the owner derives its summary and addresses from `object` (Annex A). A duplicate `link_id` (`live_item_for_link`) parks the action unless the row holding it is retained, which revives it (§11): a source's duplicate is minted (§9), a producer's is a mistake worth reporting.
+- **`add`**: `{ "v": 1, "link_id": …?, "flags": […], "object": hash }`. Creates an item staged as a local creation to push under the provisional handle SYNC.md §4 derives; the owner derives its summary and addresses from `object` (Annex A). A live duplicate `link_id` (`live_item_for_link`) parks the action: a source's duplicate is minted (§9), a producer's is a mistake worth reporting. A retained row under the key revives (§11) and a tombstone still propagating is revived the same way, the new content beating the delete on every source.
 - **`set-flags`**: `{ "v": 1, "seq": n, "flags": […] }`. Replaces the set, absolutely.
-- **`remove`**: `{ "v": 1, "seq": n }`. Already absent is success; an item the draining source does not bind is skipped (§15.2), the source that binds it applying the row.
-- **`move`**: `{ "v": 1, "seq": n, "to": collection }`. `copy` is the same shape without the removal.
+- **`remove`**: `{ "v": 1, "seq": n }`. Tombstones the shared item, every source that binds it pushing the delete (SYNC.md §9); already absent, or bound by nobody, is success.
+- **`move`**: `{ "v": 1, "seq": n, "to": collection }`. `copy` is the same shape without the removal. A target the store does not declare, or of another kind, parks the action rather than ensuring a collection nothing configured.
 - **`update`**: `{ "v": 1, "seq": n, "object": hash }`. Repoints a mutable item's body; the owner re-derives its summary and addresses.
 
 An application MAY carry a kind of its own, versioned the same way; a mail submission is the worked example. The store owes it append order, blob pinning and the skip rule.
@@ -412,10 +413,10 @@ An intent whose effect is not a store mutation is therefore at-least-once, and d
 A schema mismatch fails a query; a body named differently, a summary derived differently or a key sorted differently fails nowhere. vectors/ is therefore part of the format:
 
 - **vectors/objects.json**: bodies to object names under both `hash_algo` values, with shard paths, and the RFC 4648 §10 base32 vectors.
-- **vectors/summaries.json** and **vectors/fixtures/**: bodies to the `link_id`, summary row, address rows and `sort_key` Annex A produces, the hedged cases, the encodings that split earlier writers, and the minted keys of §9.
+- **vectors/summaries.json** and **vectors/fixtures/**: bodies to the `link_id`, summary row, address rows and `sort_key` Annex A produces, the hedged cases, the encodings that split earlier writers, and the `alt:`, `hash:` and minted keys of §9.
 - vectors/sync/ and vectors/search/ belong to the other parts.
 
-An implementation **MUST** pass objects.json: two stores naming bodies differently cannot share a blob directory. It **MUST** pass summaries.json for each kind it writes, the minted and the `hash:` keys they give included. A consumer MUST compare parsed structures, never JSON text. The values are authored from the prose, never from an implementation.
+An implementation **MUST** pass objects.json: two stores naming bodies differently cannot share a blob directory. It **MUST** pass summaries.json for each kind it writes, the minted, `alt:` and `hash:` keys they give included. checks/invariants.sh runs the canonical statements through the scenarios this part argues from and is what a change to a statement or a rule is checked against before it lands. A consumer MUST compare parsed structures, never JSON text. The values are authored from the prose, never from an implementation.
 
 An implementation that vendors vectors/ MUST record their digests and re-check them against this repository in CI.
 
@@ -446,7 +447,7 @@ A derivation is made from the body, or from a server-side summary (an IMAP `ENVE
 | `size` | the raw octets, or `RFC822.SIZE` at the `Meta` tier |
 | `attachment` | `1` when a part carries `Content-Disposition: attachment`, `0` when the parts were walked and none does, `NULL` when they were not walked |
 
-**Hint**: `message_id`, else `alt:` followed by the decoded subject, the `date` column and the `sender` column joined by `|`, each empty when absent. **Addresses**: every `From`, `To`, `Cc`, `Bcc` under its role, in document order. `References` is the search part's (SEARCH.md §9). **`sort_key`**: the `date` column, or `''`; read descending.
+**Hint**: `message_id`, else `alt:` followed by the decoded subject, the `date` column and the `sender` column joined by `|`, each empty when absent (`alt:Stand-up notes|2026-08-01T10:00:00Z|alice@example.org`). **Addresses**: every `From`, `To`, `Cc`, `Bcc` under its role, in document order. `References` is the search part's (SEARCH.md §9). **`sort_key`**: the `date` column, or `''`; read descending.
 
 ### A.2 `text/vcard`
 

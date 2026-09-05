@@ -1,0 +1,50 @@
+{
+  "label": "two members stating no Message-ID with one alt: fallback are two items, the second minted",
+  "note": "both fetches derive the same alt: key from subject, date and sender; the fallback goes through the free and minted branches like a hint, decided from the handles in byte order, so 30 takes the bare key and 31 the minted one, each with its own seq (STORAGE §9, SYNC.md §6). attachment is NULL at Meta, where no part was walked",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {},
+    "items": [],
+    "bindings": [],
+    "probes": [
+      { "collection": "INBOX", "source": "imap", "handle": "30", "flags": [] },
+      { "collection": "INBOX", "source": "imap", "handle": "31", "flags": [] }
+    ],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+  },
+  "run": { "verb": "upgrade", "collection": "INBOX", "source": "imap", "tier": "Meta", "handles": ["30", "31"] },
+  "remote": {
+    "snapshot": null,
+    "fetch": {
+      "30": { "Meta": { "body": "fixtures/mail-no-message-id.eml", "revision": null } },
+      "31": { "Meta": { "body": "fixtures/mail-no-message-id.eml", "revision": null } }
+    }
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "alt:Cron alert|2026-08-01T10:00:00Z|cron@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" },
+        { "collection": "INBOX", "link_id": "dup:alt:Cron alert|2026-08-01T10:00:00Z|cron@example.org#31", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "alt:Cron alert|2026-08-01T10:00:00Z|cron@example.org", "source": "imap", "handle": "30", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1 },
+        { "collection": "INBOX", "link_id": "dup:alt:Cron alert|2026-08-01T10:00:00Z|cron@example.org#31", "source": "imap", "handle": "31", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1 }
+      ],
+      "probes": [],
+      "summaries": [
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "alt:Cron alert|2026-08-01T10:00:00Z|cron@example.org", "row": { "message_id": null, "in_reply_to": [], "subject": "Cron alert", "sender": "cron@example.org", "sender_name": "Cron Daemon", "date": "2026-08-01T10:00:00Z", "size": 141, "attachment": null } },
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "dup:alt:Cron alert|2026-08-01T10:00:00Z|cron@example.org#31", "row": { "message_id": null, "in_reply_to": [], "subject": "Cron alert", "sender": "cron@example.org", "sender_name": "Cron Daemon", "date": "2026-08-01T10:00:00Z", "size": 141, "attachment": null } }
+      ],
+      "addresses": [
+        { "collection": "INBOX", "link_id": "alt:Cron alert|2026-08-01T10:00:00Z|cron@example.org", "role": "from", "position": 0, "address": "cron@example.org", "name": "Cron Daemon" },
+        { "collection": "INBOX", "link_id": "alt:Cron alert|2026-08-01T10:00:00Z|cron@example.org", "role": "to", "position": 0, "address": "ops@example.org", "name": null },
+        { "collection": "INBOX", "link_id": "dup:alt:Cron alert|2026-08-01T10:00:00Z|cron@example.org#31", "role": "from", "position": 0, "address": "cron@example.org", "name": "Cron Daemon" },
+        { "collection": "INBOX", "link_id": "dup:alt:Cron alert|2026-08-01T10:00:00Z|cron@example.org#31", "role": "to", "position": 0, "address": "ops@example.org", "name": null }
+      ],
+      "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+    }
+  }
+}

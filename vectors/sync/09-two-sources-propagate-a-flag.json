@@ -12,7 +12,7 @@
     "probes": [],
     "sources": [{ "collection": "INBOX", "source": "a", "checkpoint": "a1" }, { "collection": "INBOX", "source": "b", "checkpoint": "b0" }]
   },
-  "run": { "verb": "sync", "collection": "INBOX", "source": "b", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual", "delete": "keep" } },
+  "run": { "verb": "sync", "collection": "INBOX", "source": "b", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual" } },
   "remote": { "snapshot": { "items": [{ "handle": "77", "flags": ["\\Seen"], "revision": null }], "vanished": [], "complete": true, "checkpoint": "b1" }, "fetch": {} },
   "expect": {
     "pushes": [{ "kind": "SetFlags", "handle": "77", "flags": ["\\Flagged", "\\Seen"], "key": "b2c93c8bc6c517c7" }],

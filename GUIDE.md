@@ -43,7 +43,7 @@ A **producer** is a reader that appends actions:
 | Step | What | Where |
 | --- | --- | --- |
 | 5 | Pick `hash_algo` from the store, name and write a body as §4 says under the staging lock; pass vectors/objects.json | STORAGE §5, §8, §16 |
-| 6 | Enqueue in one transaction with queries/storage/queue/, a kind and a versioned payload as §15.3 says | STORAGE §15.1, §15.3 |
+| 6 | Enqueue in one transaction with queries/storage/queue/, the body pinned, a kind and a versioned payload as §15.3 says | STORAGE §15.1, §15.3 |
 
 An **owner** is the one process that mutates the store:
 
@@ -53,12 +53,12 @@ An **owner** is the one process that mutates the store:
 | 8 | Take the owner lock before any write; fail at once when it is held | STORAGE §8 |
 | 9 | Run the write transaction of §5 for every batch, with queries/storage/owner/ | STORAGE §14 |
 | 10 | Derive summaries, addresses and sort keys under Annex A for each kind written; pass vectors/summaries.json for that kind | STORAGE Annex A, §16 |
-| 11 | Retain rather than delete, purge a moved or requested row only, collect only under both locks | STORAGE §5, §11 |
-| 12 | Drain the queue with claim-first, park or skip as §13 says | STORAGE §15 |
+| 11 | Retain rather than delete, purge a moved or requested row only, collect only under both locks and never between chunks | STORAGE §5, §11 |
+| 12 | Drain the queue store-wide with claim-first, roll back before parking, park or skip as §13 says | STORAGE §15 |
 
 An **engine** (SYNC) is an owner that reproduces every case under vectors/sync/. An **index** (SEARCH) adds SQLite 3.43 with FTS5, migrations/search/ and queries/search/, and every **query client** on it answers the cases under vectors/search/ alike.
 
-Use the statements verbatim. Every one of them prepares against the canonical schema, which checks/schema.sh proves on every push, and a substitute is yours to keep equivalent under STORAGE §7's invariants.
+Use the statements verbatim. Every one of them prepares against the canonical schema, which checks/schema.sh proves on every push, and checks/invariants.sh runs them through the scenarios the parts argue from; a substitute is yours to keep equivalent under STORAGE §7's invariants.
 
 ## 2. Opening a store
 
@@ -96,7 +96,7 @@ Check the encoder against the `base32.cases` in vectors/objects.json before trus
 **Write:**
 
 1. Create the shard directory if needed.
-2. Write to a period-prefixed temporary file in that directory, `fsync` it.
+2. Write to a period-prefixed temporary file in that directory, named uniquely to this writer (a process id and a counter), `fsync` it.
 3. `rename` it onto the final name. The name is the content, so an existing file is the same bytes and the rename is harmless.
 4. `fsync` the shard directory. Without it the database commit can outlive the file's name.
 
@@ -113,29 +113,26 @@ One batch of `UpsertPlacement`, `DropPlacement { handle, reason }`, `StoreObject
 5. Resolve the batch's keys. Each `DropPlacement` names a handle: `link_for_handle` gives its link id; a handle nothing binds is a probe, `delete_probe`. Each `UpsertPlacement` carries a link id, or none for a probe (`upsert_probe`, and stop here for that placement), and its handle is resolved the same way, so a handle bound to another link id is in the batch's diff.
 6. Read what the batch touches and nothing else: `load_items_by_link`, `load_bindings_by_link`, the kind's `load_<kind>_summaries` and `load_addresses_by_link`, bound to a JSON array of the batch's link ids, so step 7 writes a summary or an address set only when it moved.
 7. Merge each placement into its shared item and binding under SYNC §9 and §10, then persist the diff:
-   - a new item: `seq_for_link_any` for a stated hint, `bump_next_seq` when it returns nothing or the key is derived (`alt:`, `hash:`, `dup:`), then `insert_item`; a retained row under the same key (`retained_item`) is revived instead, `revive_item`, its old pins released;
+   - a new item: `seq_for_link_any` for a stated hint, `bump_next_seq` when it returns nothing or the key is derived (`alt:`, `hash:`, `dup:`), then `insert_item`; a retained row under the same key (`retained_item`) is revived instead, `revive_item`, keeping its body when the placement carries none and releasing only the pins the revive replaced; a tombstone still propagating is revived the same way;
    - a new binding: `insert_binding`; a binding whose handle differs from the incoming one is a refused write unless a `Superseded` or `Rekeyed` drop for the old handle precedes it in the same batch; a handle `link_for_handle` resolves to another link id is retired first, `delete_binding` and the retention of step 7's last bullet when it was the item's last (STORAGE §10);
    - a moved item or binding: `update_item`, `update_binding`, which carries no handle;
    - a named placement's summary and addresses, derived under Annex A: `upsert_<kind>_summary`, `replace_addresses` then one `insert_address` per row, and `stamp_item` when only those rows moved;
-   - a `Deleted` drop of a binding: `delete_binding`; of the item's last binding: `delete_item_bindings` and `retain_item`, which stamps `retained_at` and keeps the body pinned; then, when `held_elsewhere` finds the link id live in another collection of the account, `purge_item` on `retained_item`'s seq and `release_pins`, since the item moved.
+   - a `Deleted` drop of a binding: `delete_binding`; of the item's last binding: `delete_item_bindings` and `retain_item`, which stamps `retained_at` and keeps the body pinned; then, when `held_elsewhere`, bound to the retiring row's `object_hash`, finds the link id live in another collection of the account with that body, `purge_item` on `retained_item`'s seq and `release_pins`, since the item moved.
 8. A `Rekeyed` drop anywhere in the batch makes it a rebuild: `bump_generation` for the collection, once, in this transaction.
 9. `SetCheckpoint`: `upsert_checkpoint` for this source, last in the batch.
-10. Never reorder the batch: a provisional handle superseded by an accepted one is two entries for one handle in one order.
+10. Never reorder the batch: a provisional handle superseded by an accepted one is two entries for one handle in one order, and a rebuild's drops all precede its upserts.
 11. Settle refcounts: `adjust_refcount` per hash by the batch's net change, or `recompute_refcounts` for the whole store. A batch that stored or dropped no object skips this.
 12. `COMMIT`. Reclaim nothing: an object at refcount zero stays for the collector.
 
-The stamps of the change feed are written by the schema's triggers; a writer never binds one.
-
-A replace-all form, `delete_items` then every row inserted, persists the same state and stamps every row of the collection on every sync, which starves every consumer of the feed.
+The stamps of the change feed are written by the schema's triggers; a writer never binds one, and `stamp_item` only asks for one.
 
 ## 6. The collector
 
 1. Hold the owner lock (§2) and take an exclusive lock on objects.lock. Both are needed: the first excludes other owners, the second excludes producers between a body and its enqueue.
-2. Serialise against the process's own writers: the owner lock does not exclude a second connection in the same process.
-3. Optionally `recompute_refcounts`.
-4. `BEGIN`; `list_garbage_objects` (refcount at or below zero), `delete_garbage_objects`; `COMMIT`.
-5. Walk objects/ and for every regular file ask `object_exists` for its name. Unlink a file no row names. Leave every period-prefixed file alone: it belongs to a writer mid-rename.
-6. Report rows dropped, files unlinked, bytes freed.
+2. Serialise against the process's own writers, and against a verb between two of its chunks: the owner lock does not exclude a second connection in the same process, and a body streamed in one chunk has no pointer until the next.
+3. `BEGIN`; `recompute_refcounts`; `list_garbage_objects` (refcount at or below zero), `delete_garbage_objects`; `COMMIT`.
+4. Walk objects/ and for every regular file ask `object_exists` for its name. Unlink a file no row names. Leave every period-prefixed file alone: it belongs to a writer mid-rename.
+5. Report rows dropped, files unlinked, bytes freed.
 
 Run it on a schedule of the owner's, and after a purge. A store that never collects grows without bound and reports nothing.
 
@@ -151,13 +148,14 @@ Retention needs no step of its own: `retain_item` in the write transaction (§5 
 4. `COMMIT`. The purge trigger counts the rows in `store_meta.purges` for the feed's consumers.
 5. Run the collector (§6) when convenient; that is where the bytes go.
 
-`retained_bytes` reports what a purge could release before choosing a cutoff. `list_retained_page` and `count_retained` are the trash view.
+`retained_bytes` reports what a purge could release before choosing a cutoff. `list_retained_page` and `count_retained` are the trash view: every deleted row, a `NULL` `retained_at` marking one a source still binds and cannot remove yet, which no purge takes.
 
 ## 8. Collection configuration
 
 - **Kind and account** are declared out of band, never inferred from a sync: `set_collection_kind(collection, account, kind)` at configuration time, `load_kind` and `load_account` to read them. `ensure_collection` may run before or after and overwrites neither.
 - **Policy**: `set_conflict` sets the collection's cross-source policy, `manual`, `prefer-incoming` or `prefer-existing`.
-- **Rename**: `rename_collection(collection, new_id)` only. Every foreign key cascades in that one statement. Deleting and recreating the row cascades the delete instead and loses every staged edit. An account rename is one `rename_collection` per collection plus `set_collection_account`, in one transaction.
+- **Rename**: `rename_collection(collection, new_id)` with `rename_queue_targets(collection, new_id)` in the same transaction. Every foreign key cascades in the first statement and the items are restamped; the second follows the id into pending `move` and `copy` payloads. Deleting and recreating the row cascades the delete instead and loses every staged edit. An account rename is one `rename_collection` per collection plus `set_collection_account`, in one transaction.
+- **Removal**: `delete_collection(collection)` then `recompute_refcounts`, in one transaction, then the collector when convenient. Nothing under it is retained.
 - **Generation**: `bump_generation` in the same transaction as a rekey (§11) and nowhere else; `load_generation` for a frontend that advertises an epoch (an IMAP `UIDVALIDITY`).
 
 ## 9. The projection
@@ -165,7 +163,7 @@ Retention needs no step of its own: `retain_item` in the write transaction (§5 
 An engine reads a collection as one source, at the scope the verb needs (SYNC §10): `load_items` and `load_bindings` for `All`, `load_items_by_link` and `load_bindings_by_link` for `Links`, `link_for_handle` then the same two for `Handles`; always `load_conflict` and `load_checkpoint`, with `load_probes_by_handle` for `Handles` and `load_probes` otherwise. A sync or a rekey asks for `All`, an upgrade for the handles it raises, a mutation for the placement it edits or every holder of the link id an `Add` must not collide with. Returning more than asked is allowed, less is not. Placements are derived, never stored. For a collection and a source, emit:
 
 - one placement per item the source binds;
-- one `Created` placement per item the source does not bind and the store holds a body for;
+- one `Created` placement per live item the source does not bind and the store holds a body for;
 - on every `Created` placement, bound or not, the origin `origin_for_link` gives: the same source binding the same link id in another collection with a base present and, when the placement has a body, that body as its base;
 - on every `Tombstone` placement, the destination `destination_for_link` gives: the same source holding a pending create of the same link id in another collection;
 - one `Probed` placement per probe row of the source;
@@ -176,64 +174,66 @@ The status is the first row that matches:
 
 | Status | Condition |
 | --- | --- |
-| `Conflict` | the binding is conflicted; carries its revision and diverging body; never downgraded |
-| `Tombstone` | the item is deleted and the source binds it; content kept |
-| `Created` | the binding has no base (`base_present` 0 and every base column `NULL`), or the source lacks the item and a body is present |
-| `Dirty` | flags differ from the base flags, both known, or the body differs from the base body |
+| `Conflict` | the binding is conflicted, or the item is (two sources disagree); carries the revision and diverging body; never downgraded |
+| `Tombstone` | the item is deleted and the source binds it; content kept; a tombstone with no base derives no remove, its binding is dropped |
+| `Created` | the binding has no base (`base_present` 0 and every base column `NULL`), or the source lacks the item, the item is live and a body is present |
+| `Dirty` | flags differ from the base flags, both known, or, for a mutable kind, a body is present and differs from the base body |
 | `Clean` | otherwise |
 
-The level is `Full` only when a body is present, whatever the row claims. A `NULL` flag set holds no opinion in the merge.
+The level is `Full` only when a body is present, whatever the row claims. A `NULL` flag set holds no opinion in the merge. A placement with no body owes no body.
 
 ## 10. A sync run
 
 1. Open (§2) and project (§9). Read the checkpoint.
 2. **Enumerate** the source from the checkpoint. Sort the snapshot by handle and keep a duplicate's first entry.
-3. **Choose candidates.** Full snapshot: every projected placement and every listed member. Delta: the changed and vanished handles, plus every projected placement that is not `Clean`. A `Created` placement is a candidate with no remote side.
+3. **Choose candidates.** Full snapshot: every projected placement and every listed member. Delta: the changed and vanished handles, plus every projected placement that is not `Clean`. A `Created` placement is a candidate with no remote side, and derives nothing while the collection holds a probe of this source.
 4. **Walk both sides in handle order.** Per candidate:
-   - flags: merge element-wise over local, base and remote; derive `SetFlags` when the merge differs from the remote; the flag axis withholds its push when the content axis already derived one for the handle, and still writes the merge;
-   - content, mutable kinds only: local body not in the base is an `Update` gated on the base revision; remote revision not in the base is a pull, which drops the local body and lowers the level to `Probed`; both is a conflict, settled by the source's policy: `Manual` marks the binding conflicted and records the observed revision, `PreferRemote` pulls, `PreferLocal` pushes gated on the observed revision, `KeepBoth` pulls and stages the local body as a new `Created` item under the provisional handle `<handle>`, `<hash>`, `<revision>` joined by `U+0001` and the key `dup:<hint>#<that handle>`; a `Conflict` placement seeing a newer revision re-records it and clears its diverging body for the next upgrade to refetch;
-   - deletes: a `Tombstone` derives `Remove`, with `to` set to its destination when the same source holds a pending create of the identity elsewhere, which the connector relocates or rejects, never deletes; a member missing from a complete snapshot, or listed vanished, is a `Deleted` drop; a remote edit over a local tombstone revives and pulls, and a revision the tombstone's base does not name is such an edit, so a move whose push record was lost is abandoned with the member live in the source;
-   - creates: a `Created` derives `Add`, by server-side copy from its origin when it has one; a connector whose collection already holds the identity answers with the holding handle, and the create lands there;
-   - rights: with `push` off nothing is pushed and everything is pulled; a forbidden kind keeps its change pending; a refused delete follows the delete policy, `Revert` (default) or `Keep`, and a source bound beside others is given `Keep`.
-5. **Push in bounded chunks.** Every change carries the idempotency key SYNC §4 derives. After each chunk, write (§5) the outcomes: `Accepted` rebases the placement as the flag axis left it and, for an `Add`, supersedes the provisional handle in the same batch; `Rejected` or unreported leaves it pending.
+   - flags: merge element-wise over local, base and remote, a flag kept when both sides carry it or one side added it over the base, dropped when either side removed it from the base, the union when there is no base; derive `SetFlags` when the merge differs from the remote; the flag axis withholds its push when the content axis already derived one for the handle, and still writes the merge;
+   - content, mutable kinds only: local body not in the base is an `Update` gated on the base revision; remote revision not in the base is a pull, which drops the local body and lowers the level to `Probed`; both is a conflict, settled by the source's policy: `Manual` marks the binding conflicted and records the observed revision, `PreferRemote` pulls, `PreferLocal` pushes gated on the observed revision; a `Conflict` placement seeing a newer revision re-records it and clears its diverging body for the next upgrade to refetch, and one whose fetched diverging body equals its own adopts the revision and clears;
+   - deletes: a `Tombstone` derives `Remove`, with `to` set to its destination when the same source holds a pending create of the identity elsewhere, which the connector relocates or rejects, never deletes; a tombstone with no base derives nothing and its binding is dropped; a member missing from a complete snapshot, or listed vanished, is a `Deleted` drop, unless its placement holds a body its base does not, in which case it is re-staged as a pending create under a provisional handle; a remote edit over a local tombstone revives and pulls, or follows the policy when the tombstone holds a local edit too, and a revision the tombstone's base does not name is such an edit, so a move whose push record was lost is abandoned with the member live in the source;
+   - creates: a `Created` derives `Add`, by server-side copy from its origin when it has one;
+   - rights: with `push` off nothing is pushed and everything is pulled; a forbidden kind keeps its change pending; a delete the rights forbid is held when the item has another binding and reverted when this one is its last, decided from the bindings loaded; a rejected push is pending like any other.
+5. **Push in bounded chunks.** Every change carries the idempotency key SYNC §4 derives, which a connector forgets once the checkpoint after the chunk lands. After each chunk, write (§5) the outcomes: `Accepted` rebases the placement as the flag axis left it and, for an `Add`, supersedes the provisional handle in the same batch; `Rejected` or unreported leaves it pending. Do not collect between chunks.
 6. **Write the checkpoint** in the batch after the last chunk, never earlier.
 7. **Report events** per item, in order: `Added`, `FlagsChanged`, `ContentChanged` and `Vanished` for what was pulled, `Conflicted`, and `Created` for an accepted add; an accepted flag, body or delete push reports nothing.
 
-A move is two halves derived by two collections' syncs in either order: `Add` by copy in the target, `Remove` with a destination in the source. Neither half is dropped for the other, and a relocated member lands the target's pending create when the fetch names it (§11).
+A move is two halves derived by two collections' syncs in either order: `Add` by copy in the target, `Remove` with a destination in the source. Neither half is dropped for the other, and a relocated member lands the target's pending create when the fetch names it (§11), the create waiting behind the probe until then.
 
 ## 11. Upgrade, mutate, rekey
 
 **Upgrade** to a tier, for the placements a consumer names:
 
 1. Select what is below the tier, plus every placement whose level claims a tier the row does not hold (`Full` with no body, `Meta` with no summary), plus a conflicted placement holding no diverging body.
-2. For an immutable kind at `Full`, ask `lookup_objects` with the placements' stated keys and adopt a body the store holds, as the base too. A mutable, conflicted or derived-key placement is fetched, never linked.
+2. For an immutable kind at `Full`, ask `lookup_objects` with the placements' stated keys and adopt a body the store holds whose size the summary agrees with, as the base too. A mutable, conflicted or derived-key placement, or one whose size disagrees, is fetched, never linked.
 3. Fetch the rest by handle; results are keyed by handle and carry the hint, the summary inputs, and at `Full` the body and its revision. A body may be streamed straight to its blob path and referenced by a byteless `StoreObject`.
-4. Assign the key once, at the first fetch carrying a hint: the hint when free in the collection, `dup:<hint>#<handle>` when this source binds the hint under another handle with a base, minted again over a key already held. A hint held by a pending create of this source lands that create instead: a `Superseded` drop of the provisional handle, the binding moved to the fetched one, the base set to what was fetched, the staged flags and body kept. Decide from the handles, not reply order.
-5. Write: item and binding inserted for a named probe and the probe dropped, summary and addresses under Annex A, the level the payload supports and never lower than held, the sort key adopted and the link id not. A conflict's fetched body lands in the binding's `conflict_object`.
+4. Assign the key once, at the first fetch carrying a hint, after a `Links` load of every fetched hint: the hint, or the kind's fallback for content stating none, when free in the collection, `dup:<value>#<handle>` when this source binds it under another handle with a base, minted again over a key already held. A hint held by a pending create of this source lands that create instead: a `Superseded` drop of the provisional handle, the binding moved to the fetched one, the base set to the fetched flags and, for an immutable kind, the staged body, the staged flags and body kept. Decide from the handles in byte order, not reply order. A mutable resource stating another hint than the one its handle was keyed under retires the old binding and is keyed afresh.
+5. Write: item and binding inserted for a named probe and the probe dropped, summary and addresses under Annex A, the level the payload supports and never lower than held, the sort key adopted and the link id not. A fetched body over a placement with no local edit becomes `base_object` with its revision as `base_revision`; one over a local edit is the both-changed case when the revision moved. A conflict's fetched body lands in the binding's `conflict_object`, or clears the conflict when it equals the placement's own.
 
 **Mutate** stages an edit through the write of §5 and no direct row edit. The queue's kinds map onto it: `set-flags` to `SetFlags`, `remove` to `Remove`, `move` and `copy` to `Move` and `Copy`, `update` to `Edit`, `add` to `Add`.
 
 | Verb | Effect |
 | --- | --- |
 | `SetFlags` | replace the flags; status `Dirty` unless `Created`, `Conflict` or `Tombstone` |
-| `Remove` | status `Tombstone`; binding and base kept |
-| `Edit` | new body stored and pointed at, base kept; nothing when the base holds it; resolves a conflict by adopting its revision and body into the base; revives a tombstone |
-| `Copy`, `Move` | a `Created` placement in the target under a provisional handle with the source's origin; `Move` tombstones the source; a live holder of the identity in the target mints the key |
-| `Add` | a new item at `Full` under a provisional handle, no base; fails on a live holder, revives a retained one, ignores a tombstone |
+| `Remove` | status `Tombstone`; binding and base kept; on a conflicted binding the base adopts the conflict's revision and the conflict clears, on a conflicted item the item's clears, so the remove pushes against what the remote holds; on a pending create the binding is dropped and the item retained |
+| `Edit` | new body stored and pointed at, base kept; nothing when the base holds it; resolves a binding's or an item's conflict by adopting its revision and body into the base; revives a tombstone |
+| `Copy`, `Move` | a `Created` placement in the target under a provisional handle with the source's origin; `Move` tombstones the source; a live holder of the identity in the target mints the key; refused for a placement with neither a body nor a based binding |
+| `Add` | a new item at `Full` under a provisional handle, no base; fails on a live holder, revives a retained one or a tombstone still propagating |
 
-**Rekey**, when a source renumbered every handle:
+A provisional handle is `U+0001` followed by the link id (SYNC §2).
 
-1. Enumerate the new handle space and fetch enough to identify every member.
-2. Match each member to its old placement by link id. A member resolving to an identity already handed out takes the minted key an old copy carried, else a mint over its own handle; pending creates count as taken. A mutable member whose fetched revision is not its old base's is carried as a pull, or as a `Conflict` at that revision when it holds a local edit.
-3. In one batch: a `Rekeyed` drop of each old handle, an upsert of the same item under its new handle carrying body, summary, level, flags, base and pending state, the sort key preferring the fetch's; a `Deleted` drop of each handle the new space lacks.
+**Rekey**, when a source renumbered every handle and the connector reported it (SYNC §4):
+
+1. Enumerate the new handle space in full and fetch enough to identify every member.
+2. Match each member to its old placement by link id, and where one hint had several old copies by body hash first and handle order last. A member resolving to an identity already handed out takes the minted key an old copy carried, else a mint over its own handle; pending creates count as taken and are carried untouched. A mutable member whose fetched revision is not its old base's is carried as a pull, or as a `Conflict` at that revision when it holds a local edit.
+3. In one batch, never cut: a `Rekeyed` drop of each old handle, then an upsert of the same item under its new handle carrying body, summary, level, flags, base and pending state, the sort key preferring the fetch's; a `Deleted` drop of each based handle the new space lacks.
 4. The store bumps the generation in the transaction applying that batch, recognising the rebuild by its `Rekeyed` drops (§5 step 8); the engine emits no op for it.
 
 ## 12. Absorbing a write across sources
 
 When a batch from one source folds into an item other sources bind:
 
-1. Adopt a known flag set, sort key and summary over the shared one; leave the shared value alone for an unknown one. A tombstone adopts no content. Merge the level as a maximum, under the rule that `Full` needs a body.
-2. Compare bodies from the binding's `shared_object`, falling back to `base_object` until the source has folded once. The incoming body differs from the source's base while the shared body differs from what the source last agreed with: a divergence, settled by the collection's policy, `manual` flagging the item and recording the diverging body in `items.conflict_object`, `prefer-incoming` adopting, `prefer-existing` keeping. Only the source having changed is a fast-forward. Flags never diverge.
+1. Adopt a known flag set, sort key and summary over the shared one; leave the shared value alone for an unknown one. A tombstone adopts no content. Merge the level as a maximum, under the rule that `Full` needs a body; a pull writes `Probed`.
+2. For a mutable kind, read three facts before applying the upsert: the source changed (the incoming body differs from the base the binding held before this upsert), the item changed (the shared body differs from `shared_object`, or from `base_object` until the source has folded once), and the two disagree (the incoming body differs from the shared one). All three is a divergence, settled by the collection's policy: `manual` keeps the shared body, flags the item and records the incoming body in `items.conflict_object`, so every binding projects `Conflict` until an `Edit` or `Remove` settles it; `prefer-incoming` adopts; `prefer-existing` keeps. Only the source having changed is a fast-forward; only the item having changed leaves the binding `Dirty` to propagate. For an immutable kind the shared body stands and the binding's base adopts it. Flags never diverge.
 3. Move `shared_object` to whatever the item settled on. Clear the binding's own conflict on an upsert carrying no divergence, releasing the pin its diverging body held.
 4. A `Deleted` drop or a `Tombstone` upsert marks the item deleted; the dropping source loses its binding, a tombstoning one keeps it; a live upsert clears it. With no binding left, `retain_item`, then `purge_item` when the account holds the identity live elsewhere. A `Superseded` or `Rekeyed` drop marks nothing.
 
@@ -244,14 +244,14 @@ Every other source then projects the change as its own `Dirty` or `Tombstone` an
 **Enqueue**, as a producer, under a shared lock on objects.lock held across the whole procedure:
 
 1. Write the body the action needs, if any (§4).
-2. `BEGIN`; `ensure_collection`; at most one `store_object`; `enqueue_action` with the kind, the versioned JSON payload and the body's hash in `object_hash`, which pins it; `COMMIT`. The statement stamps `created_at`.
+2. `BEGIN`; `ensure_collection`; at most one `store_object` followed by `pin_object`; `enqueue_action` with the kind, the versioned JSON payload and the body's hash in `object_hash`; `COMMIT`. The statement stamps `created_at`.
 3. Release the lock. Do not assume when the owner will run.
 
 **Drain**, as the owner:
 
-1. `list_queued_collections`, then per collection `load_pending_actions` outside any transaction.
-2. Per row in ascending id: `BEGIN`; `claim_action` first, and end the transaction touching nothing when it deleted no row, since another owner applied it; apply the action as the corresponding mutation of §11 (`add` derives the summary and addresses from the body, a duplicate link id, `live_item_for_link`, parks unless the holder is retained, which revives it); settle refcounts, the row's pin included; `COMMIT`. No network inside.
-3. An environment failure (busy, a body unreadable): `bump_attempts`, row left pending. A store failure (a refused rebind, a constraint) or any other permanent one: `park_action` with the error, which counts the attempt itself. Neither stops the rows behind it. An unrecognised kind, one this owner lacks the capability for, or a `remove` of an item this source does not bind: skip, touching nothing, attempts unbumped, later rows proceeding.
+1. `list_pending_actions`, store-wide in append order, outside any transaction.
+2. Per row: `BEGIN`; `claim_action` first, and end the transaction touching nothing when it deleted no row, since another handle applied it; apply the action as the corresponding mutation of §11 (`add` derives the summary and addresses from the body; a live duplicate link id, `live_item_for_link`, parks, a retained or tombstoned holder revives; a `move` or `copy` into a collection with no declared kind parks; `remove` tombstones the shared item and succeeds on one nothing binds); settle refcounts, the row's pin included; `COMMIT`. No network inside.
+3. On any failure, `ROLLBACK` first, which restores the claimed row, then in a new transaction: an environment failure (busy, a body unreadable), `bump_attempts`, row left pending until the owner's bound on attempts, then parked; a store failure (a refused rebind, a constraint) or any other permanent one, `park_action` with the error, which counts the attempt itself. Neither stops the rows behind it. An unrecognised kind, or one this owner lacks the capability for: skip, touching nothing, attempts unbumped, later rows proceeding.
 
 **Cancel or acknowledge**, as the owner: `cancel_action`, then `release_pins` on the hash it returns, in one transaction. An intent whose effect is not a store mutation is at least once; the performer deduplicates.
 
@@ -265,9 +265,9 @@ Operators read `load_parked_actions` store-wide; a reader overlays `load_pending
 - **A sweep** that must see every row once: `list_items_page`, cursor on link id.
 - **People**: `list_address_placements(address, role)`, `role` `NULL` for any; `list_domain_placements` for a domain, by scan.
 - **Identity across collections**: `list_link_placements(link_id)`, `list_object_placements(hash)`, `seq_by_link`.
-- **Trash**: `list_retained_page` (cursor on `seq`, `0` first), `count_retained`, `retained_bytes`.
-- **Change**: `PRAGMA data_version` to know that something committed; `load_change_cursor` then `list_items_changed_since` and `list_collections_changed_since` to know what, reconciling keys only when `purges` moved.
-- **Sync state**: `list_sources`, `list_conflicted_bindings(account)`, `count_probes`, `load_kind`.
+- **Trash**: `list_retained_page` (cursor on `seq`, `0` first), every deleted row, `retained_at` `NULL` on one a source still binds; `count_retained`, `retained_bytes`.
+- **Change**: `PRAGMA data_version` to know that something committed; `load_change_cursor` for the last stamp drawn and the purge count, then `list_items_changed_since` and `list_collections_changed_since` above the recorded stamp to know what, reconciling keys only when `purges` moved.
+- **Sync state**: `list_sources`, `list_conflicted_bindings(account)`, `list_conflicted_items(account)`, `count_probes`, `load_kind`.
 
 Never present a deleted row as live outside the trash view.
 
@@ -276,18 +276,18 @@ Never present a deleted row as live outside the trash view.
 **Refresh**, as the indexer, holding an exclusive advisory lock on index.lock and no store lock:
 
 1. Open index.db read-write and attach pimdir.db read-only as `store`. `load_index_meta`; on a version or tokenizer mismatch, delete index.db, apply migrations/search/0001_init.sql, `init_index_meta`.
-2. `load_change_cursor` from the store before the pass.
-3. `load_changed_items` above `store_change`, in stamp order, in bounded batches, one index transaction each. Per row: `object_indexed`, else extract the body under SEARCH §6 and `insert_object` plus `insert_object_text`; `upsert_placement`; `insert_summary_text` for a bodiless row and `delete_summary_text` once it has a body; `replace_flags` then `insert_flag`; `replace_occurrences` then `insert_occurrence` within the horizon when the body changed; `upsert_message` and `upsert_thread` for mail, re-keying a thread on join by its lowest `(sort_key, link_id)` member. A deleted or retained row: `delete_placement`, which takes its flags, occurrences and summary text.
+2. `load_change_cursor` from the store before the pass: the last stamp drawn and the purge count.
+3. `load_changed_items` above the `store_change` recorded by the previous pass, in stamp order, in bounded batches, one index transaction each. Per row: `object_indexed`, else extract the body under SEARCH §6, the role fields beside `people`, and `insert_object` plus `insert_object_text`, writing no `object` row for a blob that is not there; `upsert_placement`; `delete_summary_text` then `insert_summary_text` for a bodiless row, and `delete_summary_text` once it has a body; `replace_flags` then `insert_flag`; `replace_occurrences` then `insert_occurrence` within the horizon when the body changed; `upsert_message` for the message and for every parent id it names, and `upsert_thread`, re-keying a thread on join by its lowest present `(sort_key, link_id)` member, the new row written and the members repointed before the old row is deleted. A deleted row: `delete_placement`, which takes its flags and occurrences by cascade, then `delete_summary_text` by the id it returned.
 4. When `purges` or a collection stamp moved: `placements_gone` and `objects_gone`, then `delete_placement` for each placement, and `delete_object` (the FTS row, by rowid) then `delete_object_row` for each body.
-5. When the horizon rolls: `set_horizon`, then `items_to_reexpand` and re-expand those alone.
-6. `set_index_cursor` in the transaction that completes the pass.
+5. When the horizon rolls: `items_to_reexpand` bound to the old and the new horizon, re-expand those alone, then `set_horizon`.
+6. `set_index_cursor` with what step 2 read, in the transaction that completes the pass.
 
-**Query**, as a client, on index.db read-only with the store attached: compile the query under SEARCH §8, structured terms to seeks (`list_address_placements` on the store for an address, a range on the sort key, `flagged`, `occurring_between`, `thread_members`), text terms to `match_objects` and `match_summaries`, intersect, order by the store's sort key, present each hit through `hit` and report `coverage` beside the result. Tagging goes through the queue as a producer (§13), never through the index.
+**Query**, as a client, on index.db read-only with the store attached: compile the query under SEARCH §8, structured terms to seeks (`list_address_placements` on the store for an address, a range on the sort key, `flagged`, `occurring_between`, `thread_members` in the query's account), text terms to `match_objects` and `match_summaries` with a role field named for a role term, intersect, order by the store's sort key, present each hit through `hit` and report `coverage` beside the result. Tagging goes through the queue as a producer (§13), never through the index.
 
 ## 16. Running the vectors
 
 - **vectors/objects.json**: for each case, name the body under both algorithms and compare name and shard path. Every store implementation, before anything else.
-- **vectors/summaries.json** with vectors/fixtures/: read each fixture as bytes (they are CRLF, and a text-mode read changes the object name), check its stated hashes first, derive the link id, summary row, address rows and sort key, compare as parsed structures. A case with a `hint` and a `handle` checks the minted key; one with no `uid` checks the `hash:` key. Per kind written.
+- **vectors/summaries.json** with vectors/fixtures/: read each fixture as bytes (they are CRLF, and a text-mode read changes the object name), check its stated hashes first, derive the link id, summary row, address rows and sort key, compare as parsed structures. A case with a `hint` and a `handle` checks the minted key; one with no `uid` checks the `hash:` key, one with no `message_id` the `alt:` key. Per kind written.
 - **vectors/sync/**: build the `store` rows, run the `run` verb against the `remote` answers, compare the pushes in order with their keys, feed back the `outcomes`, compare the `events` and the rows after, `changed` stamps and `retained_at` instants excluded, chunks concatenated. Every engine.
 - **vectors/search/**: build the fixture store from store.json, index it at each case's `now`, run the query with its sort, compare hits as `(account, seq)`, ordered where the sort says so, and the coverage. Every index.
 

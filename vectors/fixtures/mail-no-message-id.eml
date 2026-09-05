@@ -1,0 +1,6 @@
+From: Cron Daemon <cron@example.org>
+To: ops@example.org
+Subject: Cron alert
+Date: Sat, 01 Aug 2026 10:00:00 +0000
+
+Disk full on host.

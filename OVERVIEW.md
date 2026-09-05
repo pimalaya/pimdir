@@ -94,7 +94,7 @@ One item, one binding per source, and no merge between sources. A change that on
 
 For that to be honest a binding keeps two agreement points: what the source last agreed with its own remote, which is what a pending push is measured from, and what it last agreed with the shared item, which is what a divergence between sources is measured from. Measuring both from one point would make a source's own unpushed edit look like another source's disagreement.
 
-A divergence between sources is settled by the collection's policy: keep the incoming body, keep the existing one, or flag the item with the diverging body kept. A divergence between a source and its own remote belongs to that binding alone. The two are recorded separately and neither implies the other.
+A divergence between sources is settled by the collection's policy: keep the incoming body, keep the existing one, or flag the item with the diverging body kept and every source's push held until a person decides. A divergence between a source and its own remote belongs to that binding alone. The two are recorded separately and neither implies the other.
 
 Deletes propagate the same way. A removal on one source marks the item deleted, every other source sees a delete to push, and when the last binding is gone the item is retained.
 
@@ -104,7 +104,7 @@ Normative: SYNC §9; STORAGE §10.
 
 Removal from every source is not removal from the store. When an item's last binding goes, the row and its body are kept, hidden from sync and from the live reads, and listed in a trash view. Only an explicit purge deletes the row; the body then falls to the collector. An identity that comes back revives the retained row, keeping its public id and body, so a restore costs no network.
 
-Retention has no switch. How long to keep and when to purge is the owner's schedule, and a policy of purging immediately reproduces a store that never retained. A move is not a loss: when the item's identity is held live in another collection of the account, the source row is purged at once rather than kept in the trash beside its new home.
+Retention has no switch. How long to keep and when to purge is the owner's schedule, and a policy of purging immediately reproduces a store that never retained. A move is not a loss: when the item's identity is held live in another collection of the account with the same body, the source row is purged at once rather than kept in the trash beside its new home. The trash also shows a deletion a source may not carry out yet, so nothing the user deleted is invisible while it waits.
 
 Normative: STORAGE §11.
 
@@ -118,7 +118,7 @@ Normative: STORAGE §15.
 
 ## 9. The change feed
 
-Every item and collection carries a stamp drawn from one counter that only increases, taken when the row last changed in a way a reader can see. A consumer that derives anything from the store, the search index or a window listing a mailbox, remembers the last stamp it folded and asks for what moved since. A deleted row cannot carry a stamp, so purges are counted separately and a consumer reconciles its keys only when that count moved.
+Every item and collection carries a stamp drawn from one counter that only increases, taken when the row last changed in a way a reader can see, and no two rows share one. A consumer that derives anything from the store, the search index or a window listing a mailbox, remembers the last stamp drawn when it last looked and asks for what moved above it. A deleted row cannot carry a stamp, so purged items and collected bodies are counted separately and a consumer reconciles its keys only when that count moved.
 
 Normative: STORAGE §4.5.
 

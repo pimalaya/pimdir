@@ -10,8 +10,8 @@ Triage first: each accepted item becomes its own change with its own delta. Noth
 ## Decide
 
 - [x] Concurrency envelope: one process with many handles, or many processes? Settled by `owner-lock-must`: the rule is about processes, the advisory lock is a MUST, and several handles of one process share one lock.
-- [ ] An object indexed with no referrer: forbidden by the format, or given a grace window? The mirror image of `orphan-blobs-are-swept-by-nobody`, which settled the file-with-no-row case (an operator sweep behind a grace period) and deliberately left this one.
-- [ ] Is the residual required to survive a crash?
+- [x] An object indexed with no referrer: forbidden by the format, or given a grace window? Settled by `collector-recomputes-and-producers-pin` (2026-09-05): legal, and the collector MUST NOT run while a verb of the owner's is between two chunks, the locks covering every other process.
+- [x] Is the residual required to survive a crash? Settled by `probes-are-rows` (2026-09-03): it is a row.
 
 ## Correctness of the format
 
@@ -30,15 +30,15 @@ Triage first: each accepted item becomes its own change with its own delta. Noth
 - [x] Scope the refcount-zero sweep to the hashes the batch touched: **not needed, measured**. The partial index `objects_garbage` already makes both halves O(garbage). At the steady state a batch actually meets (every object live, nothing to collect) the full list-plus-delete sweep is flat at 6.9 µs across 10 000, 100 000 and 400 000 objects. Scoping it would add a bound parameter and a JSON array to save nothing.
 - [x] Permit the blob write before `BEGIN` (§14 step 1): `orphan-blobs-are-swept-by-nobody`, which is what made the justification true.
 - [x] Reconsider the column order of `items_retained`: `retained-page-by-seq` re-ordered it to `(collection, seq)`, measured across every retained read. The extra `(retained_at)` index the audit proposed alongside it was **rejected on measurement**: 54.88 ms against 56.45 ms at 500 collections, because the purge cost is the per-row foreign-key check on `bindings`, not the lookup.
-- [ ] `WITHOUT ROWID` for `objects` and `sources`. Untouched, and the only remaining schema item.
-- [ ] Decide what a `DELETE FROM collections` means for the refcounts it orphans. The cascade takes items and bindings without releasing their pins, so the counts are left too high and the bodies never collected.
+- [ ] `WITHOUT ROWID` for `objects` and `sources`. Untouched, carried into `algorithm-audit-2026-09-04`.
+- [x] Decide what a `DELETE FROM collections` means for the refcounts it orphans: `collector-recomputes-and-producers-pin` (2026-09-05), `delete_collection` followed by `recompute_refcounts` in one transaction, the only sanctioned delete on the table.
 
 ## Smaller
 
 - [x] Pin `created_at` to the `strftime` form the schema already uses elsewhere: `created-at-stamped`, which stamps it in the statement rather than only pinning the form, so no producer formats a clock at all.
 - [x] Adopt `seq` paging for retained items (§14.1): `retained-page-by-seq`. 1.372 ms to 0.031 ms on a five-thousand-item trash, and the cursor stops being the internal `link_id`.
-- [ ] Say whether the §7 refcount repair is expected of an implementation or of an operator. `orphan-blobs-are-swept-by-nobody` answered the same question for the blob sweep (an operator), so this one now has a precedent to follow or to deviate from deliberately.
+- [x] Say whether the §7 refcount repair is expected of an implementation or of an operator: of the collector, which runs it first on every collection (`collector-recomputes-and-producers-pin`, 2026-09-05).
 
 ## Raised while working the list, not from the original audit
 
-- [ ] `store_meta` has **no canonical insert statement**. The one row that fixes `hash_algo` for the whole store is written by ad-hoc code in every implementation, which is the same hole §16's vectors exist because of. Needs a seventh queries/ file and a §4.4 change.
+- [x] `store_meta` has **no canonical insert statement**: `init_store_meta`, landed with `change-feed` (2026-09-03).

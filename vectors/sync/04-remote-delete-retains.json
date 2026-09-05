@@ -9,7 +9,7 @@
     "probes": [],
     "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c0" }]
   },
-  "run": { "verb": "sync", "collection": "INBOX", "source": "imap", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual", "delete": "revert" } },
+  "run": { "verb": "sync", "collection": "INBOX", "source": "imap", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual" } },
   "remote": { "snapshot": { "items": [], "vanished": [], "complete": true, "checkpoint": "c1" }, "fetch": {} },
   "expect": {
     "pushes": [],

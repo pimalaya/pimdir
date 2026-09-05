@@ -1,0 +1,35 @@
+{
+  "label": "a body fetched from one source while the shared body moved through another is a cross-source divergence",
+  "note": "source a folded c3 into the item (its shared_object says so); b's Full fetch brings c2 at r2, which differs from b's base c1 (b changed), while the shared body c3 differs from what b last agreed with, c1 (the item changed), and the two disagree. Under manual the shared body stays, the item is flagged with c2 as its diverging body, b's base moves to what its remote holds and every binding projects Conflict until an Edit or Remove settles it (SYNC.md §9, §3)",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
+    "objects": {
+      "c1": { "body": "fixtures/card-basic.vcf" },
+      "c2": { "body": "fixtures/card-basic-edited.vcf" },
+      "c3": { "body": "fixtures/card-basic-renamed.vcf" }
+    },
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c3", "level": 2, "deleted": 0 }],
+    "bindings": [
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1, "shared_object": "c3" },
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "b", "handle": "b.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1, "shared_object": "c1" }
+    ],
+    "probes": [],
+    "sources": [{ "collection": "Contacts", "source": "a", "checkpoint": "a1" }, { "collection": "Contacts", "source": "b", "checkpoint": "b0" }]
+  },
+  "run": { "verb": "upgrade", "collection": "Contacts", "source": "b", "tier": "Full", "handles": ["b.vcf"] },
+  "remote": { "snapshot": null, "fetch": { "b.vcf": { "Full": { "body": "fixtures/card-basic-edited.vcf", "revision": "r2" } } } },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [{ "kind": "Conflicted", "handle": "b.vcf" }],
+    "store": {
+      "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c3", "level": 2, "deleted": 0, "conflicted": 1, "conflict_object": "c2" }],
+      "bindings": [
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1, "shared_object": "c3" },
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "b", "handle": "b.vcf", "base_flags": [], "base_object": "c2", "base_revision": "r2", "base_present": 1, "shared_object": "c3" }
+      ],
+      "probes": [],
+      "sources": [{ "collection": "Contacts", "source": "a", "checkpoint": "a1" }, { "collection": "Contacts", "source": "b", "checkpoint": "b0" }]
+    }
+  }
+}

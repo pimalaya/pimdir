@@ -1,0 +1,25 @@
+{
+  "label": "a pending create derives no add while the collection holds a probe of its source",
+  "note": "the target of a hydrated move lists the relocated member as a probe in the run that would push the create; the probe may be that create's own arrival, so nothing is pushed until the upgrade names it, which lands the create (vector 21) or frees it (SYNC.md §5)",
+  "store": {
+    "collections": [{ "id": "Archive", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },
+    "items": [{ "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+    "bindings": [{ "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }],
+    "probes": [],
+    "sources": [{ "collection": "Archive", "source": "imap", "checkpoint": "a0" }]
+  },
+  "run": { "verb": "sync", "collection": "Archive", "source": "imap", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual" } },
+  "remote": { "snapshot": { "items": [{ "handle": "7", "flags": ["\\Seen"], "revision": null }], "vanished": [], "complete": true, "checkpoint": "a1" }, "fetch": {} },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [{ "kind": "Added", "handle": "7" }],
+    "store": {
+      "items": [{ "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+      "bindings": [{ "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }],
+      "probes": [{ "collection": "Archive", "source": "imap", "handle": "7", "flags": ["\\Seen"] }],
+      "sources": [{ "collection": "Archive", "source": "imap", "checkpoint": "a1" }]
+    }
+  }
+}

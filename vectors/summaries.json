@@ -38,6 +38,21 @@
       "sort_key": "2026-08-01T10:00:00Z"
     },
     {
+      "label": "mail, no Message-ID",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-no-message-id.eml",
+      "note": "content stating no usable hint takes the kind's fallback in its place: alt:, the decoded subject, the date column and the sender column joined by |, each empty when absent (STORAGE §9, Annex A.1). checks/vectors.py re-derives it; a second such message in one collection mints over it like a hint (vector 31)",
+      "body": { "len": 141, "blake3": "otwuvxi7drokzlnfaijscwap7n6m4glv7iqtuu6w5vqhv6uy7pia", "sha256-128": "kfaememlt26pd2lg4yhnbukwbq" },
+      "link_id": "alt:Cron alert|2026-08-01T10:00:00Z|cron@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": null, "in_reply_to": [], "subject": "Cron alert", "sender": "cron@example.org", "sender_name": "Cron Daemon", "date": "2026-08-01T10:00:00Z", "size": 141, "attachment": 0 },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "cron@example.org", "name": "Cron Daemon" },
+        { "role": "to", "position": 0, "address": "ops@example.org", "name": null }
+      ],
+      "sort_key": "2026-08-01T10:00:00Z"
+    },
+    {
       "label": "mail, encoded headers",
       "kind": "message/rfc822",
       "fixture": "fixtures/mail-encoded.eml",

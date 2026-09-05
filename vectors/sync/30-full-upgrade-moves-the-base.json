@@ -1,0 +1,27 @@
+{
+  "label": "a Full fetch over a placement with no local edit becomes its base",
+  "note": "after a pull (vector 11) the item has no body and the base names r2 with no object; the fetch brings the body at r2, which lands as object_hash and as base_object with base_revision r2, so the next sync reads it as agreed rather than as an edit to push (SYNC.md §6)",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
+    "objects": { "c2": { "body": "fixtures/card-basic-edited.vcf" } },
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": null, "level": 0, "deleted": 0 }],
+    "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": null, "base_revision": "r2", "base_present": 1 }],
+    "probes": [],
+    "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d1" }]
+  },
+  "run": { "verb": "upgrade", "collection": "Contacts", "source": "dav", "tier": "Full", "handles": ["a.vcf"] },
+  "remote": { "snapshot": null, "fetch": { "a.vcf": { "Full": { "body": "fixtures/card-basic-edited.vcf", "revision": "r2" } } } },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c2", "level": 2, "deleted": 0, "sort_key": "jane a. doe" }],
+      "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": "c2", "base_revision": "r2", "base_present": 1 }],
+      "probes": [],
+      "summaries": [{ "table": "contact_summary", "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "row": { "uid": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "fn": "Jane A. Doe", "kind": null, "org": null } }],
+      "addresses": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "role": "email", "position": 0, "address": "jane@example.org", "name": null }],
+      "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d1" }]
+    }
+  }
+}

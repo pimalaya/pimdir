@@ -151,6 +151,11 @@ for case in summaries["cases"]:
     if case["summary"].get("uid") is None and case["table"] != "mail_summary":
         check(f"{case['label']} hash: link_id", case["link_id"], "hash:" + fnv1a(bytes_))
 
+    if case["table"] == "mail_summary" and case["summary"]["message_id"] is None and "hint" not in case:
+        row = case["summary"]
+        alt = "alt:" + "|".join(row[column] or "" for column in ("subject", "date", "sender"))
+        check(f"{case['label']} alt: link_id", case["link_id"], alt)
+
 # The sync cases (SYNC.md section 11): shape and references only.
 sync_cases = sorted((root / "sync").glob("*.json"))
 
@@ -172,6 +177,12 @@ for path in sync_cases:
     require(f"{label}: run names a verb", case["run"].get("verb") in {"open", "sync", "upgrade", "mutate", "rekey"})
     if case["run"].get("verb") == "mutate":
         require(f"{label}: a mutate run carries its mutation", isinstance(case["run"].get("mutation"), dict))
+    require(f"{label}: no delete policy option, the engine decides per item", "delete" not in case["run"].get("options", {}))
+    for binding in store.get("bindings", []) + case["expect"].get("store", {}).get("bindings", []):
+        provisional = binding["handle"].startswith("\u0001")
+        require(f"{label}: binding {binding['handle']!r} is provisional iff it has no base", provisional == (binding.get("base_present", 0) == 0))
+        if provisional:
+            check(f"{label}: provisional handle of {binding['link_id']}", binding["handle"], "\u0001" + binding["link_id"])
 
     # Every push is keyed as SYNC.md section 4 says, its object named under
     # blake3 for the derivation, so an engine's keys are checked against the

@@ -31,12 +31,36 @@
         ];
       };
 
+      # The canonical files with the documents that name them.
+      standard = lib.fileset.toSource {
+        root = ./.;
+        fileset = lib.fileset.unions [
+          ./migrations
+          ./queries
+          ./vectors
+          ./OVERVIEW.md
+          ./STORAGE.md
+          ./SYNC.md
+          ./SEARCH.md
+          ./GUIDE.md
+          ./README.md
+        ];
+      };
+
       python = pkgs: pkgs.python3.withPackages (ps: [ ps.blake3 ]);
     in
     {
       checks = eachSystem (pkgs: {
         schema = pkgs.runCommand "pimdir-schema" { nativeBuildInputs = [ pkgs.sqlite ]; } ''
           bash ${./checks/schema.sh} ${format} | tee $out
+        '';
+
+        invariants = pkgs.runCommand "pimdir-invariants" { nativeBuildInputs = [ pkgs.sqlite ]; } ''
+          bash ${./checks/invariants.sh} ${format} | tee $out
+        '';
+
+        names = pkgs.runCommand "pimdir-names" { nativeBuildInputs = [ pkgs.sqlite ]; } ''
+          bash ${./checks/names.sh} ${standard} | tee $out
         '';
 
         vectors = pkgs.runCommand "pimdir-vectors" { } ''

@@ -7,7 +7,7 @@
       "m1": { "body": "fixtures/mail-basic.eml" }
     },
     "items": [{ "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
-    "bindings": [{ "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "tmp-1", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }],
+    "bindings": [{ "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }],
     "probes": [{ "collection": "Archive", "source": "imap", "handle": "7", "flags": ["\\Seen"] }],
     "sources": [{ "collection": "Archive", "source": "imap", "checkpoint": "a1" }]
   },

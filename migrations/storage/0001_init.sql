@@ -15,9 +15,11 @@ CREATE TABLE store_meta (
     -- Hands out the next item `seq`; only ever increases, so a public id is
     -- never reused store-wide (§9.1).
     next_seq    INTEGER NOT NULL DEFAULT 1,
-    -- The next change stamp (§4.5), drawn by the triggers below and stamp_item.
+    -- The next change stamp (§4.5), drawn by the triggers below; a consumer
+    -- records next_change - 1, the last stamp drawn.
     next_change INTEGER NOT NULL DEFAULT 1,
-    -- Purges run so far (§11.2): a deleted row leaves no stamp, so this does.
+    -- Rows that left without a stamp (§4.5): purged items and collected
+    -- objects, counted by the delete triggers below.
     purges      INTEGER NOT NULL DEFAULT 0
 ) STRICT;
 
@@ -37,8 +39,8 @@ CREATE TABLE collections (
     color       TEXT,                      -- optional presentation
     description TEXT,
     sort_order  INTEGER,
-    -- 'manual' | 'prefer-incoming' | 'prefer-existing'
-    conflict    TEXT NOT NULL DEFAULT 'manual',
+    conflict    TEXT NOT NULL DEFAULT 'manual'
+                CHECK (conflict IN ('manual', 'prefer-incoming', 'prefer-existing')),
     -- Handle-space epoch, bumped by the owner on a backend identity reset, so a
     -- reader derives an IMAP UIDVALIDITY from the store alone (§12).
     generation  INTEGER NOT NULL DEFAULT 1,
@@ -51,6 +53,14 @@ CREATE TABLE collections (
 CREATE INDEX collections_by_account ON collections(account) WHERE account IS NOT NULL;
 -- The change feed's collection half (§4.5).
 CREATE INDEX collections_by_changed ON collections(changed);
+
+-- A renamed collection restamps its items under the new id (§4.5), else a
+-- consumer keyed on the old id drops them and never learns the new one.
+CREATE TRIGGER collections_restamp_items AFTER UPDATE OF id ON collections
+WHEN OLD.id IS NOT NEW.id
+BEGIN
+    UPDATE items SET changed = -1 WHERE collection IN (OLD.id, NEW.id);
+END;
 
 -- One row per source syncing a collection (a server, a phone); the sync cursor
 -- is per source.
@@ -73,6 +83,13 @@ CREATE TABLE objects (
     refcount INTEGER NOT NULL DEFAULT 0 CHECK (refcount >= 0)
 ) STRICT;
 
+-- A collected object leaves no stamp either (§4.5): the index holds its text
+-- until it learns the row is gone.
+CREATE TRIGGER objects_count_collect AFTER DELETE ON objects
+BEGIN
+    UPDATE store_meta SET purges = purges + 1 WHERE id = 1;
+END;
+
 -- The shared truth of one logical item, keyed by its cross-source link id.
 -- `deleted` lingers while a removal propagates to the other sources; once the
 -- last one has dropped it the row is retained rather than deleted (non-NULL
@@ -83,17 +100,20 @@ CREATE TABLE items (
     collection      TEXT NOT NULL REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
     link_id         TEXT NOT NULL,         -- the key the item is filed under: the identity hint, a kind fallback, or a minted dup:<hint>#<handle> (§9)
     seq             INTEGER NOT NULL,      -- public id, shared by every placement of the link id (§9.1)
-    flags           TEXT,                  -- JSON array of flag strings
+    flags           TEXT CHECK (flags IS NULL OR json_valid(flags)),  -- JSON array of flag strings
     object_hash     TEXT REFERENCES objects(hash),  -- current body, NULL until hydrated
     sort_key        TEXT NOT NULL DEFAULT '',  -- the kind's ordering key, '' when unknown (§9.3)
-    level           INTEGER NOT NULL,      -- detail ladder: 0 probed, 1 meta, 2 full
-    deleted         INTEGER NOT NULL DEFAULT 0,     -- 1 while a delete propagates across sources
+    level           INTEGER NOT NULL CHECK (level IN (0, 1, 2)),  -- detail ladder: 0 probed, 1 meta, 2 full
+    deleted         INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0, 1)),  -- 1 while a delete propagates across sources
     retained_at     TEXT,                  -- RFC 3339 instant the last binding vanished (§11)
     retained_by     TEXT,                  -- the source whose removal retired it, diagnostic
-    conflicted      INTEGER NOT NULL DEFAULT 0,     -- 1 while a content conflict is unresolved
-    conflict_object TEXT REFERENCES objects(hash),  -- the diverging body a Manual conflict recorded
+    conflicted      INTEGER NOT NULL DEFAULT 0 CHECK (conflicted IN (0, 1)),  -- 1 while a cross-source content conflict is unresolved
+    conflict_object TEXT REFERENCES objects(hash),  -- the diverging body a manual conflict recorded
     changed         INTEGER NOT NULL DEFAULT 0,     -- the change stamp (§4.5), trigger-maintained
-    PRIMARY KEY (collection, link_id)
+    PRIMARY KEY (collection, link_id),
+    -- The terminal states §11 and §10 describe, held by the schema.
+    CHECK (retained_at IS NULL OR deleted = 1),
+    CHECK (conflicted = 1 OR conflict_object IS NULL)
 ) STRICT;
 
 -- Resolves a public id back to the internal link id.
@@ -101,14 +121,18 @@ CREATE UNIQUE INDEX items_by_seq ON items(collection, seq);
 -- "Does this link id already have a seq?", which is what makes every placement
 -- share one, and list_link_placements (§9.2).
 CREATE INDEX items_by_link ON items(link_id);
--- Every retained read rides this one index, and it leads with `seq` because the
--- trash listing pages on the public id (§14.1): ordering by anything else sorts
--- every retained row in the collection to return one page.
-CREATE INDEX items_retained ON items(collection, seq) WHERE retained_at IS NOT NULL;
+-- The trash view (§11, §14.1): every deleted row, retained or still
+-- propagating. It leads with `seq` because the listing pages on the public
+-- id: ordering by anything else sorts every such row to return one page.
+CREATE INDEX items_retained ON items(collection, seq) WHERE deleted = 1;
 -- Orders a collection by the kind's own key, `seq` breaking the tie so a keyset
--- page over a non-unique key is total. Without it the only orderings are by
--- link id or by seq, neither of which means anything to a reader (§14.1).
-CREATE INDEX items_by_sort ON items(collection, sort_key, seq);
+-- page over a non-unique key is total. Partial on the live rows, which every
+-- listing filters on, so a mailbox whose server expunged most of it does not
+-- page past its own trash (§14.1).
+CREATE INDEX items_by_sort ON items(collection, sort_key, seq) WHERE deleted = 0;
+-- The items waiting for a cross-source decision (list_conflicted_items).
+-- Partial, empty at rest.
+CREATE INDEX items_conflicted ON items(collection, seq) WHERE conflicted = 1;
 -- The store-global lookup of a public id (§9.1), which items_by_seq cannot
 -- serve without scanning: it leads with the collection.
 CREATE INDEX items_by_seq_global ON items(seq);
@@ -117,7 +141,10 @@ CREATE INDEX items_by_changed ON items(changed);
 
 -- The change stamps (§4.5), drawn here so no writer plumbs them. An update
 -- stamps only when an observable column moved, so a restated row stamps
--- nothing; a delete cannot stamp the row it removes and counts a purge.
+-- nothing; a delete cannot stamp the row it removes and counts a purge. A
+-- writer asks for a stamp by setting `changed` to -1 (stamp_item), and the
+-- request trigger draws it, so every stamp is drawn here and no two rows
+-- share one.
 CREATE TRIGGER items_stamp_insert AFTER INSERT ON items
 BEGIN
     UPDATE items SET changed = (SELECT next_change FROM store_meta WHERE id = 1)
@@ -136,6 +163,14 @@ WHEN OLD.flags IS NOT NEW.flags
   OR OLD.retained_at IS NOT NEW.retained_at
   OR OLD.conflicted IS NOT NEW.conflicted
   OR OLD.conflict_object IS NOT NEW.conflict_object
+BEGIN
+    UPDATE items SET changed = (SELECT next_change FROM store_meta WHERE id = 1)
+    WHERE collection = NEW.collection AND link_id = NEW.link_id;
+    UPDATE store_meta SET next_change = next_change + 1 WHERE id = 1;
+END;
+
+CREATE TRIGGER items_stamp_request AFTER UPDATE OF changed ON items
+WHEN NEW.changed = -1
 BEGIN
     UPDATE items SET changed = (SELECT next_change FROM store_meta WHERE id = 1)
     WHERE collection = NEW.collection AND link_id = NEW.link_id;
@@ -179,7 +214,7 @@ CREATE TABLE probes (
     collection TEXT NOT NULL REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
     source     TEXT NOT NULL,
     handle     TEXT NOT NULL,
-    flags      TEXT,                       -- JSON array, NULL when unread (§13)
+    flags      TEXT CHECK (flags IS NULL OR json_valid(flags)),  -- JSON array, NULL when unread (§13)
     PRIMARY KEY (collection, source, handle)
 ) STRICT;
 
@@ -193,16 +228,16 @@ CREATE TABLE bindings (
     -- a write resolving this binding to another handle is refused, and the one
     -- licensed rebind is the handle-space rebuild (§10, §12).
     handle            TEXT NOT NULL,
-    base_flags        TEXT,                -- JSON array of strings, or NULL
+    base_flags        TEXT CHECK (base_flags IS NULL OR json_valid(base_flags)),  -- JSON array of strings, or NULL
     base_object       TEXT REFERENCES objects(hash),
     base_revision     TEXT,                -- etag/modseq for mutable-content backends
     -- Whether a base exists at all, which its three value columns cannot say: a
     -- source reporting no revision, no body and no flags still agreed, and that
     -- agreement is what tells a pending push from a settled one (§13).
-    base_present      INTEGER NOT NULL DEFAULT 0,
+    base_present      INTEGER NOT NULL DEFAULT 0 CHECK (base_present IN (0, 1)),
     -- This source diverged from its OWN remote (§10), unlike items.conflicted,
     -- which is the cross-source divergence.
-    conflicted        INTEGER NOT NULL DEFAULT 0,
+    conflicted        INTEGER NOT NULL DEFAULT 0 CHECK (conflicted IN (0, 1)),
     conflict_revision TEXT,                -- the remote revision observed when it did, or NULL
     -- The diverging remote body at that revision, so a resolver reads base,
     -- local and remote from the store and needs no credentials (§13). Pinned
@@ -219,6 +254,8 @@ CREATE TABLE bindings (
     -- been swept.
     shared_object     TEXT,
     PRIMARY KEY (collection, link_id, source),
+    -- A binding that is not conflicted carries neither (§13).
+    CHECK (conflicted = 1 OR (conflict_revision IS NULL AND conflict_object IS NULL)),
     -- ON UPDATE as well as ON DELETE: renaming a collection cascades into
     -- items.collection, this composite key's parent, so without it the rename
     -- is refused one level down (§14).
@@ -234,7 +271,7 @@ CREATE TABLE mail_summary (
     collection   TEXT NOT NULL,
     link_id      TEXT NOT NULL,
     message_id   TEXT,                     -- bare Message-ID, angle brackets stripped
-    in_reply_to  TEXT NOT NULL DEFAULT '[]',   -- JSON array of bare msg-ids, document order
+    in_reply_to  TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(in_reply_to)),  -- JSON array of bare msg-ids, document order
     subject      TEXT NOT NULL,            -- decoded (RFC 2047), may be empty
     sender       TEXT,                     -- first From addr-spec, canonical (§13)
     sender_name  TEXT,                     -- its display name, decoded, or NULL
@@ -338,8 +375,11 @@ CREATE TABLE queue (
     error       TEXT                                -- last failure; non-NULL means parked
 ) STRICT;
 
--- The owner drains a collection's pending actions in append order.
+-- A reader overlays a collection's pending actions (§15.4).
 CREATE INDEX queue_by_collection ON queue(collection, id);
+-- The owner's drain, store-wide in append order, skipping the parked rows
+-- (§15.2). Partial, so it holds only what is pending.
+CREATE INDEX queue_pending ON queue(id) WHERE error IS NULL;
 
 -- Cross-source identity lookup (dedup, thread stitching) and refcount navigation.
 CREATE INDEX items_by_object ON items(object_hash);

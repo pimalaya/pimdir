@@ -19,8 +19,7 @@
     "options": {
       "push": true,
       "rights": { "flags": true, "content": true, "add": true, "remove": true },
-      "conflict": "prefer-remote",
-      "delete": "revert"
+      "conflict": "prefer-remote"
     }
   },
   "remote": {

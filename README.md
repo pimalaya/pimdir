@@ -69,9 +69,10 @@ queries/              the reference statements, one file per statement named aft
   storage/            the store's: read/ the reader's, queue/ the producer's, owner/ the rest
   search/             the search index's, prepared with the store attached
 vectors/              the normative test data (STORAGE.md §16, SYNC.md §11, SEARCH.md §11)
-checks/               what a push checks, needing no implementation
+checks/               what a push checks, needing no implementation: the schema, the statements
+                      through the parts' scenarios, the names, the vectors
 flake.nix             the toolchain those checks run under
-cairn/                the dated history of what the spec did and why (log/)
+cairn/                the dated history of what the spec did and why (log/), and the audit ledgers (changes/)
 AGENTS.md             how a contributing agent records a change here
 README.md             this file
 LICENSE-MIT           dual license
@@ -82,7 +83,9 @@ The history follows [Cairn](https://github.com/pimalaya/cairn), with one deviati
 
 ## Status
 
-Draft. Store schema version 1 and index schema version 1 are defined and stable in shape; the sync and search parts are draft and edited in place.
+Draft, in the last pass before the store freezes. Store schema version 1 and index schema version 1 are defined and stable in shape; the sync and search parts are draft and edited in place.
+
+The freeze is by profile. STORAGE freezes first, since it is what readers and producers depend on and they are the many; SYNC and SEARCH stay draft behind the reference implementation until their vectors have run against a second implementation. The gate for freezing STORAGE is the reference implementation green on every check and vector in this repository, and the audit ledger under cairn/changes/ with no open item that touches the schema.
 
 While a part is draft, its version is edited in place: a change folds into the migration, the version stays 1, and a store or index created by an earlier draft is recreated rather than migrated. After a freeze, a breaking change to the store bumps the version and ships as a new migration; a change to the index is always a rebuild.
 

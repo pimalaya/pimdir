@@ -15,7 +15,7 @@
     ],
     "bindings": [
       { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 },
-      { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "tmp-1", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }
+      { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }
     ],
     "probes": [],
     "sources": [
@@ -30,8 +30,7 @@
     "options": {
       "push": true,
       "rights": { "flags": true, "content": true, "add": true, "remove": true },
-      "conflict": "manual",
-      "delete": "revert"
+      "conflict": "manual"
     }
   },
   "remote": {
@@ -49,7 +48,7 @@
     "events": [],
     "store": {
       "items": [{ "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
-      "bindings": [{ "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "tmp-1", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }],
+      "bindings": [{ "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }],
       "probes": [],
       "sources": [
         { "collection": "Archive", "source": "imap", "checkpoint": "a0" },

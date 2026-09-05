@@ -1,0 +1,44 @@
+{
+  "label": "a rekey carries a pending create untouched, no handle space ever having held its provisional handle",
+  "note": "the source renumbered a.vcf into b.vcf; the based binding follows through a Rekeyed drop, the baseless one stays as it is rather than being dropped Deleted for a handle the new space lacks, and the generation moves once (SYNC.md §8)",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual", "generation": 1 }],
+    "objects": {
+      "c1": { "body": "fixtures/card-basic.vcf" },
+      "e1": { "body": "fixtures/card-escaped.vcf" }
+    },
+    "items": [
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0 },
+      { "collection": "Contacts", "link_id": "urn:uuid:9e8d7c6b-5a49-4837-9261-0f1e2d3c4b5a", "seq": 2, "flags": [], "object": "e1", "level": 2, "deleted": 0 }
+    ],
+    "bindings": [
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1 },
+      { "collection": "Contacts", "link_id": "urn:uuid:9e8d7c6b-5a49-4837-9261-0f1e2d3c4b5a", "source": "dav", "handle": "\u0001urn:uuid:9e8d7c6b-5a49-4837-9261-0f1e2d3c4b5a", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }
+    ],
+    "probes": [],
+    "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d0" }]
+  },
+  "run": { "verb": "rekey", "collection": "Contacts", "source": "dav" },
+  "remote": {
+    "snapshot": { "items": [{ "handle": "b.vcf", "flags": [], "revision": "r1" }], "vanished": [], "complete": true, "checkpoint": "e0" },
+    "fetch": { "b.vcf": { "Meta": { "body": "fixtures/card-basic.vcf", "revision": "r1" } } }
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual", "generation": 2 }],
+      "items": [
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0 },
+        { "collection": "Contacts", "link_id": "urn:uuid:9e8d7c6b-5a49-4837-9261-0f1e2d3c4b5a", "seq": 2, "flags": [], "object": "e1", "level": 2, "deleted": 0 }
+      ],
+      "bindings": [
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "b.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1 },
+        { "collection": "Contacts", "link_id": "urn:uuid:9e8d7c6b-5a49-4837-9261-0f1e2d3c4b5a", "source": "dav", "handle": "\u0001urn:uuid:9e8d7c6b-5a49-4837-9261-0f1e2d3c4b5a", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }
+      ],
+      "probes": [],
+      "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "e0" }]
+    }
+  }
+}

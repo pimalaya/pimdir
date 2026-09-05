@@ -34,7 +34,7 @@ The index is derived. Every row is recomputed from the store and the bodies, and
 
 ## 2. Requirements
 
-- The index MUST be a SQLite database named index.db in the store directory (STORAGE §3), every table `STRICT`, `PRAGMA foreign_keys = ON`.
+- The index MUST be a SQLite database named index.db in the store directory (STORAGE §3), every table `STRICT`, `PRAGMA foreign_keys = ON`, `PRAGMA journal_mode = WAL` RECOMMENDED so query clients read while a refresh writes.
 - Implementations MUST require **SQLite ≥ 3.43** with FTS5, for `contentless_delete`. This floor is the index's alone.
 - The schema is [migrations/search/0001_init.sql](./migrations/search/0001_init.sql), its version in the index's own `PRAGMA user_version`, mirrored in `index_meta.version`. An index at another version, or whose `index_meta.tokenizer` differs from §5's, MUST be rebuilt: there are no index migrations.
 - The statements are under [queries/search/](./queries/search/), one file per statement named after it, prepared with the store attached read-only as `store`.
@@ -51,11 +51,11 @@ The index holds one `object` row and one `object_text` FTS row per indexed body,
 
 ## 4. Refresh
 
-A refresh folds the change feed (STORAGE §4.5): every item stamped above `index_meta.store_change`, in stamp order, in read transactions of bounded size so the store's WAL still checkpoints.
+A refresh folds the change feed (STORAGE §4.5): every item stamped above `index_meta.store_change`, the last stamp drawn when the previous pass began, in stamp order, in read transactions of bounded size so the store's WAL still checkpoints.
 
-Per row: the body is indexed if its hash is new (§6); the placement is upserted; summary text is written while it has no body and dropped when it gains one; flags are replaced; occurrences are re-expanded when the body changed (§7); the thread is updated (§9). A deleted or retained row loses its placement rows; its body's text stays until the object goes.
+Per row: the body is indexed if its hash is new (§6); the placement is upserted; summary text is written while it has no body and dropped when it gains one; flags are replaced; occurrences are re-expanded when the body changed (§7); the thread is updated (§9). A deleted row loses its placement, which takes its flags and occurrences by cascade and whose summary text the indexer deletes by the rowid the delete returns; its body's text stays until the object goes. A body the blob directory no longer holds when the indexer opens it is not `unparseable`: no `object` row is written and the row is met again on the next pass.
 
-When `store_meta.purges` moved, or a collection stamp did (a rename stamps the new id only), the indexer reconciles keys: `placements_gone` and `objects_gone` name what the store no longer holds. The cursor `(next_change, purges)` read before the pass is written by `set_index_cursor` in the transaction completing it, so a crash replays and skips nothing.
+When `store_meta.purges` moved, which counts purged items and collected objects alike, or a collection stamp did (a rename restamps the items under the new id and leaves the old placements to this pass), the indexer reconciles keys: `placements_gone` and `objects_gone` name what the store no longer holds. The cursor read before the pass is written by `set_index_cursor` in the transaction completing it, so a crash replays and skips nothing.
 
 A store from before the feed carries stamps of `0` and is indexed whole once. Extraction MAY run in parallel; the index is written by one transaction per batch.
 
@@ -67,7 +67,7 @@ An address is indexed whole, as its local part and as its domain in the `people`
 
 ## 6. Extraction
 
-A body is extracted once, by hash, into seven fields: `title`, `people` (every name and address, plus §5's address tokens), `body`, `attachment` (part names and media types), `place`, `org`, `note`.
+A body is extracted once, by hash, into seven fields: `title`, `people` (every name and address, plus §5's address tokens), `body`, `attachment` (part names and media types), `place`, `org`, `note`; and, beside `people`, one field per address role of STORAGE Annex A.6 (`from`, `to`, `cc`, `bcc`, `email`, `organizer`, `attendee`) holding that role's names and addresses alone, so `from:jane` is a match on the sender and not on anyone the message names.
 
 | Kind | `title` | `people` | `body` | `attachment` | `place` | `org` | `note` |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -79,15 +79,15 @@ Mail extraction MUST walk the MIME tree, decode transfer encodings, transcode ch
 
 A `multipart/encrypted` or `application/pkcs7-mime` body is recorded `encrypted`, headers indexed and body not; indexing decrypted content is an opt-in that writes plaintext into index.db and MUST be documented as such. A body no parser accepts is `unparseable`, with what could be read.
 
-A placement with no body indexes its summary row and address rows into `summary_text`: `title` from the subject, `fn` or `summary`, `people` from the addresses. That keeps a headers-only replica searchable, and it is dropped once the body is indexed. Every value is decoded on Annex A.0's terms.
+A placement with no body indexes its summary row and address rows into `summary_text`: `title` from the subject, `fn` or `summary`, `people` and the role fields from the addresses. That keeps a headers-only replica searchable, and it is dropped once the body is indexed. Every value is decoded on Annex A.0's terms.
 
 ## 7. Calendar time
 
 `sort_key` holds a series' first occurrence (STORAGE Annex A.3), so `date:today` cannot be answered from the store for a meeting that started years ago. The index materialises every occurrence within a **horizon**, default one year back and two forward, into `occurrence(start, end)` as instants, using the resource's `VTIMEZONE`s, `RDATE`, `EXDATE` and `RECURRENCE-ID` overrides.
 
-An event spans `DTSTART` to `DTEND` or `DURATION`, a task to its `DUE`, a journal its `DTSTART` alone.
+An event spans `DTSTART` to `DTEND` or `DURATION`, and with neither one day for a date and no time for a date-time (RFC 5545 §3.6.1); a task to its `DUE`, a journal its `DTSTART` alone. A zoned time resolves through the resource's own `VTIMEZONE`, else a time zone database by `TZID`, else as floating, the same order as STORAGE Annex A.3, and here the answer moves hits across a day boundary rather than a sort position. A series no expander accepts (an `RRULE` with no `DTSTART`, a resource holding overrides and no master) yields no occurrence and MUST NOT fail the pass, and an implementation SHOULD bound the occurrences one item may write.
 
-An item is re-expanded when its body changes and when the horizon rolls, which re-expands only the recurring items whose `until` is absent or beyond the old horizon (`items_to_reexpand`). A query outside the horizon MUST say so in its coverage (§8).
+An item is re-expanded when its body changes and when the horizon rolls. The roll re-expands the recurring items whose `until` is absent or not before the old horizon's end, and expands the single items whose start the new window covers and the old one did not (`items_to_reexpand`, bound to both horizons before `set_horizon` records the new one). A query outside the horizon MUST say so in its coverage (§8).
 
 ## 8. The query language
 
@@ -97,10 +97,10 @@ A query is whitespace-separated terms, implicitly conjoined, with `or`, `not`, p
 | --- | --- |
 | `subject:` `title:` `summary:` | the `title` field |
 | `body:` | the `body` field |
-| `from:` `to:` `cc:` `attendee:` `organizer:` `email:` | the role's `item_address` seek for a value containing `@` (a bare `@domain` seeks the domain), the `people` field otherwise |
-| `with:` | any role, the same way |
+| `from:` `to:` `cc:` `bcc:` `attendee:` `organizer:` `email:` | the role's `item_address` seek for a value containing `@` (a bare `@domain` seeks the domain), the role's own field otherwise |
+| `with:` | any role, the same way over the `people` field |
 | `person:` | contacts whose `title` matches, expanded to `with:` over their `email` rows |
-| `tag:` `is:` `flag:` | a store flag (§10); `is:unread` is the absence of `\Seen`, `is:retained` includes retained items, `is:encrypted` the extraction status |
+| `tag:` `is:` `flag:` | a store flag (§10); `is:unread` is the absence of `\Seen`, `is:encrypted` the extraction status |
 | `has:body` `has:attachment` | a stored body; `mail_summary.attachment` = 1 or a non-empty `attachment` field |
 | `kind:` | `mail`, `contact`, `event`, `task`, `journal` |
 | `account:` `collection:` `folder:` | the store's axes, `folder:` an alias |
@@ -112,22 +112,22 @@ A query is whitespace-separated terms, implicitly conjoined, with `or`, `not`, p
 
 ### 8.1 Dates
 
-A value is an ISO date or month, a keyword (`today`, `yesterday`), a relative amount (`2w`, `3d`, `1y`), or a range `a..b` with either side open. A single value is the range covering it. Mail compares `sort_key`; an event, task or journal compares occurrences (§7); a contact has no date and is excluded from a date-bounded query unless `kind:contact` names it.
+A value is an ISO date or month, a keyword (`today`, `yesterday`), a relative amount (`2w`, `3d`, `1y`), or a range `a..b` with either side open. A single value is the range covering it. Mail compares `sort_key`; an event, task or journal compares occurrences (§7), an occurrence overlapping a half-open range when it starts before the range ends and ends after the range starts, a zero-length one when it starts inside it; a contact has no date and is excluded from a date-bounded query unless `kind:contact` names it.
 
 ### 8.2 Semantics
 
 - **A hit is `(account, seq)`**, one per item per account, carrying its placements (STORAGE §9.2). An implementation MAY flatten to one row per placement on request.
 - **Tags** are per placement in the store and per hit in the query: `tag:x` matches when any placement carries `x`, `not tag:x` when none does.
 - **Order** is `sort_key` descending by default, contacts last; `name` ascending; `relevance` by FTS5 `bm25`.
-- **Retained items are excluded** unless `is:retained` asks.
-- **Coverage is part of the answer**: how many live items in scope have no body (`coverage`), whether the range left the horizon, and per hit whether it matched on its body or its summary.
+- **Deleted items are excluded.** The trash is the store's (STORAGE §11), not the index's.
+- **Coverage is part of the answer**: how many live items have no body (`coverage`, per kind, which a client narrows to the query's collections), whether the range left the horizon, and per hit whether it matched on its body or its summary.
 - A snippet is re-read from the blob for the hits shown.
 
 ## 9. Threads
 
-Mail only. A message's `parent` is its first `In-Reply-To` id, from `References` and `In-Reply-To` at `Full` and from `mail_summary.in_reply_to` for a bodiless item. A thread is the connected set of messages linked by parents; its id is the link id of the member with the lowest `(sort_key, link_id)`, recomputed when threads join. No joining by subject.
+Mail only. A message's `parent` is its first `In-Reply-To` id, else the last `References` id (RFC 5322 §3.6.4), from the headers at `Full` and from `mail_summary.in_reply_to` for a bodiless item. Every id a member names has a `message` row, present in the store or not, so two replies to a parent nobody holds are one thread and a parent arriving later joins what already waited for it; a cycle is broken by ignoring the edge that would close it. A thread is the connected set over those rows; its id is the link id of the present member with the lowest `(sort_key, link_id)`, recomputed when threads join, the new row written and the members repointed before the old row goes, since the old row's delete cascades. No joining by subject.
 
-`thread:` returns the members; a threaded listing collapses hits to threads with count, first and last date.
+`thread:` returns the present members in the query's account (`thread_of` names a message's thread, `thread_members` lists it); a threaded listing collapses hits to threads with count, first and last date.
 
 ## 10. Tags
 
