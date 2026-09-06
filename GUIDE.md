@@ -153,6 +153,7 @@ Retention needs no step of its own: `retain_item` in the write transaction (§5 
 ## 8. Collection configuration
 
 - **Kind and account** are declared out of band, never inferred from a sync: `set_collection_kind(collection, account, kind)` at configuration time, `load_kind` and `load_account` to read them. `ensure_collection` may run before or after and overwrites neither.
+- **Display name**: `set_collection_name(collection, account, name)` records what the collection is called, which is not what addresses it. A frontend namespacing its ids (`work/INBOX`, `caldav/<uuid>`) writes the bare name here and renders it; the id stays the key. Nothing joins on it, so a server renaming a collection costs a label and never a re-sync.
 - **Policy**: `set_conflict` sets the collection's cross-source policy, `manual`, `prefer-incoming` or `prefer-existing`.
 - **Rename**: `rename_collection(collection, new_id)` with `rename_queue_targets(collection, new_id)` in the same transaction. Every foreign key cascades in the first statement and the items are restamped; the second follows the id into pending `move` and `copy` payloads. Deleting and recreating the row cascades the delete instead and loses every staged edit. An account rename is one `rename_collection` per collection plus `set_collection_account`, in one transaction.
 - **Removal**: `delete_collection(collection)` then `recompute_refcounts`, in one transaction, then the collector when convenient. Nothing under it is retained.

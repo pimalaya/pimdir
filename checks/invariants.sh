@@ -170,6 +170,21 @@ expect "collection: the cascade's pins are settled by the recompute" \
     "$(sql "SELECT refcount FROM objects WHERE hash = 'h1';")" "0"
 expect "collection: the cascade counts its rows as purges" "$(sql "SELECT purges FROM store_meta;")" "1"
 
+# --- A name is a label, not an address (§14) ---------------------------------
+
+fresh
+collection INBOX
+expect "name: a collection with no name of its own is seeded with its id" \
+    "$(sql "SELECT name FROM collections WHERE id = 'INBOX';")" "INBOX"
+run owner/set_collection_name ":collection='INBOX'" ":account=NULL" ":name='Inbox'"
+expect "name: the label moves" \
+    "$(sql "SELECT name FROM collections WHERE id = 'INBOX';")" "Inbox"
+expect "name: the id it is addressed by does not" \
+    "$(sql "SELECT id, kind FROM collections;")" "INBOX|message/rfc822"
+run owner/set_collection_name ":collection='Archive'" ":account=NULL" ":name='Archive'"
+expect "name: naming an absent collection creates it with an undeclared kind" \
+    "$(sql "SELECT kind FROM collections WHERE id = 'Archive';")" ""
+
 if [ "$failures" -gt 0 ]; then
     echo "$failures invariant(s) broken" >&2
     exit 1

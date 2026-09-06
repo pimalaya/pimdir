@@ -220,7 +220,7 @@ A minted key, an `alt:` key and a `hash:` key each draw their own `seq`: a deriv
 
 ### 9.2 Accounts
 
-`collections.account` is a grouping key, `NULL` in a single-account store. `collections.id` stays unique store-wide, so an owner filing two accounts namespaces their ids (`work/INBOX`) and records the account so a reader filters on a column rather than a prefix.
+`collections.account` is a grouping key, `NULL` in a single-account store. `collections.id` stays unique store-wide, so an owner filing two accounts namespaces their ids (`work/INBOX`), records the account so a reader filters on a column rather than a prefix, and records the bare name in `name` (§14) so a reader renders it without parsing one.
 
 The account scopes nothing: link ids, hashes and `seq`s keep their store-wide meaning. What multiplicity across accounts means is the interface's: a mail view lists the placements, a contact view may offer a merge.
 
@@ -338,6 +338,8 @@ A store is opened as one source. `load` projects the shared items into that sour
 The queue adds **`enqueue`**, **`drain`** and **`cancel`** (§15); retention adds **`purge`** and **`purge_retained_before`** (§11.2), both reporting rows and never bytes. **`collect_garbage()`** is §5's collector, reporting the rows, files and bytes it freed.
 
 A collection's `kind` is declared, never derived: `set_collection_kind(collection, account, kind)` sets it, `load_kind` reads it, and `ensure_collection` inserts an empty kind it MUST NOT overwrite. The account binds the same way; `set_collection_account` re-accounts a collection, `load_account` reads it.
+
+A collection's `name` is a label, never an address: `set_collection_name(collection, account, name)` sets it, and `ensure_collection` seeds it with the id so a row always carries one. An owner namespacing its ids (§9.2) SHOULD record the bare name here, the separator being its own convention and not one a reader can strip; a reader renders `name` and addresses by `id`. Nothing keys on it, so a rename costs a label and never a re-sync, and keeping it current across a `rename_collection` is the owner's.
 
 **`rename_collection(collection, new_id)`** is the only safe way to change an id: every foreign key onto `collections(id)`, and `bindings`' key onto `items(collection, link_id)`, cascades, so items, bindings, sources, queue rows and children follow in one statement, and the items are restamped under the new id (§4.5). A pending `move` or `copy` names its target inside its payload, which no key cascades: `rename_queue_targets` MUST run beside it in the same transaction. Deleting and recreating the row cascades the delete instead.
 
