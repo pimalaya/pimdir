@@ -18,5 +18,5 @@ change: cross-implementation-vectors
 
 ## Left to the consumers
 
-- [ ] **io-pimdir**: `tests/vectors.rs`, skipping when this repository is not checked out beside it, comparing parsed structures rather than JSON text.
+- [x] **io-pimdir**: `tests/vectors.rs`, skipping when this repository is not checked out beside it, comparing parsed structures rather than JSON text. Landed as `tests/objects.rs` and `tests/summaries.rs`.
 - [ ] **Android**: vendor vectors/ into the test resources with their SHA-256 recorded, plus a CI step that re-hashes against this repository.

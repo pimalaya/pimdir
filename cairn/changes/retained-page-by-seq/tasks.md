@@ -15,5 +15,5 @@ change: retained-page-by-seq
 
 ## Left to io-pimdir
 
-- [ ] The inlined index and statement, and the `--after` type on the retained listing.
+- [x] The inlined index and statement, and the `--after` type on the retained listing.
 

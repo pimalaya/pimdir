@@ -17,7 +17,7 @@ change: refcount-floor
 
 Its own change, with its own log entry and a CHANGELOG line under `### Fixed`.
 
-- [ ] The constraint in io-pimdir's inlined copy of the schema.
-- [ ] `reconcile_draft_shape`: rebuild `objects` (create constrained, copy, drop, rename) when `sqlite_schema` shows the constraint absent, inside the existing transaction, after any column and index reconciliation, recreating `objects_garbage` and running `PRAGMA foreign_key_check` before the commit.
-- [ ] Recompute refcounts before constraining, so a store carrying real drift migrates rather than failing to open.
+- [x] The constraint in io-pimdir's inlined copy of the schema.
+- [x] ~~`reconcile_draft_shape`: rebuild `objects` (create constrained, copy, drop, rename) when `sqlite_schema` shows the constraint absent, inside the existing transaction, after any column and index reconciliation, recreating `objects_garbage` and running `PRAGMA foreign_key_check` before the commit.~~ Not needed: io-pimdir refuses a store from an earlier draft instead (§6 allows either).
+- [x] ~~Recompute refcounts before constraining, so a store carrying real drift migrates rather than failing to open.~~ Not needed, for the same reason.
 - [ ] Tests: a store written without the constraint gains it on open and keeps its rows; a store with a negative count is repaired then constrained; a double release now fails loudly rather than passing.

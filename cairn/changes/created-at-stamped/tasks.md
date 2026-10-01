@@ -14,7 +14,7 @@ change: created-at-stamped
 
 ## Left to io-pimdir and Android
 
-- [ ] Drop the bound parameter; a breaking signature change on the enqueue path.
+- [ ] Drop the bound parameter; a breaking signature change on the enqueue path. Done in io-pimdir (`PimdirProducer::enqueue` takes no timestamp); Android open.
 
 ## Deliberately not done here
 

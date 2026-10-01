@@ -17,12 +17,12 @@ change: collection-display-name
 
 Its own change, with its own log entry and a CHANGELOG line under `### Added`.
 
-- [ ] Re-vendor spec/queries/storage/owner/ so tests/spec_drift.rs stays green.
-- [ ] `PimdirSourceStore::set_collection_name`, beside `ensure_collection` and `set_collection_account`.
-- [ ] Tests: the name moves independently of the id, and moving it stamps the collection in the change feed.
+- [x] Re-vendor spec/queries/storage/owner/ so tests/spec_drift.rs stays green.
+- [x] `PimdirSourceStore::set_collection_name`, beside `ensure_collection` and `set_collection_account`.
+- [x] Tests: the name moves independently of the id, and moving it stamps the collection in the change feed.
 
 ## Left to neverest
 
-- [ ] Key collections on the backend id rather than the display name.
-- [ ] Keep `DAV:displayname` instead of overwriting it with the path segment.
-- [ ] Call `set_collection_name` beside every `ensure_collection`.
+- [x] Key collections on the backend id rather than the display name.
+- [x] Keep `DAV:displayname` instead of overwriting it with the path segment.
+- [x] Call `set_collection_name` beside every `ensure_collection`.

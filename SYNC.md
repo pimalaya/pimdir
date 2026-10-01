@@ -1,6 +1,6 @@
 # Pimdir sync specification
 
-Status: draft-01
+Status: draft-02
 
 The sync part of the pimdir standard: how one or more sources reconcile through a store ([STORAGE.md](./STORAGE.md)) so that the store is an offline replica of each and every source sees every other's changes. It fixes what an engine derives from the store's rows and a source's answers, and what it writes back.
 
@@ -58,7 +58,7 @@ Placements are read from the store, never stored. For a collection and a source,
 1. `Conflict` when `bindings.conflicted` is 1, carrying `conflict_revision` and `conflict_object`, or when `items.conflicted` is 1, two sources disagreeing on the body (§9), which every binding of the item projects until an `Edit` settles it (§7); neither is downgraded.
 2. `Tombstone` when `items.deleted` is 1 and the source binds the item; the content is kept so an edit still beats the delete (§5). A tombstone whose binding has no base is a create the consumer withdrew: it derives no `Remove`, the write drops the binding and the item is retained (STORAGE §11).
 3. `Created` when the binding has no base (`base_present` 0, every base column `NULL`), or the source does not bind the item, `items.deleted` is 0 and `object_hash` is present.
-4. `Dirty` when the flags differ from `base_flags`, both known, or, for a mutable kind, `object_hash` is present and differs from `base_object`. A placement holding no body owes no body, whatever its base names.
+4. `Dirty` when the flags differ from `base_flags`, both known, or, for a mutable kind, `object_hash` is present and differs from `base_object`, a base naming no body differing from every body. A placement holding no body owes no body, whatever its base names.
 5. `Clean` otherwise.
 
 An unknown flag set (`NULL`) holds no opinion: neither an addition nor a removal, and an unknown base is no base on the flag axis. An immutable kind never owes a body: one identity is one message, and the write adopts the shared body as its base (§9).
@@ -110,7 +110,7 @@ It leaves the status alone while the content axis still owes a push, and leaves 
 
 Both is a conflict, resolved by the source's policy. Mail reports no revision and never reaches this axis.
 
-A `Conflict` placement meeting a revision newer than its `conflict_revision` records the new one and drops its `conflict_object`, which described the old revision; the upgrade fetches it anew (§6). A conflict whose fetched body equals the placement's own is no divergence, the push whose record was lost having landed: the binding adopts the revision and body as its base and the conflict clears.
+A `Conflict` placement meeting a revision newer than its `conflict_revision` records the new one and drops its `conflict_object`, which described the old revision; the upgrade fetches it anew (§6). One carrying no `conflict_revision`, the item's conflict (§9), and meeting a revision its base does not hold MUST mark the binding conflicted with that revision and ask for the diverging body, whatever the source's policy, reported as `Conflicted`: the item's conflict is still open, so the source's own divergence is recorded beside it rather than pulled or pushed into it, and an incremental enumeration never lists the member again. A conflict whose fetched body equals the placement's own is no divergence, the push whose record was lost having landed: the binding adopts the revision and body as its base and the conflict clears.
 
 **Conflict policy**, the source's, settling it against its own remote: `Manual` (default) marks the binding conflicted with the observed revision and asks for the diverging body (§6). `PreferRemote` drops the local edit and pulls. `PreferLocal` pushes the local body gated on the observed revision, falling back to `Manual` when content pushes are forbidden.
 
@@ -161,7 +161,7 @@ Landing is a `Superseded` drop of the provisional handle in the same batch, the 
 A mutation stages a local edit to one collection with no network, through the same write as a sync (§10), never by direct row edits. The queue's actions map onto them: `set-flags` to `SetFlags`, `remove` to `Remove`, `move` and `copy` to `Move` and `Copy`, `update` to `Edit`, `add` to `Add`. A mutation naming a `Probed` placement MUST be refused: nothing keys it until a `Meta` fetch names it.
 
 - `SetFlags` replaces the flags and marks the placement `Dirty`; a `Created`, `Conflict` or `Tombstone` placement keeps its status.
-- `Remove` tombstones the placement, binding and base kept so the remove is pushed against the right handle. On a conflicted binding it is the decision: the base adopts `conflict_revision`, the conflict clears and its `conflict_object` is released, so the remove pushes gated on what the remote holds; on a conflicted item (§9) it clears the item's conflict the same way. On a pending create it withdraws the create: the binding goes and the item is retained (STORAGE §11).
+- `Remove` tombstones the placement, binding and base kept so the remove is pushed against the right handle. On a conflicted binding it is the decision: the base adopts `conflict_revision` and `conflict_object` together, as an `Edit` does, and the conflict clears, so the remove pushes gated on what the remote holds; a diverging body not fetched yet leaves `base_object` unknown, never the old body, so an item another source's edit revives reads `Dirty` (§3) rather than in sync; on a conflicted item (§9) it clears the item's conflict the same way. On a pending create it withdraws the create: the binding goes and the item is retained (STORAGE §11).
 - `Edit` stores a new body and repoints the placement, keeping the base. An edit whose object the base holds stages nothing. On a conflicted placement it resolves, the base adopting `conflict_revision` and `conflict_object` together; on a conflicted item it resolves too, `items.conflicted` cleared and its `conflict_object` released; on a tombstone it revives, `Dirty`, and the destination its tombstone offered no longer derives. It MAY restate the sort key.
 - `Copy` stages a `Created` placement in a target under a provisional handle with the source's origin; `Move` also tombstones the source, whose destination the target's pending create then derives (§3). Both read the target and mint the key when a live placement there already holds the identity; a tombstoned holder blocks nothing. Both MUST be refused for a placement holding neither a body nor a based binding, since nothing could deliver the create.
 - `Add` stages a new item under a provisional handle at `Full`, no base, no origin. It MUST fail when a live placement holds the `link_id`; a retained one revives (STORAGE §11); a tombstone still propagating is revived the same way, the row adopting the new body and its delete withdrawn on every source.

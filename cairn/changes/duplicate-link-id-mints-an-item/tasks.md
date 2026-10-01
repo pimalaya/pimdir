@@ -32,6 +32,6 @@ change: duplicate-link-id-mints-an-item
 
 ## Landing
 
-- [ ] io-pimdir's spec-fidelity suite green against this checkout (it is the only place the canonical SQL is ever loaded). Red by construction until io-pimdir lands its own delta, this repository leading the chain: the suite reports exactly one difference, its inlined `bindings` still carrying `ambiguous_handles`, and its three statement tests pass.
+- [x] io-pimdir's spec-fidelity suite green against this checkout (it is the only place the canonical SQL is ever loaded). Red by construction until io-pimdir lands its own delta, this repository leading the chain: the suite reports exactly one difference, its inlined `bindings` still carrying `ambiguous_handles`, and its three statement tests pass.
 - [x] `cairn/log/2026-08-28-duplicate-link-id-mints-an-item.md`, naming `duplicate-link-id-freeze` as superseded and pointing at the Posteo evidence.
 - [x] Mark this change `landed`.
