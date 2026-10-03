@@ -71,6 +71,38 @@ CREATE TABLE sources (
     PRIMARY KEY (collection, source)
 ) STRICT;
 
+-- What each source can do (§15.6), declared by the owner, read by producers
+-- before they enqueue. A declaration writes every capability of the kinds the
+-- source syncs, `none` included, so a source with no row is undeclared, the
+-- state of a store from an owner predating §15.6, and gated by nothing. A row
+-- naming a collection overrides the source's row there (a read-only calendar
+-- in a writable account); NULL is the source-wide row, so the key is an
+-- expression index. A source id names one remote store-wide; `account` is the
+-- one it syncs for, NULL in a single-account store, so a source is a candidate
+-- for its account's intents before it has synced a collection.
+CREATE TABLE capabilities (
+    account    TEXT,
+    source     TEXT NOT NULL,
+    collection TEXT REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    capability TEXT NOT NULL,              -- Annex B name, or an `x-` one
+    support    TEXT NOT NULL CHECK (support IN ('full', 'partial', 'none')),
+    detail     TEXT                        -- what is missing or why, for a human
+) STRICT;
+
+CREATE UNIQUE INDEX capabilities_key ON capabilities(source, ifnull(collection, ''), capability);
+
+-- The source the user chose to perform an intent capability when several of
+-- an account's sources declare it (§15.6), written by the owner applying a
+-- `set-performer` action. `account` is NULL in a single-account store, so the
+-- key is an expression index rather than a primary key.
+CREATE TABLE performers (
+    account    TEXT,
+    capability TEXT NOT NULL,
+    source     TEXT NOT NULL
+) STRICT;
+
+CREATE UNIQUE INDEX performers_key ON performers(ifnull(account, ''), capability);
+
 -- Content-addressed body index; the bytes live in blob files (§5).
 --
 -- The refcount floor is load-bearing rather than tidy: a double release either
@@ -368,7 +400,7 @@ CREATE TABLE queue (
     created_at  TEXT    NOT NULL,                   -- RFC 3339, Z (§13)
     producer    TEXT    NOT NULL,                   -- enqueuing process, diagnostic
     collection  TEXT    NOT NULL REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
-    action      TEXT    NOT NULL,                   -- 'add' | 'set-flags' | 'remove' | 'move' | 'copy' | 'update' | app-defined (§15.3)
+    action      TEXT    NOT NULL,                   -- 'add' | 'set-flags' | 'remove' | 'move' | 'copy' | 'update' | 'set-performer' | an intent (§15.3, Annex B)
     payload     TEXT    NOT NULL,                   -- versioned JSON, shape per action (§15)
     object_hash TEXT    REFERENCES objects(hash),   -- pins the payload's body against the collector, or NULL
     attempts    INTEGER NOT NULL DEFAULT 0,

@@ -143,6 +143,21 @@ purges="$(sql "SELECT purges FROM store_meta;")"
 run owner/delete_garbage_objects
 expect "feed: a collected object counts as a purge" "$(sql "SELECT purges FROM store_meta;")" "$((purges + 1))"
 
+# --- A performed intent replaced by the change it leaves (§15.5) ------------
+
+fresh
+collection Sent
+object m1
+run queue/pin_object ":hash='m1'"
+run queue/enqueue_action ":producer='p'" ":collection='Sent'" ":action='submit'" ":payload='{\"v\":1,\"copy\":\"Sent\"}'" ":object_hash='m1'"
+run queue/pin_object ":hash='m1'"
+run queue/enqueue_action ":producer='owner'" ":collection='Sent'" ":action='add'" ":payload='{\"v\":1,\"flags\":[\"\\\\Seen\"]}'" ":object_hash='m1'"
+pin="$(run owner/cancel_action ":id=1")"
+run owner/release_pins ":hashes='[\"$pin\"]'"
+run owner/delete_garbage_objects
+expect "replace: the copy keeps the body the intent pinned" \
+    "$(sql "SELECT refcount FROM objects WHERE hash = 'm1';")$(sql "SELECT action FROM queue;")" "1add"
+
 # --- The drain order and the rename of a target (§14, §15) -------------------
 
 fresh
@@ -184,6 +199,96 @@ expect "name: the id it is addressed by does not" \
 run owner/set_collection_name ":collection='Archive'" ":account=NULL" ":name='Archive'"
 expect "name: naming an absent collection creates it with an undeclared kind" \
     "$(sql "SELECT kind FROM collections WHERE id = 'Archive';")" ""
+
+# --- Sources declare what they can do (§15.6) ---------------------------------
+
+fresh
+collection INBOX
+run owner/upsert_checkpoint ":collection='INBOX'" ":source='graph'" ":checkpoint=NULL"
+run owner/upsert_checkpoint ":collection='INBOX'" ":source='imap'" ":checkpoint=NULL"
+expect "capability: a source with no row is listed undeclared" \
+    "$(run read/load_capabilities ":collection='INBOX'" | tr '\n' ' ')" "graph||| imap||| "
+run owner/delete_capabilities ":source='graph'"
+run owner/set_capability ":account=NULL" ":source='graph'" ":collection=NULL" ":capability='mail.message.remove'" ":support='full'" ":detail=NULL"
+run owner/set_capability ":account=NULL" ":source='graph'" ":collection=NULL" ":capability='mail.message.move'" ":support='none'" ":detail='pull-only'"
+expect "capability: a declared source lists its rows, an undeclared one stays undeclared" \
+    "$(run read/load_capabilities ":collection='INBOX'" | tr '\n' ' ')" \
+    "graph|mail.message.move|none|pull-only graph|mail.message.remove|full| imap||| "
+run owner/delete_capabilities ":source='graph'"
+run owner/set_capability ":account=NULL" ":source='graph'" ":collection=NULL" ":capability='mail.message.remove'" ":support='full'" ":detail=NULL"
+expect "capability: a declaration replaces the set, a lost capability does not linger" \
+    "$(sql "SELECT capability FROM capabilities WHERE source = 'graph';")" "mail.message.remove"
+if fails owner/set_capability ":account=NULL" ":source='graph'" ":collection=NULL" ":capability='mail.message.copy'" ":support='maybe'" ":detail=NULL"; then :; else
+    expect "capability: support is one of three words" "accepted" "refused"
+fi
+item INBOX a 1
+sql "INSERT INTO bindings(collection, link_id, source, handle) VALUES('INBOX', 'a', 'graph', '1');"
+expect "capability: an item answers for the sources binding it alone" \
+    "$(run read/load_item_capabilities ":collection='INBOX'" ":seq=1" | tr '\n' ' ')" "graph|mail.message.remove|full| "
+run owner/set_capability ":account=NULL" ":source='graph'" ":collection=NULL" ":capability='mail.submit'" ":support='full'" ":detail=NULL"
+run owner/set_capability ":account=NULL" ":source='imap'" ":collection=NULL" ":capability='mail.submit'" ":support='partial'" ":detail='no Bcc'"
+expect "capability: two candidates make an intent ambiguous" \
+    "$(run read/list_capability_sources ":account=NULL" ":collection=NULL" ":capability='mail.submit'" | tr '\n' ' ')" "graph|full| imap|partial|no Bcc "
+run owner/set_capability ":account=NULL" ":source='graph'" ":collection=NULL" ":capability='mail.submit'" ":support='none'" ":detail=NULL"
+expect "capability: a none row is no candidate" \
+    "$(run read/list_capability_sources ":account=NULL" ":collection=NULL" ":capability='mail.submit'" | cut -d'|' -f1)" "imap"
+collection work/INBOX "'work'"
+run owner/upsert_checkpoint ":collection='work/INBOX'" ":source='work-smtp'" ":checkpoint=NULL"
+run owner/set_capability ":account='work'" ":source='work-smtp'" ":collection=NULL" ":capability='mail.submit'" ":support='full'" ":detail=NULL"
+expect "capability: candidates are the account's own" \
+    "$(run read/list_capability_sources ":account='work'" ":collection=NULL" ":capability='mail.submit'" | cut -d'|' -f1)" "work-smtp"
+run owner/set_capability ":account='work'" ":source='work-graph'" ":collection=NULL" ":capability='mail.submit'" ":support='full'" ":detail=NULL"
+expect "capability: a declared source is a candidate before it syncs anything" \
+    "$(run read/list_capability_sources ":account='work'" ":collection=NULL" ":capability='mail.submit'" | cut -d'|' -f1 | tr '\n' ' ')" "work-graph work-smtp "
+run owner/set_performer ":account=NULL" ":capability='mail.submit'" ":source='graph'"
+run owner/set_performer ":account=NULL" ":capability='mail.submit'" ":source='imap'"
+run owner/set_performer ":account='work'" ":capability='mail.submit'" ":source='work-smtp'"
+expect "performer: one choice per account and capability, the last one kept" \
+    "$(run read/load_performer ":account=NULL" ":capability='mail.submit'")" "imap"
+expect "performer: accounts choose apart" "$(sql "SELECT count(*) FROM performers;")" "2"
+run owner/delete_performer ":account=NULL" ":capability='mail.submit'"
+expect "performer: a withdrawn choice leaves the other account's" \
+    "$(run read/load_performer ":account=NULL" ":capability='mail.submit'")$(run read/load_performer ":account='work'" ":capability='mail.submit'")" "work-smtp"
+
+# --- A collection overrides its source's declaration there (§15.6) -----------
+
+fresh
+collection Personal
+collection Holidays
+run owner/upsert_checkpoint ":collection='Personal'" ":source='google'" ":checkpoint=NULL"
+run owner/upsert_checkpoint ":collection='Holidays'" ":source='google'" ":checkpoint=NULL"
+run owner/set_capability ":account=NULL" ":source='google'" ":collection=NULL" ":capability='calendar.item.add'" ":support='full'" ":detail=NULL"
+run owner/set_capability ":account=NULL" ":source='google'" ":collection=NULL" ":capability='calendar.reply'" ":support='full'" ":detail=NULL"
+run owner/set_capability ":account=NULL" ":source='google'" ":collection='Holidays'" ":capability='calendar.item.add'" ":support='none'" ":detail='read-only calendar'"
+expect "override: the source-wide row holds where nothing overrides it" \
+    "$(run read/load_capabilities ":collection='Personal'" | grep item.add)" "google|calendar.item.add|full|"
+expect "override: a collection's row wins there, the rest still holds" \
+    "$(run read/load_capabilities ":collection='Holidays'" | tr '\n' ' ')" \
+    "google|calendar.item.add|none|read-only calendar google|calendar.reply|full| "
+run owner/set_capability ":account=NULL" ":source='google'" ":collection='Holidays'" ":capability='calendar.reply'" ":support='none'" ":detail=NULL"
+expect "override: an intent anchored where the source refuses it has no candidate there" \
+    "$(run read/list_capability_sources ":account=NULL" ":collection='Holidays'" ":capability='calendar.reply'" | cut -d'|' -f1)$(run read/list_capability_sources ":account=NULL" ":collection='Personal'" ":capability='calendar.reply'" | cut -d'|' -f1)" "google"
+
+run owner/rename_collection ":collection='Holidays'" ":new_id='Holidays-FR'"
+expect "override: a rename carries it" \
+    "$(sql "SELECT collection FROM capabilities WHERE collection IS NOT NULL GROUP BY collection;")" "Holidays-FR"
+run owner/delete_capabilities ":source='google'"
+expect "override: a declaration's reset takes the overrides with it" "$(sql "SELECT count(*) FROM capabilities;")" "0"
+
+# --- Implementations: a native one where it holds, iMIP anywhere (§15.6) ------
+
+fresh
+collection Work
+collection Home
+run owner/set_capability ":account=NULL" ":source='graph'" ":collection=NULL" ":capability='calendar.reply'" ":support='none'" ":detail='only the calendars it holds'"
+run owner/set_capability ":account=NULL" ":source='graph'" ":collection='Home'" ":capability='calendar.reply'" ":support='full'" ":detail=NULL"
+run owner/set_capability ":account=NULL" ":source='smtp'" ":collection=NULL" ":capability='calendar.reply'" ":support='partial'" ":detail='by iMIP'"
+expect "implementations: a collection row makes a candidate there alone" \
+    "$(run read/list_capability_sources ":account=NULL" ":collection='Home'" ":capability='calendar.reply'" | cut -d'|' -f1 | tr '\n' ' ')" "graph smtp "
+expect "implementations: a source-wide one is a candidate everywhere" \
+    "$(run read/list_capability_sources ":account=NULL" ":collection='Work'" ":capability='calendar.reply'" | cut -d'|' -f1)" "smtp"
+expect "implementations: the account lists every source able somewhere" \
+    "$(run read/list_capability_sources ":account=NULL" ":collection=NULL" ":capability='calendar.reply'" | tr '\n' ' ')" "graph|full| smtp|partial|by iMIP "
 
 if [ "$failures" -gt 0 ]; then
     echo "$failures invariant(s) broken" >&2

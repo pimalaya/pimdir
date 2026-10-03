@@ -1,6 +1,6 @@
 # Pimdir storage specification
 
-Status: draft-02
+Status: draft-03
 
 The storage part of the pimdir standard, and its base: a **SQLite database** (the index and the mutable state) plus a **content-addressed blob directory** (the bodies). The two layers over it are [SYNC.md](./SYNC.md), how sources reconcile through the store, and [SEARCH.md](./SEARCH.md), the index and query language over it.
 
@@ -28,10 +28,10 @@ The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are to be interpreted a
 12. [Collection generation](#12-collection-generation)
 13. [Encodings](#13-encodings)
 14. [Operations](#14-operations): [reading the store](#141-reading-the-store)
-15. [Action queue](#15-action-queue): [producing](#151-producing), [applying](#152-applying), [actions](#153-actions), [reading the queue](#154-reading-the-queue), [cancelling and acknowledging](#155-cancelling-and-acknowledging)
+15. [Action queue](#15-action-queue): [producing](#151-producing), [applying](#152-applying), [actions](#153-actions), [reading the queue](#154-reading-the-queue), [cancelling and acknowledging](#155-cancelling-and-acknowledging), [capabilities](#156-capabilities)
 16. [Test vectors](#16-test-vectors)
 
-[Annex A](#annex-a-summaries-normative) fixes the per-kind summary, address and `sort_key` derivations. It is normative.
+[Annex A](#annex-a-summaries-normative) fixes the per-kind summary, address and `sort_key` derivations. [Annex B](#annex-b-capabilities-normative) fixes the capability names and the intents' payloads. Both are normative.
 
 ## 1. Goals
 
@@ -65,6 +65,9 @@ SQLite specifically: the portability is the file format, a file you copy rather 
 - **Retained item**: an item no source holds any more, kept and hidden until purged (§11).
 - **Owner lock**: the exclusive advisory lock on owner.lock the owning process holds (§8).
 - **Staging lock**: the advisory lock on objects.lock producers hold shared while a body is written but not yet referenced, and the collector takes exclusively (§5, §8).
+- **Capability**: something a source can push or perform, named by Annex B, declared by the owner per source (§15.6).
+- **Intent**: a queued action performed by one source outside the store, a mail submission for one (Annex B.2).
+- **Performer**: the source performing an intent, named in its payload, chosen by the user when several could (§15.6).
 
 ## 3. Store layout
 
@@ -106,7 +109,9 @@ The canonical schema is migrations/storage/0001_init.sql, which is normative. Th
 - **`collections`**: `id`, `account` (§9.2), `kind` (the media type every item shares), `name`, `parent` (hierarchy by reference), the presentation columns `color`, `description`, `sort_order`, the cross-source `conflict` policy, `generation` (§12) and `changed` (§4.5).
 
   Every foreign key onto `id` is `ON UPDATE CASCADE`, so a rename keeps its contents (§14); `ON DELETE` is `CASCADE`, `SET NULL` for `parent`.
-- **`sources`**: one row per source syncing a collection, keyed `(collection, source)`, carrying its `checkpoint`.
+- **`sources`**: one row per source syncing a collection, keyed `(collection, source)`, carrying its `checkpoint`. A source id names one remote store-wide, so an owner filing two accounts keeps their source ids apart as it does their collection ids (§9.2).
+- **`capabilities`**: what each source can do, one row per `(source, collection, capability)` carrying the `account` the source syncs for, `collection` `NULL` for the source-wide row and naming a collection where the source does otherwise there, with its `support` and a `detail` for a human (§15.6).
+- **`performers`**: the source the user chose to perform an intent capability for an account, one per `(account, capability)` (§15.6).
 - **`objects`**: `hash` (primary key, under `hash_algo`), `size`, `refcount` (§5, §7). The bytes live in the blob file.
 - **`items`**: the shared truth of one item, keyed `(collection, link_id)`: `seq` (§9.1), `flags` (a JSON array), `object_hash`, `sort_key` (§9.3), `level` (0 probed, 1 meta, 2 full), the cross-source state `deleted`, `conflicted`, `conflict_object`, the retention stamps `retained_at`, `retained_by` (§11), and `changed` (§4.5).
 - **`mail_summary`**, **`contact_summary`**, **`event_summary`**, **`task_summary`**, **`journal_summary`**: one table per kind, at most one row per item, keyed `(collection, link_id)`, cascading with the item, referencing no object. Their columns are Annex A's, so a writer that disagrees with the shape fails at the write.
@@ -175,7 +180,7 @@ A constraint is reconciled by a table rebuild (create, copy, drop, rename) in th
 
 ## 8. Concurrency and ownership
 
-At most one process on one host owns pimdir.db at a time, and only the owner mutates collections, items, bindings, sources and objects, the §15 enqueue excepted.
+At most one process on one host owns pimdir.db at a time, and only the owner mutates collections, items, bindings, sources, capabilities, performers and objects, the §15 enqueue excepted.
 
 An owner MUST hold an exclusive advisory lock on owner.lock for as long as it owns the store. The lock belongs to the open file, so a crashed owner leaves nothing to recover. An owner that cannot take it MUST fail immediately, naming the store, and never wait: what to do next is the caller's. The database's busy timeout is unaffected.
 
@@ -312,7 +317,9 @@ Two implementations produce byte-identical stores only with identical encodings.
 - **`retained_by`** (TEXT): the source whose removal retired the item, diagnostic.
 - **`checkpoint`** (BLOB): opaque cursor bytes, or `NULL`.
 - **`base_present`** (INTEGER, on a binding): whether a base exists. A base is present iff `base_present` is 1 or any base column is non-`NULL`; a writer MUST set the column and a reader MUST accept either witness.
-- **`action`** (TEXT): `'add'`, `'set-flags'`, `'remove'`, `'move'`, `'copy'`, `'update'` (§15.3), or an application's own kind, skipped by an owner that does not know it.
+- **`action`** (TEXT): `'add'`, `'set-flags'`, `'remove'`, `'move'`, `'copy'`, `'update'`, `'set-performer'` (§15.3), an intent of Annex B.2, or an application's own kind, skipped by an owner that does not know it.
+- **`capability`** (TEXT, on `capabilities` and `performers`): a name of Annex B, or an application's own starting with `x-`. **`collection`** (TEXT, on `capabilities`): `NULL` for the source-wide row, a collection id for an override there. **`account`** (TEXT, on `capabilities` and `performers`): the account of §9.2, `NULL` in a single-account store.
+- **`support`** (TEXT): `'full'`, `'partial'` or `'none'`. **`detail`** (TEXT): what a human reads about it, or `NULL`.
 - **`payload`** (TEXT): versioned JSON with a leading integer `v`. **`error`** (TEXT): `NULL` while pending; set when parked.
 - **`generation`** (INTEGER): the epoch of §12, starting at 1.
 
@@ -341,9 +348,11 @@ A collection's `kind` is declared, never derived: `set_collection_kind(collectio
 
 A collection's `name` is a label, never an address: `set_collection_name(collection, account, name)` sets it, and `ensure_collection` seeds it with the id so a row always carries one. An owner namespacing its ids (§9.2) SHOULD record the bare name here, the separator being its own convention and not one a reader can strip; a reader renders `name` and addresses by `id`. Nothing keys on it, so a rename costs a label and never a re-sync, and keeping it current across a `rename_collection` is the owner's.
 
+A source's **capabilities** are declared as a set, `delete_capabilities(source)` then `set_capability(account, source, collection, capability, support, detail)` per row, in one transaction (§15.6); a source the owner stops running has its set deleted the same way. A **performer** is recorded by `set_performer(account, capability, source)` and withdrawn by `delete_performer(account, capability)`, both applying a `set-performer` action (§15.3).
+
 **`rename_collection(collection, new_id)`** is the only safe way to change an id: every foreign key onto `collections(id)`, and `bindings`' key onto `items(collection, link_id)`, cascades, so items, bindings, sources, queue rows and children follow in one statement, and the items are restamped under the new id (§4.5). A pending `move` or `copy` names its target inside its payload, which no key cascades: `rename_queue_targets` MUST run beside it in the same transaction. Deleting and recreating the row cascades the delete instead.
 
-A bare `UPDATE` is refused under `NO ACTION`, and with `PRAGMA foreign_keys` off the rename cascades nothing. An account rename is one `rename_collection` per collection plus `set_collection_account`, in one transaction.
+A bare `UPDATE` is refused under `NO ACTION`, and with `PRAGMA foreign_keys` off the rename cascades nothing. An account rename is one `rename_collection` per collection plus `set_collection_account`, in one transaction, the account's sources declared and its performers recorded again under the new id.
 
 **`delete_collection(collection)`** removes a collection the operator no longer wants, everything under it cascading and retention not applying. The cascade drops pointers no statement returns, so it MUST be followed by `recompute_refcounts` in the same transaction; the bodies then fall to the collector. It is the only sanctioned `DELETE` on `collections`.
 
@@ -360,6 +369,7 @@ A **reader** (§8) opens read-only and projects the store as a local backend. Re
 - **`list_address_placements(address, role)`**: every live placement naming one address, `role` `NULL` for any: the person axis. **`list_domain_placements(domain, role)`**: the same for a domain, by a scan.
 - **`list_items_changed_since`**, **`list_collections_changed_since`**, **`load_change_cursor`**: the feed (§4.5).
 - **`list_retained_page(collection, after, limit)`** (cursor on `seq`, `0` starts), **`count_retained`**, **`retained_bytes()`**: the trash view (§11), every deleted row, `retained_at` `NULL` on one a source still binds.
+- **`load_capabilities(collection)`**, **`load_item_capabilities(collection, seq)`**: what every source syncing a collection, or binding one item, can do there, a row naming the collection winning over the source-wide one, an undeclared source listed once with no capability; **`list_capability_sources(account, collection, capability)`**: the candidates to perform an intent anchored on a collection, or anywhere in the account when none is named; **`load_performer(account, capability)`**: the user's choice among them (§15.6).
 - **`list_sources()`**, **`list_conflicted_bindings(account)`** (the bindings awaiting a decision with the three bodies the divergence is between, answered by index, never by paging), **`list_conflicted_items(account)`** (the items two sources disagree on, the same way), **`list_item_bindings(collection, link_id)`** (where one item lives per source), **`link_for_handle`** and **`handle_for_link`**, **`load_kind`**, **`count_probes`**.
 
 Three rules bind every read:
@@ -370,7 +380,7 @@ Three rules bind every read:
 
 ## 15. Action queue
 
-Only the owner mutates (§8), yet other processes originate mutations. The `queue` table is their write door: a **producer** appends an action, the **owner** applies it. Actions address collections and public ids, so the six kinds serve every domain, and the kind is an open string beside a versioned payload.
+Only the owner mutates (§8), yet other processes originate mutations. The `queue` table is their write door: a **producer** appends an action, the **owner** applies it. Actions address collections and public ids, so the six kinds serve every domain; intents (Annex B.2) carry what is not a store mutation, and the kind is an open string beside a versioned payload. What a source supports is declared beside the queue (§15.6), so a producer asks before it appends.
 
 ### 15.1 Producing
 
@@ -386,7 +396,7 @@ A failed action is retried (`bump_attempts`), a bounded number of times the owne
 
 A failure of the store itself (a refused rebind, a constraint, a target collection with no declared kind) is permanent for the row and MUST park it. Only a failure of the environment (the database busy, a body unreadable) is retried, and neither MUST stop the rows behind it.
 
-**Skipping is not parking.** An owner that does not recognise a kind, or lacks the capability it needs, SHALL leave the row pending and untouched, `error` `NULL`, `attempts` unbumped, and SHALL NOT block later actions on it. A drain has three outcomes per row: applied, parked, skipped.
+**Skipping is not parking.** An owner that does not recognise a kind, or does not run the source an intent names, SHALL leave the row pending and untouched, `error` `NULL`, `attempts` unbumped, and SHALL NOT block later actions on it. A capability a declared source does not support is not a skip: the row is parked (§15.6). A drain has three outcomes per row: applied, parked, skipped.
 
 ### 15.3 Actions
 
@@ -397,8 +407,9 @@ Existing items are addressed by `seq`. At `v: 1`:
 - **`remove`**: `{ "v": 1, "seq": n }`. Tombstones the shared item, every source that binds it pushing the delete (SYNC.md §9); already absent, or bound by nobody, is success.
 - **`move`**: `{ "v": 1, "seq": n, "to": collection }`. `copy` is the same shape without the removal. A target the store does not declare, or of another kind, parks the action rather than ensuring a collection nothing configured.
 - **`update`**: `{ "v": 1, "seq": n, "object": hash }`. Repoints a mutable item's body; the owner re-derives its summary and addresses.
+- **`set-performer`**: `{ "v": 1, "capability": name, "source": id? }`. Records `source` as the performer of an intent capability for the account of the collection the action is anchored on (`set_performer`), or withdraws the choice when `source` is absent (`delete_performer`). A `source` that does not declare the capability parks the action.
 
-An application MAY carry a kind of its own, versioned the same way; a mail submission is the worked example. The store owes it append order, blob pinning and the skip rule.
+The intents of Annex B.2 are kinds of their own, versioned the same way. An application MAY carry further ones; the store owes them append order, blob pinning and the skip rule.
 
 ### 15.4 Reading the queue
 
@@ -409,6 +420,26 @@ A reader MAY overlay a collection's pending actions (`load_pending_actions`) for
 `cancel_action` removes a pending or parked row by request, returning its pin: an operator withdrawing it, or the performer of a capability-bound intent acknowledging it. It is an owner write and MUST run in one transaction with `release_pins` on what it returned. An applied action cannot be cancelled: application deleted its row.
 
 An intent whose effect is not a store mutation is therefore at-least-once, and deduplicating is the performer's.
+
+An intent that leaves a store change behind, the copy of a sent message, is acknowledged by replacing it: in one transaction the performer enqueues that change as an ordinary action, through `enqueue_action` with its body pinned, then cancels the intent and releases its pin. The change exists only once the intent is performed, and the drain applies it like any other, gated as §15.6 says.
+
+### 15.6 Capabilities
+
+Sources do not push the same things: one takes flags and no move, another sends and cannot reply to an invitation. The owner says so in the store, and a producer reads it before it enqueues, so a gap is known at the moment of the action rather than from a rejected push.
+
+**Declaring.** The owner declares every source it runs, under the account the source syncs for: `delete_capabilities`, then one `set_capability` per capability, in one transaction, before it drains an action for that source and whenever the source's configuration changes. A row names a capability of Annex B, or an application's own starting with `x-`, with `support` `full`, `partial` (the `detail` says what is missing) or `none` (the `detail` says why). A declaration MUST write every Annex B capability of the kinds the source syncs, `none` included, so a source supporting nothing still says so. A source declares what it pushes as configured: a right its configuration withholds (SYNC §5) is `none`.
+
+A row with no `collection` holds for the whole source. A row naming a collection overrides it there alone, for what the source does otherwise in one collection: a calendar shared read-only, a label the provider reserves. The owner writes one only where the collection differs, read from the remote's access rights.
+
+A source with at least one row is **declared**, and a capability it has no row for, or a `none` row, is unsupported. A source with no row is **undeclared**, as every source of a store written before this section is, and nothing below gates it.
+
+**The producer's gate.** Before it enqueues, a producer MUST resolve the capabilities the action needs (Annex B.1) against the sources concerned: every source binding the item for an action on one (`load_item_capabilities`), every source syncing the collection for an `add` (`load_capabilities`), and for a `move` or `copy` also every source syncing the target that binds nothing of the item. It MUST NOT enqueue an action a declared source does not support, and reports the capability, the source and its detail. A `partial` support passes and its detail SHOULD be shown.
+
+**Implementations.** A source declares one implementation per capability, the way its owner performs it there, which the `detail` names when it matters to the user (`by iMIP`). Several implementations of one capability for an account are several sources, among which the user chooses for an intent (below); an owner holding two for one source exposes them as two sources, or picks one by its own configuration, which is the only way for a state capability, whose effect is a push. An implementation reaching only what its source holds declares the capability on those collections and `none` source-wide.
+
+**Intents.** An intent (Annex B.2) is performed by exactly one source, which its payload names in `source`. Its candidates are the sources of the account of the collection it anchors the intent on whose row there, the collection's own or else the source-wide one, has some support (`list_capability_sources`), whether or not the source has synced yet; an intent addressing an item is anchored on the item's collection. No candidate is a refusal; one is the performer. With two or more, the performer is the user's choice while it is still a candidate: the latest `set-performer` still queued for the account and capability, read over the store as §15.4 reads a producer's own actions, else the one `load_performer` returns; otherwise the producer MUST NOT choose: it refuses, listing the candidates, and the user picks, for this action alone or durably through `set-performer` (§15.3).
+
+**The owner's backstop.** An action reaching the drain whose capability a declared source does not support, or an intent whose `source` does not declare its capability, MUST be parked with the capability named in `error`. An intent naming no `source`, from a producer predating this section, is performed by the account's single candidate and parked when there are several.
 
 ## 16. Test vectors
 
@@ -510,3 +541,48 @@ A series keys on its first occurrence, which `until` bounds for a reader that mu
 `item_address` holds every person an item names, one row per address per role, in document order within the role: `from`, `to`, `cc`, `bcc` for mail, `email` for a card, `organizer` and `attendee` for a calendar object.
 
 The **canonical address** is the addr-spec alone, display name, comments, angle brackets and `mailto:` removed, lowercased whole. RFC 5321 §2.4 makes the local part case-sensitive and practice does not. A value that is not an addr-spec is kept lowercased as it is. The **name** is the display name decoded (a mail phrase, an `ATTENDEE`'s `CN`), or `NULL`; a card's addresses have none.
+
+## Annex B. Capabilities (normative)
+
+A capability is named `<domain>.<object>.<verb>`, the domain fixing the kind: `mail` is `message/rfc822`, `contacts` is `text/vcard`, `calendar` is `text/calendar`. A name is never given another meaning: a new behaviour takes a new name. An application's own starts with `x-`.
+
+### B.1 State
+
+What a source pushes when the owner applies a §15.3 action, read by the producer's gate (§15.6) against the sources concerned.
+
+| Capability | Needed by |
+| --- | --- |
+| `mail.message.add` | `add` |
+| `mail.message.copy` | `copy` |
+| `mail.message.move` | `move` |
+| `mail.message.remove` | `remove` |
+| `mail.flags.seen` | a flag change on `\Seen` |
+| `mail.flags.flagged` | a flag change on `\Flagged` |
+| `mail.flags.answered` | a flag change on `\Answered` |
+| `mail.flags.draft` | a flag change on `\Draft` |
+| `mail.flags.keywords` | a flag change on any other flag |
+| `contacts.card.add`, `.update`, `.remove`, `.move`, `.copy` | `add`, `update`, `remove`, `move`, `copy` of a card |
+| `calendar.item.add`, `.update`, `.remove`, `.move`, `.copy` | `add`, `update`, `remove`, `move`, `copy` of a calendar resource |
+| `calendar.occurrence.update` | an `update` that changes an occurrence, beside `calendar.item.update` |
+| `calendar.scheduling` | an `add` or `update` whose new resource, or a `remove` whose current one, is **scheduled**: the source notifies the attendees of what it pushes (RFC 6638 §3.2) |
+| `calendar.online-meeting` | an `add` or `update` whose new resource carries `X-PIMDIR-ONLINE-MEETING:TRUE` on a component the current one does not: the source creates an online meeting of its provider with the resource, removes the property, and the join details arrive with the next sync as `CONFERENCE` (RFC 7986 §5.11) |
+
+A **flag change** is a flag a `set-flags` adds or removes against the item's current set, or one an `add` or `copy` carries into the collection, whose set starts empty there: a `set-flags` restating a flag needs nothing for it, a draft added with `\Draft` needs `mail.flags.draft`.
+
+A resource is **scheduled** when one of its components names an `ATTENDEE` and some `ORGANIZER` or `ATTENDEE` of that component lacks `SCHEDULE-AGENT=CLIENT` or `SCHEDULE-AGENT=NONE` (RFC 6638 §7.1). A producer meeting a source without `calendar.scheduling` MUST NOT enqueue a scheduled resource unless the user accepts that nobody is notified, which it writes as `NONE` on them. The parameter lives in the resource, so the owner's backstop reads the same answer, and a source that schedules leaves the attendees so marked alone. An implementation notifying by email (RFC 6047) rather than through the server marks them `CLIENT` on what it pushes, so the server does not notify them again.
+
+An update **changes an occurrence** when the components carrying `RECURRENCE-ID` differ between the current and the new resource, `DTSTAMP` and `LAST-MODIFIED` aside.
+
+### B.2 Intents
+
+Performed by the source the payload names (§15.6), outside the store, then acknowledged with `cancel_action` (§15.5) or parked. An item is addressed by `seq`, or by `link_id` when the item is still a pending `add` the producer queued, exactly one of the two. `source` is absent only from a producer predating §15.6.
+
+| Capability | Kind | Payload at `v: 1` | Performed as |
+| --- | --- | --- | --- |
+| `mail.submit` | `submit` | `{ "v": 1, "source": id, "from": addr, "rcpts": [addr…], "subject": text?, "copy": collection? }`, the message as the action's body | the message sent with `from` and `rcpts` as its envelope, its `Bcc` field removed before transmission (RFC 5322 §3.6.3); anchored on the collection its sent copy belongs to, `subject` for reports only; with `copy`, a copy filed in that collection once sent (`mail.submit.copy`) |
+| `calendar.reply` | `calendar-reply` | `{ "v": 1, "source": id, "seq": n, "partstat": "ACCEPTED" \| "TENTATIVE" \| "DECLINED", "comment": text? }` | the account's reply sent to the item's organizer, `comment` with it (RFC 5546 §3.2.3); the new `PARTSTAT` arrives with the next sync |
+| `calendar.cancel` | `calendar-cancel` | `{ "v": 1, "source": id, "seq": n, "comment": text? }` | an event the account organises cancelled, the attendees notified with `comment` (RFC 5546 §3.2.5); the removal arrives with the next sync |
+
+`mail.submit.copy` is read beside `mail.submit`, from the same performer: a `submit` naming `copy` needs both. A performer whose provider files the sent message itself (Graph's `sendMail`, Gmail) supports it as that filing and enqueues nothing; any other files the copy as an `add` of the message into `copy`, `\Seen` set, by replacing the intent (§15.5), which the sources syncing `copy` then push. A provider filing every sent message, asked or not, says so in the `detail` of `mail.submit`. A producer asks for `copy` only of a declared performer: an owner predating §15.6 ignores the field, so against an undeclared one the producer files the copy itself, an `add` beside the `submit`, as it did before.
+
+`calendar.reply` and `calendar.cancel` address an item and are anchored on its collection (§15.6). An implementation through the provider's own verbs reaches only the items its source holds, and is declared on those collections. One over email (RFC 6047), sending the iTIP object (RFC 5546) with `METHOD:REPLY` or `METHOD:CANCEL` and the comment as `COMMENT`, reaches any item and is declared source-wide by a source that sends; it also writes the account's new `PARTSTAT` into the item, or removes it, marked `SCHEDULE-AGENT=CLIENT`. A source that schedules on the server and has no verb for them MAY perform them as the write its server schedules from, a `PARTSTAT` change or a removal, and declares them `partial` when `comment` is lost.

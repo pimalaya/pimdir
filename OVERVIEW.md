@@ -114,6 +114,8 @@ A process that does not own the store still originates changes: a client filing 
 
 Six kinds are defined: add, set flags, remove, move, copy, update. The kind is an open string, so an application carries intents of its own, a mail submission being the worked example, and an owner that does not recognise a kind, or lacks the means to perform it, skips the row and leaves it for the process that can. A reader may overlay pending actions on what it shows, so a queued change appears before it is applied.
 
+Sources do not all push the same things: one server moves messages and another cannot, one calendar sends invitation replies and another does not. The owner declares what each source supports, from a vocabulary the standard fixes, and a producer reads it before appending, so the user learns of a gap when acting rather than from a failed sync. A verb such as sending a message or replying to an invitation is performed by one source, and when an account has several that could, the user chooses which.
+
 Normative: STORAGE §15.
 
 ## 9. The change feed

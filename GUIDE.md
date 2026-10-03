@@ -43,7 +43,7 @@ A **producer** is a reader that appends actions:
 | Step | What | Where |
 | --- | --- | --- |
 | 5 | Pick `hash_algo` from the store, name and write a body as §4 says under the staging lock; pass vectors/objects.json | STORAGE §5, §8, §16 |
-| 6 | Enqueue in one transaction with queries/storage/queue/, the body pinned, a kind and a versioned payload as §15.3 says | STORAGE §15.1, §15.3 |
+| 6 | Check the sources' capabilities first and refuse what a declared source does not support; name an intent's performer; then enqueue in one transaction with queries/storage/queue/, the body pinned, a kind and a versioned payload as §15.3 says | STORAGE §15.1, §15.3, §15.6, Annex B |
 
 An **owner** is the one process that mutates the store:
 
@@ -54,7 +54,7 @@ An **owner** is the one process that mutates the store:
 | 9 | Run the write transaction of §5 for every batch, with queries/storage/owner/ | STORAGE §14 |
 | 10 | Derive summaries, addresses and sort keys under Annex A for each kind written; pass vectors/summaries.json for that kind | STORAGE Annex A, §16 |
 | 11 | Retain rather than delete, purge a moved or requested row only, collect only under both locks and never between chunks | STORAGE §5, §11 |
-| 12 | Drain the queue store-wide with claim-first, roll back before parking, park or skip as §13 says | STORAGE §15 |
+| 12 | Declare every source's capabilities before draining for it; drain the queue store-wide with claim-first, roll back before parking, park or skip as §13 says | STORAGE §15, §15.6 |
 
 An **engine** (SYNC) is an owner that reproduces every case under vectors/sync/. An **index** (SEARCH) adds SQLite 3.43 with FTS5, migrations/search/ and queries/search/, and every **query client** on it answers the cases under vectors/search/ alike.
 
@@ -242,19 +242,28 @@ Every other source then projects the change as its own `Dirty` or `Tombstone` an
 
 ## 13. The queue
 
+**Check**, as a producer, before anything is written:
+
+1. Map the action onto its capabilities (STORAGE Annex B.1): `move` of a message is `mail.message.move`, a `set-flags` one capability per flag it changes against the item's current set, an `add` or `copy` also one per flag it carries. A calendar write also reads its resources: the new one of an `add` or `update`, the current one of an `update` or `remove`, for `calendar.scheduling` (attendees not all marked `SCHEDULE-AGENT=CLIENT` or `NONE`), `calendar.occurrence.update` and `calendar.online-meeting`.
+2. Read the sources concerned: `load_item_capabilities(collection, seq)` for an action on an item, `load_capabilities(collection)` for an `add`, both for a `move` or `copy` into a collection synced by another source. A row with no capability is an undeclared source and gates nothing.
+3. Refuse when a declared source has no row for a needed capability, or a `none` one, reporting capability, source and `detail`; show the `detail` of a `partial` one. A scheduled resource refused for want of `calendar.scheduling` can still be written with its attendees marked `SCHEDULE-AGENT=NONE`, once the user accepts that nobody is told.
+4. For an intent (Annex B.2): the candidates are `list_capability_sources(account, collection, capability)` at the anchor collection, the item's own for an intent addressing one. One candidate is the performer; several take the user's choice if it is still listed, the latest `set-performer` pending in the queue for the account and capability before the one `load_performer` returns, otherwise refuse with the candidates and let the user pick, once or through a `set-performer` action. Write the performer into the payload's `source`.
+
 **Enqueue**, as a producer, under a shared lock on objects.lock held across the whole procedure:
 
 1. Write the body the action needs, if any (§4).
 2. `BEGIN`; `ensure_collection`; at most one `store_object` followed by `pin_object`; `enqueue_action` with the kind, the versioned JSON payload and the body's hash in `object_hash`; `COMMIT`. The statement stamps `created_at`.
 3. Release the lock. Do not assume when the owner will run.
 
+**Declare**, as the owner, for every source it runs, before draining an action for it and again when its configuration changes: `BEGIN`; `delete_capabilities(source)`; one source-wide `set_capability`, under the account the source syncs for, for every Annex B capability of the kinds the source syncs, `none` included and given a `detail` where the user deserves the reason; one more naming a collection wherever the remote's access rights differ there (a read-only calendar, a reserved label), and on each collection the source holds for an implementation reaching only those (a provider's own reply verb, `none` source-wide); `COMMIT`. A source no longer run gets `delete_capabilities` alone.
+
 **Drain**, as the owner:
 
 1. `list_pending_actions`, store-wide in append order, outside any transaction.
 2. Per row: `BEGIN`; `claim_action` first, and end the transaction touching nothing when it deleted no row, since another handle applied it; apply the action as the corresponding mutation of §11 (`add` derives the summary and addresses from the body; a live duplicate link id, `live_item_for_link`, parks, a retained or tombstoned holder revives; a `move` or `copy` into a collection with no declared kind parks; `remove` tombstones the shared item and succeeds on one nothing binds); settle refcounts, the row's pin included; `COMMIT`. No network inside.
-3. On any failure, `ROLLBACK` first, which restores the claimed row, then in a new transaction: an environment failure (busy, a body unreadable), `bump_attempts`, row left pending until the owner's bound on attempts, then parked; a store failure (a refused rebind, a constraint) or any other permanent one, `park_action` with the error, which counts the attempt itself. Neither stops the rows behind it. An unrecognised kind, or one this owner lacks the capability for: skip, touching nothing, attempts unbumped, later rows proceeding.
+3. On any failure, `ROLLBACK` first, which restores the claimed row, then in a new transaction: an environment failure (busy, a body unreadable), `bump_attempts`, row left pending until the owner's bound on attempts, then parked; a store failure (a refused rebind, a constraint) or any other permanent one, `park_action` with the error, which counts the attempt itself. Neither stops the rows behind it. An unrecognised kind, or an intent naming a source this run does not perform: skip, touching nothing, attempts unbumped, later rows proceeding. An action a declared source does not support, or an intent whose `source` does not declare it: `park_action`, the capability named in the error. A `set-performer` runs `set_performer`, or `delete_performer` when it names no source, for the account of its anchor collection.
 
-**Cancel or acknowledge**, as the owner: `cancel_action`, then `release_pins` on the hash it returns, in one transaction. An intent whose effect is not a store mutation is at least once; the performer deduplicates.
+**Cancel or acknowledge**, as the owner: `cancel_action`, then `release_pins` on the hash it returns, in one transaction. An intent whose effect is not a store mutation is at least once; the performer deduplicates. An intent leaving a change behind, a `submit` asking for a `copy` its provider does not file itself, is replaced instead: `BEGIN IMMEDIATE`; `pin_object` on the body; `enqueue_action` of the `add` into `copy`, `\Seen` set; `cancel_action` on the intent; `release_pins` on its hash; `COMMIT`. The next drain applies the copy.
 
 Operators read `load_parked_actions` store-wide; a reader overlays `load_pending_actions` for read-your-writes.
 
@@ -269,6 +278,7 @@ Operators read `load_parked_actions` store-wide; a reader overlays `load_pending
 - **Trash**: `list_retained_page` (cursor on `seq`, `0` first), every deleted row, `retained_at` `NULL` on one a source still binds; `count_retained`, `retained_bytes`.
 - **Change**: `PRAGMA data_version` to know that something committed; `load_change_cursor` for the last stamp drawn and the purge count, then `list_items_changed_since` and `list_collections_changed_since` above the recorded stamp to know what, reconciling keys only when `purges` moved.
 - **Sync state**: `list_sources`, `list_conflicted_bindings(account)`, `list_conflicted_items(account)`, `count_probes`, `load_kind`.
+- **What can be done**: `load_capabilities(collection)` and `load_item_capabilities(collection, seq)` to grey out what a source cannot push before the user tries; `list_capability_sources` and `load_performer` to show who sends or replies for an account.
 
 Never present a deleted row as live outside the trash view.
 
