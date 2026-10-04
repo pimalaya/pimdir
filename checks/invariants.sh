@@ -318,6 +318,31 @@ run queue/enqueue_action ":producer='p'" ":collection='Inbox'" ":action='add'" "
 expect "receipt: a queue id is never reused, so an old receipt names no new row" \
     "$(run read/load_action ":id=3" | cut -d'|' -f1)" "3"
 
+# --- A performed intent leaves a receipt, a withdrawn one none (§15.5) ------
+
+fresh
+collection INBOX
+collection Sent
+object m1
+run queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='collection-create'" ":payload='{\"v\":1,\"source\":\"imap\",\"name\":\"Projects\"}'" ":object_hash=NULL"
+run queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='collection-create'" ":payload='{\"v\":1,\"source\":\"imap\",\"name\":\"Other\"}'" ":object_hash=NULL"
+run queue/pin_object ":hash='m1'"
+run queue/enqueue_action ":producer='p'" ":collection='Sent'" ":action='submit'" ":payload='{\"v\":1,\"copy\":\"Sent\"}'" ":object_hash='m1'"
+run owner/cancel_action ":id=1" >/dev/null
+run owner/record_receipt ":id=1" ":collection='INBOX'" ":seq=NULL"
+run owner/cancel_action ":id=2" >/dev/null
+expect "acknowledge: a performed intent reads as applied, naming no item" \
+    "$(run read/load_action ":id=1")$(run read/load_receipt ":id=1" | cut -d'|' -f2,3)" "INBOX|"
+expect "acknowledge: a withdrawn intent leaves none" \
+    "$(run read/load_action ":id=2")$(run read/load_receipt ":id=2")" ""
+run queue/pin_object ":hash='m1'"
+run queue/enqueue_action ":producer='owner'" ":collection='Sent'" ":action='add'" ":payload='{\"v\":1,\"flags\":[\"\\\\Seen\"]}'" ":object_hash='m1'"
+pin="$(run owner/cancel_action ":id=3")"
+run owner/record_receipt ":id=3" ":collection='Sent'" ":seq=NULL"
+run owner/release_pins ":hashes='[\"$pin\"]'"
+expect "acknowledge: a replaced intent reads as applied, its change a row of its own" \
+    "$(run read/load_receipt ":id=3" | cut -d'|' -f2)$(run read/load_action ":id=4" | cut -d'|' -f5)" "Sentadd"
+
 if [ "$failures" -gt 0 ]; then
     echo "$failures invariant(s) broken" >&2
     exit 1

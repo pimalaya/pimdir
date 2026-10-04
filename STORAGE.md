@@ -119,7 +119,7 @@ The canonical schema is migrations/storage/0001_init.sql, which is normative. Th
 - **`probes`**: the handles a source enumerated whose identity is not read yet, keyed `(collection, source, handle)`, with the flags reported (SYNC.md §3).
 - **`bindings`**: one source's binding of an item, keyed `(collection, link_id, source)`: the `handle`, the sync base (`base_flags`, `base_object`, `base_revision`, `base_present`), the `shared_object` last agreed with the item, and the conflict triple `conflicted`, `conflict_revision`, `conflict_object`. A handle is bound once and never repointed, and names one item per source (§10): `bindings_by_handle` is unique.
 - **`queue`**: the action queue (§15): `id`, `created_at`, `producer`, `collection`, `action`, `payload`, `object_hash`, `attempts`, `error`.
-- **`receipts`**: what an applied queue row became, keyed by its `id`: `applied_at`, the `collection` it was queued on and, for an `add`, the `seq` of the item it created (§15.2, §15.4).
+- **`receipts`**: what an applied queue row or a performed intent became, keyed by its `id`: `applied_at`, the `collection` it was queued on and, for an `add`, the `seq` of the item it created (§15.2, §15.4, §15.5).
 
 An item plus one binding per source is the whole model. Single-source is the N=1 case; N≥2 adds only `deleted`, a removal that lingers until every source has dropped it.
 
@@ -322,7 +322,7 @@ Two implementations produce byte-identical stores only with identical encodings.
 - **`capability`** (TEXT, on `capabilities` and `performers`): a name of Annex B, or an application's own starting with `x-`. **`collection`** (TEXT, on `capabilities`): `NULL` for the source-wide row, a collection id for an override there. **`account`** (TEXT, on `capabilities` and `performers`): the account of §9.2, `NULL` in a single-account store.
 - **`support`** (TEXT): `'full'`, `'partial'` or `'none'`. **`detail`** (TEXT): what a human reads about it, or `NULL`.
 - **`payload`** (TEXT): versioned JSON with a leading integer `v`. **`error`** (TEXT): `NULL` while pending; set when parked.
-- **`seq`** (INTEGER, on `receipts`): the public id (§9.1) of the item an applied `add` created, `NULL` for every other kind.
+- **`seq`** (INTEGER, on `receipts`): the public id (§9.1) of the item an applied `add` created, or of the item a performed intent left in the store when its performer knows it; `NULL` otherwise.
 - **`generation`** (INTEGER): the epoch of §12, starting at 1.
 
 ## 14. Operations
@@ -418,15 +418,17 @@ The intents of Annex B.2 are kinds of their own, versioned the same way. An appl
 
 A reader MAY overlay a collection's pending actions (`load_pending_actions`) for read-your-writes.
 
-A producer follows one row by the `id` its enqueue answered. `load_action` reads the row while it is pending (`error` `NULL`) or parked; once it is gone, `load_receipt` says it was applied and, for an `add`, which item it created, so a producer learns the `seq` of what it staged without matching the body. A row found in neither was cancelled (§15.5), or applied longer ago than its receipt is kept: the owner keeps a receipt at least seven days after `applied_at`, then MAY drop it (`prune_receipts`). A cancelled row, an acknowledged intent included, leaves no receipt; an intent replaced by its store change (§15.5) is followed no further, the change being a row of its own.
+A producer follows one row by the `id` its enqueue answered. `load_action` reads the row while it is pending (`error` `NULL`) or parked; once it is gone, `load_receipt` says it was applied and, for an `add`, which item it created, so a producer learns the `seq` of what it staged without matching the body. A performed intent leaves a receipt too, acknowledged or replaced (§15.5), so a producer tells a message sent or a collection created from a row withdrawn. A row found in neither was cancelled by request (§15.5), or applied longer ago than its receipt is kept: the owner keeps a receipt at least seven days after `applied_at`, then MAY drop it (`prune_receipts`). A row withdrawn by request leaves no receipt; the store change replacing an intent (§15.5) is a row of its own, followed by its own `id`.
 
 ### 15.5 Cancelling and acknowledging
 
-`cancel_action` removes a pending or parked row by request, returning its pin: an operator withdrawing it, or the performer of a capability-bound intent acknowledging it. It is an owner write and MUST run in one transaction with `release_pins` on what it returned. An applied action cannot be cancelled: application deleted its row.
+`cancel_action` removes a pending or parked row, returning its pin: an operator withdrawing it by request, or the performer of a capability-bound intent acknowledging it. It is an owner write and MUST run in one transaction with `release_pins` on what it returned. An applied action cannot be cancelled: application deleted its row.
+
+A performer acknowledging an intent it performed MUST record the intent's receipt (`record_receipt`) in that same transaction: its `id`, the collection it was queued on and, as `seq`, the item its effect left in the store when the performer knows it, `NULL` otherwise (a collection created, which arrives with a later sync; a message sent, its copy filed by the provider). A withdrawal records none, which is how a producer tells the two apart (§15.4). An intent that failed is parked or left pending, never acknowledged.
 
 An intent whose effect is not a store mutation is therefore at-least-once, and deduplicating is the performer's.
 
-An intent that leaves a store change behind, the copy of a sent message, is acknowledged by replacing it: in one transaction the performer enqueues that change as an ordinary action, through `enqueue_action` with its body pinned, then cancels the intent and releases its pin. The change exists only once the intent is performed, and the drain applies it like any other, gated as §15.6 says.
+An intent that leaves a store change behind, the copy of a sent message, is acknowledged by replacing it: in one transaction the performer enqueues that change as an ordinary action, through `enqueue_action` with its body pinned, then cancels the intent, records its receipt with a `NULL` `seq` and releases its pin. The change exists only once the intent is performed, and the drain applies it like any other, gated as §15.6 says.
 
 ### 15.6 Capabilities
 
@@ -580,7 +582,7 @@ An update **changes an occurrence** when the components carrying `RECURRENCE-ID`
 
 ### B.2 Intents
 
-Performed by the source the payload names (§15.6), outside the store, then acknowledged with `cancel_action` (§15.5) or parked. An intent addressing an item does so by `seq`, or by `link_id` when the item is still a pending `add` the producer queued, exactly one of the two. `source` is absent only from a producer predating §15.6. A payload whose required fields are missing or of the wrong type is refused by the producer and parked by the performer.
+Performed by the source the payload names (§15.6), outside the store, then acknowledged with `cancel_action` and its receipt (§15.5) or parked. An intent addressing an item does so by `seq`, or by `link_id` when the item is still a pending `add` the producer queued, exactly one of the two. `source` is absent only from a producer predating §15.6. A payload whose required fields are missing or of the wrong type is refused by the producer and parked by the performer.
 
 | Capability | Kind | Payload at `v: 1` | Performed as |
 | --- | --- | --- | --- |
