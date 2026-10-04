@@ -407,6 +407,20 @@ CREATE TABLE queue (
     error       TEXT                                -- last failure; non-NULL means parked
 ) STRICT;
 
+-- What became of an applied action (§15.2, §15.4), keyed by the queue row's id:
+-- application deletes the row, so a producer holding the id its enqueue
+-- answered reads here that the row was applied and, for an `add`, the seq of
+-- the item it created. Written by the owner in the transaction applying the
+-- row, kept at least seven days, then pruned (prune_receipts). A cancelled row
+-- leaves none. `seq` names no foreign key: a later move or purge retires the
+-- item, and the receipt still says what the add created.
+CREATE TABLE receipts (
+    id         INTEGER PRIMARY KEY,        -- the applied queue row's id
+    applied_at TEXT    NOT NULL,           -- RFC 3339, Z (§13)
+    collection TEXT    NOT NULL REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    seq        INTEGER                     -- the item an `add` created, else NULL
+) STRICT;
+
 -- A reader overlays a collection's pending actions (§15.4).
 CREATE INDEX queue_by_collection ON queue(collection, id);
 -- The owner's drain, store-wide in append order, skipping the parked rows

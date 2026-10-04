@@ -26,7 +26,7 @@ known="$(
     # Pragmas, SQLite features, vector fields and JSON keys the documents write.
     printf '%s\n' user_version data_version foreign_keys journal_mode locking_mode integrity_check \
         foreign_key_check table_info table_list contentless_delete json_each json_valid \
-        sqlite_schema core_autocrlf base32 body_hex body_len input_hex input_utf8 digest_hex \
+        sqlite_schema core_autocrlf recurrence_id base32 body_hex body_len input_hex input_utf8 digest_hex \
         name_chars digest_bytes if_match set_flags no_uid_conflict collect_garbage
 )"
 

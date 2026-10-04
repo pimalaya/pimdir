@@ -290,6 +290,34 @@ expect "implementations: a source-wide one is a candidate everywhere" \
 expect "implementations: the account lists every source able somewhere" \
     "$(run read/list_capability_sources ":account=NULL" ":collection=NULL" ":capability='calendar.reply'" | tr '\n' ' ')" "graph|full| smtp|partial|by iMIP "
 
+# --- A producer follows its row to the item it created (§15.2, §15.4) ---------
+
+fresh
+collection INBOX
+run queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='add'" ":payload='{\"v\":1,\"link_id\":\"mid:a\"}'" ":object_hash=NULL"
+run queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='remove'" ":payload='{\"v\":1,\"seq\":9}'" ":object_hash=NULL"
+expect "receipt: a pending row reads as itself, unparked" \
+    "$(run read/load_action ":id=1" | cut -d'|' -f1,4,5,8)" "1|INBOX|add|"
+run owner/park_action ":id=2" ":error='unknown seq: 9'"
+expect "receipt: a parked row reads with its error" \
+    "$(run read/load_action ":id=2" | cut -d'|' -f8)" "unknown seq: 9"
+run owner/claim_action ":id=1" >/dev/null
+item INBOX mid:a 7
+run owner/record_receipt ":id=1" ":collection='INBOX'" ":seq=$(run read/seq_by_link ":collection='INBOX'" ":link_id='mid:a'")"
+expect "receipt: an applied add is gone from the queue and names its item" \
+    "$(run read/load_action ":id=1")$(run read/load_receipt ":id=1" | cut -d'|' -f2,3)" "INBOX|7"
+expect "receipt: a cancelled row leaves none" \
+    "$(run owner/cancel_action ":id=2" >/dev/null; run read/load_action ":id=2")$(run read/load_receipt ":id=2")" ""
+run owner/rename_collection ":collection='INBOX'" ":new_id='Inbox'"
+expect "receipt: a rename carries it" "$(run read/load_receipt ":id=1" | cut -d'|' -f2)" "Inbox"
+run owner/prune_receipts ":before='2000-01-01T00:00:00.000Z'"
+expect "receipt: pruning keeps what is younger" "$(sql "SELECT count(*) FROM receipts;")" "1"
+run owner/prune_receipts ":before='9999-01-01T00:00:00.000Z'"
+expect "receipt: pruning drops what is older" "$(run read/load_receipt ":id=1")" ""
+run queue/enqueue_action ":producer='p'" ":collection='Inbox'" ":action='add'" ":payload='{\"v\":1}'" ":object_hash=NULL"
+expect "receipt: a queue id is never reused, so an old receipt names no new row" \
+    "$(run read/load_action ":id=3" | cut -d'|' -f1)" "3"
+
 if [ "$failures" -gt 0 ]; then
     echo "$failures invariant(s) broken" >&2
     exit 1
