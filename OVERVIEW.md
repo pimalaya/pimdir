@@ -36,7 +36,7 @@ Normative: STORAGE §1, §3, §5, §6.
 
 Five kinds of thing live in the database.
 
-A **collection** is a mailbox, an address book or a calendar. It declares the media type of everything it holds, so a store never guesses what an item is, and it may belong to an account, which groups collections for reading and changes the meaning of nothing else.
+A **collection** is a mailbox, an address book or a calendar. It declares the media type of everything it holds, so a store never guesses what an item is, and it may belong to an account, which groups collections for reading and changes the meaning of nothing else. It also keeps what its server says about it: a name to show, and a role when the server states one, the inbox or the sent folder of a mail account, the default calendar or address book of the others.
 
 An **item** is one message, contact, event, task or journal, keyed within its collection by its link id. It carries the mutable state a source can change (flags), a pointer to its current body, a detail level saying how much of it has been fetched, and its position in the collection's natural order (a date for a message, a name for a card).
 

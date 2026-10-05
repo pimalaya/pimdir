@@ -41,6 +41,14 @@ CREATE TABLE collections (
     sort_order  INTEGER,
     conflict    TEXT NOT NULL DEFAULT 'manual'
                 CHECK (conflict IN ('manual', 'prefer-incoming', 'prefer-existing')),
+    -- What the source says the collection is for (§14), NULL when it says
+    -- nothing: a mail role is the JMAP Mailbox/role vocabulary (the IANA IMAP
+    -- mailbox name attributes lowercased, plus inbox), and `default` marks the
+    -- calendar or address book a source writes to when none is named.
+    role        TEXT CHECK (role IS NULL
+                OR (kind = 'message/rfc822' AND role IN ('inbox', 'sent', 'drafts', 'trash',
+                    'junk', 'archive', 'all', 'flagged', 'important'))
+                OR (kind IN ('text/calendar', 'text/vcard') AND role = 'default')),
     -- Handle-space epoch, bumped by the owner on a backend identity reset, so a
     -- reader derives an IMAP UIDVALIDITY from the store alone (§12).
     generation  INTEGER NOT NULL DEFAULT 1,
@@ -53,6 +61,18 @@ CREATE TABLE collections (
 CREATE INDEX collections_by_account ON collections(account) WHERE account IS NOT NULL;
 -- The change feed's collection half (§4.5).
 CREATE INDEX collections_by_changed ON collections(changed);
+-- One holder per role within an account and a kind (§14).
+CREATE UNIQUE INDEX collections_by_role ON collections(ifnull(account, ''), kind, role)
+WHERE role IS NOT NULL;
+
+-- A role set on one collection leaves the one that held it, so moving a role is
+-- one statement and the index above never sees two holders.
+CREATE TRIGGER collections_role_moves BEFORE UPDATE OF role ON collections
+WHEN NEW.role IS NOT NULL AND OLD.role IS NOT NEW.role
+BEGIN
+    UPDATE collections SET role = NULL
+    WHERE id IS NOT NEW.id AND account IS NEW.account AND kind = NEW.kind AND role = NEW.role;
+END;
 
 -- A renamed collection restamps its items under the new id (§4.5), else a
 -- consumer keyed on the old id drops them and never learns the new one.
@@ -222,7 +242,7 @@ BEGIN
 END;
 
 CREATE TRIGGER collections_stamp_update AFTER UPDATE OF
-    id, account, kind, name, parent, color, description, sort_order, generation
+    id, account, kind, name, parent, color, description, sort_order, role, generation
 ON collections
 WHEN OLD.id IS NOT NEW.id
   OR OLD.account IS NOT NEW.account
@@ -232,6 +252,7 @@ WHEN OLD.id IS NOT NEW.id
   OR OLD.color IS NOT NEW.color
   OR OLD.description IS NOT NEW.description
   OR OLD.sort_order IS NOT NEW.sort_order
+  OR OLD.role IS NOT NEW.role
   OR OLD.generation IS NOT NEW.generation
 BEGIN
     UPDATE collections SET changed = (SELECT next_change FROM store_meta WHERE id = 1)

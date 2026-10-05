@@ -200,6 +200,42 @@ run owner/set_collection_name ":collection='Archive'" ":account=NULL" ":name='Ar
 expect "name: naming an absent collection creates it with an undeclared kind" \
     "$(sql "SELECT kind FROM collections WHERE id = 'Archive';")" ""
 
+# --- A role is what a source says a collection is for (§14) -----------------
+
+fresh
+collection INBOX work
+collection Sent work
+collection Old work
+collection INBOX2 home
+expect "role: a collection is declared with none" "$(sql "SELECT count(*) FROM collections WHERE role IS NOT NULL;")" "0"
+run owner/set_collection_role ":collection='Sent'" ":role='sent'"
+expect "role: the setter records it, and the reader lists it" \
+    "$(run read/list_collections_by_account ":account='work'" | grep '^Sent|' | cut -d'|' -f10)" "sent"
+cursor="$(run read/load_change_cursor | cut -d'|' -f1)"
+run owner/set_collection_role ":collection='Old'" ":role='sent'"
+expect "role: setting it on another collection moves it there" \
+    "$(sql "SELECT id FROM collections WHERE role = 'sent';")" "Old"
+expect "role: the move stamps both collections in the feed" \
+    "$(run read/list_collections_changed_since ":since=$cursor" ":limit=10" | cut -d'|' -f1 | sort | tr '\n' ' ')" "Old Sent "
+run owner/set_collection_role ":collection='INBOX'" ":role='inbox'"
+run owner/set_collection_role ":collection='INBOX2'" ":role='inbox'"
+expect "role: each account holds its own" \
+    "$(sql "SELECT id FROM collections WHERE role = 'inbox' ORDER BY id;" | tr '\n' ' ')" "INBOX INBOX2 "
+expect "role: a direct second holder is refused by the index" \
+    "$(sql "DROP TRIGGER collections_role_moves; UPDATE collections SET role = 'inbox' WHERE id = 'Sent';" 2>&1 | grep -c UNIQUE)" "1"
+fresh
+collection INBOX
+expect "role: a value outside the kind's vocabulary is refused" \
+    "$(fails owner/set_collection_role ":collection='INBOX'" ":role='default'" && echo refused)" "refused"
+run owner/set_collection_kind ":collection='Cal'" ":account=NULL" ":kind='text/calendar'"
+run owner/set_collection_role ":collection='Cal'" ":role='default'"
+expect "role: a calendar is the default one" "$(sql "SELECT role FROM collections WHERE id = 'Cal';")" "default"
+run owner/set_collection_role ":collection='Cal'" ":role=NULL"
+expect "role: a source no longer saying it clears it" "$(sql "SELECT count(*) FROM collections WHERE role IS NOT NULL;")" "0"
+run owner/set_collection_name ":collection='Bare'" ":account=NULL" ":name='Bare'"
+expect "role: an undeclared kind takes none" \
+    "$(fails owner/set_collection_role ":collection='Bare'" ":role='sent'" && echo refused)" "refused"
+
 # --- Sources declare what they can do (§15.6) ---------------------------------
 
 fresh
