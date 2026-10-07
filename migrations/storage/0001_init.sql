@@ -107,6 +107,9 @@ CREATE TABLE sources (
     -- and then it carries nothing.
     round_started_at TEXT CHECK (round_started_at IS NOT NULL OR (round_since IS NULL AND
                      round_until IS NULL AND round_cursor IS NULL AND round_checkpoint IS NULL)),
+    -- Whether the open round lists only the band its coverage lacks, whose
+    -- absence infers no delete of an undated member; 0 with no round open.
+    round_band       INTEGER NOT NULL DEFAULT 0 CHECK (round_band = 0 OR (round_band = 1 AND round_started_at IS NOT NULL)),
     PRIMARY KEY (collection, source)
 ) STRICT;
 

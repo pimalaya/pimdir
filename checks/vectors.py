@@ -206,6 +206,7 @@ for path in sync_cases:
     for source in store.get("sources", []) + case["expect"].get("store", {}).get("sources", []):
         if source.get("round_open") is False:
             require(f"{label}: a closed round carries no cursor", source.get("round_cursor") is None and source.get("round_checkpoint") is None)
+            require(f"{label}: a closed round lists no band", source.get("round_band") in (None, False))
         if source.get("covered") is False:
             require(f"{label}: no coverage carries no bound", source.get("covered_since") is None and source.get("covered_until") is None)
 

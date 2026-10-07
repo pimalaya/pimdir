@@ -411,7 +411,7 @@ sql "INSERT INTO items(collection, link_id, seq, flags, level) VALUES('INBOX', '
      INSERT INTO bindings(collection, link_id, source, handle) VALUES('INBOX', 'draft', 'imap', char(1) || 'draft');
      INSERT INTO mail_summary(collection, link_id, subject, date) VALUES('INBOX', 'draft', '', '2026-10-06T09:00:00Z');"
 run owner/upsert_checkpoint ":collection='INBOX'" ":source='imap'" ":checkpoint=x'6330'"
-run owner/open_round ":collection='INBOX'" ":source='imap'" ":since='2026-09-01T00:00:00Z'" ":until=NULL"
+run owner/open_round ":collection='INBOX'" ":source='imap'" ":since='2026-09-01T00:00:00Z'" ":until=NULL" ":band=0"
 expect "round: the first round draws id 1, the checkpoint stays" \
     "$(run owner/load_round ":collection='INBOX'" ":source='imap'" | cut -d'|' -f1,3)$(run owner/load_checkpoint ":collection='INBOX'" ":source='imap'" | cut -d'|' -f1)" \
     "1|2026-09-01T00:00:00Zc0"
@@ -422,7 +422,7 @@ expect "round: a page lands its cursor, a later page keeps the checkpoint it car
     "$(run owner/load_round ":collection='INBOX'" ":source='imap'" | cut -d'|' -f5,6)" "p2|c1"
 expect "round: the last page infers deletes in scope only, the undated always in it, never a pending create" \
     "$(run owner/list_unstamped_bindings ":collection='INBOX'" ":source='imap'" | tr '\n' ' ')" "20|nodate 25|gone "
-run owner/open_round ":collection='INBOX'" ":source='imap'" ":since='2026-09-01T00:00:00Z'" ":until=NULL"
+run owner/open_round ":collection='INBOX'" ":source='imap'" ":since='2026-09-01T00:00:00Z'" ":until=NULL" ":band=0"
 expect "round: a restart draws a new id, voiding the cursor, the checkpoint and the old stamps" \
     "$(run owner/load_round ":collection='INBOX'" ":source='imap'" | cut -d'|' -f1,5,6)|$(run owner/list_unstamped_bindings ":collection='INBOX'" ":source='imap'" | cut -d'|' -f1 | tr '\n' ' ')" \
     "2|||20 25 30 "
@@ -452,6 +452,29 @@ expect "coverage: a bound without a closing is refused by the schema" \
     "$(sql "UPDATE sources SET covered_since = 'x' WHERE source = 'graph';" 2>&1 | grep -c CHECK)" "1"
 expect "round: no round, no cursor, by the schema" \
     "$(sql "UPDATE sources SET round_cursor = x'78' WHERE source = 'graph';" 2>&1 | grep -c CHECK)" "1"
+expect "round: no round, no band, by the schema" \
+    "$(sql "UPDATE sources SET round_band = 1 WHERE source = 'graph';" 2>&1 | grep -c CHECK)" "1"
+
+# --- A band round infers no delete of an undated member (SYNC.md §5) --------
+
+fresh
+collection INBOX
+mail INBOX recent 1 30 "'2026-10-06T08:00:00Z'"
+mail INBOX old 2 10 "'2026-08-01T10:00:00Z'"
+mail INBOX older 3 5 "'2026-06-01T10:00:00Z'"
+mail INBOX nodate 4 20 NULL
+run owner/open_round ":collection='INBOX'" ":source='imap'" ":since='2026-07-01T00:00:00Z'" ":until='2026-09-01T00:00:00Z'" ":band=1"
+expect "band: the round records that it lists the band alone" \
+    "$(run owner/load_round ":collection='INBOX'" ":source='imap'" | cut -d'|' -f3,4,7)" \
+    "2026-07-01T00:00:00Z|2026-09-01T00:00:00Z|1"
+expect "band: the last page infers deletes inside the band only, never of an undated member" \
+    "$(run owner/list_unstamped_bindings ":collection='INBOX'" ":source='imap'" | tr '\n' ' ')" "10|old "
+run owner/close_round ":collection='INBOX'" ":source='imap'" ":checkpoint=NULL" ":since='2026-07-01T00:00:00Z'" ":until=NULL"
+expect "band: closing clears the band with the round" \
+    "$(run owner/load_round ":collection='INBOX'" ":source='imap'" | cut -d'|' -f2,7)" "|0"
+run owner/open_round ":collection='INBOX'" ":source='imap'" ":since='2026-07-01T00:00:00Z'" ":until=NULL" ":band=0"
+expect "band: a round over the whole scope still finds the undated member absent" \
+    "$(run owner/list_unstamped_bindings ":collection='INBOX'" ":source='imap'" | tr '\n' ' ')" "10|old 20|nodate 30|recent "
 
 # --- Collecting below a date is manual and pushes nothing (§11.3) -----------
 
