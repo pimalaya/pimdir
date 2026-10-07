@@ -1,7 +1,7 @@
 ---
 cairn: change
 id: scoped-mail-sync
-status: active
+status: landed
 created: 2026-10-07
 ---
 
@@ -52,7 +52,7 @@ Both run io-pimdir's sync through the same seam (SYNC.md §4): an enumeration of
 | Source | Page | Why |
 |---|---|---|
 | IMAP | 500 UIDs per `UID FETCH` | `ENVELOPE`, flags, `INTERNALDATE` and a few header fields are under 1 KB a mail: half a megabyte a response, short enough to resume cheaply |
-| Graph message delta | 1,000 (`Prefer: odata.maxpagesize=1000`) | honoured with the summary `$select`, first page in under 3 s (measured below) |
+| Graph message delta | 1,000 (`Prefer: odata.maxpagesize=1000`) | first page in under 3 s (measured below); Graph answers 512 at most (see What changed during implementation) |
 | Gmail | 100 ids per `messages.list`, their metadata read in batches of 50 | Google advises batches of 50 at most; 100 reads paced near 40 a second commit every 2.5 s |
 | JMAP | 500, capped by the server's `maxObjectsInGet` | the server states its own ceiling |
 | DAV, Google Agenda, People | 64 bodies per `multiget` or batch | neverest's body batch today (`BATCH_SIZE`) |
@@ -102,7 +102,7 @@ On `microsoft@pimalaya.onmicrosoft.com`, Inbox of 1,254 mails:
 
 - **`$deltatoken=latest` is ignored by message delta**: with or without `$select` or `$filter`, either casing, the answer is an ordinary first page (10 mails, a next link), not an empty page with a delta link. There is no shortcut to a delta link; none is needed.
 - **Message delta answers newest first** (`receivedDateTime` descending, 2026-10-07 to 2023-10-08), so it is already a paged round in recency order.
-- **Full summary `$select`** (`id, subject, from, toRecipients, ccRecipients, sentDateTime, receivedDateTime, isRead, flag, hasAttachments, internetMessageId, conversationId, parentFolderId`): `maxpagesize=1000` is honoured, 3 requests, first page in 2.6 to 2.9 s, the whole Inbox in about 6.5 s; at 200, 7 requests, about 12 s. Ids only at 200: 7 requests, under a second.
+- **Full summary `$select`** (`id, subject, from, toRecipients, ccRecipients, sentDateTime, receivedDateTime, isRead, flag, hasAttachments, internetMessageId, conversationId, parentFolderId`): `maxpagesize=1000` looked honoured, 3 requests, first page in 2.6 to 2.9 s, the whole Inbox in about 6.5 s (corrected below: Graph caps message delta pages at 512, which 3 requests for 1,254 mails also fit); at 200, 7 requests, about 12 s. Ids only at 200: 7 requests, under a second.
 - A plain listing by `sentDateTime desc` at `$top=1000`: 2 requests, about 6 s, but no delta link at its end.
 
 So Graph's connector is one filtered message delta with the summary `$select` at 1,000 a page, each page committed as it lands: the Inbox that took two minutes shows its newest thousand mails in about three seconds.
@@ -113,6 +113,16 @@ So Graph's connector is one filtered message delta with the summary `$select` at
 - **himalaya**: coverage in `pimdir collection list --json`, so MOA never reads the store itself.
 - **MOA**: the ladder of `sync-window.md` keeps its order (Inbox and Sent first) but each step shows its first page within seconds, so it can shrink to Inbox and Sent over 30 days, every folder over a year, then no scope. The agent says "dans les mails depuis le …" from coverage. The paperclip and triage read the mark of §4 until the body is in.
 - **Android**: its four connectors page and carry meta; `PER_MAILBOX` and the probe-then-upgrade step go; the account's bound is a scope, a narrowed bound a collection; the lazy list reads the counts and pages of §7.
+
+## What changed during implementation
+
+- **Graph caps message delta pages at 512**, even when asked 1,000 (`Prefer: odata.maxpagesize=1000`): measured by MOA on its seeded test box (moa `docs/plan/findings.md`, a1d4ba0), pages of 512, 1,024 and 1,254 mails. The measured section above read 3 requests for 1,254 mails as 1,000 honoured; they fit 512 as well. neverest and the Android bridge still ask 1,000.
+- **Graph mail is bound to no scope.** A delta link made under a `receivedDateTime` filter made every widening relist the whole wider scope (about `n²/1000` summaries to fill a folder of `n`). Decided 2026-10-07: one unfiltered delta link per folder, and a scope listed by band on `/messages`, filtered and ordered on `sentDateTime` (neverest 3938d10, android 0bebef8), instead of the filtered delta of §1 and of the measured section's conclusion.
+- **An empty mail `date` is stored as `NULL`** (io-pimdir f9b13f8), so a round closed in one run and one resumed from its cursor read an undated member alike: in every scope.
+- **A band round keeps undated mail** (pimdir 00535c1, io-pimdir ff28408): a band listed by date never lists an undated member, so its last page infers deletes only inside the band, recorded by `sources.round_band`; rounds over a whole scope and deltas reconcile undated mail.
+- **Bodies follow their page** in neverest (6f9017c): a landed page's bodies download while the next pages list, the first body readable before the round closes.
+- **Android's first sync is short** (android 7bb0e68): the newest chunk of 50 mails per mailbox, the floor being the date of the oldest of them; scrolling and a background fill widen by count, 500 a background step, inbox and sent mail first.
+- **MOA sets no scope by default** (no `item.filter.since`, no `--since`) and shows coverage instead: Réglages says how far an unfinished copy reaches, and the agent's `mail_search` carries it as a note (moa f187373).
 
 ## Open questions
 
