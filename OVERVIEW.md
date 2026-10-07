@@ -46,7 +46,7 @@ A **summary** is what a reader lists an item from without opening its body: subj
 
 A **binding** is one source's view of one item: the handle the source knows it by and the base, what the source last agreed to. An item with one binding is the single-source case, and adding sources adds bindings and nothing else.
 
-A handle a source has listed but not yet identified is a **probe**, held as a row until the fetch that names it.
+Nothing enters the store unnamed: a source lists each member with its identity and summary, so a listed message is an item from the moment its page lands, its body fetched later or never.
 
 Normative: STORAGE §2, §4.3, Annex A.
 
@@ -82,9 +82,11 @@ Flags merge element-wise and never conflict: a flag added on one side and untouc
 
 A push is confirmed before local state moves: an accepted push moves the base, a rejected one leaves the change pending for the next run. The source's checkpoint is recorded only after the last push of a run, so an interrupted run resumes rather than forgets.
 
-An engine speaks five verbs. **Open** reads the store's view of a source with no network. **Sync** reconciles a collection against what the source enumerates. **Upgrade** raises items up the detail ladder, from a listed handle to identity and summary to a full body, since enumeration is cheap and bodies hydrate on demand. **Mutate** stages a local edit offline through the same write a sync uses. **Rekey** rebuilds a collection whose source renumbered every handle, carrying each item's state across by link id.
+A source lists a collection in one of two ways: the changes since its checkpoint, or a whole listing, a **round**, which it may answer in pages, newest first, each page named and committed as it lands, so a large mailbox shows its newest mail within seconds and an interrupted round resumes where it stopped. A mail collection may be synced under a **scope**, a window on each message's own date, the one every copy and every provider agrees on: older mail is not listed, and a message missing from a round counts as deleted only inside the window. What a source says it removed is removed whatever its date, and what the user changed is pushed whatever its date. A sync never deletes anything on a server that the user did not delete. Each source records its **coverage**, the window its last round covered and when, so a reader can say "mail since" and a search knows where it stops being exhaustive.
 
-A connector answers three requests and knows nothing of the store: enumerate what the collection holds, fetch a batch of handles at a tier, push a batch of changes and report each outcome. What it does over IMAP, JMAP or DAV is its own business.
+An engine speaks five verbs. **Open** reads the store's view of a source with no network. **Sync** reconciles a collection against what the source enumerates. **Upgrade** raises listed items to their full body, since a listing is cheap and bodies hydrate on demand, and revisits an item whose summary is missing. **Mutate** stages a local edit offline through the same write a sync uses. **Rekey** rebuilds a collection whose source renumbered every handle, carrying each item's state across by link id.
+
+A connector answers three requests and knows nothing of the store: list what the collection holds, page by page, each member with its identity and summary; fetch a batch of handles at a tier; push a batch of changes and report each outcome. What it does over IMAP, JMAP or DAV is its own business.
 
 Normative: SYNC §3 to §8.
 
@@ -103,6 +105,8 @@ Normative: SYNC §9; STORAGE §10.
 ## 7. Retention
 
 Removal from every source is not removal from the store. When an item's last binding goes, the row and its body are kept, hidden from sync and from the live reads, and listed in a trash view. Only an explicit purge deletes the row; the body then falls to the collector. An identity that comes back revives the retained row, keeping its public id and body, so a restore costs no network.
+
+Mail older than a sync's window is not removed either: it stays stored and readable until the owner, on the user's request, collects what lies below a date, which frees the space and tells no server anything. Widening the window later lists it again.
 
 Retention has no switch. How long to keep and when to purge is the owner's schedule, and a policy of purging immediately reproduces a store that never retained. A move is not a loss: when the item's identity is held live in another collection of the account with the same body, the source row is purged at once rather than kept in the trash beside its new home. The trash also shows a deletion a source may not carry out yet, so nothing the user deleted is invisible while it waits.
 

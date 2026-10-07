@@ -82,14 +82,47 @@ BEGIN
     UPDATE items SET changed = -1 WHERE collection IN (OLD.id, NEW.id);
 END;
 
--- One row per source syncing a collection (a server, a phone); the sync cursor
--- is per source.
+-- One row per source syncing a collection (a server, a phone): its sync
+-- cursor, the coverage that cursor serves, and the round under way (SYNC.md
+-- §5). A scope is `[since, until)` on the mail summary's `date`, NULL bounds
+-- open; the coverage is the scope of the last round that closed, and the
+-- store is complete over it.
 CREATE TABLE sources (
-    collection TEXT NOT NULL REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
-    source     TEXT NOT NULL,              -- source id ('left', 'right', 'phone')
-    checkpoint BLOB,                       -- opaque remote cursor (QRESYNC/JMAP state, DAV sync-token)
+    collection       TEXT NOT NULL REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    source           TEXT NOT NULL,        -- source id ('left', 'right', 'phone')
+    checkpoint       BLOB,                 -- opaque remote cursor (QRESYNC/JMAP state, DAV sync-token)
+    covered_since    TEXT,                 -- the coverage's floor, RFC 3339 Z, NULL unbounded
+    covered_until    TEXT,                 -- its ceiling, exclusive, NULL unbounded
+    -- When the last round closed, stamped by SQLite; NULL is never complete,
+    -- and then the coverage carries no bound.
+    covered_at       TEXT CHECK (covered_at IS NOT NULL OR (covered_since IS NULL AND covered_until IS NULL)),
+    -- The last round id drawn (open_round), so a restarted round stamps
+    -- afresh and a binding's stamp names one listing.
+    round            INTEGER NOT NULL DEFAULT 0,
+    round_since      TEXT,                 -- the open round's scope, NULL bounds open
+    round_until      TEXT,
+    round_cursor     BLOB,                 -- the connector's resume cursor, opaque
+    round_checkpoint BLOB,                 -- the checkpoint the round lands when it closes
+    -- When the open round began, stamped by SQLite; NULL is no round open,
+    -- and then it carries nothing.
+    round_started_at TEXT CHECK (round_started_at IS NOT NULL OR (round_since IS NULL AND
+                     round_until IS NULL AND round_cursor IS NULL AND round_checkpoint IS NULL)),
     PRIMARY KEY (collection, source)
 ) STRICT;
+
+-- A coverage a reader lists with the collection (list_collections) moves
+-- the collection's stamp (§4.5), so a window saying "mail since" follows the
+-- feed rather than polling the sync state.
+CREATE TRIGGER sources_stamp_coverage AFTER UPDATE OF covered_since, covered_until, covered_at
+ON sources
+WHEN OLD.covered_since IS NOT NEW.covered_since
+  OR OLD.covered_until IS NOT NEW.covered_until
+  OR OLD.covered_at IS NOT NEW.covered_at
+BEGIN
+    UPDATE collections SET changed = (SELECT next_change FROM store_meta WHERE id = 1)
+    WHERE id = NEW.collection;
+    UPDATE store_meta SET next_change = next_change + 1 WHERE id = 1;
+END;
 
 -- What each source can do (§15.6), declared by the owner, read by producers
 -- before they enqueue. A declaration writes every capability of the kinds the
@@ -155,7 +188,9 @@ CREATE TABLE items (
     flags           TEXT CHECK (flags IS NULL OR json_valid(flags)),  -- JSON array of flag strings
     object_hash     TEXT REFERENCES objects(hash),  -- current body, NULL until hydrated
     sort_key        TEXT NOT NULL DEFAULT '',  -- the kind's ordering key, '' when unknown (§9.3)
-    level           INTEGER NOT NULL CHECK (level IN (0, 1, 2)),  -- detail ladder: 0 probed, 1 meta, 2 full
+    -- The detail ladder: 1 meta, 2 full. 0 is what an earlier draft wrote for a
+    -- probed or pulled row, never written now and read as 1 (§13).
+    level           INTEGER NOT NULL CHECK (level IN (0, 1, 2)),
     deleted         INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0, 1)),  -- 1 while a delete propagates across sources
     retained_at     TEXT,                  -- RFC 3339 instant the last binding vanished (§11)
     retained_by     TEXT,                  -- the source whose removal retired it, diagnostic
@@ -260,17 +295,6 @@ BEGIN
     UPDATE store_meta SET next_change = next_change + 1 WHERE id = 1;
 END;
 
--- A handle a source enumerated whose identity is not read yet (SYNC.md §3).
--- A row, not a memory: the checkpoint that stops the source listing it again
--- lands before the fetch that names it, so a crash in between would lose it.
-CREATE TABLE probes (
-    collection TEXT NOT NULL REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
-    source     TEXT NOT NULL,
-    handle     TEXT NOT NULL,
-    flags      TEXT CHECK (flags IS NULL OR json_valid(flags)),  -- JSON array, NULL when unread (§13)
-    PRIMARY KEY (collection, source, handle)
-) STRICT;
-
 -- One source's binding of an item: its handle there, the three-way-merge base
 -- last agreed with it, and whether its own sync is stuck on a conflict.
 CREATE TABLE bindings (
@@ -306,6 +330,10 @@ CREATE TABLE bindings (
     -- bytes, and a content hash compares the same after the body it named has
     -- been swept.
     shared_object     TEXT,
+    -- The id of the last round whose listing carried this handle (SYNC.md
+    -- §5), NULL until one did: a round's last page drops the in-scope
+    -- bindings it did not stamp.
+    round             INTEGER,
     PRIMARY KEY (collection, link_id, source),
     -- A binding that is not conflicted carries neither (§13).
     CHECK (conflicted = 1 OR (conflict_revision IS NULL AND conflict_object IS NULL)),

@@ -1,0 +1,54 @@
+{
+  "label": "a paged round lands each page in its own write, the round left open on an interruption",
+  "note": "the first scoped sync of a mailbox lists newest first in pages; the first page names its members, stamps their bindings with round 1, and lands the resume cursor p1 and the checkpoint c1 the source gave up front, the old checkpoint (none) staying until the round closes. The run is cut after it: what landed stays, the round is open, no delete is inferred and nothing is pushed (SYNC.md §4, §5)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {},
+    "items": [],
+    "bindings": [],
+    "sources": []
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "INBOX",
+    "source": "imap",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual",
+      "scope": { "since": "2026-09-01T00:00:00Z", "until": null }
+    }
+  },
+  "remote": {
+    "pages": [
+      { "items": [{ "handle": "12", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-recent.eml" } }, { "handle": "13", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-future-date.eml" } }], "vanished": [], "last": false, "cursor": "p1", "checkpoint": "c1" }
+    ],
+    "interrupted_after": 1,
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [
+      { "kind": "Added", "handle": "12" },
+      { "kind": "Added", "handle": "13" }
+    ],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z" },
+        { "collection": "INBOX", "link_id": "future-1@example.org", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2035-01-01T00:00:00Z" }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "imap", "handle": "12", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 },
+        { "collection": "INBOX", "link_id": "future-1@example.org", "source": "imap", "handle": "13", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 }
+      ],
+      "summaries": [
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "recent-1@example.org", "row": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 241, "attachment": 0 } },
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "future-1@example.org", "row": { "message_id": "future-1@example.org", "in_reply_to": [], "subject": "Clock skew", "sender": "mallory@example.org", "sender_name": "Mallory Example", "date": "2035-01-01T00:00:00Z", "size": 194, "attachment": 0 } }
+      ],
+      "sources": [
+        { "collection": "INBOX", "source": "imap", "checkpoint": null, "round": 1, "round_open": true, "round_since": "2026-09-01T00:00:00Z", "round_until": null, "round_cursor": "p1", "round_checkpoint": "c1", "covered": false, "covered_since": null, "covered_until": null }
+      ]
+    }
+  }
+}

@@ -1,0 +1,18 @@
+Message-ID: <footer-1@example.org>
+Subject: [list] Release notes
+From: List Robot <robot@lists.example.org>
+To: list@lists.example.org
+Date: Mon, 05 Oct 2026 07:00:00 +0000
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="b1"
+
+--b1
+Content-Type: text/plain; charset=utf-8
+
+Version 2 is out.
+--b1
+Content-Type: text/plain; charset=utf-8
+Content-Disposition: inline
+
+list mailing list footer
+--b1--

@@ -1,0 +1,19 @@
+Message-ID: <attach-1@example.org>
+Subject: Invoice
+From: Billing <billing@example.org>
+To: bob@example.org
+Date: Mon, 05 Oct 2026 09:00:00 +0000
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="b2"
+
+--b2
+Content-Type: text/plain; charset=utf-8
+
+Attached.
+--b2
+Content-Type: application/pdf; name="invoice.pdf"
+Content-Disposition: attachment; filename="invoice.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQK
+--b2--

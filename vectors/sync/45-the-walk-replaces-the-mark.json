@@ -1,0 +1,50 @@
+{
+  "label": "the walk of the parts replaces the attachment mark read without the body",
+  "note": "20 was named from a multipart/mixed Content-Type, marked 1; the Full fetch walks the parts, finds no Content-Disposition: attachment, and writes 0 over it. A later listing's meta never puts the 1 back over a walked mark (STORAGE Annex A.1, SYNC.md §6)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {
+      "f1": { "body": "fixtures/mail-mixed-footer.eml" }
+    },
+    "items": [
+      { "collection": "INBOX", "link_id": "footer-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-05T07:00:00Z" }
+    ],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "footer-1@example.org", "source": "imap", "handle": "20", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "footer-1@example.org", "row": { "message_id": "footer-1@example.org", "in_reply_to": [], "subject": "[list] Release notes", "sender": "robot@lists.example.org", "sender_name": "List Robot", "date": "2026-10-05T07:00:00Z", "size": 425, "attachment": 1 } }
+    ],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+  },
+  "run": {
+    "verb": "upgrade",
+    "collection": "INBOX",
+    "source": "imap",
+    "tier": "Full",
+    "handles": ["20"]
+  },
+  "remote": {
+    "snapshot": null,
+    "fetch": {
+      "20": { "Full": { "body": "fixtures/mail-mixed-footer.eml", "revision": null } }
+    }
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "footer-1@example.org", "seq": 1, "flags": [], "object": "f1", "level": 2, "deleted": 0, "sort_key": "2026-10-05T07:00:00Z" }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "footer-1@example.org", "source": "imap", "handle": "20", "base_flags": [], "base_object": "f1", "base_revision": null, "base_present": 1, "round": 1 }
+      ],
+      "summaries": [
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "footer-1@example.org", "row": { "message_id": "footer-1@example.org", "in_reply_to": [], "subject": "[list] Release notes", "sender": "robot@lists.example.org", "sender_name": "List Robot", "date": "2026-10-05T07:00:00Z", "size": 425, "attachment": 0 } }
+      ],
+      "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+    }
+  }
+}

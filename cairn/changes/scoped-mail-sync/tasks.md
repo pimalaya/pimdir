@@ -28,14 +28,15 @@ Ordered: each block needs the ones above it, except 1, which can start at once.
 
 ## 2. pimdir (this repository)
 
-- [ ] SYNC.md §4: paged enumeration (page, resume cursor, last page), every member named with its meta
-- [ ] SYNC.md §5: scope (in-scope rule, two-day margin, absence only in scope, explicit removals always, local changes always), rounds stamped and closed, checkpoint bound to its scope
-- [ ] SYNC.md §3, §5, §6, §12: probes and `Probed` removed; creates wait for the page that lands them; naming at enumeration on §6's identity rules
-- [ ] STORAGE.md: coverage and the open round per `(collection, source)`; the round stamp on bindings; `collect_before`; the `probes` table and its statements removed
-- [ ] Annex A: the attachment mark without the body (the source's flag, else `multipart/mixed`), replaced by the walk of the parts
-- [ ] migrations/storage: coverage, round and stamp columns; `probes` dropped (level 0 rows read as meta to revisit); queries: `set_coverage`, `collect_before`, `count_mail`, per-day and unread counts, sender and subject `LIKE`
-- [ ] vectors: a paged round (interrupted, resumed, restarted), an old `Date` received today, a future `Date`, no `Date`, an explicit removal out of scope, a widening, a collection, a create landed by a page, the attachment mark both ways; in every one, no `Remove` pushed that the consumer did not stage
-- [ ] checks/invariants.sh; GUIDE.md, OVERVIEW.md; log entry
+- [x] SYNC.md §4: paged enumeration (page, resume cursor, last page), every member named with its meta
+- [x] SYNC.md §5: scope (in-scope rule, two-day margin, absence only in scope, explicit removals always, local changes always), rounds stamped and closed, checkpoint bound to its scope
+- [x] SYNC.md §3, §5, §6, §12: probes and `Probed` removed; creates wait for the page that lands them; naming at enumeration on §6's identity rules
+- [x] STORAGE.md: coverage and the open round per `(collection, source)`; the round stamp on bindings; `collect_before`; the `probes` table and its statements removed
+- [x] Annex A: the attachment mark without the body (the source's flag, else `multipart/mixed`), replaced by the walk of the parts
+- [x] migrations/storage: coverage, round and stamp columns; `probes` dropped (level 0 rows read as meta to revisit); queries: `set_coverage`, `collect_before`, `count_mail`, per-day and unread counts, sender and subject `LIKE`
+- [x] vectors: a paged round (interrupted, resumed, restarted), an old `Date` received today, a future `Date`, no `Date`, an explicit removal out of scope, a widening, a collection, a create landed by a page, the attachment mark both ways; in every one, no `Remove` pushed that the consumer did not stage
+- [x] checks/invariants.sh; GUIDE.md, OVERVIEW.md
+- [ ] log entry
 
 ## 3. io-pimdir
 

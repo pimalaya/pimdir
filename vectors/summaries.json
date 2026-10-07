@@ -7,7 +7,7 @@
       "label": "mail, every field present",
       "kind": "message/rfc822",
       "fixture": "fixtures/mail-basic.eml",
-      "note": "the Date carries a +02:00 offset, so the key and the date column are the UTC instant with the Z designator, never the local reading. attachment is 0 because the writer walked the one text part; the Meta tier, which walks nothing, writes NULL there and agrees on every other column",
+      "note": "the Date carries a +02:00 offset, so the key and the date column are the UTC instant with the Z designator, never the local reading. attachment is 0 because the writer walked the one text part, and 0 without the body too (meta_attachment), the top-level Content-Type being text/plain (Annex A.1)",
       "body": { "len": 299, "blake3": "vmrssbttugq3lthad7jpxm73flnmmuqq3vvdsxj2ghqy6bfwdbra", "sha256-128": "dh4uthikps6rrobtyfukbuo6sy" },
       "link_id": "basic-1@example.org",
       "table": "mail_summary",
@@ -17,7 +17,8 @@
         { "role": "to", "position": 0, "address": "bob@example.org", "name": null },
         { "role": "to", "position": 1, "address": "carol@example.org", "name": null }
       ],
-      "sort_key": "2026-08-01T10:00:00Z"
+      "sort_key": "2026-08-01T10:00:00Z",
+      "meta_attachment": 0
     },
     {
       "label": "mail, Message-ID already claimed in the collection",
@@ -35,7 +36,8 @@
         { "role": "to", "position": 0, "address": "bob@example.org", "name": null },
         { "role": "to", "position": 1, "address": "carol@example.org", "name": null }
       ],
-      "sort_key": "2026-08-01T10:00:00Z"
+      "sort_key": "2026-08-01T10:00:00Z",
+      "meta_attachment": 0
     },
     {
       "label": "mail, no Message-ID",
@@ -50,7 +52,8 @@
         { "role": "from", "position": 0, "address": "cron@example.org", "name": "Cron Daemon" },
         { "role": "to", "position": 0, "address": "ops@example.org", "name": null }
       ],
-      "sort_key": "2026-08-01T10:00:00Z"
+      "sort_key": "2026-08-01T10:00:00Z",
+      "meta_attachment": 0
     },
     {
       "label": "mail, encoded headers",
@@ -67,7 +70,8 @@
         { "role": "cc", "position": 0, "address": "carol@example.org", "name": null },
         { "role": "cc", "position": 1, "address": "dan@example.net", "name": "Dan" }
       ],
-      "sort_key": "2026-08-04T09:15:00Z"
+      "sort_key": "2026-08-04T09:15:00Z",
+      "meta_attachment": 0
     },
     {
       "label": "mail, unparseable Date",
@@ -82,7 +86,8 @@
         { "role": "from", "position": 0, "address": "alice@example.org", "name": "Alice Example" },
         { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
       ],
-      "sort_key": ""
+      "sort_key": "",
+      "meta_attachment": 0
     },
     {
       "label": "mail, no Subject header",
@@ -97,7 +102,8 @@
         { "role": "from", "position": 0, "address": "alice@example.org", "name": null },
         { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
       ],
-      "sort_key": "2026-08-01T10:00:00Z"
+      "sort_key": "2026-08-01T10:00:00Z",
+      "meta_attachment": 0
     },
     {
       "label": "mail, two In-Reply-To ids",
@@ -112,7 +118,72 @@
         { "role": "from", "position": 0, "address": "alice@example.org", "name": "Alice Example" },
         { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
       ],
-      "sort_key": "2026-08-01T10:00:00Z"
+      "sort_key": "2026-08-01T10:00:00Z",
+      "meta_attachment": 0
+    },
+    {
+      "label": "mail, a recent Date",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-recent.eml",
+      "note": "the in-scope message of the scoped sync cases (SYNC.md §11); a text/plain message marks 0 with the body and without",
+      "body": { "len": 241, "blake3": "zeh6d25msxa54lmheiax4ns3ajqsybejzd4afgfb7sbts4mgumma", "sha256-128": "ens3ivvm4yocui77pd7c4mkkli" },
+      "link_id": "recent-1@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 241, "attachment": 0 },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "alice@example.org", "name": "Alice Example" },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sort_key": "2026-10-06T08:30:00Z",
+      "meta_attachment": 0
+    },
+    {
+      "label": "mail, a Date in the future",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-future-date.eml",
+      "note": "a clock set ahead: the Date is taken as stated, and a scope with an open ceiling holds it (SYNC.md §5). No Content-Type is text/plain (RFC 2045 §5.2), so no mark",
+      "body": { "len": 194, "blake3": "wxty4on2jpu2ballqpzivfmn4yvkbcifxjt2mkflli4v2ukojw4a", "sha256-128": "gj6on4mawmlot7mlgc2ygby5na" },
+      "link_id": "future-1@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": "future-1@example.org", "in_reply_to": [], "subject": "Clock skew", "sender": "mallory@example.org", "sender_name": "Mallory Example", "date": "2035-01-01T00:00:00Z", "size": 194, "attachment": 0 },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "mallory@example.org", "name": "Mallory Example" },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sort_key": "2035-01-01T00:00:00Z",
+      "meta_attachment": 0
+    },
+    {
+      "label": "mail, multipart/mixed with no attachment",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-mixed-footer.eml",
+      "note": "a list footer as a second, inline part: without the body the top-level multipart/mixed reads as an attachment (meta_attachment 1), and the walk of the parts finds no Content-Disposition: attachment and replaces it with 0 (Annex A.1)",
+      "body": { "len": 425, "blake3": "ist5uhynbyinwp6khnmgswp7iwu4f5j2ake7tfrlpgexchvo4h6q", "sha256-128": "4cplpiezupmuhvuyacwlits4l4" },
+      "link_id": "footer-1@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": "footer-1@example.org", "in_reply_to": [], "subject": "[list] Release notes", "sender": "robot@lists.example.org", "sender_name": "List Robot", "date": "2026-10-05T07:00:00Z", "size": 425, "attachment": 0 },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "robot@lists.example.org", "name": "List Robot" },
+        { "role": "to", "position": 0, "address": "list@lists.example.org", "name": null }
+      ],
+      "sort_key": "2026-10-05T07:00:00Z",
+      "meta_attachment": 1
+    },
+    {
+      "label": "mail, an attachment",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-attachment.eml",
+      "note": "a part carrying Content-Disposition: attachment under a multipart/mixed: both derivations give 1 (Annex A.1)",
+      "body": { "len": 451, "blake3": "okt44y7tza2h5npmu7sfm6pcnmjx3caaw7bn5q6kn3bs22bn5waa", "sha256-128": "kx52plp3ukh2nkoc2dp6gaojhu" },
+      "link_id": "attach-1@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": "attach-1@example.org", "in_reply_to": [], "subject": "Invoice", "sender": "billing@example.org", "sender_name": "Billing", "date": "2026-10-05T09:00:00Z", "size": 451, "attachment": 1 },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "billing@example.org", "name": "Billing" },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sort_key": "2026-10-05T09:00:00Z",
+      "meta_attachment": 1
     },
     {
       "label": "card, every field present",

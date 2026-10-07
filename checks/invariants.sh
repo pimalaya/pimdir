@@ -379,6 +379,147 @@ run owner/release_pins ":hashes='[\"$pin\"]'"
 expect "acknowledge: a replaced intent reads as applied, its change a row of its own" \
     "$(run read/load_receipt ":id=3" | cut -d'|' -f2)$(run read/load_action ":id=4" | cut -d'|' -f5)" "Sentadd"
 
+
+# --- Nothing reaches the store unnamed (§10, SYNC.md §4) ---------------------
+
+fresh
+expect "probes: the table is gone, every listed member being named" \
+    "$(sql "SELECT count(*) FROM sqlite_schema WHERE name = 'probes';")" "0"
+
+# --- A round is stamped page by page and closed once (SYNC.md §5) -----------
+
+# mail <collection> <link_id> <seq> <handle> <date|NULL> [flags] [base_flags]:
+# a bound item with its summary, as a page's write leaves it.
+mail() {
+    run owner/insert_item ":collection='$1'" ":link_id='$2'" ":seq=$3" ":flags='${6:-[]}'" \
+        ":object_hash=NULL" ":sort_key=''" ":level=1" ":deleted=0" ":conflicted=0" ":conflict_object=NULL"
+    run owner/insert_binding ":collection='$1'" ":link_id='$2'" ":source='imap'" ":handle='$4'" \
+        ":base_flags='${7:-[]}'" ":base_object=NULL" ":base_revision=NULL" ":base_present=1" \
+        ":conflicted=0" ":conflict_revision=NULL" ":conflict_object=NULL" ":shared_object=NULL"
+    run owner/upsert_mail_summary ":collection='$1'" ":link_id='$2'" ":message_id='$2'" \
+        ":in_reply_to='[]'" ":subject='s $2'" ":sender='alice@example.org'" ":sender_name='Alice'" \
+        ":date=$5" ":size=1" ":attachment=0"
+}
+
+fresh
+collection INBOX
+mail INBOX recent 1 30 "'2026-10-06T08:00:00Z'"
+mail INBOX old 2 10 "'2026-08-01T10:00:00Z'"
+mail INBOX nodate 3 20 NULL
+mail INBOX gone 4 25 "'2026-10-01T00:00:00Z'"
+sql "INSERT INTO items(collection, link_id, seq, flags, level) VALUES('INBOX', 'draft', 5, '[]', 2);
+     INSERT INTO bindings(collection, link_id, source, handle) VALUES('INBOX', 'draft', 'imap', char(1) || 'draft');
+     INSERT INTO mail_summary(collection, link_id, subject, date) VALUES('INBOX', 'draft', '', '2026-10-06T09:00:00Z');"
+run owner/upsert_checkpoint ":collection='INBOX'" ":source='imap'" ":checkpoint=x'6330'"
+run owner/open_round ":collection='INBOX'" ":source='imap'" ":since='2026-09-01T00:00:00Z'" ":until=NULL"
+expect "round: the first round draws id 1, the checkpoint stays" \
+    "$(run owner/load_round ":collection='INBOX'" ":source='imap'" | cut -d'|' -f1,3)$(run owner/load_checkpoint ":collection='INBOX'" ":source='imap'" | cut -d'|' -f1)" \
+    "1|2026-09-01T00:00:00Zc0"
+run owner/stamp_bindings ":collection='INBOX'" ":source='imap'" ":handles='[\"30\"]'"
+run owner/set_round_cursor ":collection='INBOX'" ":source='imap'" ":cursor=x'7031'" ":checkpoint=x'6331'"
+run owner/set_round_cursor ":collection='INBOX'" ":source='imap'" ":cursor=x'7032'" ":checkpoint=NULL"
+expect "round: a page lands its cursor, a later page keeps the checkpoint it carries none of" \
+    "$(run owner/load_round ":collection='INBOX'" ":source='imap'" | cut -d'|' -f5,6)" "p2|c1"
+expect "round: the last page infers deletes in scope only, the undated always in it, never a pending create" \
+    "$(run owner/list_unstamped_bindings ":collection='INBOX'" ":source='imap'" | tr '\n' ' ')" "20|nodate 25|gone "
+run owner/open_round ":collection='INBOX'" ":source='imap'" ":since='2026-09-01T00:00:00Z'" ":until=NULL"
+expect "round: a restart draws a new id, voiding the cursor, the checkpoint and the old stamps" \
+    "$(run owner/load_round ":collection='INBOX'" ":source='imap'" | cut -d'|' -f1,5,6)|$(run owner/list_unstamped_bindings ":collection='INBOX'" ":source='imap'" | cut -d'|' -f1 | tr '\n' ' ')" \
+    "2|||20 25 30 "
+run owner/stamp_bindings ":collection='INBOX'" ":source='imap'" ":handles='[\"20\",\"30\"]'"
+run owner/set_round_cursor ":collection='INBOX'" ":source='imap'" ":cursor=NULL" ":checkpoint=x'6332'"
+cursor="$(run read/load_change_cursor | cut -d'|' -f1)"
+run owner/close_round ":collection='INBOX'" ":source='imap'" ":checkpoint=NULL" ":since='2026-09-01T00:00:00Z'" ":until=NULL"
+expect "round: closing lands the round's checkpoint and its coverage, and clears the round" \
+    "$(run owner/load_checkpoint ":collection='INBOX'" ":source='imap'" | cut -d'|' -f1,2)|$(run owner/load_round ":collection='INBOX'" ":source='imap'" | cut -d'|' -f1-6)" \
+    "c2|2026-09-01T00:00:00Z|2|||||"
+expect "round: the coverage is stamped by SQLite" \
+    "$(sql "SELECT covered_at LIKE '____-__-__T__:__:__.___Z' FROM sources;")" "1"
+expect "coverage: a closing moves the collection in the feed" \
+    "$(run read/list_collections_changed_since ":since=$cursor" ":limit=10" | cut -d'|' -f1)" "INBOX"
+expect "coverage: a reader lists it with the collection" \
+    "$(run read/list_collections | cut -d'|' -f1,11,12)" "INBOX|2026-09-01T00:00:00Z|"
+run owner/upsert_checkpoint ":collection='INBOX'" ":source='graph'" ":checkpoint=NULL"
+expect "coverage: a collection with a source never complete has none" \
+    "$(run read/list_collections | cut -d'|' -f11,13)" "|"
+expect "coverage: per source, the round under way included" \
+    "$(run read/list_coverage ":collection='INBOX'" | cut -d'|' -f1,2,5 | tr '\n' ' ')" "graph|| imap|2026-09-01T00:00:00Z| "
+run owner/set_coverage ":collection='INBOX'" ":source='imap'" ":since='2026-10-01T00:00:00Z'" ":until=NULL"
+run owner/set_coverage ":collection='INBOX'" ":source='graph'" ":since='2026-10-01T00:00:00Z'" ":until=NULL"
+expect "coverage: a narrower scope restates it, a source never complete gains none" \
+    "$(run read/list_coverage ":collection='INBOX'" | cut -d'|' -f1,2 | tr '\n' ' ')" "graph| imap|2026-10-01T00:00:00Z "
+expect "coverage: a bound without a closing is refused by the schema" \
+    "$(sql "UPDATE sources SET covered_since = 'x' WHERE source = 'graph';" 2>&1 | grep -c CHECK)" "1"
+expect "round: no round, no cursor, by the schema" \
+    "$(sql "UPDATE sources SET round_cursor = x'78' WHERE source = 'graph';" 2>&1 | grep -c CHECK)" "1"
+
+# --- Collecting below a date is manual and pushes nothing (§11.3) -----------
+
+fresh
+collection INBOX
+collection Archive
+object h1
+mail INBOX old 1 10 "'2026-08-01T10:00:00Z'"
+sql "UPDATE items SET object_hash = 'h1' WHERE link_id = 'old'; UPDATE bindings SET base_object = 'h1' WHERE link_id = 'old';"
+mail INBOX dirty 2 11 "'2026-08-01T10:00:00Z'" '["\\Flagged"]' '[]'
+mail INBOX recent 3 12 "'2026-10-06T08:00:00Z'"
+mail INBOX nodate 4 13 NULL
+mail Archive old 1 10 "'2026-08-01T10:00:00Z'"
+sql "INSERT INTO items(collection, link_id, seq, flags, level) VALUES('INBOX', 'created', 5, '[]', 2);
+     INSERT INTO bindings(collection, link_id, source, handle) VALUES('INBOX', 'created', 'imap', char(1) || 'created');
+     INSERT INTO mail_summary(collection, link_id, subject, date) VALUES('INBOX', 'created', '', '2026-08-01T10:00:00Z');"
+run owner/recompute_refcounts
+purges="$(sql "SELECT purges FROM store_meta;")"
+expect "collect: only what owes nothing, below the date, in the collection" \
+    "$(run owner/collect_before ":collection='INBOX'" ":before='2026-09-01T00:00:00Z'")" "1"
+run owner/recompute_refcounts
+expect "collect: an unpushed flag, a pending create, the undated and the newer stay" \
+    "$(sql "SELECT link_id FROM items WHERE collection = 'INBOX' ORDER BY link_id;" | tr '\n' ' ')" "created dirty nodate recent "
+expect "collect: bindings, summary and addresses go with the item" \
+    "$(sql "SELECT (SELECT count(*) FROM bindings WHERE collection = 'INBOX' AND link_id = 'old') + (SELECT count(*) FROM mail_summary WHERE collection = 'INBOX' AND link_id = 'old');")" "0"
+expect "collect: the body is released to the collector, the holder elsewhere untouched" \
+    "$(sql "SELECT refcount FROM objects WHERE hash = 'h1';")$(sql "SELECT count(*) FROM items WHERE collection = 'Archive';")" "01"
+expect "collect: no tombstone, no queued push, and the feed counts a purge" \
+    "$(sql "SELECT count(*) FROM items WHERE deleted = 1;")$(sql "SELECT count(*) FROM queue;")$(sql "SELECT purges FROM store_meta;")" "00$((purges + 1))"
+
+# --- Readers count and page under the chips (§14.1) --------------------------
+
+fresh
+collection INBOX
+collection Sent
+mail INBOX a 1 1 "'2026-10-06T08:00:00Z'" '["\\Seen"]'
+mail INBOX b 2 2 "'2026-10-06T20:00:00Z'"
+mail INBOX c 3 3 "'2026-10-05T08:00:00Z'"
+mail Sent a 1 1 "'2026-10-06T08:00:00Z'" '["\\Seen"]'
+sql "UPDATE items SET sort_key = (SELECT date FROM mail_summary s WHERE s.collection = items.collection AND s.link_id = items.link_id);
+     UPDATE mail_summary SET attachment = 1, subject = 'Invoice 100%' WHERE link_id = 'c';
+     UPDATE items SET flags = NULL WHERE link_id = 'b';"
+expect "count: over a set of collections" \
+    "$(run read/count_mail ":collections='[\"INBOX\",\"Sent\"]'" ":seen=NULL" ":attachment=NULL")" "4"
+expect "count: the read chip, unknown flags unread" \
+    "$(run read/count_mail ":collections='[\"INBOX\"]'" ":seen=0" ":attachment=NULL")$(run read/count_mail ":collections='[\"INBOX\"]'" ":seen=1" ":attachment=NULL")" "21"
+expect "count: the attachment chip" \
+    "$(run read/count_mail ":collections='[\"INBOX\"]'" ":seen=NULL" ":attachment=1")" "1"
+expect "count: per day, on the reader's clock" \
+    "$(run read/count_mail_by_day ":collections='[\"INBOX\"]'" ":seen=NULL" ":attachment=NULL" ":shift='+300 minutes'" | tr '\n' ' ')" \
+    "2026-10-07|1 2026-10-06|1 2026-10-05|1 "
+expect "count: unread per collection" \
+    "$(run read/count_unread ":collections='[\"INBOX\",\"Sent\"]'" ":attachment=NULL")" "INBOX|2"
+expect "page: newest first across collections, one seq in two placed apart" \
+    "$(run read/list_mail_page_filtered ":collections='[\"INBOX\",\"Sent\"]'" ":seen=NULL" ":attachment=NULL" \
+        ":after_key=NULL" ":after_seq=NULL" ":after_collection=NULL" ":limit=10" | cut -d'|' -f1,2 | tr '\n' ' ')" \
+    "INBOX|2 Sent|1 INBOX|1 INBOX|3 "
+expect "page: the cursor resumes past the twin" \
+    "$(run read/list_mail_page_filtered ":collections='[\"INBOX\",\"Sent\"]'" ":seen=NULL" ":attachment=NULL" \
+        ":after_key='2026-10-06T08:00:00Z'" ":after_seq=1" ":after_collection='Sent'" ":limit=10" | cut -d'|' -f1,2 | tr '\n' ' ')" \
+    "INBOX|1 INBOX|3 "
+expect "search: subject, escaped" \
+    "$(run read/search_mail ":collections='[\"INBOX\"]'" ":pattern='%100\\%%'" ":seen=NULL" ":attachment=NULL" \
+        ":after_key=NULL" ":after_seq=NULL" ":after_collection=NULL" ":limit=10" | cut -d'|' -f2)" "3"
+expect "search: sender, case folded" \
+    "$(run read/search_mail ":collections='[\"INBOX\"]'" ":pattern='%ALICE@%'" ":seen=0" ":attachment=NULL" \
+        ":after_key=NULL" ":after_seq=NULL" ":after_collection=NULL" ":limit=10" | cut -d'|' -f2 | tr '\n' ' ')" "2 3 "
+
 if [ "$failures" -gt 0 ]; then
     echo "$failures invariant(s) broken" >&2
     exit 1

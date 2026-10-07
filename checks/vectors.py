@@ -11,6 +11,7 @@ import base64
 import hashlib
 import json
 import sys
+from email import message_from_bytes
 from pathlib import Path
 
 from blake3 import blake3
@@ -139,6 +140,10 @@ for case in summaries["cases"]:
     if case["table"] == "mail_summary":
         check(f"{case['label']} size column", case["summary"]["size"], case["body"]["len"])
         require(f"{case['label']} in_reply_to is an array", isinstance(case["summary"]["in_reply_to"], list))
+        # The mark without the body (Annex A.1): 1 when the top-level
+        # Content-Type is multipart/mixed, else 0, read by the stdlib parser.
+        mixed = message_from_bytes(bytes_).get_content_type() == "multipart/mixed"
+        check(f"{case['label']} meta_attachment", case.get("meta_attachment"), int(mixed))
 
     for address in case["addresses"]:
         require(f"{case['label']} role {address['role']}", address["role"] in ROLES)
@@ -178,6 +183,46 @@ for path in sync_cases:
     if case["run"].get("verb") == "mutate":
         require(f"{label}: a mutate run carries its mutation", isinstance(case["run"].get("mutation"), dict))
     require(f"{label}: no delete policy option, the engine decides per item", "delete" not in case["run"].get("options", {}))
+    require(f"{label}: no probes, every member arriving named", "probes" not in store and "probes" not in case["expect"].get("store", {}))
+    scope = case["run"].get("options", {}).get("scope")
+    if scope is not None:
+        require(f"{label}: a scope bounds a mail collection", all(c["kind"] == "message/rfc822" for c in store.get("collections", [])))
+        require(f"{label}: a scope is since and until", set(scope) == {"since", "until"})
+
+    # What a connector answers (SYNC.md section 4): one page as `snapshot`,
+    # or `pages`, newest first, every page but the last carrying a cursor.
+    # Every member carries its meta, read from a fixture: nothing reaches the
+    # store unnamed.
+    remote = case["remote"]
+    require(f"{label}: one snapshot or pages, not both", not (remote.get("snapshot") and remote.get("pages")))
+    pages = remote.get("pages") or ([remote["snapshot"]] if remote.get("snapshot") else [])
+    for at, page in enumerate(remote.get("pages") or []):
+        require(f"{label}: page {at} says whether it is the last", isinstance(page.get("last"), bool))
+        require(f"{label}: page {at} carries a cursor unless it is the last", page.get("last") or page.get("cursor") is not None)
+    for page in pages:
+        for member in page["items"]:
+            meta = member.get("meta")
+            require(f"{label}: member {member['handle']} carries its meta", isinstance(meta, dict) and (root / meta.get("body", "")).is_file())
+    for source in store.get("sources", []) + case["expect"].get("store", {}).get("sources", []):
+        if source.get("round_open") is False:
+            require(f"{label}: a closed round carries no cursor", source.get("round_cursor") is None and source.get("round_checkpoint") is None)
+        if source.get("covered") is False:
+            require(f"{label}: no coverage carries no bound", source.get("covered_since") is None and source.get("covered_until") is None)
+
+    # A sync never deletes on the server on its own account (SYNC.md section
+    # 5): every Remove pushed names a handle the consumer tombstoned, a
+    # binding of a deleted item, or the one a mutate run removes.
+    staged = {
+        binding["handle"]
+        for binding in store.get("bindings", [])
+        for item in store.get("items", [])
+        if item["collection"] == binding["collection"] and item["link_id"] == binding["link_id"] and item.get("deleted") == 1
+    }
+    if case["run"].get("verb") == "mutate" and case["run"]["mutation"].get("kind") == "Remove":
+        staged |= {binding["handle"] for binding in store.get("bindings", [])}
+    for push in case["expect"].get("pushes", []):
+        if push.get("kind") == "Remove":
+            require(f"{label}: Remove {push['handle']} was staged by the consumer", push["handle"] in staged)
     for binding in store.get("bindings", []) + case["expect"].get("store", {}).get("bindings", []):
         provisional = binding["handle"].startswith("\u0001")
         require(f"{label}: binding {binding['handle']!r} is provisional iff it has no base", provisional == (binding.get("base_present", 0) == 0))

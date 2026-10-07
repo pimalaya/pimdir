@@ -9,7 +9,6 @@
     },
     "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c2", "level": 2, "deleted": 0 }],
     "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1 }],
-    "probes": [],
     "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d0" }]
   },
   "run": {
@@ -24,7 +23,7 @@
   },
   "remote": {
     "snapshot": {
-      "items": [{ "handle": "a.vcf", "flags": [], "revision": "r2" }],
+      "items": [{ "handle": "a.vcf", "flags": [], "revision": "r2", "meta": { "body": "fixtures/card-basic-renamed.vcf" } }],
       "vanished": [],
       "complete": true,
       "checkpoint": "d1"
@@ -38,7 +37,6 @@
     "store": {
       "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c2", "level": 2, "deleted": 0 }],
       "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": "c2", "base_revision": "r3", "base_present": 1 }],
-      "probes": [],
       "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d1" }]
     }
   }

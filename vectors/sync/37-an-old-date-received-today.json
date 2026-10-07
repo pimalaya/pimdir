@@ -1,0 +1,55 @@
+{
+  "label": "a message with an old Date received today is out of scope, and named if a page carries it",
+  "note": "the scope is on the Date, never on the arrival: a connector narrows its listing by received date with a margin and drops what its own check on the Date puts out of scope. One that hands such a member anyway (14, dated August, delivered today) has it named and stamped like any other, the engine never filtering a page by date; the scope decides what absence means and nothing else. No delete, no push (SYNC.md §5)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {},
+    "items": [],
+    "bindings": [],
+    "sources": []
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "INBOX",
+    "source": "imap",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual",
+      "scope": { "since": "2026-09-01T00:00:00Z", "until": null }
+    }
+  },
+  "remote": {
+    "snapshot": {
+      "items": [
+        { "handle": "12", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-recent.eml" } },
+        { "handle": "14", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-basic.eml" } }
+      ],
+      "vanished": [],
+      "complete": true,
+      "checkpoint": "c1"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [
+      { "kind": "Added", "handle": "12" },
+      { "kind": "Added", "handle": "14" }
+    ],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z" },
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "imap", "handle": "12", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 },
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "14", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 }
+      ],
+      "sources": [
+        { "collection": "INBOX", "source": "imap", "checkpoint": "c1", "round": 1, "round_open": false, "round_since": null, "round_until": null, "round_cursor": null, "round_checkpoint": null, "covered": true, "covered_since": "2026-09-01T00:00:00Z", "covered_until": null }
+      ]
+    }
+  }
+}

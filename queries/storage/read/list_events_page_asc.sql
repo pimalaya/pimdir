@@ -1,4 +1,4 @@
--- A LEFT JOIN: a probed item has a row and no summary yet.
+-- A LEFT JOIN: an item with no summary row (Annex A.3) still lists.
 -- Chronological on the first occurrence (§9.3); a series is expanded above
 -- the store (SEARCH.md).
 SELECT i.seq, i.link_id, i.flags, i.object_hash, i.sort_key, i.level,

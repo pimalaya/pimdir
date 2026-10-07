@@ -1,0 +1,57 @@
+{
+  "label": "a pending create derives no add while its round is open",
+  "note": "a page not landed yet may carry the create's own arrival, relocated by the move's other half, and pushing before it lands makes a second copy; the first page of the resumed round names another member and the run stops, so nothing is pushed until the last page has landed, which lands the create (vector 21) or frees it (SYNC.md §5)",
+  "store": {
+    "collections": [{ "id": "Archive", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {
+      "m1": { "body": "fixtures/mail-basic.eml" }
+    },
+    "items": [
+      { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" }
+    ],
+    "bindings": [
+      { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0, "round": null }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "Archive", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0 } }
+    ],
+    "sources": [
+      { "collection": "Archive", "source": "imap", "checkpoint": "a0", "round": 1, "round_open": true, "round_since": null, "round_until": null, "round_cursor": "p1", "round_checkpoint": "a1", "covered": true, "covered_since": null, "covered_until": null }
+    ]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "Archive",
+    "source": "imap",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual"
+    }
+  },
+  "remote": {
+    "pages": [
+      { "items": [{ "handle": "9", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-recent.eml" } }], "vanished": [], "last": false, "cursor": "p2", "checkpoint": null }
+    ],
+    "interrupted_after": 1,
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [{ "kind": "Added", "handle": "9" }],
+    "store": {
+      "items": [
+        { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" },
+        { "collection": "Archive", "link_id": "recent-1@example.org", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z" }
+      ],
+      "bindings": [
+        { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0, "round": null },
+        { "collection": "Archive", "link_id": "recent-1@example.org", "source": "imap", "handle": "9", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 }
+      ],
+      "sources": [
+        { "collection": "Archive", "source": "imap", "checkpoint": "a0", "round": 1, "round_open": true, "round_since": null, "round_until": null, "round_cursor": "p2", "round_checkpoint": "a1", "covered": true, "covered_since": null, "covered_until": null }
+      ]
+    }
+  }
+}

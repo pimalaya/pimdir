@@ -1,0 +1,47 @@
+{
+  "label": "a Meta upgrade revisits a claim the row does not hold",
+  "note": "the row claims level 1 and holds no summary, which no listing names any more since the member is bound; the Meta upgrade, kept for exactly this, fetches it and writes the summary, the addresses and the sort key, the level unchanged and the base untouched (SYNC.md §6)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {},
+    "items": [{ "collection": "INBOX", "link_id": "bare-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "" }],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "bare-1@example.org", "source": "imap", "handle": "11", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1 }
+    ],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+  },
+  "run": {
+    "verb": "upgrade",
+    "collection": "INBOX",
+    "source": "imap",
+    "tier": "Meta",
+    "handles": ["11"]
+  },
+  "remote": {
+    "snapshot": null,
+    "fetch": {
+      "11": { "Meta": { "body": "fixtures/mail-no-subject.eml", "revision": null } }
+    }
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "bare-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "bare-1@example.org", "source": "imap", "handle": "11", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1 }
+      ],
+      "summaries": [
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "bare-1@example.org", "row": { "message_id": "bare-1@example.org", "in_reply_to": [], "subject": "", "sender": "alice@example.org", "sender_name": null, "date": "2026-08-01T10:00:00Z", "size": 146, "attachment": 0 } }
+      ],
+      "addresses": [
+        { "collection": "INBOX", "link_id": "bare-1@example.org", "role": "from", "position": 0, "address": "alice@example.org", "name": null },
+        { "collection": "INBOX", "link_id": "bare-1@example.org", "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+    }
+  }
+}

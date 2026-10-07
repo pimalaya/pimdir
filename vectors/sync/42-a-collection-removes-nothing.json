@@ -1,0 +1,56 @@
+{
+  "label": "after a collection a sync removes nothing, and an old message's flag still pushes",
+  "note": "the owner narrowed the scope to October and collected what lies below it (STORAGE §11.3): basic-1 is gone from the store and still on the server, and encoded-1 stayed, owing a flag. The next run is a delta inside the coverage: the collected message is not listed and derives nothing, no Remove above all, and the old message's local change pushes whatever the scope (SYNC.md §5)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {},
+    "items": [
+      { "collection": "INBOX", "link_id": "recent-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z" },
+      { "collection": "INBOX", "link_id": "encoded-1@example.org", "seq": 2, "flags": ["\\Flagged"], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-04T09:15:00Z" }
+    ],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "imap", "handle": "12", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 },
+      { "collection": "INBOX", "link_id": "encoded-1@example.org", "source": "imap", "handle": "9", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": null }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "recent-1@example.org", "row": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 241, "attachment": 0 } },
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "encoded-1@example.org", "row": { "message_id": "encoded-1@example.org", "in_reply_to": [], "subject": "Réunion de rentrée", "sender": "zoe.bruck@example.org", "sender_name": "Zöe Brück", "date": "2026-08-04T09:15:00Z", "size": 348, "attachment": 0 } }
+    ],
+    "sources": [
+      { "collection": "INBOX", "source": "imap", "checkpoint": "c1", "round": 1, "round_open": false, "round_since": null, "round_until": null, "round_cursor": null, "round_checkpoint": null, "covered": true, "covered_since": "2026-10-01T00:00:00Z", "covered_until": null }
+    ]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "INBOX",
+    "source": "imap",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual",
+      "scope": { "since": "2026-10-01T00:00:00Z", "until": null }
+    }
+  },
+  "remote": {
+    "snapshot": { "items": [], "vanished": [], "complete": false, "checkpoint": "c2" },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [{ "kind": "SetFlags", "handle": "9", "flags": ["\\Flagged"], "key": "f722628b9b619540" }],
+    "outcomes": [{ "handle": "9", "outcome": "Accepted" }],
+    "events": [],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z" },
+        { "collection": "INBOX", "link_id": "encoded-1@example.org", "seq": 2, "flags": ["\\Flagged"], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-04T09:15:00Z" }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "imap", "handle": "12", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 },
+        { "collection": "INBOX", "link_id": "encoded-1@example.org", "source": "imap", "handle": "9", "base_flags": ["\\Flagged"], "base_object": null, "base_revision": null, "base_present": 1, "round": null }
+      ],
+      "sources": [
+        { "collection": "INBOX", "source": "imap", "checkpoint": "c2", "round": 1, "round_open": false, "round_since": null, "round_until": null, "round_cursor": null, "round_checkpoint": null, "covered": true, "covered_since": "2026-10-01T00:00:00Z", "covered_until": null }
+      ]
+    }
+  }
+}

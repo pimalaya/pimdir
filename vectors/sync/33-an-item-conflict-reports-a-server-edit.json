@@ -13,7 +13,6 @@
       { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1, "conflicted": 0, "conflict_revision": null, "conflict_object": null, "shared_object": "c3" },
       { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "b", "handle": "b.vcf", "base_flags": [], "base_object": "c2", "base_revision": "r2", "base_present": 1, "shared_object": "c3" }
     ],
-    "probes": [],
     "sources": [{ "collection": "Contacts", "source": "a", "checkpoint": "a1" }, { "collection": "Contacts", "source": "b", "checkpoint": "b1" }]
   },
   "run": {
@@ -28,7 +27,7 @@
   },
   "remote": {
     "snapshot": {
-      "items": [{ "handle": "b.vcf", "flags": [], "revision": "r3" }],
+      "items": [{ "handle": "b.vcf", "flags": [], "revision": "r3", "meta": { "body": "fixtures/card-basic-edited.vcf" } }],
       "vanished": [],
       "complete": false,
       "checkpoint": "b2"
@@ -45,7 +44,6 @@
         { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1, "conflicted": 0, "conflict_revision": null, "conflict_object": null, "shared_object": "c3" },
         { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "b", "handle": "b.vcf", "base_flags": [], "base_object": "c2", "base_revision": "r2", "base_present": 1, "conflicted": 1, "conflict_revision": "r3", "conflict_object": null, "shared_object": "c3" }
       ],
-      "probes": [],
       "sources": [{ "collection": "Contacts", "source": "a", "checkpoint": "a1" }, { "collection": "Contacts", "source": "b", "checkpoint": "b2" }]
     }
   }

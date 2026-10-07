@@ -27,7 +27,8 @@ known="$(
     printf '%s\n' user_version data_version foreign_keys journal_mode locking_mode integrity_check \
         foreign_key_check table_info table_list contentless_delete json_each json_valid \
         sqlite_schema core_autocrlf recurrence_id base32 body_hex body_len input_hex input_utf8 digest_hex \
-        name_chars digest_bytes if_match set_flags no_uid_conflict collect_garbage
+        name_chars digest_bytes if_match set_flags no_uid_conflict collect_garbage \
+        meta_attachment round_open cursor_rejected interrupted_after scope_bound
 )"
 
 # A backticked identifier, the name alone: a call's parameters are dropped and

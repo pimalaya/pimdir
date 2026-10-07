@@ -9,11 +9,10 @@
       { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "a", "handle": "10", "base_flags": ["\\Flagged", "\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1, "shared_object": "m1" },
       { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "b", "handle": "77", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1, "shared_object": "m1" }
     ],
-    "probes": [],
     "sources": [{ "collection": "INBOX", "source": "a", "checkpoint": "a1" }, { "collection": "INBOX", "source": "b", "checkpoint": "b0" }]
   },
   "run": { "verb": "sync", "collection": "INBOX", "source": "b", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual" } },
-  "remote": { "snapshot": { "items": [{ "handle": "77", "flags": ["\\Seen"], "revision": null }], "vanished": [], "complete": true, "checkpoint": "b1" }, "fetch": {} },
+  "remote": { "snapshot": { "items": [{ "handle": "77", "flags": ["\\Seen"], "revision": null, "meta": { "body": "fixtures/mail-basic.eml" } }], "vanished": [], "complete": true, "checkpoint": "b1" }, "fetch": {} },
   "expect": {
     "pushes": [{ "kind": "SetFlags", "handle": "77", "flags": ["\\Flagged", "\\Seen"], "key": "b2c93c8bc6c517c7" }],
     "outcomes": [{ "handle": "77", "outcome": "Accepted" }],
@@ -24,7 +23,6 @@
         { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "a", "handle": "10", "base_flags": ["\\Flagged", "\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1, "shared_object": "m1" },
         { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "b", "handle": "77", "base_flags": ["\\Flagged", "\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1, "shared_object": "m1" }
       ],
-      "probes": [],
       "sources": [{ "collection": "INBOX", "source": "a", "checkpoint": "a1" }, { "collection": "INBOX", "source": "b", "checkpoint": "b1" }]
     }
   }

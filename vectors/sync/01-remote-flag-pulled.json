@@ -6,11 +6,10 @@
     "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },
     "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
     "bindings": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }],
-    "probes": [],
     "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c0" }]
   },
   "run": { "verb": "sync", "collection": "INBOX", "source": "imap", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual" } },
-  "remote": { "snapshot": { "items": [{ "handle": "10", "flags": ["\\Flagged", "\\Seen"], "revision": null }], "vanished": [], "complete": true, "checkpoint": "c1" }, "fetch": {} },
+  "remote": { "snapshot": { "items": [{ "handle": "10", "flags": ["\\Flagged", "\\Seen"], "revision": null, "meta": { "body": "fixtures/mail-basic.eml" } }], "vanished": [], "complete": true, "checkpoint": "c1" }, "fetch": {} },
   "expect": {
     "pushes": [],
     "outcomes": [],
@@ -18,7 +17,6 @@
     "store": {
       "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Flagged", "\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
       "bindings": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Flagged", "\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }],
-      "probes": [],
       "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
     }
   }

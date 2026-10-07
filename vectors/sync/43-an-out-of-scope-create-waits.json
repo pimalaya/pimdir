@@ -1,0 +1,69 @@
+{
+  "label": "a create with no origin whose Date the scope excludes waits; one it holds is pushed",
+  "note": "two pending creates with no origin in a target synced over [2026-09-01, open). basic-1, dated August, may be its own arrival, relocated by the move's other half with its Date kept, which no page of this scope lists: pushing it would file a second copy, so it waits for a round whose scope holds it. attach-1 is in scope, the round's pages could have landed it and did not, so it is added once the last page has landed (SYNC.md §5)",
+  "store": {
+    "collections": [{ "id": "Archive", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {
+      "m1": { "body": "fixtures/mail-basic.eml" },
+      "a1": { "body": "fixtures/mail-attachment.eml" }
+    },
+    "items": [
+      { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" },
+      { "collection": "Archive", "link_id": "attach-1@example.org", "seq": 2, "flags": [], "object": "a1", "level": 2, "deleted": 0, "sort_key": "2026-10-05T09:00:00Z" }
+    ],
+    "bindings": [
+      { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0, "round": null },
+      { "collection": "Archive", "link_id": "attach-1@example.org", "source": "imap", "handle": "\u0001attach-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0, "round": null }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "Archive", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0 } },
+      { "table": "mail_summary", "collection": "Archive", "link_id": "attach-1@example.org", "row": { "message_id": "attach-1@example.org", "in_reply_to": [], "subject": "Invoice", "sender": "billing@example.org", "sender_name": "Billing", "date": "2026-10-05T09:00:00Z", "size": 451, "attachment": 1 } }
+    ],
+    "sources": [{ "collection": "Archive", "source": "imap", "checkpoint": "a0" }]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "Archive",
+    "source": "imap",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual",
+      "scope": { "since": "2026-09-01T00:00:00Z", "until": null }
+    }
+  },
+  "remote": {
+    "snapshot": {
+      "items": [{ "handle": "12", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-recent.eml" } }],
+      "vanished": [],
+      "complete": true,
+      "checkpoint": "a1"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [
+      { "kind": "Add", "handle": "\u0001attach-1@example.org", "link_id": "attach-1@example.org", "flags": [], "origin": null, "object": "a1", "key": "3fc88704d8bb354c" }
+    ],
+    "outcomes": [{ "handle": "\u0001attach-1@example.org", "outcome": "Accepted", "assigned": "20", "revision": null }],
+    "events": [
+      { "kind": "Added", "handle": "12" },
+      { "kind": "Created", "handle": "20" }
+    ],
+    "store": {
+      "items": [
+        { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" },
+        { "collection": "Archive", "link_id": "attach-1@example.org", "seq": 2, "flags": [], "object": "a1", "level": 2, "deleted": 0, "sort_key": "2026-10-05T09:00:00Z" },
+        { "collection": "Archive", "link_id": "recent-1@example.org", "seq": 3, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z" }
+      ],
+      "bindings": [
+        { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0, "round": null },
+        { "collection": "Archive", "link_id": "attach-1@example.org", "source": "imap", "handle": "20", "base_flags": [], "base_object": "a1", "base_revision": null, "base_present": 1, "round": null },
+        { "collection": "Archive", "link_id": "recent-1@example.org", "source": "imap", "handle": "12", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 }
+      ],
+      "sources": [
+        { "collection": "Archive", "source": "imap", "checkpoint": "a1", "round": 1, "round_open": false, "round_since": null, "round_until": null, "round_cursor": null, "round_checkpoint": null, "covered": true, "covered_since": "2026-09-01T00:00:00Z", "covered_until": null }
+      ]
+    }
+  }
+}

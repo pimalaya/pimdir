@@ -14,7 +14,6 @@
       { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 },
       { "collection": "INBOX", "link_id": "dup:basic-1@example.org#11", "source": "imap", "handle": "11", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }
     ],
-    "probes": [],
     "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c0" }]
   },
   "run": {
@@ -25,17 +24,14 @@
   "remote": {
     "snapshot": {
       "items": [
-        { "handle": "20", "flags": ["\\Seen"], "revision": null },
-        { "handle": "21", "flags": ["\\Seen"], "revision": null }
+        { "handle": "20", "flags": ["\\Seen"], "revision": null, "meta": { "body": "fixtures/mail-basic.eml" } },
+        { "handle": "21", "flags": ["\\Seen"], "revision": null, "meta": { "body": "fixtures/mail-basic.eml" } }
       ],
       "vanished": [],
       "complete": true,
       "checkpoint": "d0"
     },
-    "fetch": {
-      "20": { "Meta": {"body": "fixtures/mail-basic.eml", "revision": null} },
-      "21": { "Meta": {"body": "fixtures/mail-basic.eml", "revision": null} }
-    }
+    "fetch": {}
   },
   "expect": {
     "pushes": [],
@@ -51,7 +47,6 @@
         { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "20", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 },
         { "collection": "INBOX", "link_id": "dup:basic-1@example.org#11", "source": "imap", "handle": "21", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }
       ],
-      "probes": [],
       "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "d0" }]
     }
   }

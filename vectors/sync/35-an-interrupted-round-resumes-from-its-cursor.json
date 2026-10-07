@@ -1,0 +1,72 @@
+{
+  "label": "an interrupted round resumes from its cursor and infers deletes in scope only when its last page lands",
+  "note": "the round of vector 34 resumes from p1 over a store an earlier draft synced with no coverage; the last page lists 8, stamped like the first page's. Then the in-scope bindings no page stamped are dropped Deleted: 11, whose unknown Date is always in scope, is retained; 10, whose Date predates the scope, is out of it and stays, neither dropped nor pushed. The round closes with the checkpoint c1 the first page carried and the coverage of its scope (SYNC.md §5)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {},
+    "items": [
+      { "collection": "INBOX", "link_id": "recent-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z" },
+      { "collection": "INBOX", "link_id": "future-1@example.org", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2035-01-01T00:00:00Z" },
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 3, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" },
+      { "collection": "INBOX", "link_id": "nodate-1@example.org", "seq": 4, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "" },
+      { "collection": "INBOX", "link_id": "attach-1@example.org", "seq": 5, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-05T09:00:00Z" }
+    ],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "imap", "handle": "12", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 },
+      { "collection": "INBOX", "link_id": "future-1@example.org", "source": "imap", "handle": "13", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 },
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": null },
+      { "collection": "INBOX", "link_id": "nodate-1@example.org", "source": "imap", "handle": "11", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": null },
+      { "collection": "INBOX", "link_id": "attach-1@example.org", "source": "imap", "handle": "8", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": null }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "recent-1@example.org", "row": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 241, "attachment": 0 } },
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "future-1@example.org", "row": { "message_id": "future-1@example.org", "in_reply_to": [], "subject": "Clock skew", "sender": "mallory@example.org", "sender_name": "Mallory Example", "date": "2035-01-01T00:00:00Z", "size": 194, "attachment": 0 } },
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0 } },
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "nodate-1@example.org", "row": { "message_id": "nodate-1@example.org", "in_reply_to": [], "subject": "When?", "sender": "alice@example.org", "sender_name": "Alice Example", "date": null, "size": 165, "attachment": 0 } },
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "attach-1@example.org", "row": { "message_id": "attach-1@example.org", "in_reply_to": [], "subject": "Invoice", "sender": "billing@example.org", "sender_name": "Billing", "date": "2026-10-05T09:00:00Z", "size": 451, "attachment": 1 } }
+    ],
+    "sources": [
+      { "collection": "INBOX", "source": "imap", "checkpoint": "c0", "round": 1, "round_open": true, "round_since": "2026-09-01T00:00:00Z", "round_until": null, "round_cursor": "p1", "round_checkpoint": "c1", "covered": false, "covered_since": null, "covered_until": null }
+    ]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "INBOX",
+    "source": "imap",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual",
+      "scope": { "since": "2026-09-01T00:00:00Z", "until": null }
+    }
+  },
+  "remote": {
+    "pages": [
+      { "items": [{ "handle": "8", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-attachment.eml" } }], "vanished": [], "last": true, "cursor": null, "checkpoint": null }
+    ],
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [{ "kind": "Vanished", "handle": "11" }],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z", "retained": false, "retained_by": null },
+        { "collection": "INBOX", "link_id": "future-1@example.org", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2035-01-01T00:00:00Z", "retained": false, "retained_by": null },
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 3, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z", "retained": false, "retained_by": null },
+        { "collection": "INBOX", "link_id": "nodate-1@example.org", "seq": 4, "flags": [], "object": null, "level": 1, "deleted": 1, "sort_key": "", "retained": true, "retained_by": "imap" },
+        { "collection": "INBOX", "link_id": "attach-1@example.org", "seq": 5, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-05T09:00:00Z", "retained": false, "retained_by": null }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "imap", "handle": "12", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 },
+        { "collection": "INBOX", "link_id": "future-1@example.org", "source": "imap", "handle": "13", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 },
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": null },
+        { "collection": "INBOX", "link_id": "attach-1@example.org", "source": "imap", "handle": "8", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 }
+      ],
+      "sources": [
+        { "collection": "INBOX", "source": "imap", "checkpoint": "c1", "round": 1, "round_open": false, "round_since": null, "round_until": null, "round_cursor": null, "round_checkpoint": null, "covered": true, "covered_since": "2026-09-01T00:00:00Z", "covered_until": null }
+      ]
+    }
+  }
+}

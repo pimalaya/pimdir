@@ -24,7 +24,7 @@ The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are to be interpreted a
 8. [Concurrency and ownership](#8-concurrency-and-ownership)
 9. [Identity and dedup](#9-identity-and-dedup): [the public id](#91-the-public-id-seq), [accounts](#92-accounts), [the sort key](#93-the-sort-key)
 10. [Sync model](#10-sync-model)
-11. [Retention](#11-retention): [requirements](#111-requirements), [purging](#112-purging)
+11. [Retention](#11-retention): [requirements](#111-requirements), [purging](#112-purging), [collecting below a date](#113-collecting-below-a-date)
 12. [Collection generation](#12-collection-generation)
 13. [Encodings](#13-encodings)
 14. [Operations](#14-operations): [reading the store](#141-reading-the-store)
@@ -48,20 +48,22 @@ SQLite specifically: the portability is the file format, a file you copy rather 
 ## 2. Terminology
 
 - **Store**: a directory holding one database and one blob directory.
-- **Database**: pimdir.db, holding collections, items, summaries, addresses, bindings, probes, objects and checkpoints.
+- **Database**: pimdir.db, holding collections, items, summaries, addresses, bindings, objects, checkpoints and coverage.
 - **Collection**: a mailbox, address book or calendar; a row in `collections`.
 - **Account**: the identity a collection belongs to, an opaque owner-chosen id in `collections.account`, `NULL` in a single-account store (§9.2).
 - **Item**: one message, contact, event, task or journal.
 - **Placement**: one item's presence in one collection: handle, flags, level, base and a pointer to its object. One item in two collections is two placements sharing one object.
 - **Summary**: what a reader lists an item from without its body, one row in its kind's table (Annex A), derived by the writer, never by the store.
 - **Address**: one person an item names in one role, a row of one generic table across every kind (Annex A.6).
-- **Probe**: a handle a source enumerated whose identity is not read yet, a row until the fetch that names it (SYNC.md §3).
 - **Stamp**: the value of the store-wide change counter a row took when it last moved (§4.5).
 - **Object**: a content-addressed, immutable body: a row in `objects`, bytes in a blob file.
 - **Handle**: the backend's id for a placement in its collection (an IMAP UID, a DAV resource name).
 - **Link id**: the item's key in its collection, assigned from the identity hint the content states (`Message-ID`, `UID`) and equal to it unless the collection already holds it (§9).
 - **Hash**: the content hash of an object's bytes: its integrity value, dedup key and blob name.
 - **Checkpoint**: an opaque per-source cursor (QRESYNC state, JMAP state, DAV sync-token).
+- **Scope**: `[since, until)` on a message's summary `date`, either bound open, under which a source syncs a mail collection (SYNC.md §5).
+- **Round**: one complete listing of a scope by one source, in pages, under an id; it stamps the bindings it lists (SYNC.md §5).
+- **Coverage**: the scope of a source's last round that closed and when it closed: the store holds every member of the collection the source has in that scope, and the checkpoint serves it.
 - **Retained item**: an item no source holds any more, kept and hidden until purged (§11).
 - **Owner lock**: the exclusive advisory lock on owner.lock the owning process holds (§8).
 - **Staging lock**: the advisory lock on objects.lock producers hold shared while a body is written but not yet referenced, and the collector takes exclusively (§5, §8).
@@ -109,15 +111,14 @@ The canonical schema is migrations/storage/0001_init.sql, which is normative. Th
 - **`collections`**: `id`, `account` (§9.2), `kind` (the media type every item shares), `name`, `parent` (hierarchy by reference), the presentation columns `color`, `description`, `sort_order`, the `role` a source states (§14), the cross-source `conflict` policy, `generation` (§12) and `changed` (§4.5).
 
   Every foreign key onto `id` is `ON UPDATE CASCADE`, so a rename keeps its contents (§14); `ON DELETE` is `CASCADE`, `SET NULL` for `parent`.
-- **`sources`**: one row per source syncing a collection, keyed `(collection, source)`, carrying its `checkpoint`. A source id names one remote store-wide, so an owner filing two accounts keeps their source ids apart as it does their collection ids (§9.2).
+- **`sources`**: one row per source syncing a collection, keyed `(collection, source)`, carrying its `checkpoint`; its **coverage**, `covered_since` and `covered_until`, the scope of its last round that closed, and `covered_at`, when it closed, `NULL` for never; and its **round**: `round`, the last id drawn, and while one is open `round_started_at`, its scope `round_since` and `round_until`, its resume cursor `round_cursor` and the checkpoint it will land, `round_checkpoint` (§10). The schema holds that no coverage carries no bound and no open round carries nothing. A source id names one remote store-wide, so an owner filing two accounts keeps their source ids apart as it does their collection ids (§9.2).
 - **`capabilities`**: what each source can do, one row per `(source, collection, capability)` carrying the `account` the source syncs for, `collection` `NULL` for the source-wide row and naming a collection where the source does otherwise there, with its `support` and a `detail` for a human (§15.6).
 - **`performers`**: the source the user chose to perform an intent capability for an account, one per `(account, capability)` (§15.6).
 - **`objects`**: `hash` (primary key, under `hash_algo`), `size`, `refcount` (§5, §7). The bytes live in the blob file.
-- **`items`**: the shared truth of one item, keyed `(collection, link_id)`: `seq` (§9.1), `flags` (a JSON array), `object_hash`, `sort_key` (§9.3), `level` (0 probed, 1 meta, 2 full), the cross-source state `deleted`, `conflicted`, `conflict_object`, the retention stamps `retained_at`, `retained_by` (§11), and `changed` (§4.5).
+- **`items`**: the shared truth of one item, keyed `(collection, link_id)`: `seq` (§9.1), `flags` (a JSON array), `object_hash`, `sort_key` (§9.3), `level` (1 meta, 2 full; 0 an earlier draft's, read as 1), the cross-source state `deleted`, `conflicted`, `conflict_object`, the retention stamps `retained_at`, `retained_by` (§11), and `changed` (§4.5).
 - **`mail_summary`**, **`contact_summary`**, **`event_summary`**, **`task_summary`**, **`journal_summary`**: one table per kind, at most one row per item, keyed `(collection, link_id)`, cascading with the item, referencing no object. Their columns are Annex A's, so a writer that disagrees with the shape fails at the write.
 - **`item_address`**: the people an item names, keyed `(collection, link_id, role, position)` (Annex A.6). One table across every kind, so "everything about this address" is one seek on `item_address_by_address`.
-- **`probes`**: the handles a source enumerated whose identity is not read yet, keyed `(collection, source, handle)`, with the flags reported (SYNC.md §3).
-- **`bindings`**: one source's binding of an item, keyed `(collection, link_id, source)`: the `handle`, the sync base (`base_flags`, `base_object`, `base_revision`, `base_present`), the `shared_object` last agreed with the item, and the conflict triple `conflicted`, `conflict_revision`, `conflict_object`. A handle is bound once and never repointed, and names one item per source (§10): `bindings_by_handle` is unique.
+- **`bindings`**: one source's binding of an item, keyed `(collection, link_id, source)`: the `handle`, the sync base (`base_flags`, `base_object`, `base_revision`, `base_present`), the `shared_object` last agreed with the item, the conflict triple `conflicted`, `conflict_revision`, `conflict_object`, and `round`, the id of the last round that listed the handle (§10). A handle is bound once and never repointed, and names one item per source (§10): `bindings_by_handle` is unique.
 - **`queue`**: the action queue (§15): `id`, `created_at`, `producer`, `collection`, `action`, `payload`, `object_hash`, `attempts`, `error`.
 - **`receipts`**: what an applied queue row or a performed intent became, keyed by its `id`: `applied_at`, the `collection` it was queued on and, for an `add`, the `seq` of the item it created (§15.2, §15.4, §15.5).
 
@@ -135,7 +136,7 @@ An implementation SHOULD use them verbatim and MAY substitute an equivalent pres
 
 `items.changed` and `collections.changed` hold the value of `store_meta.next_change` the row took when it last moved. The counter only increases and every stamp is drawn once, so no two rows share one and a page ordered by `changed` is total. `PRAGMA data_version` says that something committed; the feed says what.
 
-Triggers in the canonical DDL draw the stamps, so no writer plumbs one. An insert takes the next stamp; an update takes one only when a column a reader can observe moved. A summary or address row has no stamp: a writer changing one under an unchanged item MUST run `stamp_item` in the same transaction, which requests a stamp the trigger then draws. A renamed collection restamps every item under its new id.
+Triggers in the canonical DDL draw the stamps, so no writer plumbs one. An insert takes the next stamp; an update takes one only when a column a reader can observe moved. A summary or address row has no stamp: a writer changing one under an unchanged item MUST run `stamp_item` in the same transaction, which requests a stamp the trigger then draws. A renamed collection restamps every item under its new id, and a source's coverage moving restamps its collection, which a reader lists with it (§14.1).
 
 A deleted row cannot carry a stamp, so a purged item and a collected object count in `store_meta.purges`. `load_change_cursor` answers the last stamp drawn and that count; a consumer records both, folds `list_items_changed_since` and `list_collections_changed_since` above the recorded stamp on its next look, and reconciles its keys against the store only when `purges` moved. A cursor is read before a pass and recorded after it, so a crash between the two replays and skips nothing.
 
@@ -167,6 +168,8 @@ Schema evolution is ordered, forward-only SQL under migrations/storage/, named N
 There are no down-migrations. An implementation meeting a newer or corrupt store MAY rebuild from the blobs and a full re-sync, which MAY lose un-pushed local mutation: a migration MUST preserve item and binding state, and rebuild is a last resort.
 
 **While this part is `draft`** a schema change MAY be folded into 0001_init.sql, `user_version` staying `1`. A store from an earlier draft is then not detectably out of date, so an implementation MUST either reconcile the shape on open (`ALTER TABLE … ADD COLUMN`, guarded by `PRAGMA table_info`) or refuse the store with a message; failing a later query is not acceptable. A reconciled index or trigger is created when absent, and a trigger whose body moved (`collections_stamp_update` when `role` arrived) is dropped and created again, in the same transaction. A reader meeting a store its owner has not reconciled yet reads the missing column as `NULL`.
+
+A table the canonical schema no longer has is dropped in the same transaction: `probes`, whose handles the next round names again, a store from an earlier draft having no coverage (SYNC.md §5). A row an earlier draft wrote at `level` 0 is kept and read as 1 (§13).
 
 A reconciled column MUST be backfilled where `NULL` contradicts the existing rows, in the same transaction: `bindings.shared_object` from the item's `object_hash` (`backfill_shared_object`), or the first absorb files a source's own pending edit as a divergence.
 
@@ -255,7 +258,9 @@ A binding records two agreement points and a store MUST keep both: `base_object`
 
 `level` is the tier an item reached, a claim; `object_hash IS NOT NULL` is the fact of a body, and a remote content change drops the body while the level stays. `deleted` carries a removal until every source has dropped it, and the item is then retained (§11).
 
-A handle enumerated but not yet named is a `probes` row, not an item. It becomes an item and a binding in the transaction of the fetch that names it.
+Nothing reaches the store unnamed: a member a source lists arrives with its identity and summary (SYNC.md §4) and becomes an item and a binding in the write of the page that lists it.
+
+**Coverage and rounds.** A source syncing a mail collection under a scope lists it in rounds (SYNC.md §5). `open_round` draws the round's id and records its scope, in the write of its first page; every page stamps the bindings of the handles it listed with that id (`stamp_bindings`) and records its resume cursor and any checkpoint it carries (`set_round_cursor`); the last page reads the based bindings the round did not stamp whose item's `date` falls in its scope or is unknown (`list_unstamped_bindings`), the members it found absent; `close_round` lands the round's checkpoint, records the coverage and clears the round, in the write after the last chunk. A round is never closed by a rebuild: a rekey lands its checkpoint and leaves the coverage alone. A scope narrowing inside the coverage is recorded with `set_coverage`, `covered_at` unchanged. A coverage moving restamps its collection (§4.5), since a reader lists it with the collection.
 
 Two divergences are recorded and are not the same fact: `items.conflicted` and `items.conflict_object`, two sources editing the shared body differently; `bindings.conflicted`, `conflict_revision` and `conflict_object`, one source diverging from its own remote. A store MUST persist both independently, and the schema holds that neither carries a diverging body without its flag.
 
@@ -271,7 +276,7 @@ The unique index on `(collection, source, handle)` refuses a write that does not
 
 ## 11. Retention
 
-When an item's last binding vanishes the store retains the row rather than deleting it, and only an explicit purge removes it. A remote expunge therefore never destroys the local copy. The one exception is an identity another collection of the same account holds live with the same body: the item moved, or was filed twice, and nothing is lost by purging the row in the same transaction, the holder pinning the body. A holder carrying another body, or none, is not that case and the row is retained. Retention is the terminal state of `deleted`: a retained row carries `deleted = 1`, no bindings, and a non-`NULL` `retained_at`, which the schema holds. It is unconditional; how long to keep and when to sweep is the owner's schedule.
+When an item's last binding vanishes the store retains the row rather than deleting it, and only an explicit purge removes it, or the owner's manual collection of what lies below a date (§11.3). A remote expunge therefore never destroys the local copy. The one exception is an identity another collection of the same account holds live with the same body: the item moved, or was filed twice, and nothing is lost by purging the row in the same transaction, the holder pinning the body. A holder carrying another body, or none, is not that case and the row is retained. Retention is the terminal state of `deleted`: a retained row carries `deleted = 1`, no bindings, and a non-`NULL` `retained_at`, which the schema holds. It is unconditional; how long to keep and when to sweep is the owner's schedule.
 
 A tombstone a source still binds, because that source may not remove it (SYNC.md §5), never reaches retention: it stays `deleted = 1` with its binding, hidden from the live reads and listed in the trash beside the retained rows, so nothing the user deleted is invisible.
 
@@ -282,13 +287,19 @@ A tombstone a source still binds, because that source may not remove it (SYNC.md
 - **Stamped by SQLite**: `retained_at` is written by the statement; the cutoff of a purge is the caller's parameter.
 - **Hidden from the sync seam**: `load_items` filters `retained_at IS NULL`, or the next run re-uploads every retained row.
 - **Hidden from the reads**: a deleted row is a tombstone under §14.1's live-only rule; `list_retained_page` and `count_retained` are the trash view and list every deleted row, `retained_at` saying whether a source still binds it.
-- **Purge is the only true delete**: `purge_item` and `purge_retained_before`, both guarded on `retained_at IS NOT NULL`, both `RETURN` the pinned hashes for `release_pins` in the same transaction. The bodies fall to the collector. A tombstone a source still binds is not purgeable: its source has not agreed.
+- **Purge is the only true delete** of a retained row, as the owner's collection is of a live one (§11.3): `purge_item` and `purge_retained_before`, both guarded on `retained_at IS NOT NULL`, both `RETURN` the pinned hashes for `release_pins` in the same transaction. The bodies fall to the collector. A tombstone a source still binds is not purgeable: its source has not agreed.
 - **A reappearing link id revives** (`retained_item` then `revive_item`): stamps cleared, `deleted` back to 0, `seq` kept. The incoming placement's body is adopted when it carries one; when it carries none, a `Meta` fetch or a queued `add` by copy, the retained body stays and, for an immutable kind, becomes the binding's base, so a restore costs no network. The pins the retained row held are released only for what the revive replaced. One branch serves a source-side resurrection and a queued `add`.
 - `retained_by` is diagnostic; a retained item has no binding and pushes nothing.
 
 ### 11.2 Purging
 
 `purge_item(collection, seq)` empties one item; `purge_retained_before(cutoff)` every item retired before an RFC 3339 instant, store-wide, the owner computing the cutoff from its own policy. A cutoff of now reproduces terminal deletion. `retained_bytes()` reports what retention holds. Either purge counts in `store_meta.purges` through the delete trigger (§4.5).
+
+### 11.3 Collecting below a date
+
+Nothing in pimdir is deleted by inference, and a scope is no exception: mail older than a source's scope stays stored and readable, and a sync neither drops it nor pushes anything for it (SYNC.md §5). Freeing that space is the owner's, on the user's request, by **`collect_before(collection, before)`**: every live mail item of the collection whose `date` is older than the RFC 3339 instant `before` and that owes nothing, removed with its bindings, summary and addresses. An item owes something while it is conflicted, a binding of it is conflicted or has no base, or its flags differ from a binding's base flags, both known; it stays. An item with no `date` is never older.
+
+A collection is not a delete: it stamps no tombstone, queues nothing and derives no push, and the remote keeps every member, which a later widening lists and names again. It MUST run in one transaction with `recompute_refcounts`, the cascade dropping pins no statement returns, and the bodies fall to the collector; each row counts in `store_meta.purges` (§4.5). It MUST NOT run between two chunks of a verb (§5), and an owner SHOULD drain the queue first, an action addressing a collected item by `seq` being parked. An owner narrowing a scope and collecting below it records the narrower coverage with the next sync (SYNC.md §5), not before.
 
 ## 12. Collection generation
 
@@ -300,10 +311,10 @@ A rebuild's batch drops the old spine and upserts the same items under their new
 
 Two implementations produce byte-identical stores only with identical encodings. These are normative.
 
-- **`level`** (INTEGER): `0` probed, `1` meta, `2` full.
+- **`level`** (INTEGER): `1` meta, `2` full. `0` is what an earlier draft wrote for a probed or pulled row: never written, and read as `1`, a claim the next upgrade revisits (SYNC.md §6).
 - **`deleted`, `conflicted`** (INTEGER): `0` or `1`.
 - **`conflict`** (TEXT, on a collection): `'manual'`, `'prefer-incoming'` or `'prefer-existing'`.
-- **`flags`, `base_flags`** (TEXT): a JSON array of raw flag strings sorted by code point (`["$flagged","\\Seen"]`). `NULL` is unknown, `'[]'` is known-empty. The same on `probes.flags`.
+- **`flags`, `base_flags`** (TEXT): a JSON array of raw flag strings sorted by code point (`["$flagged","\\Seen"]`). `NULL` is unknown, `'[]'` is known-empty.
 - **`object_hash`, `base_object`, `conflict_object`** (TEXT): a hash under `store_meta.hash_algo`, or `NULL`.
 - **`refcount`** (INTEGER): the pointer count of §5, `>= 0` by constraint; `0` is a meaningful, collectable count.
 - **`link_id`** (TEXT): the hint verbatim, a kind fallback, or a minted `dup:<hint>#<handle>`; opaque.
@@ -314,9 +325,12 @@ Two implementations produce byte-identical stores only with identical encodings.
 - **`base_revision`** (TEXT): an opaque etag or modseq, or `NULL`.
 - **`conflict_revision`, `conflict_object`** (on a binding): the remote revision and body observed when the binding was marked conflicted. A binding that is not conflicted MUST NOT carry either.
 - **`shared_object`** (TEXT, on a binding): the shared body last reconciled against (§10), `NULL` until the source has folded once; never counted (§5).
-- **`created_at`, `retained_at`, `applied_at`** (TEXT): `strftime('%Y-%m-%dT%H:%M:%fZ','now')`, stamped by SQLite (`init_store_meta`, `enqueue_action`, `retain_item`, `record_receipt`). Every instant the format fixes is UTC with the **`Z` designator**, never `+00:00`, which sorts apart from it.
+- **`created_at`, `retained_at`, `applied_at`** (TEXT): `strftime('%Y-%m-%dT%H:%M:%fZ','now')`, stamped by SQLite (`init_store_meta`, `enqueue_action`, `retain_item`, `record_receipt`, and `covered_at`, `round_started_at` by `close_round`, `open_round`). Every instant the format fixes is UTC with the **`Z` designator**, never `+00:00`, which sorts apart from it.
 - **`retained_by`** (TEXT): the source whose removal retired the item, diagnostic.
-- **`checkpoint`** (BLOB): opaque cursor bytes, or `NULL`.
+- **`checkpoint`**, **`round_cursor`**, **`round_checkpoint`** (BLOB): opaque cursor bytes, or `NULL`.
+- **`covered_since`**, **`covered_until`**, **`round_since`**, **`round_until`** (TEXT): a scope's bounds, RFC 3339 UTC at seconds precision with the `Z` designator, as Annex A writes `date`; `NULL` an open bound. A message is in a scope when `since <= date < until`, or when its `date` is `NULL`.
+- **`covered_at`**, **`round_started_at`** (TEXT): stamped by SQLite as `created_at` is (`close_round`, `open_round`); `NULL` no coverage, no round open.
+- **`round`** (INTEGER): on a source, the last round id drawn, `0` before any; on a binding, the round that last listed its handle, `NULL` before one did.
 - **`base_present`** (INTEGER, on a binding): whether a base exists. A base is present iff `base_present` is 1 or any base column is non-`NULL`; a writer MUST set the column and a reader MUST accept either witness.
 - **`action`** (TEXT): `'add'`, `'set-flags'`, `'remove'`, `'move'`, `'copy'`, `'update'`, `'set-performer'` (§15.3), an intent of Annex B.2, or an application's own kind, skipped by an owner that does not know it.
 - **`capability`** (TEXT, on `capabilities` and `performers`): a name of Annex B, or an application's own starting with `x-`. **`collection`** (TEXT, on `capabilities`): `NULL` for the source-wide row, a collection id for an override there. **`account`** (TEXT, on `capabilities` and `performers`): the account of §9.2, `NULL` in a single-account store.
@@ -329,22 +343,22 @@ Two implementations produce byte-identical stores only with identical encodings.
 
 A store is opened as one source. `load` projects the shared items into that source's placements; `write` folds its changes back. The statements are §4.4's, bound with §13.
 
-- **`load(collection, scope)`**: `load_items`, `load_bindings`, `load_conflict`, projected for the source (SYNC.md §3), plus `load_probes` and `load_checkpoint`. The scope (SYNC.md §10) is a floor: `All` reads the collection; `Links` reads `load_items_by_link` and `load_bindings_by_link` for the link ids named; `Handles` resolves each handle with `link_for_handle` and reads the same two, a handle nothing binds being a probe. A `Created` placement's origin is `origin_for_link` and a `Tombstone` placement's destination `destination_for_link` (SYNC.md §3). The probes of a `Handles` load are `load_probes_by_handle`, of the others `load_probes`. A store MAY return more than the scope names and MUST NOT return less.
+- **`load(collection, scope)`**: `load_items`, `load_bindings`, `load_conflict`, projected for the source (SYNC.md §3), plus `load_checkpoint`, which answers the coverage beside the checkpoint, and `load_round`; a round's last page adds `list_unstamped_bindings`. The scope (SYNC.md §10) is a floor: `All` reads the collection; `Links` reads `load_items_by_link` and `load_bindings_by_link` for the link ids named; `Handles` resolves each handle with `link_for_handle` and reads the same two, a handle nothing binds being a member to name. A `Created` placement's origin is `origin_for_link` and a `Tombstone` placement's destination `destination_for_link` (SYNC.md §3). A store MAY return more than the scope names and MUST NOT return less.
 - **`lookup_objects(links)`**: `:links` a JSON array of link ids, `:account` the caller's own (§9.2): across collections a link id is one body downloaded once, across accounts it is not a fact. It answers the body's hash and size, the size being the witness a link is checked against (SYNC.md §6). A writer-derived key never matches (§9).
 - **`write(ops)`** runs as one transaction:
   1. A `StoreObject` carries the index row and optionally the bytes. With bytes, write the blob first (§5), then `store_object`; without, the body is already at its sharded path, streamed there by the consumer. The blob write MAY precede `BEGIN` and SHOULD for a body of any size; the writer's lock (§8), not the file's age, keeps a collector out of the window.
 
-     A `SetCheckpoint` runs `ensure_collection` then `upsert_checkpoint`.
+     A `SetCheckpoint` runs `ensure_collection` then `upsert_checkpoint`; a `SetCoverage` runs `set_coverage` beside it. A round's ops run `ensure_collection` then `open_round` (`OpenRound`), `stamp_bindings` after the page's upserts (`Stamp`), `set_round_cursor` (`SetRoundCursor`) and `close_round` (`CloseRound`), in the batch order SYNC.md §10 gives.
 
      Placement upserts and drops are merged into the shared items and bindings, `set_conflict` carrying the collection's policy. The reference form is the **diff**:
 
      `load_items_by_link`, `load_bindings_by_link`, the kind's `load_<kind>_summaries` and `load_addresses_by_link` bound to the batch's link ids, each dropped handle resolved with `link_for_handle` and each upserted handle likewise, a handle bound to another link id retiring that binding first (§10), then `insert_item`, `insert_binding`, `update_item`, `update_binding`, `delete_binding` for a binding a `Deleted` drop removes, and `delete_item_bindings` with `retain_item` for an item the result no longer holds, purged at once when `held_elsewhere` says the identity moved (§11). `update_binding` carries no handle: a rebind is refused (§10) except through §12's rebuild.
 
-     A named placement carries its summary and addresses, derived by the writer under Annex A and written with the item (`upsert_<kind>_summary`, `replace_addresses`, `insert_address`); a calendar resource whose component changed under its key leaves its old table (`delete_event_summary`, `delete_task_summary`, `delete_journal_summary`). An unnamed one is a probe (`upsert_probe`), dropped (`delete_probe`) in the transaction that names it, and a rebuild voids a source's probes at once (`delete_probes`, §12). An item left with no binding is retained (§11).
+     A named placement carries its summary and addresses, derived by the writer under Annex A and written with the item (`upsert_<kind>_summary`, `replace_addresses`, `insert_address`); a calendar resource whose component changed under its key leaves its old table (`delete_event_summary`, `delete_task_summary`, `delete_journal_summary`). A placement is always named: an upsert for a handle nothing binds and carrying no link id is refused. An item left with no binding is retained (§11).
   2. Settle the refcount of every object the batch touched: `adjust_refcount` by the batch's net change, or `recompute_refcounts` for the whole store, which is also §7's repair. A batch that stored or dropped no object MAY skip this.
   3. Commit. The batch reclaims nothing (§5).
 
-The queue adds **`enqueue`**, **`drain`**, **`cancel`** and **`prune_receipts`** (§15); retention adds **`purge`** and **`purge_retained_before`** (§11.2), both reporting rows and never bytes. **`collect_garbage()`** is §5's collector, reporting the rows, files and bytes it freed.
+The queue adds **`enqueue`**, **`drain`**, **`cancel`** and **`prune_receipts`** (§15); retention adds **`purge`** and **`purge_retained_before`** (§11.2), and the owner's manual **`collect_before`** (§11.3), each reporting rows and never bytes. **`collect_garbage()`** is §5's collector, reporting the rows, files and bytes it freed.
 
 A collection's `kind` is declared, never derived: `set_collection_kind(collection, account, kind)` sets it, `load_kind` reads it, and `ensure_collection` inserts an empty kind it MUST NOT overwrite. The account binds the same way; `set_collection_account` re-accounts a collection, `load_account` reads it.
 
@@ -364,9 +378,10 @@ A bare `UPDATE` is refused under `NO ACTION`, and with `PRAGMA foreign_keys` off
 
 A **reader** (§8) opens read-only and projects the store as a local backend. Reads are kind-agnostic where they can be, keyed by `seq`, and named after their statement.
 
-- **`list_collections()`**, **`list_collections_by_account(account)`** (`NULL` selects a single-account store's), **`list_accounts()`** (accounts owning at least one collection, not a roster).
+- **`list_collections()`**, **`list_collections_by_account(account)`** (`NULL` selects a single-account store's), **`list_accounts()`** (accounts owning at least one collection, not a roster). A collection is listed with its coverage, the narrowest of its sources' (the latest `covered_since`, the earliest `covered_until`, the oldest `covered_at`), and none while one of them has never closed a round: a reader says "mail since" from it, and a search over the collection knows it is not exhaustive below it. **`list_coverage(collection)`** answers it per source, with the round each has under way.
 - **`list_items_page(collection, after, limit)`**: a keyset page in link-id order, the sweep that sees every item once; `''` starts from the beginning.
 - **`list_items_page_asc`**, **`list_items_page_desc`** `(collection, after_key, after_seq, limit)`: the natural order (§9.3), cursor `(sort_key, seq)`; descending, a `NULL` cursor is the first page.
+- **`count_mail(collections, seen, attachment)`**, **`count_mail_by_day(collections, seen, attachment, shift)`**, **`count_unread(collections, attachment)`**: the live mail of a set of collections under the read and attachment chips (`NULL` for either), in all, per day of the `Date` on the reader's clock, and unread per collection, so a list is sized by a count before it loads; **`list_mail_page_filtered`** the page under the same chips across the set, cursor `(sort_key, seq, collection)`; **`search_mail`** the same page over a `LIKE` pattern on the subject, the sender and its name, until the search part's index (SEARCH.md) answers the body.
 - **`list_mail_page_desc`**, **`list_contacts_page_asc`**, **`list_events_page_asc`**, **`list_tasks_page_asc`**, **`list_journals_page_asc`**: the same page joined with the kind's summary; **`get_mail`**, **`get_contact`**, **`get_event`**, **`get_task`**, **`get_journal`** one item. A mixed calendar merges its three pages on `(sort_key, seq)`; `component_of` says which table holds an item.
 - **`get_item(collection, seq)`**, **`load_addresses(collection, link_id)`** (one item's people by role), **`count_items(collection)`**, **`seq_by_link(collection, link_id)`**.
 - **`list_link_placements(link_id)`**, **`list_object_placements(hash)`**: every live placement of one key, or one body, with collection and account. The first pairs by key, so a minted copy is paired with its twin by the body read alone.
@@ -375,7 +390,7 @@ A **reader** (§8) opens read-only and projects the store as a local backend. Re
 - **`list_retained_page(collection, after, limit)`** (cursor on `seq`, `0` starts), **`count_retained`**, **`retained_bytes()`**: the trash view (§11), every deleted row, `retained_at` `NULL` on one a source still binds.
 - **`load_capabilities(collection)`**, **`load_item_capabilities(collection, seq)`**: what every source syncing a collection, or binding one item, can do there, a row naming the collection winning over the source-wide one, an undeclared source listed once with no capability; **`list_capability_sources(account, collection, capability)`**: the candidates to perform an intent anchored on a collection, or anywhere in the account when none is named; **`load_performer(account, capability)`**: the user's choice among them (§15.6).
 - **`load_action(id)`**, **`load_receipt(id)`**: one queue row by the id its enqueue answered, pending or parked, and what it became once applied (§15.4).
-- **`list_sources()`**, **`list_conflicted_bindings(account)`** (the bindings awaiting a decision with the three bodies the divergence is between, answered by index, never by paging), **`list_conflicted_items(account)`** (the items two sources disagree on, the same way), **`list_item_bindings(collection, link_id)`** (where one item lives per source), **`link_for_handle`** and **`handle_for_link`**, **`load_kind`**, **`count_probes`**.
+- **`list_sources()`**, **`list_conflicted_bindings(account)`** (the bindings awaiting a decision with the three bodies the divergence is between, answered by index, never by paging), **`list_conflicted_items(account)`** (the items two sources disagree on, the same way), **`list_item_bindings(collection, link_id)`** (where one item lives per source), **`link_for_handle`** and **`handle_for_link`**, **`load_kind`**.
 
 Three rules bind every read:
 
@@ -455,7 +470,7 @@ A source with at least one row is **declared**, and a capability it has no row f
 A schema mismatch fails a query; a body named differently, a summary derived differently or a key sorted differently fails nowhere. vectors/ is therefore part of the format:
 
 - **vectors/objects.json**: bodies to object names under both `hash_algo` values, with shard paths, and the RFC 4648 §10 base32 vectors.
-- **vectors/summaries.json** and **vectors/fixtures/**: bodies to the `link_id`, summary row, address rows and `sort_key` Annex A produces, the hedged cases, the encodings that split earlier writers, and the `alt:`, `hash:` and minted keys of §9.
+- **vectors/summaries.json** and **vectors/fixtures/**: bodies to the `link_id`, summary row, address rows and `sort_key` Annex A produces, the attachment mark read without the body, the hedged cases, the encodings that split earlier writers, and the `alt:`, `hash:` and minted keys of §9.
 - vectors/sync/ and vectors/search/ belong to the other parts.
 
 An implementation **MUST** pass objects.json: two stores naming bodies differently cannot share a blob directory. It **MUST** pass summaries.json for each kind it writes, the minted, `alt:` and `hash:` keys they give included. checks/invariants.sh runs the canonical statements through the scenarios this part argues from and is what a change to a statement or a rule is checked against before it lands. A consumer MUST compare parsed structures, never JSON text. The values are authored from the prose, never from an implementation.
@@ -466,7 +481,7 @@ An implementation that vendors vectors/ MUST record their digests and re-check t
 
 What a writer derives from an item before its row reaches the store: the identity hint §9 keys on, the row of the kind's summary table, the `item_address` rows and the `sort_key` (§9.3). The store parses no body; the tables fix the shape and vectors/summaries.json the values.
 
-A derivation is made from the body, or from a server-side summary (an IMAP `ENVELOPE`) where the kind has a cheap tier. Where a kind has both, the two MUST agree byte for byte.
+A derivation is made from the body, or from a server-side summary (an IMAP `ENVELOPE`, a Graph `$select`, Gmail's metadata, a JMAP `Email/get`) where the kind has a cheap tier. Where a kind has both, the two MUST agree byte for byte, the attachment mark aside (A.1).
 
 ### A.0 Common rules
 
@@ -485,9 +500,11 @@ A derivation is made from the body, or from a server-side summary (an IMAP `ENVE
 | `subject` | `Subject`, decoded; `''` when absent |
 | `sender` | the first `From` address, canonical (A.6) |
 | `sender_name` | its display name, decoded |
-| `date` | `Date` as an instant; `NULL` when unparseable |
+| `date` | `Date` as an instant; `NULL` when unparseable. From a server-side summary, the `Date` field the server states (IMAP `ENVELOPE`, Graph's `sentDateTime`, JMAP's `sentAt`), never a received date |
 | `size` | the raw octets, or `RFC822.SIZE` at the `Meta` tier |
-| `attachment` | `1` when a part carries `Content-Disposition: attachment`, `0` when the parts were walked and none does, `NULL` when they were not walked |
+| `attachment` | with the body, `1` when a part carries `Content-Disposition: attachment`, `0` when none does; without it, the source's own flag where it states one (Graph's `hasAttachments`, JMAP's `hasAttachment`), else `1` when the top-level `Content-Type` is `multipart/mixed` and `0` otherwise |
+
+The mark read without the body is replaced by the walk of the parts once the body is read, and a writer holding the body MUST NOT write one read without it over it. It misses both ways, each corrected when the body is read: a `multipart/mixed` with no attachment (a list footer, inline images) reads as one, an attachment under `multipart/signed` or `multipart/encrypted` as none. It saves an IMAP listing the `BODYSTRUCTURE`. A row an earlier draft wrote at the `Meta` tier holds `NULL`, examined by nobody.
 
 **Hint**: `message_id`, else `alt:` followed by the decoded subject, the `date` column and the `sender` column joined by `|`, each empty when absent (`alt:Stand-up notes|2026-08-01T10:00:00Z|alice@example.org`). **Addresses**: every `From`, `To`, `Cc`, `Bcc` under its role, in document order. `References` is the search part's (SEARCH.md §9). **`sort_key`**: the `date` column, or `''`; read descending.
 

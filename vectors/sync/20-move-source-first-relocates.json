@@ -17,7 +17,6 @@
       { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 },
       { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }
     ],
-    "probes": [],
     "sources": [
       { "collection": "INBOX", "source": "imap", "checkpoint": "c0" },
       { "collection": "Archive", "source": "imap", "checkpoint": "a0" }
@@ -35,7 +34,7 @@
   },
   "remote": {
     "snapshot": {
-      "items": [{ "handle": "10", "flags": ["\\Seen"], "revision": null }],
+      "items": [{ "handle": "10", "flags": ["\\Seen"], "revision": null, "meta": { "body": "fixtures/mail-basic.eml" } }],
       "vanished": [],
       "complete": true,
       "checkpoint": "c1"
@@ -49,7 +48,6 @@
     "store": {
       "items": [{ "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
       "bindings": [{ "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }],
-      "probes": [],
       "sources": [
         { "collection": "Archive", "source": "imap", "checkpoint": "a0" },
         { "collection": "INBOX", "source": "imap", "checkpoint": "c1" }

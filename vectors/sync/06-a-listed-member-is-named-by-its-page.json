@@ -1,0 +1,53 @@
+{
+  "label": "a listed member is named by the page that lists it",
+  "note": "a member arrives with its meta, so the page's write keys it (STORAGE §9) and inserts the item at level 1, its binding with a base equal to what the source reported, and the summary and address rows of Annex A.1 read without the body; the attachment mark is the top-level Content-Type's, text/plain here. A complete one-page enumeration is a round: it stamps the binding and closes with the coverage of no scope (SYNC.md §4, §5)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {},
+    "items": [],
+    "bindings": [],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c0" }]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "INBOX",
+    "source": "imap",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual"
+    }
+  },
+  "remote": {
+    "snapshot": {
+      "items": [{ "handle": "11", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-no-subject.eml" } }],
+      "vanished": [],
+      "complete": true,
+      "checkpoint": "c1"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [{ "kind": "Added", "handle": "11" }],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "bare-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "bare-1@example.org", "source": "imap", "handle": "11", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 }
+      ],
+      "summaries": [
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "bare-1@example.org", "row": { "message_id": "bare-1@example.org", "in_reply_to": [], "subject": "", "sender": "alice@example.org", "sender_name": null, "date": "2026-08-01T10:00:00Z", "size": 146, "attachment": 0 } }
+      ],
+      "addresses": [
+        { "collection": "INBOX", "link_id": "bare-1@example.org", "role": "from", "position": 0, "address": "alice@example.org", "name": null },
+        { "collection": "INBOX", "link_id": "bare-1@example.org", "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sources": [
+        { "collection": "INBOX", "source": "imap", "checkpoint": "c1", "round": 1, "round_open": false, "round_since": null, "round_until": null, "round_cursor": null, "round_checkpoint": null, "covered": true, "covered_since": null, "covered_until": null }
+      ]
+    }
+  }
+}

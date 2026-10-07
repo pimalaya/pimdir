@@ -1,0 +1,56 @@
+{
+  "label": "without the body the attachment mark is the source's flag, else the top-level Content-Type",
+  "note": "20 comes from a source stating its own flag (Graph hasAttachments, false here), which wins over a multipart/mixed Content-Type; 21 from one stating none, so its multipart/mixed reads as 1. Neither part list was walked (STORAGE Annex A.1)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {},
+    "items": [],
+    "bindings": [],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c0" }]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "INBOX",
+    "source": "imap",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual"
+    }
+  },
+  "remote": {
+    "snapshot": {
+      "items": [
+        { "handle": "20", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-mixed-footer.eml", "attachment": false } },
+        { "handle": "21", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-attachment.eml" } }
+      ],
+      "vanished": [],
+      "complete": true,
+      "checkpoint": "c1"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [
+      { "kind": "Added", "handle": "20" },
+      { "kind": "Added", "handle": "21" }
+    ],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "footer-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-05T07:00:00Z" },
+        { "collection": "INBOX", "link_id": "attach-1@example.org", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-05T09:00:00Z" }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "footer-1@example.org", "source": "imap", "handle": "20", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 },
+        { "collection": "INBOX", "link_id": "attach-1@example.org", "source": "imap", "handle": "21", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 }
+      ],
+      "summaries": [
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "footer-1@example.org", "row": { "message_id": "footer-1@example.org", "in_reply_to": [], "subject": "[list] Release notes", "sender": "robot@lists.example.org", "sender_name": "List Robot", "date": "2026-10-05T07:00:00Z", "size": 425, "attachment": 0 } },
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "attach-1@example.org", "row": { "message_id": "attach-1@example.org", "in_reply_to": [], "subject": "Invoice", "sender": "billing@example.org", "sender_name": "Billing", "date": "2026-10-05T09:00:00Z", "size": 451, "attachment": 1 } }
+      ],
+      "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+    }
+  }
+}
