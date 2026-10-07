@@ -220,6 +220,9 @@ CREATE INDEX items_retained ON items(collection, seq) WHERE deleted = 1;
 -- listing filters on, so a mailbox whose server expunged most of it does not
 -- page past its own trash (§14.1).
 CREATE INDEX items_by_sort ON items(collection, sort_key, seq) WHERE deleted = 0;
+-- The same order across a set of collections (list_mail_page_filtered,
+-- search_mail): a page over several walks one order, never sorts the store.
+CREATE INDEX items_by_sort_global ON items(sort_key, seq, collection) WHERE deleted = 0;
 -- The items waiting for a cross-source decision (list_conflicted_items).
 -- Partial, empty at rest.
 CREATE INDEX items_conflicted ON items(collection, seq) WHERE conflicted = 1;

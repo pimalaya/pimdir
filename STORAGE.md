@@ -248,7 +248,7 @@ The store records nothing else about an account: no credentials, no endpoints. I
 - `seq` breaks ties, so a page over `(sort_key, seq)` is total.
 - `set_sort_key` restates a key without refetching; a `write` MUST leave an existing key alone unless it carries a new one.
 
-Paging is a seek on `items_by_sort`, not a scan. A key is presentation, not sync: a wrong one mis-sorts and loses nothing.
+Paging is a seek on `items_by_sort`, not a scan. A page over a set of collections (`list_mail_page_filtered`, `search_mail`) walks `items_by_sort_global`, the same order store-wide, its collection test kept off `items_by_seq` (`+i.collection`) so that a planner without statistics does not read and sort every live row of the set instead; a substituted statement SHOULD keep that plan. A key is presentation, not sync: a wrong one mis-sorts and loses nothing.
 
 ## 10. Sync model
 

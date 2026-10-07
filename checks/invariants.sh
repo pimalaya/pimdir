@@ -543,6 +543,25 @@ expect "search: sender, case folded" \
     "$(run read/search_mail ":collections='[\"INBOX\"]'" ":pattern='%ALICE@%'" ":seen=0" ":attachment=NULL" \
         ":after_key=NULL" ":after_seq=NULL" ":after_collection=NULL" ":limit=10" | cut -d'|' -f2 | tr '\n' ' ')" "2 3 "
 
+# plan <profile/name> [:param=literal...]: the statement's query plan, bound.
+plan() {
+    local file="$1"; shift
+    {
+        for binding in "$@"; do
+            echo ".parameter set ${binding%%=*} ${binding#*=}"
+        done
+        echo "EXPLAIN QUERY PLAN"
+        cat "$root/queries/storage/$file.sql"
+    } | sqlite3 "$dir/pimdir.db"
+}
+
+for statement in list_mail_page_filtered search_mail; do
+    steps="$(plan "read/$statement" ":collections='[\"INBOX\",\"Sent\"]'" ":pattern='%a%'" ":seen=NULL" \
+        ":attachment=NULL" ":after_key=NULL" ":after_seq=NULL" ":after_collection=NULL" ":limit=10")"
+    expect "page: $statement walks items_by_sort_global over two collections, sorting nothing" \
+        "$(grep -c 'USING INDEX items_by_sort_global' <<<"$steps" || true)$(grep -c 'TEMP B-TREE FOR ORDER BY' <<<"$steps" || true)" "10"
+done
+
 if [ "$failures" -gt 0 ]; then
     echo "$failures invariant(s) broken" >&2
     exit 1
