@@ -19,11 +19,11 @@ Ordered: each block needs the ones above it, except 1, which can start at once.
 ## 1. Fixes with no spec change
 
 - [ ] neverest `msgraph`: `date` from `sentDateTime` (`message_date`)
-- [ ] Android `graph_mail`: the same; `sentDateTime` in `MESSAGE_SELECT`
+- [x] Android `graph_mail`: the same; `sentDateTime` in `MESSAGE_SELECT` (android c2782a8)
 - [ ] io-msgraph: a way to send `Prefer: odata.maxpagesize`; neverest and the Android bridge send 1,000 on message delta, with the summary `$select`
 - [ ] neverest `imap`: `delete_message` by `UID EXPUNGE` on the one UID, the push rejected on a server with neither UIDPLUS nor IMAP4rev2
 - [ ] neverest: `Retry-After`, back-off on 429, 503 and Gmail quota errors, `throttled { source, until }` in the report
-- [ ] Android bridge: the same back-off
+- [x] Android bridge: the same back-off (android c2782a8)
 - [ ] neverest and the Android bridge: Gmail paced near 40 reads a second, below the 250-unit quota
 
 ## 2. pimdir (this repository)
@@ -55,15 +55,15 @@ Ordered: each block needs the ones above it, except 1, which can start at once.
 - [ ] neverest DAV, Google Agenda, People: bodies fetched per page, nothing written unnamed
 - [ ] neverest: `item.filter.since` (`30d` or a date), `sync --since`, refused on DAV, Google Agenda and People; coverage and bytes in the report
 - [ ] neverest tests: Stalwart (old `Date` received today, future `Date`, none, removal out of scope, widening, interrupted round); live Graph and Gmail
-- [ ] Android `imap`, `jmap`, `graph_mail`, `gmail`: the same pages and meta; `PER_MAILBOX` and the windowed spine go
-- [ ] Android DAV connectors: bodies per page, as neverest
-- [ ] Android `MailEngine.sync`: the probe-then-upgrade step goes; the bound becomes a scope, a narrowed bound a `collect_before`
+- [x] Android `imap`, `jmap`, `graph_mail`, `gmail`: the same pages and meta; `PER_MAILBOX` and the windowed spine go (android 57e44ed; Gmail metadata one paced read per id, io-gmail having no batch)
+- [x] Android DAV connectors: bodies per page, as neverest (android 57e44ed: new or changed members read 64 at a time)
+- [x] Android `MailEngine.sync`: the probe-then-upgrade step goes; the bound becomes a scope, a narrowed bound a `collect_before` (android 57e44ed)
 
 ## 5. Readers
 
 - [ ] himalaya: coverage in `pimdir collection list --json`; the attachment mark as stored
 - [ ] MOA: ladder reshaped on paged rounds (`docs/plan/sync-window.md`); coverage in Réglages and in `mail_search`
-- [ ] Android: lazy list on counts and pages (`full-mail-index` §3), the bound in Settings
+- [x] Android: lazy list on counts and pages (`full-mail-index` §3), the bound in Settings (android 57e44ed)
 
 ## 6. Land
 
