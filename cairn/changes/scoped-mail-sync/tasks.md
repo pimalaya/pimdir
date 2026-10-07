@@ -18,13 +18,13 @@ Ordered: each block needs the ones above it, except 1, which can start at once.
 
 ## 1. Fixes with no spec change
 
-- [ ] neverest `msgraph`: `date` from `sentDateTime` (`message_date`)
+- [x] neverest `msgraph`: `date` from `sentDateTime` (`message_date`) (neverest 15c4acc)
 - [x] Android `graph_mail`: the same; `sentDateTime` in `MESSAGE_SELECT` (android c2782a8)
-- [ ] io-msgraph: a way to send `Prefer: odata.maxpagesize`; neverest and the Android bridge send 1,000 on message delta, with the summary `$select`
-- [ ] neverest `imap`: `delete_message` by `UID EXPUNGE` on the one UID, the push rejected on a server with neither UIDPLUS nor IMAP4rev2
-- [ ] neverest: `Retry-After`, back-off on 429, 503 and Gmail quota errors, `throttled { source, until }` in the report
+- [ ] io-msgraph: a way to send `Prefer: odata.maxpagesize`; neverest and the Android bridge send 1,000 on message delta, with the summary `$select` (io-msgraph 00ef069; neverest 2b59f13 sends it with every link)
+- [x] neverest `imap`: `delete_message` by `UID EXPUNGE` on the one UID, the push rejected on a server with neither UIDPLUS nor IMAP4rev2 (neverest a044e91)
+- [x] neverest: `Retry-After`, back-off on 429, 503 and Gmail quota errors, `throttled { source, until }` in the report (neverest 3d94aed; a create retried on 429 only, Graph 5xx batch bodies no throttle: 2b59f13)
 - [x] Android bridge: the same back-off (android c2782a8)
-- [ ] neverest and the Android bridge: Gmail paced near 40 reads a second, below the 250-unit quota
+- [ ] neverest and the Android bridge: Gmail paced near 40 reads a second, below the 250-unit quota (neverest 3d94aed)
 
 ## 2. pimdir (this repository)
 
@@ -49,12 +49,12 @@ Ordered: each block needs the ones above it, except 1, which can start at once.
 
 ## 4. Connectors
 
-- [ ] neverest `imap`: `UID SEARCH SENTSINCE` (a day's margin), pages by UID descending, `ENVELOPE` and `Content-Type`, no `BODYSTRUCTURE`, `CHANGEDSINCE` checked locally
-- [ ] neverest `msgraph`: message delta filtered on `receivedDateTime ge since − 2 days`, summary `$select`, 1,000 a page, each page committed; delta link bound to its scope
-- [ ] neverest `gmail`: `q=after:<epoch>` with margin, pages, meta from metadata (`Content-Type` among the headers), history checked locally, paced
-- [ ] neverest DAV, Google Agenda, People: bodies fetched per page, nothing written unnamed
-- [ ] neverest: `item.filter.since` (`30d` or a date), `sync --since`, refused on DAV, Google Agenda and People; coverage and bytes in the report
-- [ ] neverest tests: Stalwart (old `Date` received today, future `Date`, none, removal out of scope, widening, interrupted round); live Graph and Gmail
+- [x] neverest `imap`: `UID SEARCH SENTSINCE` (a day's margin), pages by UID descending, `ENVELOPE` and `Content-Type`, no `BODYSTRUCTURE`, `CHANGEDSINCE` checked locally (neverest 2b59f13; the header fields carry what `ENVELOPE` does, read as the body is, so no `ENVELOPE`; undated mail searched apart)
+- [x] neverest `msgraph`: message delta filtered on `receivedDateTime ge since − 2 days`, summary `$select`, 1,000 a page, each page committed; delta link bound to its scope (neverest 2b59f13)
+- [x] neverest `gmail`: `q=after:<epoch>` with margin, pages, meta from metadata (`Content-Type` among the headers), history checked locally, paced (neverest 2b59f13; one paced read per id, io-gmail having no batch)
+- [x] neverest DAV, Google Agenda, People: bodies fetched per page, nothing written unnamed (neverest 2b59f13: new or changed members read 64 at a time, Graph contacts and events too)
+- [x] neverest: `item.filter.since` (`30d` or a date), `sync --since`, refused on DAV, Google Agenda and People; coverage and bytes in the report (neverest 2b59f13: `coverage`, `downloaded`)
+- [ ] neverest tests: Stalwart (old `Date` received today, future `Date`, none, removal out of scope, widening, interrupted round); live Graph and Gmail (Stalwart done, neverest 2b59f13 tests/scope.rs; live Graph and Gmail compile, not run)
 - [x] Android `imap`, `jmap`, `graph_mail`, `gmail`: the same pages and meta; `PER_MAILBOX` and the windowed spine go (android 57e44ed; Gmail metadata one paced read per id, io-gmail having no batch)
 - [x] Android DAV connectors: bodies per page, as neverest (android 57e44ed: new or changed members read 64 at a time)
 - [x] Android `MailEngine.sync`: the probe-then-upgrade step goes; the bound becomes a scope, a narrowed bound a `collect_before` (android 57e44ed)
