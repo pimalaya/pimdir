@@ -62,7 +62,7 @@ Ordered: each block needs the ones above it, except 1, which can start at once.
 ## 5. Readers
 
 - [ ] himalaya: coverage in `pimdir collection list --json`; the attachment mark as stored
-- [ ] MOA: ladder reshaped on paged rounds (`docs/plan/sync-window.md`); coverage in Réglages and in `mail_search`
+- [x] MOA: ladder reshaped on paged rounds (`docs/plan/sync-window.md`); coverage in Réglages and in `mail_search` (moa ca77922 pins, f187373: no ladder, Inbox and Sent first kept, exit 3 on an open round resumes the first sync, coverage from `himalaya pimdir mailbox list` in Réglages and as a note on the agent's `mail_search`; measured in moa docs/plan/findings.md)
 - [x] Android: lazy list on counts and pages (`full-mail-index` §3), the bound in Settings (android 57e44ed)
 
 ## 6. Land
