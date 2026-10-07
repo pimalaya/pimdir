@@ -40,12 +40,12 @@ Ordered: each block needs the ones above it, except 1, which can start at once.
 
 ## 3. io-pimdir
 
-- [ ] Re-vendor schema and statements; reconcile on open
-- [ ] `PimdirRemoteItem` carries link id, summary and sort key; `PimdirRemoteSnapshot` page and resume cursor; scope on the sync call; probes removed from the engine
-- [ ] Merge: per-page writes, stamps, deletes inferred at the last page and in scope only
-- [ ] Checkpoint keyed by scope; coverage written when a round closes
-- [ ] `collect_before`; readers for counts, pages and search
-- [ ] Tests on the vectors of 2
+- [x] Re-vendor schema and statements; reconcile on open
+- [x] `PimdirRemoteItem` carries link id, summary and sort key; `PimdirRemoteSnapshot` page and resume cursor; scope on the sync call; probes removed from the engine
+- [x] Merge: per-page writes, stamps, deletes inferred at the last page and in scope only
+- [x] Checkpoint keyed by scope; coverage written when a round closes
+- [x] `collect_before`; readers for counts, pages and search
+- [x] Tests on the vectors of 2
 
 ## 4. Connectors
 
