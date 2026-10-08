@@ -1,0 +1,65 @@
+{
+  "label": "the target half of a move into a collection already holding the identity copies from its origin",
+  "note": "the create in Trash is keyed by the identity minted over its provisional handle, and INBOX binds the identity itself: the pairing finds the origin all the same, so the Add is a server-side copy from INBOX 10, the one way to deliver a create holding no body; Trash's own copy under 3 is never its origin, being in the same collection (SYNC.md §3, §5)",
+  "store": {
+    "collections": [
+      { "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" },
+      { "id": "Trash", "account": null, "kind": "message/rfc822", "conflict": "manual" }
+    ],
+    "objects": {},
+    "items": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": null, "level": 1, "deleted": 1 },
+      { "collection": "Trash", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": null, "level": 1, "deleted": 0 },
+      { "collection": "Trash", "link_id": "dup:basic-1@example.org#\u0001basic-1@example.org", "seq": 2, "flags": ["\\Seen"], "object": null, "level": 1, "deleted": 0 }
+    ],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Seen"], "base_object": null, "base_revision": null, "base_present": 1 },
+      { "collection": "Trash", "link_id": "basic-1@example.org", "source": "imap", "handle": "3", "base_flags": ["\\Seen"], "base_object": null, "base_revision": null, "base_present": 1 },
+      { "collection": "Trash", "link_id": "dup:basic-1@example.org#\u0001basic-1@example.org", "source": "imap", "handle": "\u0001dup:basic-1@example.org#\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }
+    ],
+    "sources": [
+      { "collection": "INBOX", "source": "imap", "checkpoint": "c0" },
+      { "collection": "Trash", "source": "imap", "checkpoint": "t0" }
+    ]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "Trash",
+    "source": "imap",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual"
+    }
+  },
+  "remote": {
+    "snapshot": {
+      "items": [{ "handle": "3", "flags": ["\\Seen"], "revision": null, "meta": { "body": "fixtures/mail-basic.eml" } }],
+      "vanished": [],
+      "complete": true,
+      "checkpoint": "t1"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [{ "kind": "Add", "handle": "\u0001dup:basic-1@example.org#\u0001basic-1@example.org", "link_id": "dup:basic-1@example.org#\u0001basic-1@example.org", "flags": ["\\Seen"], "origin": { "collection": "INBOX", "handle": "10" }, "object": null, "key": "7eac189ff6bf93ab" }],
+    "outcomes": [{ "handle": "\u0001dup:basic-1@example.org#\u0001basic-1@example.org", "outcome": "Accepted", "assigned": "4", "revision": null }],
+    "events": [{ "kind": "Created", "handle": "4" }],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": null, "level": 1, "deleted": 1 },
+        { "collection": "Trash", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": null, "level": 1, "deleted": 0 },
+        { "collection": "Trash", "link_id": "dup:basic-1@example.org#\u0001basic-1@example.org", "seq": 2, "flags": ["\\Seen"], "object": null, "level": 1, "deleted": 0 }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Seen"], "base_object": null, "base_revision": null, "base_present": 1 },
+        { "collection": "Trash", "link_id": "basic-1@example.org", "source": "imap", "handle": "3", "base_flags": ["\\Seen"], "base_object": null, "base_revision": null, "base_present": 1 },
+        { "collection": "Trash", "link_id": "dup:basic-1@example.org#\u0001basic-1@example.org", "source": "imap", "handle": "4", "base_flags": ["\\Seen"], "base_object": null, "base_revision": null, "base_present": 1 }
+      ],
+      "sources": [
+        { "collection": "INBOX", "source": "imap", "checkpoint": "c0" },
+        { "collection": "Trash", "source": "imap", "checkpoint": "t1" }
+      ]
+    }
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "label": "the source half of a move into a collection already holding the identity relocates, never deletes",
+  "note": "Trash held the message under 3 before the move, so the move's create there is keyed by the identity minted over its provisional handle; the tombstone pairs with that create all the same, so the Remove relocates into Trash and carries no link_id, the copy Trash already held proving no delivery; INBOX holds no body, so nothing else could deliver the create, and a plain delete would take the only copy of the move (SYNC.md §3, §4, §5)",
+  "store": {
+    "collections": [
+      { "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" },
+      { "id": "Trash", "account": null, "kind": "message/rfc822", "conflict": "manual" }
+    ],
+    "objects": {},
+    "items": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": null, "level": 1, "deleted": 1 },
+      { "collection": "Trash", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": null, "level": 1, "deleted": 0 },
+      { "collection": "Trash", "link_id": "dup:basic-1@example.org#\u0001basic-1@example.org", "seq": 2, "flags": ["\\Seen"], "object": null, "level": 1, "deleted": 0 }
+    ],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Seen"], "base_object": null, "base_revision": null, "base_present": 1 },
+      { "collection": "Trash", "link_id": "basic-1@example.org", "source": "imap", "handle": "3", "base_flags": ["\\Seen"], "base_object": null, "base_revision": null, "base_present": 1 },
+      { "collection": "Trash", "link_id": "dup:basic-1@example.org#\u0001basic-1@example.org", "source": "imap", "handle": "\u0001dup:basic-1@example.org#\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }
+    ],
+    "sources": [
+      { "collection": "INBOX", "source": "imap", "checkpoint": "c0" },
+      { "collection": "Trash", "source": "imap", "checkpoint": "t0" }
+    ]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "INBOX",
+    "source": "imap",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual"
+    }
+  },
+  "remote": {
+    "snapshot": {
+      "items": [{ "handle": "10", "flags": ["\\Seen"], "revision": null, "meta": { "body": "fixtures/mail-basic.eml" } }],
+      "vanished": [],
+      "complete": true,
+      "checkpoint": "c1"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [{ "kind": "Remove", "handle": "10", "to": "Trash", "link_id": null, "if_match": null, "key": "de5f13f5a240cc23" }],
+    "outcomes": [{ "handle": "10", "outcome": "Accepted" }],
+    "events": [],
+    "store": {
+      "items": [
+        { "collection": "Trash", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": null, "level": 1, "deleted": 0 },
+        { "collection": "Trash", "link_id": "dup:basic-1@example.org#\u0001basic-1@example.org", "seq": 2, "flags": ["\\Seen"], "object": null, "level": 1, "deleted": 0 }
+      ],
+      "bindings": [
+        { "collection": "Trash", "link_id": "basic-1@example.org", "source": "imap", "handle": "3", "base_flags": ["\\Seen"], "base_object": null, "base_revision": null, "base_present": 1 },
+        { "collection": "Trash", "link_id": "dup:basic-1@example.org#\u0001basic-1@example.org", "source": "imap", "handle": "\u0001dup:basic-1@example.org#\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }
+      ],
+      "sources": [
+        { "collection": "INBOX", "source": "imap", "checkpoint": "c1" },
+        { "collection": "Trash", "source": "imap", "checkpoint": "t0" }
+      ]
+    }
+  }
+}

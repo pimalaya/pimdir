@@ -71,9 +71,11 @@ An unknown flag set (`NULL`) holds no opinion: neither an addition nor a removal
 
 **Level** MUST be `Full` only when `object_hash` is present, whatever `items.level` claims, so an item whose body a remote change dropped projects at most `Meta` and an upgrade refetches it. A level of `0`, which an earlier draft wrote for a probed or pulled row, MUST be read as `Meta`, a claim the row may not hold (§6), and is never written.
 
-**Origin.** A `Created` placement carries an origin when the same source binds the same `link_id` in another collection, with a base present and, when the placement has a body, that body as `base_object` (`origin_for_link`): a server-side copy from that handle rather than an upload. A binding whose base holds another body would copy what the server has, not what the placement intends.
+**Origin.** A `Created` placement carries an origin when the same source binds the same identity in another collection, with a base present and, when the placement has a body, that body as `base_object` (`origin_for_link`): a server-side copy from that handle rather than an upload. A binding whose base holds another body would copy what the server has, not what the placement intends.
 
-**Destination.** A `Tombstone` placement carries a destination when the same source holds a pending create of the same `link_id` in another collection (`destination_for_link`): the relocation its remove offers (§5). Origins and destinations are derived from bindings, never stored, so both read the same after a crash and after a hub folded the item.
+**Destination.** A `Tombstone` placement carries a destination when the same source holds a pending create of the same identity in another collection (`destination_for_link`), named by that create's handle: the relocation its remove offers (§5).
+
+**The same identity**, for both, is the same `link_id`, or the one minted over the provisional handle the other derives (`dup:`, the key, `#`, `U+0001` and the key again): the key a `Copy` or a `Move` gives its create beside a live holder (§7). The bare key MUST be preferred. Origins and destinations are derived from bindings, never stored, so both read the same after a crash and after a hub folded the item.
 
 ## 4. The remote seam
 
@@ -104,7 +106,7 @@ A connector MAY lower a page after a timeout or a `413`, and MUST NOT raise one 
 **Push** takes a batch of changes and returns an outcome each:
 
 - `Add { handle, link_id, flags, origin, object }`: create by server-side copy from `origin` when present, else by uploading `object`; accepted with the assigned handle. A connector to a mutable kind MUST report the revision the member holds once accepted, else the next enumeration reads its own push as a remote edit and refetches it.
-- `Remove { handle, to, link_id, if_match }`: delete when `to` is absent or already holds `link_id` (§5); relocate into `to` otherwise. A connector that cannot relocate MUST reject the change rather than delete: the destination has not received the member, and a delete would take the only copy.
+- `Remove { handle, to, link_id, if_match }`: delete when `to` is absent or already holds `link_id` (§5); relocate into `to` otherwise. `link_id` is the tombstone's key, and MUST be absent when its destination is a create under a minted key (§3): `to` held the identity before the move, so holding it proves no delivery. A connector that cannot relocate MUST reject the change rather than delete: the destination has not received the member, and a delete would take the only copy.
 - `SetFlags { handle, flags }`: replace the flag set.
 - `Update { handle, object, if_match }`: replace a mutable body, gated on `if_match` where supported; accepted with the revision the member holds, on `Add`'s terms.
 
@@ -166,7 +168,7 @@ A revision the tombstone's base does not name is a remote edit, an enumeration c
 
 **A move** is a `Created` placement in the target plus a `Tombstone` in the source, each derived by its own collection's sync in either order and each able to deliver alone. Neither half MUST be dropped for the other.
 
-The create delivers by copy from its origin, or by upload when the store holds the body. The remove delivers by relocating into its destination, which the connector MUST reject when it cannot relocate (§4), and is a plain delete once the destination holds the identity.
+The create delivers by copy from its origin, or by upload when the store holds the body. The remove delivers by relocating into its destination, which the connector MUST reject when it cannot relocate (§4), and is a plain delete once the destination holds the identity the move delivered, a copy the target held before the move not being that delivery (§4). A create landed first, by its copy from the origin, leaves no destination, and the remove is then a plain delete.
 
 A relocated member is listed by the target's next listing under a new handle, and the page naming it lands the create (§6); until then the create waits, as every create waits for the page that lands it.
 
@@ -182,7 +184,7 @@ An upgrade raises placements to `Full`, or revisits at `Meta` a claim the row do
 
 Minting MUST be decided against the whole collection and from the handles in byte order, not reply order, so a rebuild mints the same key; a page or an upgrade therefore loads the hints it carries by key (§10) before it assigns any.
 
-**A pending create is landed by its arrival.** A hint a page or a fetch carries that the collection holds as a pending create of this source (§2) is that create delivered: by a relocation (§5), by an accepted add whose record was lost, or by another client. The engine MUST land it rather than mint; only a hint held by a based binding is minted.
+**A pending create is landed by its arrival.** A hint a page or a fetch carries that the collection holds as a pending create of this source (§2), keyed by the hint or by the hint minted over the provisional handle it derives (§7), the bare key first, is that create delivered: by a relocation (§5), by an accepted add whose record was lost, or by another client. The engine MUST land it rather than mint; only a hint held by a based binding is minted.
 
 Landing is a `Superseded` drop of the provisional handle in the same batch, the binding moved to the listed one, and the base set to the flags the listing or the fetch reported and, for an immutable kind, the staged body, one identity being one message. For a mutable kind the base takes the listed revision and the body when the listing or the fetch carried one; a fetched body differing from the staged one is the content axis's both-changed case (§5). The flags and body staged on the create stay, so an edit made on it still pushes.
 
@@ -203,7 +205,7 @@ A mutation stages a local edit to one collection with no network, through the sa
 - `SetFlags` replaces the flags and marks the placement `Dirty`; a `Created`, `Conflict` or `Tombstone` placement keeps its status.
 - `Remove` tombstones the placement, binding and base kept so the remove is pushed against the right handle. On a conflicted binding it is the decision: the base adopts `conflict_revision` and `conflict_object` together, as an `Edit` does, and the conflict clears, so the remove pushes gated on what the remote holds; a diverging body not fetched yet leaves `base_object` unknown, never the old body, so an item another source's edit revives reads `Dirty` (§3) rather than in sync; on a conflicted item (§9) it clears the item's conflict the same way. On a pending create it withdraws the create: the binding goes and the item is retained (STORAGE §11).
 - `Edit` stores a new body and repoints the placement, keeping the base. An edit whose object the base holds stages nothing. On a conflicted placement it resolves, the base adopting `conflict_revision` and `conflict_object` together; on a conflicted item it resolves too, `items.conflicted` cleared and its `conflict_object` released; on a tombstone it revives, `Dirty`, and the destination its tombstone offered no longer derives. It MAY restate the sort key.
-- `Copy` stages a `Created` placement in a target under a provisional handle with the source's origin; `Move` also tombstones the source, whose destination the target's pending create then derives (§3). Both read the target and mint the key when a live placement there already holds the identity; a tombstoned holder blocks nothing. Both MUST be refused for a placement holding neither a body nor a based binding, since nothing could deliver the create.
+- `Copy` stages a `Created` placement in a target under a provisional handle with the source's origin; `Move` also tombstones the source, whose destination the target's pending create then derives (§3). Both read the target and, when a live placement there already holds the identity, key the create by the identity minted over the provisional handle it derives, minted again over a held key (STORAGE §9); a tombstoned holder blocks nothing. Both MUST be refused for a placement holding neither a body nor a based binding, since nothing could deliver the create.
 - `Add` stages a new item under a provisional handle at `Full`, no base, no origin. It MUST fail when a live placement holds the `link_id`; a retained one revives (STORAGE §11); a tombstone still propagating is revived the same way, the row adopting the new body and its delete withdrawn on every source.
 
 A delete meant to land in a trash collection is a relocation: stage it as `Move` into that collection, so the trash shows it at once and the push relocates it (§4). `Remove` fits a delete meant to be final, as from the trash itself.
