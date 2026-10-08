@@ -225,6 +225,8 @@ A move is two halves derived by two collections' syncs in either order: `Add` by
 | `Copy`, `Move` | a `Created` placement in the target under a provisional handle with the source's origin; `Move` tombstones the source; a live holder of the identity in the target mints the key; refused for a placement with neither a body nor a based binding |
 | `Add` | a new item at `Full` under a provisional handle, no base; fails on a live holder, revives a retained one or a tombstone still propagating |
 
+A delete meant to land in a trash collection is a `Move` into it, so the trash shows it before any sync; `Remove` is for a delete meant to be final, as from the trash itself.
+
 A provisional handle is `U+0001` followed by the link id (SYNC §2).
 
 **Rekey**, when a source renumbered every handle and the connector reported it (SYNC §4):

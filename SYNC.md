@@ -206,6 +206,8 @@ A mutation stages a local edit to one collection with no network, through the sa
 - `Copy` stages a `Created` placement in a target under a provisional handle with the source's origin; `Move` also tombstones the source, whose destination the target's pending create then derives (§3). Both read the target and mint the key when a live placement there already holds the identity; a tombstoned holder blocks nothing. Both MUST be refused for a placement holding neither a body nor a based binding, since nothing could deliver the create.
 - `Add` stages a new item under a provisional handle at `Full`, no base, no origin. It MUST fail when a live placement holds the `link_id`; a retained one revives (STORAGE §11); a tombstone still propagating is revived the same way, the row adopting the new body and its delete withdrawn on every source.
 
+A delete meant to land in a trash collection is a relocation: stage it as `Move` into that collection, so the trash shows it at once and the push relocates it (§4). `Remove` fits a delete meant to be final, as from the trash itself.
+
 ## 8. Rekey
 
 A source may renumber every member (an IMAP `UIDVALIDITY` bump, a restore). A rekey re-enumerates the spine, which MUST be a round over the whole collection whatever the scope, every page read before its one batch is written: the old handles being void, it is the one listing whose absence covers every member. It carries each placement's body, summary, level, flags, base and pending state onto its new handle **by link id**, the one identifier that survived. A resync would instead delete the collection and lose every staged edit.
