@@ -1,0 +1,25 @@
+{
+  "label": "a remove staged on a pending create withdraws it, and the item is retained",
+  "note": "the contact was created offline and never pushed; the user deletes it. Nothing is owed to the source, so the binding goes in the mutation's own write and the row is retained, rather than a tombstone left for a sync to drop, which a collection no sync visits would keep for ever (SYNC.md §7, §3, STORAGE §11)",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
+    "objects": {
+      "c1": { "body": "fixtures/card-basic.vcf" }
+    },
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0 }],
+    "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "\u0001urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }],
+    "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d0" }]
+  },
+  "run": { "verb": "mutate", "collection": "Contacts", "source": "dav", "mutation": { "kind": "Remove", "seq": 1 } },
+  "remote": { "snapshot": null, "fetch": {} },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 1, "retained": true, "retained_by": "dav" }],
+      "bindings": [],
+      "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d0" }]
+    }
+  }
+}
