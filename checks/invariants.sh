@@ -634,6 +634,63 @@ run owner/delete_collection ":collection='Cards'"
 expect "reference: a collection's delete takes the references of the endpoints it held last" \
     "$(sql "SELECT count(*) FROM item_reference;")" "0"
 
+# --- A file stands for an attachment until no reference names it (§14.3) ----
+
+fresh
+file_kind=application/octet-stream
+collection work/INBOX work
+for folder in work/Attachments work/Docs; do
+    run owner/set_collection_kind ":collection='$folder'" ":account='work'" ":kind='$file_kind'"
+done
+object hx
+mail work/INBOX m 1 10 "'2026-10-06T08:00:00Z'"
+# file <collection> <link_id> <seq> <object|NULL> <name> <part|NULL> [bound]
+file() {
+    run owner/insert_item ":collection='$1'" ":link_id='$2'" ":seq=$3" ":flags='[]'" ":object_hash=$4" \
+        ":sort_key='$(tr '[:upper:]' '[:lower:]' <<<"$5")'" ":level=$([ "$4" = NULL ] && echo 1 || echo 2)" \
+        ":deleted=0" ":conflicted=0" ":conflict_object=NULL"
+    run owner/upsert_file_summary ":collection='$1'" ":link_id='$2'" ":name='$5'" ":media_type='application/pdf'" \
+        ":size=1234" ":part=$6"
+    if [ -n "${7:-}" ]; then
+        sql "INSERT INTO bindings(collection, link_id, source, handle, base_present) VALUES('$1', '$2', 'dav', '$2', 1);"
+    fi
+}
+file work/Attachments 'part:m#2' 2 NULL Report.pdf "'2'"
+file work/Attachments 'part:m#3' 3 NULL photo.jpg "'3'"
+file work/Docs local 4 "'hx'" notes.txt NULL
+file work/Docs synced 5 NULL remote.txt NULL bound
+run owner/recompute_refcounts
+for part in 'part:m#2' 'part:m#3'; do
+    ref $mail_kind m $file_kind "$part" attachment auto >/dev/null
+done
+expect "file: a blob-less file is a Meta item with its summary" \
+    "$(run read/get_file ":collection='work/Attachments'" ":seq=2" | cut -d'|' -f4,6,7,8,9,10)" "|1|Report.pdf|application/pdf|1234|2"
+expect "file: a folder lists A to Z on the name" \
+    "$(run read/list_files_page_asc ":collection='work/Attachments'" ":after_key=''" ":after_seq=0" ":limit=10" | cut -d'|' -f7 | tr '\n' ' ')" \
+    "photo.jpg Report.pdf "
+expect "file: a message's attachments in the order recorded, with their part" \
+    "$(run read/list_attachments ":account='work'" ":link_id='m'" | cut -d'|' -f1,4,7,8 | tr '\n' ' ')" \
+    "part:m#2|Report.pdf|2| part:m#3|photo.jpg|3| "
+file work/Docs 'part:m#2' 2 "'hx'" 'Q3 report.pdf' "'2'"
+expect "file: saved to a folder, the stand-in still reads, held by the saved copy's body" \
+    "$(run read/list_attachments ":account='work'" ":link_id='m'" | head -1 | cut -d'|' -f2,4,8)" "work/Attachments|Report.pdf|hx"
+expect "file: one public id for the stand-in and the saved copy" \
+    "$(sql "SELECT count(DISTINCT seq) FROM items WHERE link_id = 'part:m#2';")" "1"
+run owner/remove_reference ":from_kind='$mail_kind'" ":from_link_id='m'" ":to_kind='$file_kind'" ":to_link_id='part:m#3'" ":role='attachment'" >/dev/null
+expect "file: a stand-in no reference names is collected" \
+    "$(sql "SELECT count(*) FROM items WHERE link_id = 'part:m#3';")" "0"
+for target in local synced; do
+    ref $mail_kind m $file_kind $target related user >/dev/null
+    run owner/remove_reference ":from_kind='$mail_kind'" ":from_link_id='m'" ":to_kind='$file_kind'" ":to_link_id='$target'" ":role='related'" >/dev/null
+done
+expect "file: a file holding a body, or bound by a source, is never collected for want of a reference" \
+    "$(sql "SELECT link_id FROM items WHERE link_id IN ('local', 'synced') ORDER BY link_id;" | tr '\n' ' ')" "local synced "
+sql "UPDATE items SET deleted = 1, retained_at = 'x' WHERE link_id = 'm';"
+run owner/purge_item ":collection='work/INBOX'" ":seq=1" >/dev/null
+expect "file: the message's last row gone, its stand-in goes and the saved copy stays with its body" \
+    "$(sql "SELECT collection || ':' || ifnull(object_hash, '') FROM items WHERE link_id = 'part:m#2';")|$(sql "SELECT count(*) FROM item_reference;")" \
+    "work/Docs:hx|0"
+
 # --- Readers count and page under the chips (§14.1) --------------------------
 
 fresh

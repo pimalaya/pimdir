@@ -27,7 +27,7 @@ The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are to be interpreted a
 11. [Retention](#11-retention): [requirements](#111-requirements), [purging](#112-purging), [collecting below a date](#113-collecting-below-a-date), [releasing bodies below a date](#114-releasing-bodies-below-a-date)
 12. [Collection generation](#12-collection-generation)
 13. [Encodings](#13-encodings)
-14. [Operations](#14-operations): [reading the store](#141-reading-the-store), [references](#142-references)
+14. [Operations](#14-operations): [reading the store](#141-reading-the-store), [references](#142-references), [files](#143-files)
 15. [Action queue](#15-action-queue): [producing](#151-producing), [applying](#152-applying), [actions](#153-actions), [reading the queue](#154-reading-the-queue), [cancelling and acknowledging](#155-cancelling-and-acknowledging), [capabilities](#156-capabilities)
 16. [Test vectors](#16-test-vectors)
 
@@ -116,7 +116,7 @@ The canonical schema is migrations/storage/0001_init.sql, which is normative. Th
 - **`performers`**: the source the user chose to perform an intent capability for an account, one per `(account, capability)` (§15.6).
 - **`objects`**: `hash` (primary key, under `hash_algo`), `size`, `refcount` (§5, §7). The bytes live in the blob file.
 - **`items`**: the shared truth of one item, keyed `(collection, link_id)`: `seq` (§9.1), `flags` (a JSON array), `object_hash`, `sort_key` (§9.3), `level` (1 meta, 2 full; 0 an earlier draft's, read as 1), the cross-source state `deleted`, `conflicted`, `conflict_object`, the retention stamps `retained_at`, `retained_by` (§11), and `changed` (§4.5).
-- **`mail_summary`**, **`contact_summary`**, **`event_summary`**, **`task_summary`**, **`journal_summary`**: one table per kind, at most one row per item, keyed `(collection, link_id)`, cascading with the item, referencing no object. Their columns are Annex A's, so a writer that disagrees with the shape fails at the write.
+- **`mail_summary`**, **`contact_summary`**, **`event_summary`**, **`task_summary`**, **`journal_summary`**, **`file_summary`**: one table per kind, at most one row per item, keyed `(collection, link_id)`, cascading with the item, referencing no object. Their columns are Annex A's, so a writer that disagrees with the shape fails at the write.
 - **`item_address`**: the people an item names, keyed `(collection, link_id, role, position)` (Annex A.6). One table across every kind, so "everything about this address" is one seek on `item_address_by_address`.
 - **`item_reference`**: a reference between two items (§14.2), keyed `(from_link_id, from_kind, to_link_id, to_kind, role)`, each endpoint a kind and a link id held by no foreign key, with its `role`, `origin` and `created_at`; `item_reference_to` serves the other end.
 - **`bindings`**: one source's binding of an item, keyed `(collection, link_id, source)`: the `handle`, the sync base (`base_flags`, `base_object`, `base_revision`, `base_present`), the `shared_object` last agreed with the item, the conflict triple `conflicted`, `conflict_revision`, `conflict_object`, and `round`, the id of the last round that listed the handle (§10). A handle is bound once and never repointed, and names one item per source (§10): `bindings_by_handle` is unique.
@@ -226,7 +226,7 @@ All four are store-wide, accounts included (§9.2). An identity or a body in mor
 
 `items.seq` is a small integer a consumer shows and accepts wherever it would take a link id. One `link_id` keeps one `seq` in every collection and account it is filed in, drawn from `store_meta.next_seq` (`seq_for_link_any`, else `bump_next_seq`). It is assigned once, only increases, and is never reused. A consumer reads and edits by `(collection, seq)`, which is unique.
 
-A minted key, an `alt:` key and a `hash:` key each draw their own `seq`: a derived key restates nothing the content carries. The item holding the bare hint keeps the shared one, so one message in two mailboxes shows once and two resources one collection holds show twice.
+A minted key, an `alt:` key and a `hash:` key each draw their own `seq`: a derived key restates nothing the content carries. The item holding the bare hint keeps the shared one, so one message in two mailboxes shows once and two resources one collection holds show twice. A file's `part:` or `file:` key (Annex A.7) is a name the store gives, not a guess at one, and shares its `seq` as a hint does, so a file in two folders shows once.
 
 ### 9.2 Accounts
 
@@ -394,7 +394,7 @@ A **reader** (§8) opens read-only and projects the store as a local backend. Re
 - **`list_items_page_asc`**, **`list_items_page_desc`** `(collection, after_key, after_seq, limit)`: the natural order (§9.3), cursor `(sort_key, seq)`; descending, a `NULL` cursor is the first page.
 - **`count_mail(collections, seen, attachment, since)`**, **`count_mail_by_day(collections, seen, attachment, shift, since)`**, **`count_unread(collections, attachment, since)`**: the live mail of a set of collections under the read and attachment chips (`NULL` for either), in all, per day of the `Date` on the reader's clock, and unread per collection, so a list is sized by a count before it loads; **`list_mail_page_filtered`** the page under the same chips across the set, cursor `(sort_key, seq, collection)`; **`search_mail`** the same page over a `LIKE` pattern on the subject, the sender and its name, until the search part's index (SEARCH.md) answers the body. `since` is a floor on the sort key (§9.3), an RFC 3339 instant: a row below it is left out, an undated one below any, and `NULL` sets none. It is a seek on the index, so a list cut at a date costs the rows above it, never the store's. `search_mail` takes no floor.
 - **`sum_mail(collections, seen, attachment, since, until)`**: what `count_mail` counts with a sort key in `[since, until)`, either bound `NULL` for open, as the rows, the summed `size` of those that know it and the count of those that do not, so a reader says what a range of dates weighs before downloading it. An undated row lies below every date, held only by a range open below.
-- **`list_mail_page_desc`**, **`list_contacts_page_asc`**, **`list_events_page_asc`**, **`list_tasks_page_asc`**, **`list_journals_page_asc`**: the same page joined with the kind's summary; **`get_mail`**, **`get_contact`**, **`get_event`**, **`get_task`**, **`get_journal`** one item. A mixed calendar merges its three pages on `(sort_key, seq)`; `component_of` says which table holds an item.
+- **`list_mail_page_desc`**, **`list_contacts_page_asc`**, **`list_events_page_asc`**, **`list_tasks_page_asc`**, **`list_journals_page_asc`**, **`list_files_page_asc`**: the same page joined with the kind's summary; **`get_mail`**, **`get_contact`**, **`get_event`**, **`get_task`**, **`get_journal`**, **`get_file`** one item; **`list_attachments(account, link_id)`** the files a message attaches (§14.3). A mixed calendar merges its three pages on `(sort_key, seq)`; `component_of` says which table holds an item.
 - **`get_item(collection, seq)`**, **`load_addresses(collection, link_id)`** (one item's people by role), **`count_items(collection)`**, **`seq_by_link(collection, link_id)`**.
 - **`list_link_placements(link_id)`**, **`list_object_placements(hash)`**: every live placement of one key, or one body, with collection and account. The first pairs by key, so a minted copy is paired with its twin by the body read alone.
 - **`references_from(kind, link_id)`**, **`references_to(kind, link_id)`**: the references an item makes and receives (§14.2), whatever their endpoints' state.
@@ -422,6 +422,17 @@ A **reference** says that one item bears on another: a message and the file it a
 - **`remove_reference`** deletes one, whatever its origin. A rule matching again records it anew; no suppression is kept.
 - **A reference goes with the last row of either endpoint.** `items_drop_references` deletes it when a delete leaves no row of `items`, live, tombstoned or retained, under that link id in a collection of that kind: a purge, a collection below a date or a collection's delete of the last copy. A move, a tombstone, a retention and the loss of one copy among several keep it, so a restore finds it. Every reference's two endpoints are therefore held. Whether an endpoint is live is the reader's to ask (`list_link_placements`).
 - A reference stamps nothing in the feed (§4.5) and is local to the store: no source learns of it, and another store records its own.
+
+
+### 14.3 Files
+
+A **file** is an item of a collection of kind `application/octet-stream`: an identity, its `link_id`, pointing at its current body, its `object_hash`, which an edit moves to a new blob. A **folder** is such a collection, holding nothing a filesystem would mirror; a file's name is its summary in that folder (Annex A.7), so a rename is a summary write and a move one placement, and one file in two folders is two rows sharing a `link_id`, a `seq` and a body. The file's own media type is its summary's, never the collection's kind, which says only that the body is bytes.
+
+- **A file is mutable**: a source syncing a folder reports revisions, and an edit, a push gated on the base and a divergence follow the content axis as a card does (SYNC.md §5). Nothing kind-specific is added to the base or the conflict.
+- **A collection no source syncs** holds items no binding names: a folder on the device, and the attachments collection below. The owner writes them directly (`insert_item`, `upsert_file_summary`); §11's retention, which follows a binding vanishing, does not apply to them, and no projection offers them.
+- **An attachment** is a file inside a message's body, stood for by a file holding no body: `object_hash` `NULL`, `level` `1`, its summary naming the part (`part`, the IMAP section of RFC 3501 §6.4.5), keyed `part:` (Annex A.7). It lives in a collection of the file kind, one per account, that no source syncs and the owner chooses, since the message's own collection holds another kind; an `attachment` reference from the message (§14.2) ties them, and the owner MUST record the file and that reference in one transaction. A `Meta` row with its summary claims nothing (SYNC.md §6), so no sync or upgrade reads the missing body as one to fetch: a reader opens the part from the message's body when held, or has the message's source fetch the part alone. `list_attachments` reads a message's files.
+- **Saving an attachment** places the same `link_id` in a folder with its own body: the stand-in stays, the saved copy holding a blob several messages may share.
+- **A stand-in goes once no reference names it**: `item_reference_collects_files` deletes a file of a collection of that kind holding no body and bound by no source when a reference is deleted and none names it any more, so a message gone with its last row (§14.2) takes its stand-ins. A file holding a body, or one a source syncs, is never collected this way.
 
 ## 15. Action queue
 
@@ -592,6 +603,19 @@ A series keys on its first occurrence, which `until` bounds for a reader that mu
 `item_address` holds every person an item names, one row per address per role, in document order within the role: `from`, `to`, `cc`, `bcc` for mail, `email` for a card, `organizer` and `attendee` for a calendar object.
 
 The **canonical address** is the addr-spec alone, display name, comments, angle brackets and `mailto:` removed, lowercased whole. RFC 5321 §2.4 makes the local part case-sensitive and practice does not. A value that is not an addr-spec is kept lowercased as it is. The **name** is the display name decoded (a mail phrase, an `ATTENDEE`'s `CN`), or `NULL`; a card's addresses have none.
+
+### A.7 `application/octet-stream`
+
+A file's bytes say nothing about it, so its summary is what its source or its writer states, not a derivation from the body.
+
+| Column | Derivation |
+| --- | --- |
+| `name` | the file's name in this collection, as its folder or source states it, or an attachment's `filename` (`Content-Disposition`, else the `Content-Type` `name`, RFC 2231 decoded); `''` when none |
+| `media_type` | the type and subtype as stated (an attachment's `Content-Type`), lowercased, parameters dropped; `NULL` when unstated |
+| `size` | with the body, its octets; without it, as stated: an attachment's decoded octets, or the source's figure |
+| `part` | for an attachment, its section in the message's body (RFC 3501 §6.4.5, `1`, `2.1`), counted on the body as stored; `NULL` otherwise |
+
+The size read without the body is replaced by the body's own, as for mail (A.1). **Hint**: none, the bytes stating no identity. An attachment is keyed `part:`, its message's `link_id`, `#` and its `part` (`part:abc@host#2`), so every writer walking one message names its files alike; a file created in the store is keyed `file:` and 32 lowercase hexadecimal digits of 128 random bits. Neither is a protocol identity, nor parsed by a reader. The keys of files a source lists are left to the first file source. A file carries no flags (`'[]'`) and no addresses. **`sort_key`**: `name` on A.2's rule for `fn`, read ascending.
 
 ## Annex B. Capabilities (normative)
 

@@ -36,9 +36,9 @@ Normative: STORAGE §1, §3, §5, §6.
 
 Six kinds of thing live in the database.
 
-A **collection** is a mailbox, an address book or a calendar. It declares the media type of everything it holds, so a store never guesses what an item is, and it may belong to an account, which groups collections for reading and changes the meaning of nothing else. It also keeps what its server says about it: a name to show, and a role when the server states one, the inbox or the sent folder of a mail account, the default calendar or address book of the others.
+A **collection** is a mailbox, an address book, a calendar or a folder of files. It declares the media type of everything it holds, so a store never guesses what an item is, and it may belong to an account, which groups collections for reading and changes the meaning of nothing else. It also keeps what its server says about it: a name to show, and a role when the server states one, the inbox or the sent folder of a mail account, the default calendar or address book of the others.
 
-An **item** is one message, contact, event, task or journal, keyed within its collection by its link id. It carries the mutable state a source can change (flags), a pointer to its current body, a detail level saying how much of it has been fetched, and its position in the collection's natural order (a date for a message, a name for a card).
+An **item** is one message, contact, event, task, journal or file, keyed within its collection by its link id. It carries the mutable state a source can change (flags), a pointer to its current body, a detail level saying how much of it has been fetched, and its position in the collection's natural order (a date for a message, a name for a card).
 
 An **object** is one body, by hash. Two items with identical bytes share one object, so a message filed in two mailboxes costs one copy, and copying or moving an item never copies bytes. Objects are reference counted, and an object nothing points at stays on disk until a collector runs.
 
@@ -46,7 +46,7 @@ A **summary** is what a reader lists an item from without opening its body: subj
 
 A **binding** is one source's view of one item: the handle the source knows it by and the base, what the source last agreed to. An item with one binding is the single-source case, and adding sources adds bindings and nothing else.
 
-A **reference** links one item to another of any kind: a message to the contact who sent it, an invitation to its event, anything a person links by hand. It names each end by its identity rather than by a collection, so it survives a move and holds while any copy of either end remains, tombstoned or retained included. It is recorded once, by a writer's rule or by a person, and never recomputed; nothing requires one.
+A **reference** links one item to another of any kind: a message to the contact who sent it, an invitation to its event, anything a person links by hand. It names each end by its identity rather than by a collection, so it survives a move and holds while any copy of either end remains, tombstoned or retained included. It is recorded once, by a writer's rule or by a person, and never recomputed; nothing requires one. An attachment is a file standing for a part of its message, holding no bytes of its own until it is saved to a folder, and it goes once no reference names it.
 
 Nothing enters the store unnamed: a source lists each member with its identity and summary, so a listed message is an item from the moment its page lands, its body fetched later or never.
 

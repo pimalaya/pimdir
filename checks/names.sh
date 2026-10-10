@@ -37,7 +37,7 @@ mentioned="$(
     grep -oh '`[a-z][a-z0-9]*\(_[a-z0-9<>]\+\)\+[(`]' "${documents[@]/#/$root/}" | tr -d '`(' | sort -u |
     while read -r name; do
         case "$name" in
-            *'<kind>'*) for kind in mail contact event task journal; do echo "${name//<kind>/$kind}"; done ;;
+            *'<kind>'*) for kind in mail contact event task journal file; do echo "${name//<kind>/$kind}"; done ;;
             *) echo "$name" ;;
         esac
     done | sort -u

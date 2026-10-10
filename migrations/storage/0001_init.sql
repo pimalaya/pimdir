@@ -33,7 +33,7 @@ CREATE TABLE store_meta (
 CREATE TABLE collections (
     id          TEXT PRIMARY KEY,          -- stable id (base32 uuid or backend id), unique store-wide
     account     TEXT,                      -- owning account, NULL in a single-account store
-    kind        TEXT NOT NULL,             -- media type: message/rfc822, text/vcard, text/calendar
+    kind        TEXT NOT NULL,             -- media type: message/rfc822, text/vcard, text/calendar, application/octet-stream
     name        TEXT NOT NULL,             -- logical name (INBOX, Contacts)
     parent      TEXT REFERENCES collections(id) ON UPDATE CASCADE ON DELETE SET NULL,
     color       TEXT,                      -- optional presentation
@@ -432,6 +432,21 @@ CREATE TABLE journal_summary (
     FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
 ) STRICT;
 
+-- application/octet-stream, a file (Annex A.7): what its source or its writer
+-- states, the bytes saying nothing of it. One row per placement, so a file
+-- in two folders may carry two names. `part` stays with the file wherever it
+-- is placed.
+CREATE TABLE file_summary (
+    collection TEXT NOT NULL,
+    link_id    TEXT NOT NULL,
+    name       TEXT NOT NULL,              -- the file's name in this collection, may be empty
+    media_type TEXT,                       -- type/subtype lowercased, no parameter, or NULL
+    size       INTEGER,                    -- octets: the body's when held, else as stated
+    part       TEXT,                       -- an attachment's IMAP section in its message, or NULL
+    PRIMARY KEY (collection, link_id),
+    FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
+) STRICT;
+
 -- The people an item names, whatever its kind (§4.4, Annex A.6). One generic
 -- table, since "everything about this address" is asked across every kind.
 CREATE TABLE item_address (
@@ -487,6 +502,24 @@ BEGIN
        OR (to_link_id = OLD.link_id
            AND NOT EXISTS (SELECT 1 FROM items i JOIN collections c ON c.id = i.collection
                            WHERE i.link_id = OLD.link_id AND c.kind = item_reference.to_kind));
+END;
+
+-- A file holding no body and bound by no source stands for an attachment
+-- inside a message (§14.3), and goes once no reference names it: a message
+-- gone with its last row takes it, through items_drop_references. A file with
+-- a body, or one a source syncs, is never collected here.
+CREATE TRIGGER item_reference_collects_files AFTER DELETE ON item_reference
+BEGIN
+    DELETE FROM items
+    WHERE object_hash IS NULL
+      AND ((OLD.from_kind = 'application/octet-stream' AND link_id = OLD.from_link_id)
+           OR (OLD.to_kind = 'application/octet-stream' AND link_id = OLD.to_link_id))
+      AND (SELECT kind FROM collections c WHERE c.id = items.collection) = 'application/octet-stream'
+      AND NOT EXISTS (SELECT 1 FROM bindings b
+                      WHERE b.collection = items.collection AND b.link_id = items.link_id)
+      AND NOT EXISTS (SELECT 1 FROM item_reference r
+                      WHERE (r.from_link_id = items.link_id AND r.from_kind = 'application/octet-stream')
+                         OR (r.to_link_id = items.link_id AND r.to_kind = 'application/octet-stream'));
 END;
 
 -- The action queue (§15): mutations requested by processes that do not own the
