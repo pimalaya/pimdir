@@ -543,6 +543,36 @@ expect "search: sender, case folded" \
     "$(run read/search_mail ":collections='[\"INBOX\"]'" ":pattern='%ALICE@%'" ":seen=0" ":attachment=NULL" \
         ":after_key=NULL" ":after_seq=NULL" ":after_collection=NULL" ":limit=10" | cut -d'|' -f2 | tr '\n' ' ')" "2 3 "
 
+# An undated row, and sizes known and not, for the floor and the sums.
+mail INBOX d 4 4 NULL
+sql "UPDATE mail_summary SET size = CASE link_id WHEN 'a' THEN 100 WHEN 'c' THEN 50 END WHERE collection = 'INBOX';"
+inbox=":collections='[\"INBOX\"]'"
+both=":collections='[\"INBOX\",\"Sent\"]'"
+expect "since: NULL is no floor, the undated row counted" \
+    "$(run read/count_mail "$inbox" ":seen=NULL" ":attachment=NULL" ":since=NULL")" "4"
+expect "since: a floor leaves out the rows below it and the undated, and keeps a key equal to it" \
+    "$(run read/count_mail "$inbox" ":seen=NULL" ":attachment=NULL" ":since='2026-10-06T08:00:00Z'")" "2"
+expect "since: per day above the floor, no undated day" \
+    "$(run read/count_mail_by_day "$inbox" ":seen=NULL" ":attachment=NULL" ":shift=NULL" ":since='2026-10-06T00:00:00Z'" | tr '\n' ' ')" \
+    "2026-10-06|2 "
+expect "since: unread above the floor" \
+    "$(run read/count_unread "$both" ":attachment=NULL" ":since='2026-10-06T00:00:00Z'")" "INBOX|1"
+expect "since: the page ends at the floor" \
+    "$(run read/list_mail_page_filtered "$both" ":seen=NULL" ":attachment=NULL" ":since='2026-10-06T00:00:00Z'" \
+        ":after_key=NULL" ":after_seq=NULL" ":after_collection=NULL" ":limit=10" | cut -d'|' -f1,2 | tr '\n' ' ')" \
+    "INBOX|2 Sent|1 INBOX|1 "
+expect "sum: rows, known bytes and unknown sizes above a floor" \
+    "$(run read/sum_mail "$inbox" ":seen=NULL" ":attachment=NULL" ":since='2026-10-06T00:00:00Z'" ":until=NULL")" "2|100|1"
+expect "sum: a range open below holds the undated" \
+    "$(run read/sum_mail "$inbox" ":seen=NULL" ":attachment=NULL" ":since=NULL" ":until='2026-10-06T00:00:00Z'")" "2|50|1"
+expect "sum: the range is half-open" \
+    "$(run read/sum_mail "$inbox" ":seen=NULL" ":attachment=NULL" ":since='2026-10-05T08:00:00Z'" ":until='2026-10-06T08:00:00Z'")" "1|50|0"
+expect "sum: under the chips across collections" \
+    "$(run read/sum_mail "$both" ":seen=0" ":attachment=NULL" ":since=NULL" ":until=NULL")$(run read/sum_mail "$both" ":seen=NULL" ":attachment=1" ":since=NULL" ":until=NULL")" \
+    "3|50|21|50|0"
+expect "sum: nothing in range sums to zero" \
+    "$(run read/sum_mail "$both" ":seen=NULL" ":attachment=NULL" ":since='2027-01-01T00:00:00Z'" ":until=NULL")" "0|0|0"
+
 # plan <profile/name> [:param=literal...]: the statement's query plan, bound.
 plan() {
     local file="$1"; shift
@@ -561,6 +591,15 @@ for statement in list_mail_page_filtered search_mail; do
     expect "page: $statement walks items_by_sort_global over two collections, sorting nothing" \
         "$(grep -c 'USING INDEX items_by_sort_global' <<<"$steps" || true)$(grep -c 'TEMP B-TREE FOR ORDER BY' <<<"$steps" || true)" "10"
 done
+
+expect "since: the page seeks the floor on items_by_sort_global" \
+    "$(plan read/list_mail_page_filtered "$both" ":since='2026-10-06T00:00:00Z'" | grep -c 'items_by_sort_global (sort_key>?)' || true)" "1"
+for statement in count_mail count_mail_by_day count_unread; do
+    expect "since: $statement seeks the floor on items_by_sort" \
+        "$(plan "read/$statement" "$both" ":since='2026-10-06T00:00:00Z'" | grep -c 'items_by_sort (collection=? AND sort_key>?)' || true)" "1"
+done
+expect "sum: both bounds seek items_by_sort, open or not" \
+    "$(plan read/sum_mail "$both" ":since=NULL" ":until=NULL" | grep -c 'items_by_sort (collection=? AND sort_key>? AND sort_key<?)' || true)" "1"
 
 if [ "$failures" -gt 0 ]; then
     echo "$failures invariant(s) broken" >&2
