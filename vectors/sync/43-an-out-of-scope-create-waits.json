@@ -16,8 +16,8 @@
       { "collection": "Archive", "link_id": "attach-1@example.org", "source": "imap", "handle": "\u0001attach-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0, "round": null }
     ],
     "summaries": [
-      { "table": "mail_summary", "collection": "Archive", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0 } },
-      { "table": "mail_summary", "collection": "Archive", "link_id": "attach-1@example.org", "row": { "message_id": "attach-1@example.org", "in_reply_to": [], "subject": "Invoice", "sender": "billing@example.org", "sender_name": "Billing", "date": "2026-10-05T09:00:00Z", "size": 451, "attachment": 1 } }
+      { "table": "mail_summary", "collection": "Archive", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "Archive", "link_id": "attach-1@example.org", "row": { "message_id": "attach-1@example.org", "in_reply_to": [], "subject": "Invoice", "sender": "billing@example.org", "sender_name": "Billing", "date": "2026-10-05T09:00:00Z", "size": 451, "attachment": 1, "invitation": null } }
     ],
     "sources": [{ "collection": "Archive", "source": "imap", "checkpoint": "a0" }]
   },

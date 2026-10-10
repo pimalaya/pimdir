@@ -1,0 +1,26 @@
+Message-ID: <invite-1@example.org>
+Subject: Invitation: Weekly sync
+From: Alice Example <alice@example.org>
+To: bob@example.org
+Date: Fri, 07 Aug 2026 08:00:00 +0000
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="b3"
+
+--b3
+Content-Type: text/plain; charset=utf-8
+
+You are invited to the weekly sync.
+--b3
+Content-Type: text/calendar; charset=utf-8; method=REQUEST
+
+BEGIN:VCALENDAR
+VERSION:2.0
+METHOD:REQUEST
+BEGIN:VEVENT
+UID:event-series@exa
+ mple.org
+SUMMARY:Weekly sync
+DTSTART:20260814T090000Z
+END:VEVENT
+END:VCALENDAR
+--b3--

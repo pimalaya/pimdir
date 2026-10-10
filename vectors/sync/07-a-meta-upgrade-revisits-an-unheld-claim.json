@@ -35,7 +35,7 @@
         { "collection": "INBOX", "link_id": "bare-1@example.org", "source": "imap", "handle": "11", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1 }
       ],
       "summaries": [
-        { "table": "mail_summary", "collection": "INBOX", "link_id": "bare-1@example.org", "row": { "message_id": "bare-1@example.org", "in_reply_to": [], "subject": "", "sender": "alice@example.org", "sender_name": null, "date": "2026-08-01T10:00:00Z", "size": 146, "attachment": 0 } }
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "bare-1@example.org", "row": { "message_id": "bare-1@example.org", "in_reply_to": [], "subject": "", "sender": "alice@example.org", "sender_name": null, "date": "2026-08-01T10:00:00Z", "size": 146, "attachment": 0, "invitation": null } }
       ],
       "addresses": [
         { "collection": "INBOX", "link_id": "bare-1@example.org", "role": "from", "position": 0, "address": "alice@example.org", "name": null },

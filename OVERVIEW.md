@@ -46,7 +46,7 @@ A **summary** is what a reader lists an item from without opening its body: subj
 
 A **binding** is one source's view of one item: the handle the source knows it by and the base, what the source last agreed to. An item with one binding is the single-source case, and adding sources adds bindings and nothing else.
 
-A **reference** links one item to another of any kind: a message to the contact who sent it, an invitation to its event, anything a person links by hand. It names each end by its identity rather than by a collection, so it survives a move and holds while any copy of either end remains, tombstoned or retained included. It is recorded once, by a writer's rule or by a person, and never recomputed; nothing requires one. An attachment is a file standing for a part of its message, holding no bytes of its own until it is saved to a folder, and it goes once no reference names it.
+A **reference** links one item to another of any kind: a message to the contact who sent it, an invitation to its event, anything a person links by hand. It names each end by its identity rather than by a collection, so it survives a move and holds while any copy of either end remains, tombstoned or retained included. It is recorded once, by a person or by an owner's rule (a message to the card of its sender, to the event it invites to, to its attachments), and never recomputed; nothing requires one. An attachment is a file standing for a part of its message, holding no bytes of its own until it is saved to a folder, and it goes once no reference names it.
 
 Nothing enters the store unnamed: a source lists each member with its identity and summary, so a listed message is an item from the moment its page lands, its body fetched later or never.
 

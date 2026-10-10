@@ -47,8 +47,8 @@
         { "collection": "INBOX", "link_id": "dup:alt:Cron alert|2026-08-01T10:00:00Z|cron@example.org#31", "source": "imap", "handle": "31", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 }
       ],
       "summaries": [
-        { "table": "mail_summary", "collection": "INBOX", "link_id": "alt:Cron alert|2026-08-01T10:00:00Z|cron@example.org", "row": { "message_id": null, "in_reply_to": [], "subject": "Cron alert", "sender": "cron@example.org", "sender_name": "Cron Daemon", "date": "2026-08-01T10:00:00Z", "size": 141, "attachment": 0 } },
-        { "table": "mail_summary", "collection": "INBOX", "link_id": "dup:alt:Cron alert|2026-08-01T10:00:00Z|cron@example.org#31", "row": { "message_id": null, "in_reply_to": [], "subject": "Cron alert", "sender": "cron@example.org", "sender_name": "Cron Daemon", "date": "2026-08-01T10:00:00Z", "size": 141, "attachment": 0 } }
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "alt:Cron alert|2026-08-01T10:00:00Z|cron@example.org", "row": { "message_id": null, "in_reply_to": [], "subject": "Cron alert", "sender": "cron@example.org", "sender_name": "Cron Daemon", "date": "2026-08-01T10:00:00Z", "size": 141, "attachment": 0, "invitation": null } },
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "dup:alt:Cron alert|2026-08-01T10:00:00Z|cron@example.org#31", "row": { "message_id": null, "in_reply_to": [], "subject": "Cron alert", "sender": "cron@example.org", "sender_name": "Cron Daemon", "date": "2026-08-01T10:00:00Z", "size": 141, "attachment": 0, "invitation": null } }
       ],
       "addresses": [
         { "collection": "INBOX", "link_id": "alt:Cron alert|2026-08-01T10:00:00Z|cron@example.org", "role": "from", "position": 0, "address": "cron@example.org", "name": "Cron Daemon" },

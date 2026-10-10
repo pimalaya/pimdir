@@ -15,9 +15,9 @@
       { "collection": "INBOX", "link_id": "nodate-1@example.org", "source": "imap", "handle": "11", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 }
     ],
     "summaries": [
-      { "table": "mail_summary", "collection": "INBOX", "link_id": "recent-1@example.org", "row": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 241, "attachment": 0 } },
-      { "table": "mail_summary", "collection": "INBOX", "link_id": "encoded-1@example.org", "row": { "message_id": "encoded-1@example.org", "in_reply_to": [], "subject": "Réunion de rentrée", "sender": "zoe.bruck@example.org", "sender_name": "Zöe Brück", "date": "2026-08-04T09:15:00Z", "size": 348, "attachment": 0 } },
-      { "table": "mail_summary", "collection": "INBOX", "link_id": "nodate-1@example.org", "row": { "message_id": "nodate-1@example.org", "in_reply_to": [], "subject": "When?", "sender": "alice@example.org", "sender_name": "Alice Example", "date": null, "size": 165, "attachment": 0 } }
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "recent-1@example.org", "row": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 241, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "encoded-1@example.org", "row": { "message_id": "encoded-1@example.org", "in_reply_to": [], "subject": "Réunion de rentrée", "sender": "zoe.bruck@example.org", "sender_name": "Zöe Brück", "date": "2026-08-04T09:15:00Z", "size": 348, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "nodate-1@example.org", "row": { "message_id": "nodate-1@example.org", "in_reply_to": [], "subject": "When?", "sender": "alice@example.org", "sender_name": "Alice Example", "date": null, "size": 165, "attachment": 0, "invitation": null } }
     ],
     "sources": [
       { "collection": "INBOX", "source": "imap", "checkpoint": "c1", "round": 1, "round_open": false, "round_since": null, "round_until": null, "round_cursor": null, "round_checkpoint": null, "round_band": false, "covered": true, "covered_since": "2026-09-01T00:00:00Z", "covered_until": null }

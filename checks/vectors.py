@@ -22,7 +22,7 @@ ALGORITHMS = {
 }
 
 TABLES = {
-    "mail_summary": {"message_id", "in_reply_to", "subject", "sender", "sender_name", "date", "size", "attachment"},
+    "mail_summary": {"message_id", "in_reply_to", "subject", "sender", "sender_name", "date", "size", "attachment", "invitation"},
     "contact_summary": {"uid", "fn", "kind", "org"},
     "event_summary": {"uid", "summary", "location", "dtstart", "dtstart_tzid", "dtstart_value", "dtend", "recurring", "until"},
     "task_summary": {"uid", "summary", "dtstart", "dtstart_tzid", "dtstart_value", "due", "due_tzid", "due_value", "status", "completed", "percent", "recurring", "until"},
@@ -144,6 +144,17 @@ for case in summaries["cases"]:
         # Content-Type is multipart/mixed, else 0, read by the stdlib parser.
         mixed = message_from_bytes(bytes_).get_content_type() == "multipart/mixed"
         check(f"{case['label']} meta_attachment", case.get("meta_attachment"), int(mixed))
+        # The invitation: the UID of the first component of the first
+        # text/calendar part, unfolded, read by the stdlib parser.
+        invitation = None
+        for part in message_from_bytes(bytes_).walk():
+            if part.get_content_type() == "text/calendar":
+                text = part.get_payload(decode=True).decode().replace("\r\n ", "").replace("\r\n\t", "")
+                uids = [line.split(":", 1)[1] for line in text.split("\r\n")
+                        if ":" in line and line.split(":", 1)[0].split(";")[0].upper() == "UID"]
+                invitation = uids[0] if uids else None
+                break
+        check(f"{case['label']} invitation", case["summary"]["invitation"], invitation)
 
     for address in case["addresses"]:
         require(f"{case['label']} role {address['role']}", address["role"] in ROLES)
@@ -261,6 +272,15 @@ for item in store["items"]:
     require(f"search store: {item['link_id']} in a known collection", item["collection"] in accounts)
     if "fixture" in item:
         require(f"search store: {item['fixture']} exists", (root / item["fixture"]).is_file())
+
+# A reference names two endpoints the store holds (STORAGE section 14.2), each
+# a kind and a link id with an item under that kind.
+kinds = {c["id"]: c["kind"] for c in store["collections"]}
+endpoints = {(kinds[item["collection"]], item["link_id"]) for item in store["items"]}
+for reference in store.get("references", []):
+    for end in ("from", "to"):
+        endpoint = (reference[f"{end}_kind"], reference[f"{end}_link_id"])
+        require(f"search store: reference {end} {endpoint} is held", endpoint in endpoints)
 
 for case in queries["cases"]:
     for hit in case["hits"]:

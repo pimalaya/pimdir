@@ -11,7 +11,7 @@
       { "collection": "INBOX", "link_id": "footer-1@example.org", "source": "imap", "handle": "20", "base_flags": ["\\Seen"], "base_object": null, "base_revision": null, "base_present": 1, "round": null }
     ],
     "summaries": [
-      { "table": "mail_summary", "collection": "INBOX", "link_id": "footer-1@example.org", "row": { "message_id": "footer-1@example.org", "in_reply_to": [], "subject": "[list] Release notes", "sender": "robot@lists.example.org", "sender_name": "List Robot", "date": "2026-10-05T07:00:00Z", "size": 425, "attachment": 0 } }
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "footer-1@example.org", "row": { "message_id": "footer-1@example.org", "in_reply_to": [], "subject": "[list] Release notes", "sender": "robot@lists.example.org", "sender_name": "List Robot", "date": "2026-10-05T07:00:00Z", "size": 425, "attachment": 0, "invitation": null } }
     ],
     "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c0" }]
   },
@@ -48,7 +48,7 @@
         { "collection": "INBOX", "link_id": "footer-1@example.org", "source": "imap", "handle": "20", "base_flags": ["\\Seen"], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 }
       ],
       "summaries": [
-        { "table": "mail_summary", "collection": "INBOX", "link_id": "footer-1@example.org", "row": { "message_id": "footer-1@example.org", "in_reply_to": [], "subject": "[list] Release notes", "sender": "robot@lists.example.org", "sender_name": "List Robot", "date": "2026-10-05T07:00:00Z", "size": 440, "attachment": 1 } }
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "footer-1@example.org", "row": { "message_id": "footer-1@example.org", "in_reply_to": [], "subject": "[list] Release notes", "sender": "robot@lists.example.org", "sender_name": "List Robot", "date": "2026-10-05T07:00:00Z", "size": 440, "attachment": 1, "invitation": null } }
       ],
       "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
     }

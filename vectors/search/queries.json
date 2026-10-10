@@ -2,12 +2,12 @@
   "v": 1,
   "now": "2026-08-20T12:00:00Z",
   "horizon": { "start": "2025-08-20T12:00:00Z", "end": "2028-08-20T12:00:00Z" },
-  "coverage": { "message/rfc822": 1 },
-  "note": "hits are (account, seq) pairs compared as a set unless the case says ordered (SEARCH.md §8.2); coverage is the bodiless live items in scope, here item 8 whenever mail is in scope",
+  "coverage": { "message/rfc822": 1, "application/octet-stream": 1 },
+  "note": "hits are (account, seq) pairs compared as a set unless the case says ordered (SEARCH.md §8.2); coverage is the bodiless live items in scope, here item 8 whenever mail is in scope and item 10 whenever files are",
   "cases": [
     { "query": "stand-up", "hits": [["home", 1], ["work", 1]], "note": "free text over title; one message in two accounts is two hits" },
     { "query": "reunion", "hits": [["home", 2]], "note": "remove_diacritics 2: the accented subject matches the bare word" },
-    { "query": "from:alice@example.org", "hits": [["home", 1], ["work", 1], ["home", 3]], "note": "an address seek on the from role" },
+    { "query": "from:alice@example.org", "hits": [["home", 1], ["work", 1], ["home", 3], ["home", 9]], "note": "an address seek on the from role" },
     { "query": "with:jane.doe@example.com", "hits": [["home", 5]], "note": "the card's EMAIL, lowercased whole on the way in" },
     { "query": "with:@example.net", "hits": [["home", 2], ["home", 8]], "note": "a domain token: a cc on a full body and a sender on a bodiless summary" },
     { "query": "is:unread kind:mail", "hits": [["home", 2], ["home", 8]], "note": "the absence of \\Seen, kind narrowing to mail" },
@@ -18,6 +18,13 @@
     { "query": "\"stand-up notes\" not tag:\\Seen", "hits": [], "note": "both placements carry the flag, so the union rule excludes the hit in both accounts" },
     { "query": "thread:multi-1@example.org", "hits": [["home", 3]], "note": "a thread whose parents the store never held is named by its only member" },
     { "query": "33612345678", "hits": [["home", 5]], "note": "a telephone number matches by its digits alone" },
-    { "query": "budget", "hits": [["home", 8]], "note": "a bodiless item matches on its summary, and the hit says so" }
+    { "query": "budget", "hits": [["home", 8]], "note": "a bodiless item matches on its summary, and the hit says so" },
+    { "query": "linked:6", "hits": [["home", 9]], "note": "the other end of the event's references, given by seq: its invitation (SEARCH.md §8, STORAGE §14.2)" },
+    { "query": "linked:invitation:event-series@example.org", "hits": [["home", 9]], "note": "given by link id, narrowed to a role" },
+    { "query": "linked:4", "hits": [["home", 1], ["work", 1]], "note": "a reference names an identity, so its other end is every placement of it, in both accounts" },
+    { "query": "linked:sender:4", "hits": [], "note": "the role narrows: the reference to card 4 is related, not sender" },
+    { "query": "linked:attachment:8 kind:file", "hits": [["home", 10]], "note": "a message's attachments, its stand-in in the file kind" },
+    { "query": "linked:10", "hits": [["home", 8]], "note": "either direction: the file's message" },
+    { "query": "kind:file forecast", "hits": [["home", 10]], "note": "a bodiless file matches on its name" }
   ]
 }

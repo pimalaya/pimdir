@@ -11,7 +11,7 @@
       "body": { "len": 299, "blake3": "vmrssbttugq3lthad7jpxm73flnmmuqq3vvdsxj2ghqy6bfwdbra", "sha256-128": "dh4uthikps6rrobtyfukbuo6sy" },
       "link_id": "basic-1@example.org",
       "table": "mail_summary",
-      "summary": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0 },
+      "summary": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null },
       "addresses": [
         { "role": "from", "position": 0, "address": "alice@example.org", "name": "Alice Example" },
         { "role": "to", "position": 0, "address": "bob@example.org", "name": null },
@@ -30,7 +30,7 @@
       "handle": "1174",
       "link_id": "dup:basic-1@example.org#1174",
       "table": "mail_summary",
-      "summary": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0 },
+      "summary": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null },
       "addresses": [
         { "role": "from", "position": 0, "address": "alice@example.org", "name": "Alice Example" },
         { "role": "to", "position": 0, "address": "bob@example.org", "name": null },
@@ -47,7 +47,7 @@
       "body": { "len": 141, "blake3": "otwuvxi7drokzlnfaijscwap7n6m4glv7iqtuu6w5vqhv6uy7pia", "sha256-128": "kfaememlt26pd2lg4yhnbukwbq" },
       "link_id": "alt:Cron alert|2026-08-01T10:00:00Z|cron@example.org",
       "table": "mail_summary",
-      "summary": { "message_id": null, "in_reply_to": [], "subject": "Cron alert", "sender": "cron@example.org", "sender_name": "Cron Daemon", "date": "2026-08-01T10:00:00Z", "size": 141, "attachment": 0 },
+      "summary": { "message_id": null, "in_reply_to": [], "subject": "Cron alert", "sender": "cron@example.org", "sender_name": "Cron Daemon", "date": "2026-08-01T10:00:00Z", "size": 141, "attachment": 0, "invitation": null },
       "addresses": [
         { "role": "from", "position": 0, "address": "cron@example.org", "name": "Cron Daemon" },
         { "role": "to", "position": 0, "address": "ops@example.org", "name": null }
@@ -63,7 +63,7 @@
       "body": { "len": 348, "blake3": "bjkoehoowohmcp62f3lzzvicdmaavmhoey2jvlaxxhr5z4576zla", "sha256-128": "h6ijrtjfprfscqgxcqov2brhre" },
       "link_id": "encoded-1@example.org",
       "table": "mail_summary",
-      "summary": { "message_id": "encoded-1@example.org", "in_reply_to": [], "subject": "Réunion de rentrée", "sender": "zoe.bruck@example.org", "sender_name": "Zöe Brück", "date": "2026-08-04T09:15:00Z", "size": 348, "attachment": 0 },
+      "summary": { "message_id": "encoded-1@example.org", "in_reply_to": [], "subject": "Réunion de rentrée", "sender": "zoe.bruck@example.org", "sender_name": "Zöe Brück", "date": "2026-08-04T09:15:00Z", "size": 348, "attachment": 0, "invitation": null },
       "addresses": [
         { "role": "from", "position": 0, "address": "zoe.bruck@example.org", "name": "Zöe Brück" },
         { "role": "to", "position": 0, "address": "bob@example.org", "name": "Bob, Jr." },
@@ -81,7 +81,7 @@
       "body": { "len": 165, "blake3": "c6y4qvc2bvpf3bntujlfu6wijelnkjaeprt6afqstbdms7fi2gga", "sha256-128": "rviotkynhqei4k6i7yiofpohsm" },
       "link_id": "nodate-1@example.org",
       "table": "mail_summary",
-      "summary": { "message_id": "nodate-1@example.org", "in_reply_to": [], "subject": "When?", "sender": "alice@example.org", "sender_name": "Alice Example", "date": null, "size": 165, "attachment": 0 },
+      "summary": { "message_id": "nodate-1@example.org", "in_reply_to": [], "subject": "When?", "sender": "alice@example.org", "sender_name": "Alice Example", "date": null, "size": 165, "attachment": 0, "invitation": null },
       "addresses": [
         { "role": "from", "position": 0, "address": "alice@example.org", "name": "Alice Example" },
         { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
@@ -97,7 +97,7 @@
       "body": { "len": 146, "blake3": "sof74dppzba7w5pyaob6zzc3bk7witzwpduhrn6qo4xknqquzfpq", "sha256-128": "7iivjcylgtutffe2bskjktv2du" },
       "link_id": "bare-1@example.org",
       "table": "mail_summary",
-      "summary": { "message_id": "bare-1@example.org", "in_reply_to": [], "subject": "", "sender": "alice@example.org", "sender_name": null, "date": "2026-08-01T10:00:00Z", "size": 146, "attachment": 0 },
+      "summary": { "message_id": "bare-1@example.org", "in_reply_to": [], "subject": "", "sender": "alice@example.org", "sender_name": null, "date": "2026-08-01T10:00:00Z", "size": 146, "attachment": 0, "invitation": null },
       "addresses": [
         { "role": "from", "position": 0, "address": "alice@example.org", "name": null },
         { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
@@ -113,7 +113,7 @@
       "body": { "len": 240, "blake3": "6p5wwi7wm3bwgd6wvkfexm66mqyxxxvylw44wubrjtceiys3vmnq", "sha256-128": "u52kp67wyed4p7xiv4ayp46vpm" },
       "link_id": "multi-1@example.org",
       "table": "mail_summary",
-      "summary": { "message_id": "multi-1@example.org", "in_reply_to": ["one@example.org", "two@example.org"], "subject": "Re: two parents", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 240, "attachment": 0 },
+      "summary": { "message_id": "multi-1@example.org", "in_reply_to": ["one@example.org", "two@example.org"], "subject": "Re: two parents", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 240, "attachment": 0, "invitation": null },
       "addresses": [
         { "role": "from", "position": 0, "address": "alice@example.org", "name": "Alice Example" },
         { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
@@ -129,7 +129,7 @@
       "body": { "len": 241, "blake3": "zeh6d25msxa54lmheiax4ns3ajqsybejzd4afgfb7sbts4mgumma", "sha256-128": "ens3ivvm4yocui77pd7c4mkkli" },
       "link_id": "recent-1@example.org",
       "table": "mail_summary",
-      "summary": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 241, "attachment": 0 },
+      "summary": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 241, "attachment": 0, "invitation": null },
       "addresses": [
         { "role": "from", "position": 0, "address": "alice@example.org", "name": "Alice Example" },
         { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
@@ -145,7 +145,7 @@
       "body": { "len": 194, "blake3": "wxty4on2jpu2ballqpzivfmn4yvkbcifxjt2mkflli4v2ukojw4a", "sha256-128": "gj6on4mawmlot7mlgc2ygby5na" },
       "link_id": "future-1@example.org",
       "table": "mail_summary",
-      "summary": { "message_id": "future-1@example.org", "in_reply_to": [], "subject": "Clock skew", "sender": "mallory@example.org", "sender_name": "Mallory Example", "date": "2035-01-01T00:00:00Z", "size": 194, "attachment": 0 },
+      "summary": { "message_id": "future-1@example.org", "in_reply_to": [], "subject": "Clock skew", "sender": "mallory@example.org", "sender_name": "Mallory Example", "date": "2035-01-01T00:00:00Z", "size": 194, "attachment": 0, "invitation": null },
       "addresses": [
         { "role": "from", "position": 0, "address": "mallory@example.org", "name": "Mallory Example" },
         { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
@@ -161,7 +161,7 @@
       "body": { "len": 425, "blake3": "ist5uhynbyinwp6khnmgswp7iwu4f5j2ake7tfrlpgexchvo4h6q", "sha256-128": "4cplpiezupmuhvuyacwlits4l4" },
       "link_id": "footer-1@example.org",
       "table": "mail_summary",
-      "summary": { "message_id": "footer-1@example.org", "in_reply_to": [], "subject": "[list] Release notes", "sender": "robot@lists.example.org", "sender_name": "List Robot", "date": "2026-10-05T07:00:00Z", "size": 425, "attachment": 0 },
+      "summary": { "message_id": "footer-1@example.org", "in_reply_to": [], "subject": "[list] Release notes", "sender": "robot@lists.example.org", "sender_name": "List Robot", "date": "2026-10-05T07:00:00Z", "size": 425, "attachment": 0, "invitation": null },
       "addresses": [
         { "role": "from", "position": 0, "address": "robot@lists.example.org", "name": "List Robot" },
         { "role": "to", "position": 0, "address": "list@lists.example.org", "name": null }
@@ -177,13 +177,29 @@
       "body": { "len": 451, "blake3": "okt44y7tza2h5npmu7sfm6pcnmjx3caaw7bn5q6kn3bs22bn5waa", "sha256-128": "kx52plp3ukh2nkoc2dp6gaojhu" },
       "link_id": "attach-1@example.org",
       "table": "mail_summary",
-      "summary": { "message_id": "attach-1@example.org", "in_reply_to": [], "subject": "Invoice", "sender": "billing@example.org", "sender_name": "Billing", "date": "2026-10-05T09:00:00Z", "size": 451, "attachment": 1 },
+      "summary": { "message_id": "attach-1@example.org", "in_reply_to": [], "subject": "Invoice", "sender": "billing@example.org", "sender_name": "Billing", "date": "2026-10-05T09:00:00Z", "size": 451, "attachment": 1, "invitation": null },
       "addresses": [
         { "role": "from", "position": 0, "address": "billing@example.org", "name": "Billing" },
         { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
       ],
       "sort_key": "2026-10-05T09:00:00Z",
       "meta_attachment": 1
+    },
+    {
+      "label": "mail, an invitation",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-invitation.eml",
+      "note": "an iMIP request (RFC 6047): the UID of the VEVENT in the text/calendar part, its folded line unfolded, is the invitation; a multipart/alternative with no Content-Disposition: attachment gives 0 both ways (Annex A.1)",
+      "body": { "len": 573, "blake3": "hpkzpfq2ankd5sryeiutnd64ubefp72sjydjbxxrhzugr55ijk2q", "sha256-128": "ysoatdzcatm4slege335gwahqq" },
+      "link_id": "invite-1@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": "invite-1@example.org", "in_reply_to": [], "subject": "Invitation: Weekly sync", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-07T08:00:00Z", "size": 573, "attachment": 0, "invitation": "event-series@example.org" },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "alice@example.org", "name": "Alice Example" },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sort_key": "2026-08-07T08:00:00Z",
+      "meta_attachment": 0
     },
     {
       "label": "card, every field present",

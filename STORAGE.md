@@ -423,6 +423,13 @@ A **reference** says that one item bears on another: a message and the file it a
 - **A reference goes with the last row of either endpoint.** `items_drop_references` deletes it when a delete leaves no row of `items`, live, tombstoned or retained, under that link id in a collection of that kind: a purge, a collection below a date or a collection's delete of the last copy. A move, a tombstone, a retention and the loss of one copy among several keep it, so a restore finds it. Every reference's two endpoints are therefore held. Whether an endpoint is live is the reader's to ask (`list_link_placements`).
 - A reference stamps nothing in the feed (§4.5) and is local to the store: no source learns of it, and another store records its own.
 
+**Automatic references.** An owner MAY record references by rule; one that applies a rule below MUST record what its statement records, so two owners over one store record the same references. A rule's reference runs from the item whose content states it to the item it names, origin `auto`, both ends live when recorded, and never alters one already recorded, a person's included. Each rule has a statement per end, run after the write that changed what it reads, in that transaction or the next; a `NULL` link id runs it over every item of that end, which backfills a store.
+
+- **`sender`**: a mail to every contact holding one of its `from` addresses as an `email` (Annex A.6). `link_senders_of(link_id)` after a mail's addresses are written; `link_mail_from(link_id)` after a contact's, so a contact added, or given an address, has its history. An address removed removes nothing; two contacts holding one address both receive it.
+- **`invitation`**: a mail to the calendar item its `invitation` names by link id (Annex A.1). `link_invitations_of(link_id)` after a mail's body is read; `link_invitations_to(link_id)` after a calendar item's write, so an event synced after its invitation is tied to it.
+- **`attachment`**: a mail to the stand-ins of its parts, recorded with them (§14.3).
+
+An item deleted for good takes its references with it, by the trigger above.
 
 ### 14.3 Files
 
@@ -517,7 +524,7 @@ An implementation that vendors vectors/ MUST record their digests and re-check t
 
 What a writer derives from an item before its row reaches the store: the identity hint §9 keys on, the row of the kind's summary table, the `item_address` rows and the `sort_key` (§9.3). The store parses no body; the tables fix the shape and vectors/summaries.json the values.
 
-A derivation is made from the body, or from a server-side summary (an IMAP `ENVELOPE`, a Graph `$select`, Gmail's metadata, a JMAP `Email/get`) where the kind has a cheap tier. Where a kind has both, the two MUST agree byte for byte, the attachment mark and the size aside (A.1).
+A derivation is made from the body, or from a server-side summary (an IMAP `ENVELOPE`, a Graph `$select`, Gmail's metadata, a JMAP `Email/get`) where the kind has a cheap tier. Where a kind has both, the two MUST agree byte for byte, the attachment mark, the size and the invitation aside (A.1).
 
 ### A.0 Common rules
 
@@ -539,8 +546,9 @@ A derivation is made from the body, or from a server-side summary (an IMAP `ENVE
 | `date` | `Date` as an instant; `NULL` when unparseable. From a server-side summary, the `Date` field the server states (IMAP `ENVELOPE`, Graph's `sentDateTime`, JMAP's `sentAt`), never a received date |
 | `size` | with the body, its octets; without it, the size the source states (IMAP's `RFC822.SIZE`, Graph's `PidTagMessageSize`, Gmail's `sizeEstimate`, JMAP's `size`), which may be an estimate, `NULL` when it states none |
 | `attachment` | with the body, `1` when a part carries `Content-Disposition: attachment`, `0` when none does; without it, the source's own flag where it states one (Graph's `hasAttachments`, JMAP's `hasAttachment`), else `1` when the top-level `Content-Type` is `multipart/mixed` and `0` otherwise |
+| `invitation` | with the body, the first `UID` of the first `text/calendar` part in document order (an iMIP message, RFC 6047), its transfer encoding undone and its lines unfolded, the value verbatim; `NULL` when no part is one, and without the body |
 
-The size and the mark read without the body are replaced by the body's own once it is read, and a writer holding the body MUST NOT write either read without it over it; a row whose body was released (§11.4) holds it no more, and the next meta restates both. The mark misses both ways, each corrected when the body is read: a `multipart/mixed` with no attachment (a list footer, inline images) reads as one, an attachment under `multipart/signed` or `multipart/encrypted` as none. It saves an IMAP listing the `BODYSTRUCTURE`. A row an earlier draft wrote at the `Meta` tier holds `NULL`, examined by nobody.
+The size and the mark read without the body are replaced by the body's own once it is read, and a writer holding the body MUST NOT write either read without it over it; a row whose body was released (§11.4) holds it no more, and the next meta restates both. The invitation, a fact of an immutable message, is never cleared once read: `upsert_mail_summary` keeps a known one over `NULL`, released body or not. The mark misses both ways, each corrected when the body is read: a `multipart/mixed` with no attachment (a list footer, inline images) reads as one, an attachment under `multipart/signed` or `multipart/encrypted` as none. It saves an IMAP listing the `BODYSTRUCTURE`. A row an earlier draft wrote at the `Meta` tier holds `NULL`, examined by nobody.
 
 **Hint**: `message_id`, else `alt:` followed by the decoded subject, the `date` column and the `sender` column joined by `|`, each empty when absent (`alt:Stand-up notes|2026-08-01T10:00:00Z|alice@example.org`). **Addresses**: every `From`, `To`, `Cc`, `Bcc` under its role, in document order. `References` is the search part's (SEARCH.md §9). **`sort_key`**: the `date` column, or `''`; read descending.
 

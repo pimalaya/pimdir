@@ -365,9 +365,14 @@ CREATE TABLE mail_summary (
     date         TEXT,                     -- RFC 3339 UTC Z at seconds precision, or NULL
     size         INTEGER,                  -- raw message octets, or NULL
     attachment   INTEGER,                  -- 1 has one, 0 has none, NULL not examined
+    invitation   TEXT,                     -- the UID its first text/calendar part carries, NULL none or not examined
     PRIMARY KEY (collection, link_id),
     FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
 ) STRICT;
+
+-- The mail inviting to a calendar item, for link_invitations_to (§14.2).
+-- Partial: most mail invites to nothing.
+CREATE INDEX mail_summary_by_invitation ON mail_summary(invitation) WHERE invitation IS NOT NULL;
 
 -- text/vcard (Annex A.2). Every EMAIL is an item_address row.
 CREATE TABLE contact_summary (

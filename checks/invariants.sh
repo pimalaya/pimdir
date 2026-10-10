@@ -49,6 +49,18 @@ expect() {
     fi
 }
 
+
+# plan <profile/name> [:param=literal...]: the statement's query plan, bound.
+plan() {
+    local file="$1"; shift
+    {
+        for binding in "$@"; do
+            echo ".parameter set ${binding%%=*} ${binding#*=}"
+        done
+        echo "EXPLAIN QUERY PLAN"
+        cat "$root/queries/storage/$file.sql"
+    } | sqlite3 "$dir/pimdir.db"
+}
 collection() {
     run owner/set_collection_kind ":collection='$1'" ":account=${2:-NULL}" ":kind='message/rfc822'"
 }
@@ -634,6 +646,65 @@ run owner/delete_collection ":collection='Cards'"
 expect "reference: a collection's delete takes the references of the endpoints it held last" \
     "$(sql "SELECT count(*) FROM item_reference;")" "0"
 
+# --- Automatic references run from the mail to what it names (§14.2) --------
+
+fresh
+collection INBOX
+run owner/set_collection_kind ":collection='Cards'" ":account=NULL" ":kind='$card_kind'"
+run owner/set_collection_kind ":collection='Cal'" ":account=NULL" ":kind='$cal_kind'"
+mail INBOX m1 1 10 "'2026-10-06T08:00:00Z'"
+mail INBOX m2 2 11 "'2026-10-06T09:00:00Z'"
+mail INBOX m3 3 12 "'2026-10-06T10:00:00Z'"
+mail INBOX m4 4 13 "'2026-10-06T11:00:00Z'"
+mail INBOX m5 5 14 "'2026-10-06T12:00:00Z'"
+item Cards c1 6
+item Cards c2 7
+item Cal ev1 8
+sql "INSERT INTO item_address(collection, link_id, role, position, address) VALUES
+         ('INBOX', 'm1', 'from', 0, 'alice@example.org'), ('INBOX', 'm2', 'from', 0, 'bob@example.org'),
+         ('INBOX', 'm3', 'from', 0, 'alice@example.org'), ('INBOX', 'm1', 'to', 0, 'carol@example.org'),
+         ('Cards', 'c1', 'email', 0, 'alice@example.org'), ('Cards', 'c2', 'email', 0, 'carol@example.org');
+     UPDATE items SET deleted = 1 WHERE link_id = 'm3';
+     UPDATE mail_summary SET invitation = 'ev1' WHERE link_id = 'm4';
+     UPDATE mail_summary SET invitation = 'ev2' WHERE link_id = 'm5';"
+refs() {
+    sql "SELECT from_link_id || '>' || to_link_id || ':' || role || ':' || origin FROM item_reference ORDER BY 1;" | tr '\n' ' '
+}
+run owner/link_senders_of ":link_id='m1'"
+expect "auto: a mail refers to the contact its from address names, never through another role" \
+    "$(refs)" "m1>c1:sender:auto "
+run owner/link_mail_from ":link_id='c1'"
+expect "auto: a contact's backfill takes live mail only" "$(refs)" "m1>c1:sender:auto "
+run owner/add_reference ":from_kind='$mail_kind'" ":from_link_id='m2'" ":to_kind='$card_kind'" ":to_link_id='c2'" ":role='sender'" ":origin='user'" >/dev/null
+sql "INSERT INTO item_address(collection, link_id, role, position, address) VALUES('Cards', 'c2', 'email', 1, 'bob@example.org');"
+run owner/link_mail_from ":link_id='c2'"
+expect "auto: an address added brings its history, a person's reference kept as it is" \
+    "$(refs)" "m1>c1:sender:auto m2>c2:sender:user "
+sql "DELETE FROM item_address WHERE link_id = 'c1';"
+run owner/link_mail_from ":link_id='c1'"
+expect "auto: an address removed removes nothing" "$(refs)" "m1>c1:sender:auto m2>c2:sender:user "
+sql "DELETE FROM item_reference;"
+run owner/link_senders_of ":link_id=NULL"
+expect "auto: a NULL link id backfills every mail" "$(refs)" "m2>c2:sender:auto "
+run owner/link_invitations_of ":link_id='m4'"
+run owner/link_invitations_of ":link_id='m5'"
+expect "auto: an invitation refers to the calendar item it names, none for one not held yet" \
+    "$(refs)" "m2>c2:sender:auto m4>ev1:invitation:auto "
+item Cal ev2 9
+run owner/link_invitations_to ":link_id='ev2'"
+expect "auto: a calendar item synced after its invitation is tied to it" \
+    "$(refs)" "m2>c2:sender:auto m4>ev1:invitation:auto m5>ev2:invitation:auto "
+run owner/upsert_mail_summary ":collection='INBOX'" ":link_id='m4'" ":message_id='m4'" ":in_reply_to='[]'" \
+    ":subject='s m4'" ":sender='alice@example.org'" ":sender_name='Alice'" ":date=NULL" ":size=1" ":attachment=0" ":invitation=NULL"
+expect "auto: a write without the body keeps a known invitation" \
+    "$(sql "SELECT invitation FROM mail_summary WHERE link_id = 'm4';")" "ev1"
+for statement in link_senders_of link_mail_from link_invitations_of; do
+    expect "auto: $statement seeks one link id" \
+        "$(plan "owner/$statement" ":link_id='m1'" | grep -c 'items_by_link (link_id>? AND link_id<?)' || true)" "1"
+done
+expect "auto: link_invitations_to seeks the invitation" \
+    "$(plan owner/link_invitations_to ":link_id='ev1'" | grep -c 'mail_summary_by_invitation' || true)" "1"
+
 # --- A file stands for an attachment until no reference names it (§14.3) ----
 
 fresh
@@ -758,18 +829,6 @@ expect "sum: under the chips across collections" \
     "3|50|21|50|0"
 expect "sum: nothing in range sums to zero" \
     "$(run read/sum_mail "$both" ":seen=NULL" ":attachment=NULL" ":since='2027-01-01T00:00:00Z'" ":until=NULL")" "0|0|0"
-
-# plan <profile/name> [:param=literal...]: the statement's query plan, bound.
-plan() {
-    local file="$1"; shift
-    {
-        for binding in "$@"; do
-            echo ".parameter set ${binding%%=*} ${binding#*=}"
-        done
-        echo "EXPLAIN QUERY PLAN"
-        cat "$root/queries/storage/$file.sql"
-    } | sqlite3 "$dir/pimdir.db"
-}
 
 for statement in list_mail_page_filtered search_mail; do
     steps="$(plan "read/$statement" ":collections='[\"INBOX\",\"Sent\"]'" ":pattern='%a%'" ":seen=NULL" \

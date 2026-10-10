@@ -13,7 +13,7 @@
       { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "imap", "handle": "11", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 }
     ],
     "summaries": [
-      { "table": "mail_summary", "collection": "INBOX", "link_id": "recent-1@example.org", "row": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 260, "attachment": 0 } }
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "recent-1@example.org", "row": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 260, "attachment": 0, "invitation": null } }
     ],
     "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
   },
@@ -42,7 +42,7 @@
         { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "imap", "handle": "11", "base_flags": [], "base_object": "r1", "base_revision": null, "base_present": 1, "round": 1 }
       ],
       "summaries": [
-        { "table": "mail_summary", "collection": "INBOX", "link_id": "recent-1@example.org", "row": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 241, "attachment": 0 } }
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "recent-1@example.org", "row": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 241, "attachment": 0, "invitation": null } }
       ],
       "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
     }

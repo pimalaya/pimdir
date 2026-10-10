@@ -45,7 +45,7 @@ The **indexer** is a store reader (STORAGE §8): read-only on pimdir.db, no stor
 
 The main database is index.db, pimdir.db attached as `store` through a read-only URI, so one statement joins both (`hit`, `coverage`).
 
-Tagging is a store write through the queue (§10). Nothing writes the store through the index.
+Tagging is a store write through the queue (§10). Nothing writes the store through the index. References (STORAGE §14.2) are read from the store by `linked`, never copied into the index.
 
 The index holds one `object` row and one `object_text` FTS row per indexed body, keyed on the store's hash, so a body filed in three collections is tokenised once; one `placement` row per live item seen; a `summary_text` row per placement with no body; the derived `flag`, `occurrence`, `thread` and `message` tables; and `index_meta`, the store cursor folded in (§4) and the horizon (§7).
 
@@ -79,7 +79,7 @@ Mail extraction MUST walk the MIME tree, decode transfer encodings, transcode ch
 
 A `multipart/encrypted` or `application/pkcs7-mime` body is recorded `encrypted`, headers indexed and body not; indexing decrypted content is an opt-in that writes plaintext into index.db and MUST be documented as such. A body no parser accepts is `unparseable`, with what could be read.
 
-A placement with no body indexes its summary row and address rows into `summary_text`: `title` from the subject, `fn` or `summary`, `people` and the role fields from the addresses. That keeps a headers-only replica searchable, and it is dropped once the body is indexed. Every value is decoded on Annex A.0's terms.
+A placement with no body indexes its summary row and address rows into `summary_text`: `title` from the subject, `fn`, `summary` or a file's `name`, `people` and the role fields from the addresses. That keeps a headers-only replica searchable, and it is dropped once the body is indexed. A file (STORAGE §14.3) is indexed from its summary alone, its body or not: its content is out of scope, as attachment content is. Every value is decoded on Annex A.0's terms.
 
 ## 7. Calendar time
 
@@ -102,10 +102,11 @@ A query is whitespace-separated terms, implicitly conjoined, with `or`, `not`, p
 | `person:` | contacts whose `title` matches, expanded to `with:` over their `email` rows |
 | `tag:` `is:` `flag:` | a store flag (§10); `is:unread` is the absence of `\Seen`, `is:encrypted` the extraction status |
 | `has:body` `has:attachment` | a stored body; `mail_summary.attachment` = 1 or a non-empty `attachment` field |
-| `kind:` | `mail`, `contact`, `event`, `task`, `journal` |
+| `kind:` | `mail`, `contact`, `event`, `task`, `journal`, `file` |
 | `account:` `collection:` `folder:` | the store's axes, `folder:` an alias |
 | `date:` `when:` | an instant or a range (§8.1) |
 | `thread:` `id:` | a thread id (§9); a link id or a `seq` |
+| `linked:` | the items at the other end of the named item's references, either direction (`linked`): `linked:<id>`, or `linked:<role>:<id>` for one role of STORAGE §14.2, the item named as `id:` names it, with every kind it is held under |
 | `attachment:` `mimetype:` | the `attachment` field |
 | `location:` | the `place` field |
 | `changed:` | a range over `items.changed` |
@@ -137,6 +138,6 @@ A tag is an `items.flags` entry, so it syncs with the sources that carry keyword
 
 vectors/search/ holds the fixture store and the queries every conforming implementation MUST answer alike:
 
-`store.json`, collections (`id`, `account`, `kind`) and items (`collection`, `seq`, `link_id`, `flags`, and a `fixture` or a `summary` for a bodiless item); `queries.json`, cases with a `query`, an optional `sort`, the `now` relative dates resolve against, the expected hits as `(account, seq)` pairs (ordered when the sort says so, a set otherwise) and the expected coverage.
+`store.json`, collections (`id`, `account`, `kind`), items (`collection`, `seq`, `link_id`, `flags`, and a `fixture` or a `summary` for a bodiless item) and the references the store records (`from_kind`, `from_link_id`, `to_kind`, `to_link_id`, `role`, `origin`), given rather than derived; `queries.json`, cases with a `query`, an optional `sort`, the `now` relative dates resolve against, the expected hits as `(account, seq)` pairs (ordered when the sort says so, a set otherwise) and the expected coverage.
 
 An implementation builds the store, indexes it at `now`, and compares. checks/vectors.py validates that every fixture and placement resolves; only an implementation runs a case. Tokenisation is pinned by cases whose hits depend on diacritics, a domain token or a digits-only telephone number.
