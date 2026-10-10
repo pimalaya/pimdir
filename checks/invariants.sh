@@ -903,6 +903,66 @@ expect "search: calendar items by summary or an event's location, live only, nam
 expect "search: files by name" \
     "$(run read/search_files ":collections='[\"Docs\"]'" ":pattern='%PLAN%'" ":after_key=NULL" ":after_seq=NULL" ":after_collection=NULL" ":limit=10" | cut -d'|' -f3,8)" "plan|plan.pdf"
 
+# --- A store is reconciled against the canonical schema's own text (§6) -----
+
+fresh
+rm -f "$dir/scratch.db"
+for migration in "$root"/migrations/storage/*.sql; do
+    sqlite3 "$dir/scratch.db" < "$migration"
+done
+# shape <db>: every table, index and trigger with its text, comments dropped
+# and whitespace collapsed, one per line.
+shape() {
+    sqlite3 -separator ' ' "$1" "SELECT type, name, replace(sql, char(10), ' #NL# ')
+                  FROM sqlite_schema WHERE sql IS NOT NULL ORDER BY type, name;" |
+        awk '{ t = $1; nm = $2; $1 = ""; $2 = ""; n = split($0, lines, "#NL#"); s = "";
+                        for (i = 1; i <= n; i++) { l = lines[i]; sub(/--.*/, "", l); s = s " " l }
+                        gsub(/[ \t]+/, " ", s); sub(/^ /, "", s); sub(/ $/, "", s); print t " " nm " " s }'
+}
+differs() {
+    diff <(shape "$dir/pimdir.db") <(shape "$dir/scratch.db") | grep '^[<>]' | cut -d' ' -f3 | sort -u | tr '\n' ' '
+}
+# rebuild <table>: §6's rebuild of one table from the canonical text.
+rebuild() {
+    local t="$1" drops creates cols
+    drops="$(sql "SELECT 'DROP ' || upper(type) || ' ' || name || ';' FROM sqlite_schema WHERE tbl_name = '$t' AND type IN ('index', 'trigger') AND sql IS NOT NULL;")"
+    creates="$(sqlite3 "$dir/scratch.db" "SELECT sql || ';' FROM sqlite_schema WHERE tbl_name = '$t' AND type IN ('index', 'trigger') AND sql IS NOT NULL;")"
+    cols="$(sql "SELECT group_concat(name, ', ') FROM pragma_table_info('$t') WHERE name IN ($(sqlite3 "$dir/scratch.db" "SELECT group_concat(quote(name)) FROM pragma_table_info('$t');"));")"
+    sqlite3 "$dir/pimdir.db" "PRAGMA foreign_keys = OFF; PRAGMA legacy_alter_table = ON; BEGIN; $drops
+        ALTER TABLE $t RENAME TO ${t}_aside;
+        $(sqlite3 "$dir/scratch.db" "SELECT sql FROM sqlite_schema WHERE name = '$t';");
+        INSERT INTO $t ($cols) SELECT $cols FROM ${t}_aside;
+        UPDATE sqlite_sequence SET seq = max(seq, (SELECT seq FROM sqlite_sequence WHERE name = '${t}_aside')) WHERE name = '$t';
+        INSERT INTO sqlite_sequence(name, seq) SELECT '$t', seq FROM sqlite_sequence
+            WHERE name = '${t}_aside' AND NOT EXISTS (SELECT 1 FROM sqlite_sequence WHERE name = '$t');
+        DROP TABLE ${t}_aside; $creates COMMIT;"
+}
+expect "reconcile: a store the canonical migrations created is current" "$(differs)" ""
+collection INBOX
+run queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='remove'" ":payload='{\"v\":1}'" ":object_hash=NULL" >/dev/null
+run queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='remove'" ":payload='{\"v\":1}'" ":object_hash=NULL" >/dev/null
+sql "DELETE FROM queue WHERE id = 2;"
+printf '.dbconfig defensive off\n%s\n' "PRAGMA writable_schema = ON;
+    UPDATE sqlite_schema SET sql = replace(sql, ' OR (kind = ''application/octet-stream'' AND role = ''attachments'')', '') WHERE name = 'collections';
+    UPDATE sqlite_schema SET sql = replace(sql, '-- global append order', '-- an edited comment') WHERE name = 'queue';
+    UPDATE sqlite_schema SET sql = replace(sql, 'AUTOINCREMENT,', 'AUTOINCREMENT, -- a comment of an earlier owner') WHERE name = 'queue';" | sqlite3 "$dir/pimdir.db" >/dev/null
+expect "reconcile: a table whose constraint moved differs, a comment does not" "$(differs)" "collections "
+rebuild collections
+rebuild queue
+expect "reconcile: rebuilt from the canonical text, nothing differs and no key dangles" \
+    "$(differs)|$(sql "PRAGMA foreign_key_check;")|$(sql "SELECT count(*) FROM collections;")" "||1"
+expect "reconcile: the rebuilt table takes the new constraint, its triggers back" \
+    "$(run owner/set_collection_kind ":collection='Files'" ":account=NULL" ":kind='application/octet-stream'")$(run owner/set_collection_role ":collection='Files'" ":role='attachments'")$(sql "SELECT role FROM collections WHERE id = 'Files';")$(sql "SELECT count(*) FROM sqlite_schema WHERE tbl_name = 'collections' AND type = 'trigger';")" \
+    "attachments$(sqlite3 "$dir/scratch.db" "SELECT count(*) FROM sqlite_schema WHERE tbl_name = 'collections' AND type = 'trigger';")"
+expect "reconcile: an AUTOINCREMENT counter carries over, no id reused" \
+    "$(run queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='remove'" ":payload='{\"v\":1}'" ":object_hash=NULL")$(sql "SELECT max(id) FROM queue;")" "3"
+object hb
+mail INBOX held 10 20 "'2026-10-06T08:00:00Z'"
+mail INBOX bare 11 21 "'2026-10-06T08:00:00Z'"
+sql "UPDATE items SET object_hash = 'hb' WHERE link_id = 'held';"
+expect "reconcile: list_held_mail pages the rows holding a body" \
+    "$(run owner/list_held_mail ":after_collection=NULL" ":after_link_id=NULL" ":limit=10" | cut -d'|' -f2,4)|$(run owner/list_held_mail ":after_collection='INBOX'" ":after_link_id='held'" ":limit=10")" "held|hb|"
+
 # --- Readers count and page under the chips (§14.1) --------------------------
 
 fresh
