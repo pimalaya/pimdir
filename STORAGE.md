@@ -27,7 +27,7 @@ The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are to be interpreted a
 11. [Retention](#11-retention): [requirements](#111-requirements), [purging](#112-purging), [collecting below a date](#113-collecting-below-a-date), [releasing bodies below a date](#114-releasing-bodies-below-a-date)
 12. [Collection generation](#12-collection-generation)
 13. [Encodings](#13-encodings)
-14. [Operations](#14-operations): [reading the store](#141-reading-the-store)
+14. [Operations](#14-operations): [reading the store](#141-reading-the-store), [references](#142-references)
 15. [Action queue](#15-action-queue): [producing](#151-producing), [applying](#152-applying), [actions](#153-actions), [reading the queue](#154-reading-the-queue), [cancelling and acknowledging](#155-cancelling-and-acknowledging), [capabilities](#156-capabilities)
 16. [Test vectors](#16-test-vectors)
 
@@ -118,6 +118,7 @@ The canonical schema is migrations/storage/0001_init.sql, which is normative. Th
 - **`items`**: the shared truth of one item, keyed `(collection, link_id)`: `seq` (§9.1), `flags` (a JSON array), `object_hash`, `sort_key` (§9.3), `level` (1 meta, 2 full; 0 an earlier draft's, read as 1), the cross-source state `deleted`, `conflicted`, `conflict_object`, the retention stamps `retained_at`, `retained_by` (§11), and `changed` (§4.5).
 - **`mail_summary`**, **`contact_summary`**, **`event_summary`**, **`task_summary`**, **`journal_summary`**: one table per kind, at most one row per item, keyed `(collection, link_id)`, cascading with the item, referencing no object. Their columns are Annex A's, so a writer that disagrees with the shape fails at the write.
 - **`item_address`**: the people an item names, keyed `(collection, link_id, role, position)` (Annex A.6). One table across every kind, so "everything about this address" is one seek on `item_address_by_address`.
+- **`item_reference`**: a reference between two items (§14.2), keyed `(from_link_id, from_kind, to_link_id, to_kind, role)`, each endpoint a kind and a link id held by no foreign key, with its `role`, `origin` and `created_at`; `item_reference_to` serves the other end.
 - **`bindings`**: one source's binding of an item, keyed `(collection, link_id, source)`: the `handle`, the sync base (`base_flags`, `base_object`, `base_revision`, `base_present`), the `shared_object` last agreed with the item, the conflict triple `conflicted`, `conflict_revision`, `conflict_object`, and `round`, the id of the last round that listed the handle (§10). A handle is bound once and never repointed, and names one item per source (§10): `bindings_by_handle` is unique.
 - **`queue`**: the action queue (§15): `id`, `created_at`, `producer`, `collection`, `action`, `payload`, `object_hash`, `attempts`, `error`.
 - **`receipts`**: what an applied queue row or a performed intent became, keyed by its `id`: `applied_at`, the `collection` it was queued on and, for an `add`, the `seq` of the item it created (§15.2, §15.4, §15.5).
@@ -167,7 +168,7 @@ Schema evolution is ordered, forward-only SQL under migrations/storage/, named N
 
 There are no down-migrations. An implementation meeting a newer or corrupt store MAY rebuild from the blobs and a full re-sync, which MAY lose un-pushed local mutation: a migration MUST preserve item and binding state, and rebuild is a last resort.
 
-**While this part is `draft`** a schema change MAY be folded into 0001_init.sql, `user_version` staying `1`. A store from an earlier draft is then not detectably out of date, so an implementation MUST either reconcile the shape on open (`ALTER TABLE … ADD COLUMN`, guarded by `PRAGMA table_info`) or refuse the store with a message; failing a later query is not acceptable. A reconciled index or trigger is created when absent, and a trigger whose body moved (`collections_stamp_update` when `role` arrived) is dropped and created again, in the same transaction. A reader meeting a store its owner has not reconciled yet reads the missing column as `NULL`.
+**While this part is `draft`** a schema change MAY be folded into 0001_init.sql, `user_version` staying `1`. A store from an earlier draft is then not detectably out of date, so an implementation MUST either reconcile the shape on open (`ALTER TABLE … ADD COLUMN`, guarded by `PRAGMA table_info`) or refuse the store with a message; failing a later query is not acceptable. A reconciled table, index or trigger is created when absent, and a trigger whose body moved (`collections_stamp_update` when `role` arrived) is dropped and created again, in the same transaction. A reader meeting a store its owner has not reconciled yet reads the missing column as `NULL`.
 
 A table the canonical schema no longer has is dropped in the same transaction: `probes`, whose handles the next round names again, a store from an earlier draft having no coverage (SYNC.md §5). A row an earlier draft wrote at `level` 0 is kept and read as 1 (§13).
 
@@ -330,10 +331,11 @@ Two implementations produce byte-identical stores only with identical encodings.
 - **`changed`** (INTEGER, on `items` and `collections`): the stamp of §4.5, `0` before the feed existed, `-1` only inside the statement requesting one; `next_change` and `purges` (INTEGER, on `store_meta`) its counters, the second counting every item purged and every object collected.
 - **The summary columns**: Annex A's, decoded or verbatim as it says, an instant with the `Z` designator, `NULL` for absent and unknown unless it says otherwise.
 - **`role`, `address`, `position`** (on `item_address`): a role of Annex A.6, the canonical addr-spec, and the 0-based document order within the role.
+- **`from_kind`, `to_kind`, `role`, `origin`** (on `item_reference`): a collection kind as `collections.kind` holds it; `attachment`, `invitation`, `sender`, `related` or `x-` and a name; `auto` or `user` (§14.2).
 - **`base_revision`** (TEXT): an opaque etag or modseq, or `NULL`.
 - **`conflict_revision`, `conflict_object`** (on a binding): the remote revision and body observed when the binding was marked conflicted. A binding that is not conflicted MUST NOT carry either.
 - **`shared_object`** (TEXT, on a binding): the shared body last reconciled against (§10), `NULL` until the source has folded once; never counted (§5).
-- **`created_at`, `retained_at`, `applied_at`** (TEXT): `strftime('%Y-%m-%dT%H:%M:%fZ','now')`, stamped by SQLite (`init_store_meta`, `enqueue_action`, `retain_item`, `record_receipt`, and `covered_at`, `round_started_at` by `close_round`, `open_round`). Every instant the format fixes is UTC with the **`Z` designator**, never `+00:00`, which sorts apart from it.
+- **`created_at`, `retained_at`, `applied_at`** (TEXT): `strftime('%Y-%m-%dT%H:%M:%fZ','now')`, stamped by SQLite (`init_store_meta`, `enqueue_action`, `retain_item`, `record_receipt`, `add_reference`, and `covered_at`, `round_started_at` by `close_round`, `open_round`). Every instant the format fixes is UTC with the **`Z` designator**, never `+00:00`, which sorts apart from it.
 - **`retained_by`** (TEXT): the source whose removal retired the item, diagnostic.
 - **`checkpoint`**, **`round_cursor`**, **`round_checkpoint`** (BLOB): opaque cursor bytes, or `NULL`.
 - **`covered_since`**, **`covered_until`**, **`round_since`**, **`round_until`** (TEXT): a scope's bounds, RFC 3339 UTC at seconds precision with the `Z` designator, as Annex A writes `date`; `NULL` an open bound. A message is in a scope when `since <= date < until`, or when its `date` is `NULL`.
@@ -395,6 +397,7 @@ A **reader** (§8) opens read-only and projects the store as a local backend. Re
 - **`list_mail_page_desc`**, **`list_contacts_page_asc`**, **`list_events_page_asc`**, **`list_tasks_page_asc`**, **`list_journals_page_asc`**: the same page joined with the kind's summary; **`get_mail`**, **`get_contact`**, **`get_event`**, **`get_task`**, **`get_journal`** one item. A mixed calendar merges its three pages on `(sort_key, seq)`; `component_of` says which table holds an item.
 - **`get_item(collection, seq)`**, **`load_addresses(collection, link_id)`** (one item's people by role), **`count_items(collection)`**, **`seq_by_link(collection, link_id)`**.
 - **`list_link_placements(link_id)`**, **`list_object_placements(hash)`**: every live placement of one key, or one body, with collection and account. The first pairs by key, so a minted copy is paired with its twin by the body read alone.
+- **`references_from(kind, link_id)`**, **`references_to(kind, link_id)`**: the references an item makes and receives (§14.2), whatever their endpoints' state.
 - **`list_address_placements(address, role)`**: every live placement naming one address, `role` `NULL` for any: the person axis. **`list_domain_placements(domain, role)`**: the same for a domain, by a scan.
 - **`list_items_changed_since`**, **`list_collections_changed_since`**, **`load_change_cursor`**: the feed (§4.5).
 - **`list_retained_page(collection, after, limit)`** (cursor on `seq`, `0` starts), **`count_retained`**, **`retained_bytes()`**: the trash view (§11), every deleted row, `retained_at` `NULL` on one a source still binds.
@@ -407,6 +410,18 @@ Three rules bind every read:
 - **Live only.** A tombstone (`deleted = 1`) is never presented as live; the trash reads are the exception and present their rows as deleted.
 - **Level-aware.** `level` says the tier reached, `object_hash` whether a body is there. A reader renders a list from the summary and treats an absent body, or a blob file gone under a purge, as not yet hydrated, never as an error.
 - **Snapshot-consistent.** A reader sees a WAL snapshot and may run beside the owner. It detects change by `PRAGMA data_version` or the feed, and MAY overlay pending actions (§15.4).
+
+
+### 14.2 References
+
+A **reference** says that one item bears on another: a message and the file it attaches, an invitation and its event, a mail and the contact who sent it, two things a person linked. It is a fact recorded once, never derived from content nor recomputed, which is why it lives here and not in the rebuildable search index. Nothing requires one: an owner MAY record references and a reader MAY ignore them.
+
+- **Endpoints** are a collection kind and a `link_id`, never a collection: one identity filed in several collections is one endpoint, and a move keeps its references. The kind is part of it, a vCard and an event sharing a UID being two endpoints. No foreign key holds them.
+- **`role`** is an open vocabulary: `attachment`, `invitation`, `sender`, `related`, or an application's own starting with `x-`, anything else refused. **`origin`** is `auto`, recorded by a writer's rule, or `user`, by a person, so a reader can say why a reference exists and undo a rule's references without touching a person's.
+- **`add_reference`** records one between two endpoints the store holds, each with at least one row of `items` in a collection of its kind, and records nothing otherwise. A reference is unique on its endpoints and role: recording it again changes nothing, save that `user` takes over `auto`, never the reverse. It answers the row when it recorded or took one over. An item never refers to itself.
+- **`remove_reference`** deletes one, whatever its origin. A rule matching again records it anew; no suppression is kept.
+- **A reference goes with the last row of either endpoint.** `items_drop_references` deletes it when a delete leaves no row of `items`, live, tombstoned or retained, under that link id in a collection of that kind: a purge, a collection below a date or a collection's delete of the last copy. A move, a tombstone, a retention and the loss of one copy among several keep it, so a restore finds it. Every reference's two endpoints are therefore held. Whether an endpoint is live is the reader's to ask (`list_link_placements`).
+- A reference stamps nothing in the feed (§4.5) and is local to the store: no source learns of it, and another store records its own.
 
 ## 15. Action queue
 

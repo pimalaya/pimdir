@@ -288,6 +288,7 @@ Operators read `load_parked_actions` store-wide; a reader overlays `load_pending
 - **A sweep** that must see every row once: `list_items_page`, cursor on link id.
 - **People**: `list_address_placements(address, role)`, `role` `NULL` for any; `list_domain_placements` for a domain, by scan.
 - **Identity across collections**: `list_link_placements(link_id)`, `list_object_placements(hash)`, `seq_by_link`.
+- **References**: `references_from(kind, link_id)` and `references_to(kind, link_id)`, the kind being the collection's, then `list_link_placements` on the other end to open it, since a reference outlives a tombstone and a retention. As the owner, `add_reference` with an `origin` of `auto` for a rule's and `user` for a person's, which answers nothing when it changed nothing (a duplicate, or an endpoint the store holds no row of); `remove_reference` to unlink. The last row of an endpoint takes its references with it, by trigger.
 - **Trash**: `list_retained_page` (cursor on `seq`, `0` first), every deleted row, `retained_at` `NULL` on one a source still binds; `count_retained`, `retained_bytes`.
 - **Change**: `PRAGMA data_version` to know that something committed; `load_change_cursor` for the last stamp drawn and the purge count, then `list_items_changed_since` and `list_collections_changed_since` above the recorded stamp to know what, reconciling keys only when `purges` moved.
 - **Sync state**: `list_sources`, `list_coverage`, `list_conflicted_bindings(account)`, `list_conflicted_items(account)`, `load_kind`.

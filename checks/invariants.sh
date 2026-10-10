@@ -568,6 +568,72 @@ run owner/release_bases_before "$set" ":until=NULL"
 expect "release: no ceiling reaches the newest" \
     "$(run owner/release_before "$set" ":until=NULL")" "4"
 
+# --- A reference joins two endpoints and goes with the last row of one (§14.2)
+
+fresh
+collection INBOX
+collection Archive
+run owner/set_collection_kind ":collection='Cards'" ":account=NULL" ":kind='text/vcard'"
+run owner/set_collection_kind ":collection='Cal'" ":account=NULL" ":kind='text/calendar'"
+mail INBOX m 1 10 "'2026-10-06T08:00:00Z'"
+mail Archive m 1 10 "'2026-10-06T08:00:00Z'"
+item Cards alice 2
+item Cal ev 3
+item Cal same 4
+item Cards same 5
+# ref <from_kind> <from_link_id> <to_kind> <to_link_id> <role> <origin>: add_reference.
+ref() {
+    run owner/add_reference ":from_kind='$1'" ":from_link_id='$2'" ":to_kind='$3'" ":to_link_id='$4'" \
+        ":role='$5'" ":origin='$6'" | cut -d'|' -f1-6
+}
+mail_kind=message/rfc822 card_kind=text/vcard cal_kind=text/calendar
+cursor="$(run read/load_change_cursor | cut -d'|' -f1)"
+expect "reference: recorded between two held endpoints, and answered" \
+    "$(ref $mail_kind m $card_kind alice sender auto)" "message/rfc822|m|text/vcard|alice|sender|auto"
+expect "reference: read from either end" \
+    "$(run read/references_from ":kind='$mail_kind'" ":link_id='m'" | cut -d'|' -f3,4)$(run read/references_to ":kind='$card_kind'" ":link_id='alice'" | cut -d'|' -f1,2)" \
+    "text/vcard|alicemessage/rfc822|m"
+expect "reference: stamped by SQLite, moving nothing in the feed" \
+    "$(sql "SELECT created_at LIKE '____-__-__T__:__:__.___Z' FROM item_reference;")$(run read/list_items_changed_since ":since=$cursor" ":limit=10")" "1"
+expect "reference: a duplicate records nothing" \
+    "$(ref $mail_kind m $card_kind alice sender auto)$(sql "SELECT count(*) FROM item_reference;")" "1"
+expect "reference: a person's takes over a rule's, never the reverse" \
+    "$(ref $mail_kind m $card_kind alice sender user | cut -d'|' -f6)$(ref $mail_kind m $card_kind alice sender auto)$(sql "SELECT origin FROM item_reference;")" \
+    "useruser"
+expect "reference: an application's x- role is accepted" \
+    "$(ref $card_kind alice $cal_kind ev x-moa-thread user | cut -d'|' -f5)" "x-moa-thread"
+expect "reference: a role outside the vocabulary, a bare or capital x-, and an unknown origin are refused" \
+    "$(fails owner/add_reference ":from_kind='$card_kind'" ":from_link_id='alice'" ":to_kind='$cal_kind'" ":to_link_id='ev'" ":role='friend'" ":origin='user'" && echo r)$(fails owner/add_reference ":from_kind='$card_kind'" ":from_link_id='alice'" ":to_kind='$cal_kind'" ":to_link_id='ev'" ":role='x-'" ":origin='user'" && echo b)$(fails owner/add_reference ":from_kind='$card_kind'" ":from_link_id='alice'" ":to_kind='$cal_kind'" ":to_link_id='ev'" ":role='X-a'" ":origin='user'" && echo c)$(fails owner/add_reference ":from_kind='$card_kind'" ":from_link_id='alice'" ":to_kind='$cal_kind'" ":to_link_id='ev'" ":role='related'" ":origin='robot'" && echo o)" \
+    "rbco"
+expect "reference: an endpoint the store holds no row of, under that kind, records nothing" \
+    "$(ref $mail_kind m $card_kind ghost related user)$(ref $mail_kind m $cal_kind alice related user)" ""
+expect "reference: an item never refers to itself" \
+    "$(fails owner/add_reference ":from_kind='$cal_kind'" ":from_link_id='ev'" ":to_kind='$cal_kind'" ":to_link_id='ev'" ":role='related'" ":origin='user'" && echo refused)" "refused"
+expect "reference: removed by a plain delete, once" \
+    "$(run owner/remove_reference ":from_kind='$card_kind'" ":from_link_id='alice'" ":to_kind='$cal_kind'" ":to_link_id='ev'" ":role='x-moa-thread'" | cut -d'|' -f5)$(run owner/remove_reference ":from_kind='$card_kind'" ":from_link_id='alice'" ":to_kind='$cal_kind'" ":to_link_id='ev'" ":role='x-moa-thread'")" \
+    "x-moa-thread"
+ref $mail_kind m $cal_kind ev invitation auto >/dev/null
+ref $card_kind alice $cal_kind same related user >/dev/null
+ref $cal_kind ev $card_kind same related user >/dev/null
+run owner/rename_collection ":collection='INBOX'" ":new_id='Inbox'"
+sql "DELETE FROM items WHERE collection = 'Inbox' AND link_id = 'm';"
+expect "reference: a rename keeps it, and a copy deleted elsewhere too" \
+    "$(run read/references_from ":kind='$mail_kind'" ":link_id='m'" | cut -d'|' -f5 | tr '\n' ' ')" "sender invitation "
+sql "UPDATE items SET deleted = 1, retained_at = 'x' WHERE collection = 'Archive' AND link_id = 'm';"
+expect "reference: a tombstoned or retained last row still holds it" \
+    "$(run read/references_from ":kind='$mail_kind'" ":link_id='m'" | wc -l | tr -d ' ')" "2"
+run owner/purge_item ":collection='Archive'" ":seq=1" >/dev/null
+expect "reference: the purge of the last row takes every reference of the endpoint" \
+    "$(run read/references_from ":kind='$mail_kind'" ":link_id='m'")$(run read/references_to ":kind='$cal_kind'" ":link_id='ev'")" ""
+sql "DELETE FROM items WHERE collection = 'Cards' AND link_id = 'same';"
+expect "reference: the kind is in the endpoint, another kind's row under the same link id holding nothing" \
+    "$(run read/references_to ":kind='$cal_kind'" ":link_id='same'" | cut -d'|' -f2)|$(run read/references_to ":kind='$card_kind'" ":link_id='same'")" "alice|"
+expect "reference: every reference's endpoints are held, by the schema's trigger" \
+    "$(sql "SELECT count(*) FROM item_reference r WHERE NOT EXISTS (SELECT 1 FROM items i JOIN collections c ON c.id = i.collection WHERE i.link_id = r.from_link_id AND c.kind = r.from_kind) OR NOT EXISTS (SELECT 1 FROM items i JOIN collections c ON c.id = i.collection WHERE i.link_id = r.to_link_id AND c.kind = r.to_kind);")" "0"
+run owner/delete_collection ":collection='Cards'"
+expect "reference: a collection's delete takes the references of the endpoints it held last" \
+    "$(sql "SELECT count(*) FROM item_reference;")" "0"
+
 # --- Readers count and page under the chips (§14.1) --------------------------
 
 fresh

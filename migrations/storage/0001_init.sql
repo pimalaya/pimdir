@@ -448,6 +448,47 @@ CREATE TABLE item_address (
 -- The person axis: every placement naming one address, by role.
 CREATE INDEX item_address_by_address ON item_address(address, role, collection);
 
+-- A reference from one item to another, whatever their kinds and wherever they
+-- are filed (§4.3, §14.2): an endpoint is a kind and a link id, so one held in
+-- three collections is one endpoint, and a move keeps it. No foreign key, for
+-- the same reason: the endpoint outlives any one row. A fact recorded once and
+-- never recomputed, which no store requires.
+CREATE TABLE item_reference (
+    from_kind    TEXT NOT NULL,            -- the referring item's collection kind
+    from_link_id TEXT NOT NULL,
+    to_kind      TEXT NOT NULL,            -- the referred item's collection kind
+    to_link_id   TEXT NOT NULL,
+    -- What the reference says: a name pimdir gives, or an application's own
+    -- starting with x-, as for capabilities.
+    role         TEXT NOT NULL CHECK (role IN ('attachment', 'invitation', 'sender', 'related')
+                                      OR (substr(role, 1, 2) = 'x-' AND length(role) > 2)),
+    origin       TEXT NOT NULL CHECK (origin IN ('auto', 'user')),  -- a writer's rule, or a person
+    created_at   TEXT NOT NULL,            -- stamped by add_reference (§13)
+    -- The key leads with the link id, which items_drop_references seeks by.
+    PRIMARY KEY (from_link_id, from_kind, to_link_id, to_kind, role),
+    CHECK (from_kind != to_kind OR from_link_id != to_link_id)
+) STRICT;
+
+-- references_to, and the trigger's seek on the other end.
+CREATE INDEX item_reference_to ON item_reference(to_link_id, to_kind, from_link_id, from_kind, role);
+
+-- A reference goes with the last row of either endpoint, live, tombstoned or
+-- retained (§14.2): when a delete leaves no row of that link id in a collection
+-- of that kind. A move, a retention and a purge of one copy among several keep
+-- it; the purge or collection of the last copy, or its collection's delete,
+-- takes it. Read from the reference's own kinds, since a collection deleted by
+-- cascade is gone before its items are.
+CREATE TRIGGER items_drop_references AFTER DELETE ON items
+BEGIN
+    DELETE FROM item_reference
+    WHERE (from_link_id = OLD.link_id
+           AND NOT EXISTS (SELECT 1 FROM items i JOIN collections c ON c.id = i.collection
+                           WHERE i.link_id = OLD.link_id AND c.kind = item_reference.from_kind))
+       OR (to_link_id = OLD.link_id
+           AND NOT EXISTS (SELECT 1 FROM items i JOIN collections c ON c.id = i.collection
+                           WHERE i.link_id = OLD.link_id AND c.kind = item_reference.to_kind));
+END;
+
 -- The action queue (§15): mutations requested by processes that do not own the
 -- store, applied by the owner in append order.
 CREATE TABLE queue (
