@@ -13,4 +13,5 @@ JOIN item_address m ON m.address = c.address AND m.role = 'from'
 JOIN collections mc ON mc.id = m.collection AND mc.kind = 'message/rfc822'
 JOIN items mi ON mi.collection = m.collection AND mi.link_id = m.link_id AND mi.deleted = 0
 WHERE ci.link_id BETWEEN coalesce(:link_id, '') AND coalesce(:link_id, x'') AND ci.deleted = 0
+  AND NOT (mi.link_id GLOB 'alt:*' OR mi.link_id GLOB 'dup:*' OR mi.link_id GLOB 'hash:*') AND NOT (ci.link_id GLOB 'alt:*' OR ci.link_id GLOB 'dup:*' OR ci.link_id GLOB 'hash:*')
 ON CONFLICT DO NOTHING;

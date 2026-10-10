@@ -61,6 +61,21 @@ plan() {
         cat "$root/queries/storage/$file.sql"
     } | sqlite3 "$dir/pimdir.db"
 }
+# trigger_plan <trigger> [:param=literal...]: the plan of a trigger's one
+# statement, read back from the schema, each OLD.x bound as :old_x.
+trigger_plan() {
+    local name="$1"; shift
+    local body
+    body="$(sql "SELECT sql FROM sqlite_schema WHERE name = '$name';" | sed -n '/^BEGIN$/,/^END$/p' | sed '1d;$d;s/OLD\./:old_/g')"
+    {
+        for binding in "$@"; do
+            echo ".parameter set ${binding%%=*} ${binding#*=}"
+        done
+        echo "EXPLAIN QUERY PLAN"
+        echo "$body"
+    } | sqlite3 "$dir/pimdir.db"
+}
+
 collection() {
     run owner/set_collection_kind ":collection='$1'" ":account=${2:-NULL}" ":kind='message/rfc822'"
 }
@@ -516,6 +531,18 @@ expect "collect: the body is released to the collector, the holder elsewhere unt
     "$(sql "SELECT refcount FROM objects WHERE hash = 'h1';")$(sql "SELECT count(*) FROM items WHERE collection = 'Archive';")" "01"
 expect "collect: no tombstone, no queued push, and the feed counts a purge" \
     "$(sql "SELECT count(*) FROM items WHERE deleted = 1;")$(sql "SELECT count(*) FROM queue;")$(sql "SELECT purges FROM store_meta;")" "00$((purges + 1))"
+run owner/set_collection_kind ":collection='Cards'" ":account=NULL" ":kind='text/vcard'"
+item Cards card 20
+mail INBOX kept 6 14 "'2026-08-01T10:00:00Z'"
+mail INBOX told 7 15 "'2026-08-01T10:00:00Z'"
+mail INBOX target 8 16 "'2026-08-01T10:00:00Z'"
+for pair in "kept|message/rfc822|card|text/vcard|related|user" "card|text/vcard|target|message/rfc822|related|user" \
+            "told|message/rfc822|card|text/vcard|sender|auto"; do
+    IFS='|' read -r fl fk tl tk role origin <<<"$pair"
+    run owner/add_reference ":from_kind='$fk'" ":from_link_id='$fl'" ":to_kind='$tk'" ":to_link_id='$tl'" ":role='$role'" ":origin='$origin'" >/dev/null
+done
+expect "collect: a mail a person's reference names, from either end, stays; a rule's reference does not hold one" \
+    "$(run owner/collect_before ":collection='INBOX'" ":before='2026-09-01T00:00:00Z'")|$(sql "SELECT count(*) FROM item_reference WHERE origin = 'user';")" "7|2"
 
 # --- Releasing bodies below a date keeps the headers (§11.4) ----------------
 
@@ -534,6 +561,7 @@ mail INBOX conflicted 5 14 "'2026-08-01T10:00:00Z'"
 mail INBOX diverged 6 15 "'2026-08-01T10:00:00Z'"
 mail INBOX edited 7 16 "'2026-08-01T10:00:00Z'"
 mail INBOX witness 8 17 "'2026-08-01T10:00:00Z'"
+mail INBOX gone 11 18 "'2026-08-01T10:00:00Z'"
 mail Archive old 1 10 "'2026-08-01T10:00:00Z'"
 mail Both full 9 20 "'2026-08-01T10:00:00Z'"
 mail Both half 10 21 "'2026-08-01T10:00:00Z'"
@@ -545,6 +573,7 @@ sql "UPDATE items SET sort_key = coalesce((SELECT date FROM mail_summary s WHERE
      UPDATE bindings SET conflicted = 1 WHERE link_id = 'diverged';
      UPDATE bindings SET base_object = 'h1' WHERE link_id = 'edited';
      UPDATE bindings SET base_present = 0, base_flags = NULL WHERE link_id = 'witness';
+     UPDATE items SET deleted = 1 WHERE link_id = 'gone';
      INSERT INTO items(collection, link_id, seq, flags, object_hash, sort_key, level) VALUES
          ('INBOX', 'created', 20, '[]', 'h9', '2026-08-01T10:00:00Z', 2),
          ('INBOX', 'lone', 21, '[]', 'h9', '2026-08-01T10:00:00Z', 2),
@@ -561,9 +590,11 @@ run owner/release_bases_before "$set" ":until='2026-09-01T00:00:00Z'"
 expect "release: below the date, what needs no body, the undated included, two sources' bases alike" \
     "$(run owner/release_before "$set" ":until='2026-09-01T00:00:00Z'" | sort -n | tr '\n' ' ')" "1 2 3 8 9 "
 run owner/recompute_refcounts
-expect "release: a conflict, a diverged binding, a local edit, a pending create, no binding, an unbound source, another kind, the newer and an unnamed collection keep theirs" \
+expect "release: a conflict, a diverged binding, a local edit, a pending create, no binding, an unbound source, another kind, a tombstone, the newer and an unnamed collection keep theirs" \
     "$(sql "SELECT collection || ':' || link_id FROM items WHERE object_hash IS NOT NULL ORDER BY collection, link_id;" | tr '\n' ' ')" \
-    "Archive:old Both:half Cards:card INBOX:conflicted INBOX:created INBOX:diverged INBOX:edited INBOX:lone INBOX:recent "
+    "Archive:old Both:half Cards:card INBOX:conflicted INBOX:created INBOX:diverged INBOX:edited INBOX:gone INBOX:lone INBOX:recent "
+expect "release: a tombstone, a newer item, a conflicted one and another kind keep their bases" \
+    "$(sql "SELECT count(*) FROM bindings WHERE link_id IN ('gone', 'recent', 'conflicted', 'card') AND base_object IS NOT NULL;")|$(sql "SELECT object_hash FROM items WHERE link_id = 'gone';")" "4|h9"
 expect "release: back to Meta, flags, summary and addresses kept" \
     "$(sql "SELECT level, flags FROM items WHERE collection = 'INBOX' AND link_id = 'dirty';")|$(sql "SELECT count(*) FROM mail_summary WHERE collection = 'INBOX' AND link_id IN ('old', 'dirty', 'nodate', 'witness');")" \
     '1|["\\Flagged"]|4'
@@ -593,6 +624,9 @@ item Cards alice 2
 item Cal ev 3
 item Cal same 4
 item Cards same 5
+item Cards same2 6
+item Cal same2 7
+item INBOX 'alt:Alert|2026-08-01T10:00:00Z|cron@host' 8
 # ref <from_kind> <from_link_id> <to_kind> <to_link_id> <role> <origin>: add_reference.
 ref() {
     run owner/add_reference ":from_kind='$1'" ":from_link_id='$2'" ":to_kind='$3'" ":to_link_id='$4'" \
@@ -607,11 +641,11 @@ expect "reference: read from either end" \
     "text/vcard|alicemessage/rfc822|m"
 expect "reference: stamped by SQLite, moving nothing in the feed" \
     "$(sql "SELECT created_at LIKE '____-__-__T__:__:__.___Z' FROM item_reference;")$(run read/list_items_changed_since ":since=$cursor" ":limit=10")" "1"
-expect "reference: a duplicate records nothing" \
-    "$(ref $mail_kind m $card_kind alice sender auto)$(sql "SELECT count(*) FROM item_reference;")" "1"
+expect "reference: a duplicate records nothing and answers the reference standing" \
+    "$(ref $mail_kind m $card_kind alice sender auto | cut -d'|' -f6)$(sql "SELECT count(*) FROM item_reference;")" "auto1"
 expect "reference: a person's takes over a rule's, never the reverse" \
-    "$(ref $mail_kind m $card_kind alice sender user | cut -d'|' -f6)$(ref $mail_kind m $card_kind alice sender auto)$(sql "SELECT origin FROM item_reference;")" \
-    "useruser"
+    "$(ref $mail_kind m $card_kind alice sender user | cut -d'|' -f6)$(ref $mail_kind m $card_kind alice sender auto | cut -d'|' -f6)$(sql "SELECT origin FROM item_reference;")" \
+    "useruseruser"
 expect "reference: an application's x- role is accepted" \
     "$(ref $card_kind alice $cal_kind ev x-moa-thread user | cut -d'|' -f5)" "x-moa-thread"
 expect "reference: a role outside the vocabulary, a bare or capital x-, and an unknown origin are refused" \
@@ -619,6 +653,10 @@ expect "reference: a role outside the vocabulary, a bare or capital x-, and an u
     "rbco"
 expect "reference: an endpoint the store holds no row of, under that kind, records nothing" \
     "$(ref $mail_kind m $card_kind ghost related user)$(ref $mail_kind m $cal_kind alice related user)" ""
+expect "reference: the from end is matched under its kind too" \
+    "$(ref $card_kind m $card_kind alice related user)" ""
+expect "reference: a writer-derived key is no endpoint: recorded by nothing, refused by the schema" \
+    "$(ref $mail_kind 'alt:Alert|2026-08-01T10:00:00Z|cron@host' $card_kind alice related user)$(sql "INSERT INTO item_reference VALUES('$mail_kind', 'dup:m#1', '$card_kind', 'alice', 'related', 'user', 't');" 2>&1 | grep -c CHECK)$(sql "INSERT INTO item_reference VALUES('$card_kind', 'alice', 'application/octet-stream', 'part:alt:x#2', 'attachment', 'auto', 't');" 2>&1 | grep -c CHECK)" "11"
 expect "reference: an item never refers to itself" \
     "$(fails owner/add_reference ":from_kind='$cal_kind'" ":from_link_id='ev'" ":to_kind='$cal_kind'" ":to_link_id='ev'" ":role='related'" ":origin='user'" && echo refused)" "refused"
 expect "reference: removed by a plain delete, once" \
@@ -640,6 +678,10 @@ expect "reference: the purge of the last row takes every reference of the endpoi
 sql "DELETE FROM items WHERE collection = 'Cards' AND link_id = 'same';"
 expect "reference: the kind is in the endpoint, another kind's row under the same link id holding nothing" \
     "$(run read/references_to ":kind='$cal_kind'" ":link_id='same'" | cut -d'|' -f2)|$(run read/references_to ":kind='$card_kind'" ":link_id='same'")" "alice|"
+ref $card_kind same2 $cal_kind ev related user >/dev/null
+sql "DELETE FROM items WHERE collection = 'Cards' AND link_id = 'same2';"
+expect "reference: the from end goes by its kind, another kind's row under its link id holding nothing" \
+    "$(run read/references_to ":kind='$cal_kind'" ":link_id='ev'")" ""
 expect "reference: every reference's endpoints are held, by the schema's trigger" \
     "$(sql "SELECT count(*) FROM item_reference r WHERE NOT EXISTS (SELECT 1 FROM items i JOIN collections c ON c.id = i.collection WHERE i.link_id = r.from_link_id AND c.kind = r.from_kind) OR NOT EXISTS (SELECT 1 FROM items i JOIN collections c ON c.id = i.collection WHERE i.link_id = r.to_link_id AND c.kind = r.to_kind);")" "0"
 run owner/delete_collection ":collection='Cards'"
@@ -652,30 +694,43 @@ fresh
 collection INBOX
 run owner/set_collection_kind ":collection='Cards'" ":account=NULL" ":kind='$card_kind'"
 run owner/set_collection_kind ":collection='Cal'" ":account=NULL" ":kind='$cal_kind'"
-mail INBOX m1 1 10 "'2026-10-06T08:00:00Z'"
-mail INBOX m2 2 11 "'2026-10-06T09:00:00Z'"
-mail INBOX m3 3 12 "'2026-10-06T10:00:00Z'"
-mail INBOX m4 4 13 "'2026-10-06T11:00:00Z'"
-mail INBOX m5 5 14 "'2026-10-06T12:00:00Z'"
-item Cards c1 6
-item Cards c2 7
-item Cal ev1 8
+for n in 1 2 3 4 5 6 7 8; do
+    mail INBOX m$n $n 1$n "'2026-10-06T0$n:00:00Z'"
+done
+mail INBOX 'alt:Alert|2026-08-01T10:00:00Z|cron@host' 20 30 "'2026-10-06T09:00:00Z'"
+item Cards c1 9
+item Cards c2 10
+item Cards c3 11
+item Cards ev4 12
+item Cal ev1 13
+item Cal ev3 14
 sql "INSERT INTO item_address(collection, link_id, role, position, address) VALUES
          ('INBOX', 'm1', 'from', 0, 'alice@example.org'), ('INBOX', 'm2', 'from', 0, 'bob@example.org'),
          ('INBOX', 'm3', 'from', 0, 'alice@example.org'), ('INBOX', 'm1', 'to', 0, 'carol@example.org'),
-         ('Cards', 'c1', 'email', 0, 'alice@example.org'), ('Cards', 'c2', 'email', 0, 'carol@example.org');
-     UPDATE items SET deleted = 1 WHERE link_id = 'm3';
-     UPDATE mail_summary SET invitation = 'ev1' WHERE link_id = 'm4';
-     UPDATE mail_summary SET invitation = 'ev2' WHERE link_id = 'm5';"
+         ('INBOX', 'alt:Alert|2026-08-01T10:00:00Z|cron@host', 'from', 0, 'alice@example.org'),
+         ('Cards', 'c1', 'email', 0, 'alice@example.org'), ('Cards', 'c2', 'email', 0, 'carol@example.org'),
+         ('Cards', 'c3', 'email', 0, 'alice@example.org');
+     UPDATE items SET deleted = 1 WHERE link_id IN ('m3', 'm6', 'c3', 'ev3');
+     UPDATE mail_summary SET invitation = 'ev1' WHERE link_id IN ('m4', 'm6');
+     UPDATE mail_summary SET invitation = 'ev2' WHERE link_id = 'm5';
+     UPDATE mail_summary SET invitation = 'ev3' WHERE link_id = 'm7';
+     UPDATE mail_summary SET invitation = 'ev4' WHERE link_id = 'm8';"
 refs() {
     sql "SELECT from_link_id || '>' || to_link_id || ':' || role || ':' || origin FROM item_reference ORDER BY 1;" | tr '\n' ' '
 }
+user() {
+    run owner/add_reference ":from_kind='$mail_kind'" ":from_link_id='$1'" ":to_kind='$2'" ":to_link_id='$3'" ":role='$4'" ":origin='user'" >/dev/null
+}
 run owner/link_senders_of ":link_id='m1'"
-expect "auto: a mail refers to the contact its from address names, never through another role" \
+expect "auto: a mail refers to the live contact its from address names, never through another role" \
     "$(refs)" "m1>c1:sender:auto "
+run owner/link_senders_of ":link_id='m3'"
+run owner/link_senders_of ":link_id='alt:Alert|2026-08-01T10:00:00Z|cron@host'"
+expect "auto: a deleted mail, and one under a derived key, refer to nobody" "$(refs)" "m1>c1:sender:auto "
 run owner/link_mail_from ":link_id='c1'"
-expect "auto: a contact's backfill takes live mail only" "$(refs)" "m1>c1:sender:auto "
-run owner/add_reference ":from_kind='$mail_kind'" ":from_link_id='m2'" ":to_kind='$card_kind'" ":to_link_id='c2'" ":role='sender'" ":origin='user'" >/dev/null
+run owner/link_mail_from ":link_id='c3'"
+expect "auto: a contact's backfill takes live mail only, and a deleted contact takes none" "$(refs)" "m1>c1:sender:auto "
+user m2 $card_kind c2 sender
 sql "INSERT INTO item_address(collection, link_id, role, position, address) VALUES('Cards', 'c2', 'email', 1, 'bob@example.org');"
 run owner/link_mail_from ":link_id='c2'"
 expect "auto: an address added brings its history, a person's reference kept as it is" \
@@ -683,17 +738,26 @@ expect "auto: an address added brings its history, a person's reference kept as 
 sql "DELETE FROM item_address WHERE link_id = 'c1';"
 run owner/link_mail_from ":link_id='c1'"
 expect "auto: an address removed removes nothing" "$(refs)" "m1>c1:sender:auto m2>c2:sender:user "
-sql "DELETE FROM item_reference;"
+sql "DELETE FROM item_reference;
+     UPDATE items SET deleted = 0 WHERE link_id = 'c3';"
+user m2 $card_kind c2 sender
 run owner/link_senders_of ":link_id=NULL"
-expect "auto: a NULL link id backfills every mail" "$(refs)" "m2>c2:sender:auto "
-run owner/link_invitations_of ":link_id='m4'"
-run owner/link_invitations_of ":link_id='m5'"
-expect "auto: an invitation refers to the calendar item it names, none for one not held yet" \
-    "$(refs)" "m2>c2:sender:auto m4>ev1:invitation:auto "
-item Cal ev2 9
+expect "auto: a NULL link id backfills every live mail, a person's reference kept as it is" \
+    "$(refs)" "m1>c3:sender:auto m2>c2:sender:user "
+sql "DELETE FROM item_reference;"
+user m4 $cal_kind ev1 invitation
+for n in 4 5 6 7 8; do
+    run owner/link_invitations_of ":link_id='m$n'"
+done
+for e in ev1 ev3 ev4; do
+    run owner/link_invitations_to ":link_id='$e'"
+done
+expect "auto: an invitation refers to the live calendar item it names, a person's kept, none for one not held, deleted or of another kind" \
+    "$(refs)" "m4>ev1:invitation:user "
+item Cal ev2 15
 run owner/link_invitations_to ":link_id='ev2'"
-expect "auto: a calendar item synced after its invitation is tied to it" \
-    "$(refs)" "m2>c2:sender:auto m4>ev1:invitation:auto m5>ev2:invitation:auto "
+expect "auto: a calendar item synced after its invitation is tied to it, never to a deleted mail" \
+    "$(refs)" "m4>ev1:invitation:user m5>ev2:invitation:auto "
 run owner/upsert_mail_summary ":collection='INBOX'" ":link_id='m4'" ":message_id='m4'" ":in_reply_to='[]'" \
     ":subject='s m4'" ":sender='alice@example.org'" ":sender_name='Alice'" ":date=NULL" ":size=1" ":attachment=0" ":invitation=NULL"
 expect "auto: a write without the body keeps a known invitation" \
@@ -747,9 +811,33 @@ expect "file: saved to a folder, the stand-in still reads, held by the saved cop
     "$(run read/list_attachments ":account='work'" ":link_id='m'" | head -1 | cut -d'|' -f2,4,8)" "work/Attachments|Report.pdf|hx"
 expect "file: one public id for the stand-in and the saved copy" \
     "$(sql "SELECT count(DISTINCT seq) FROM items WHERE link_id = 'part:m#2';")" "1"
+run owner/set_collection_role ":collection='work/Attachments'" ":role='attachments'"
+expect "file: the attachments role marks a file collection, and no other kind takes it" \
+    "$(sql "SELECT role FROM collections WHERE id = 'work/Attachments';")$(fails owner/set_collection_role ":collection='work/INBOX'" ":role='attachments'" && echo refused)" "attachmentsrefused"
+expect "file: every stand-in of an account with its message, newest first, paged" \
+    "$(run read/list_attachments_by_account ":account='work'" ":after_key=NULL" ":after_seq=NULL" ":limit=10" | cut -d'|' -f3,8,12 | tr '\n' ' ')|$(run read/list_attachments_by_account ":account='work'" ":after_key=''" ":after_seq=3" ":limit=10" | cut -d'|' -f3)" \
+    "part:m#3|m|alice@example.org part:m#2|m|alice@example.org |part:m#2"
+for folder in home/Attachments home/Docs; do
+    run owner/set_collection_kind ":collection='$folder'" ":account='home'" ":kind='$file_kind'"
+done
+file home/Attachments 'part:m#2' 2 NULL Report.pdf "'2'"
+file home/Attachments 'part:m#3' 3 NULL photo.jpg "'3'"
+file work/Docs 'part:m#3' 3 "'hx'" photo.jpg "'3'"
+sql "UPDATE items SET deleted = 1 WHERE collection IN ('home/Attachments', 'work/Docs') AND link_id = 'part:m#3';"
+ref $mail_kind m $file_kind local related user >/dev/null
+expect "file: a message's attachments are the account's, live, by the attachment role, held by a live body only" \
+    "$(run read/list_attachments ":account='home'" ":link_id='m'" | cut -d'|' -f1,2 | tr '\n' ' ')|$(run read/list_attachments ":account='work'" ":link_id='m'" | cut -d'|' -f1,8 | tr '\n' ' ')" \
+    "part:m#2|home/Attachments |part:m#2|hx part:m#3| "
+run owner/remove_reference ":from_kind='$mail_kind'" ":from_link_id='m'" ":to_kind='$file_kind'" ":to_link_id='local'" ":role='related'" >/dev/null
+run owner/insert_item ":collection='work/INBOX'" ":link_id='part:m#3'" ":seq=3" ":flags='[]'" ":object_hash=NULL" \
+    ":sort_key=''" ":level=1" ":deleted=0" ":conflicted=0" ":conflict_object=NULL"
+run owner/add_reference ":from_kind='$file_kind'" ":from_link_id='part:m#3'" ":to_kind='$file_kind'" ":to_link_id='local'" ":role='related'" ":origin='user'" >/dev/null
 run owner/remove_reference ":from_kind='$mail_kind'" ":from_link_id='m'" ":to_kind='$file_kind'" ":to_link_id='part:m#3'" ":role='attachment'" >/dev/null
-expect "file: a stand-in no reference names is collected" \
-    "$(sql "SELECT count(*) FROM items WHERE link_id = 'part:m#3';")" "0"
+expect "file: a stand-in a reference still names from its own end stays" \
+    "$(sql "SELECT count(*) FROM items WHERE collection = 'work/Attachments' AND link_id = 'part:m#3';")" "1"
+run owner/remove_reference ":from_kind='$file_kind'" ":from_link_id='part:m#3'" ":to_kind='$file_kind'" ":to_link_id='local'" ":role='related'" >/dev/null
+expect "file: a stand-in no reference names is collected, never a row of another kind under its key" \
+    "$(sql "SELECT group_concat(collection) FROM items WHERE link_id = 'part:m#3' AND (deleted = 0 OR object_hash IS NOT NULL);")" "work/Docs,work/INBOX"
 for target in local synced; do
     ref $mail_kind m $file_kind $target related user >/dev/null
     run owner/remove_reference ":from_kind='$mail_kind'" ":from_link_id='m'" ":to_kind='$file_kind'" ":to_link_id='$target'" ":role='related'" >/dev/null
@@ -761,6 +849,59 @@ run owner/purge_item ":collection='work/INBOX'" ":seq=1" >/dev/null
 expect "file: the message's last row gone, its stand-in goes and the saved copy stays with its body" \
     "$(sql "SELECT collection || ':' || ifnull(object_hash, '') FROM items WHERE link_id = 'part:m#2';")|$(sql "SELECT count(*) FROM item_reference;")" \
     "work/Docs:hx|0"
+steps="$(trigger_plan item_reference_collects_files ":old_from_kind='$mail_kind'" ":old_from_link_id='m'" ":old_to_kind='$file_kind'" ":old_to_link_id='x'")"
+expect "file: the collecting trigger seeks the ends' link ids, never every bodiless row" \
+    "$(grep -c 'items USING INDEX items_by_link' <<<"$steps" || true)$(grep -c 'items_by_object' <<<"$steps" || true)" "10"
+steps="$(trigger_plan items_drop_references ":old_link_id='m'")"
+expect "reference: the dropping trigger seeks both ends' keys" \
+    "$(grep -c 'SCAN item_reference' <<<"$steps" || true)" "0"
+run owner/upsert_file_summary ":collection='work/Docs'" ":link_id='part:m#2'" ":name='Q3 report.pdf'" ":media_type='application/pdf'" ":size=1234" ":part='2.1'"
+expect "file: a summary write restates the part" \
+    "$(run read/get_file ":collection='work/Docs'" ":seq=2" | cut -d'|' -f10)" "2.1"
+expect "file: a collection holding no object pointer can skip the recount" \
+    "$(run owner/collection_holds_objects ":collection='work/Attachments'")$(run owner/collection_holds_objects ":collection='work/Docs'")" "01"
+expect "file: an unbound file is deleted with the hashes to release, a bound one is its source's" \
+    "$(run owner/delete_unbound_item ":collection='work/Docs'" ":link_id='local'" | cut -d'|' -f1)|$(run owner/delete_unbound_item ":collection='work/Docs'" ":link_id='synced'")|$(sql "SELECT count(*) FROM items WHERE link_id IN ('local', 'synced');")" \
+    "hx||1"
+
+# --- A link picker reads one statement per kind (§14.1, §14.2) -------------
+
+fresh
+collection INBOX
+run owner/set_collection_kind ":collection='Cards'" ":account=NULL" ":kind='$card_kind'"
+run owner/set_collection_kind ":collection='Cal'" ":account=NULL" ":kind='$cal_kind'"
+run owner/set_collection_kind ":collection='Docs'" ":account=NULL" ":kind='$file_kind'"
+mail INBOX m 1 10 "'2026-10-06T08:00:00Z'"
+item Cards jane 2
+item Cards bob 3
+item Cal ev 4
+item Cal todo 5
+item Cal note 6
+item Docs plan 7
+sql "UPDATE items SET sort_key = CASE link_id WHEN 'jane' THEN 'jane doe' WHEN 'bob' THEN 'bob' WHEN 'plan' THEN 'plan.pdf' ELSE sort_key END;
+     INSERT INTO item_address(collection, link_id, role, position, address) VALUES('Cards', 'bob', 'email', 0, 'bob@plan.example');"
+run owner/upsert_contact_summary ":collection='Cards'" ":link_id='jane'" ":uid='jane'" ":fn='Jane Doe'" ":kind=NULL" ":org=NULL"
+run owner/upsert_contact_summary ":collection='Cards'" ":link_id='bob'" ":uid='bob'" ":fn='Bob'" ":kind=NULL" ":org=NULL"
+run owner/upsert_event_summary ":collection='Cal'" ":link_id='ev'" ":uid='ev'" ":summary='Plan review'" ":location='Room 2'" \
+    ":dtstart=NULL" ":dtstart_tzid=NULL" ":dtstart_value=NULL" ":dtend=NULL" ":recurring=NULL" ":until=NULL"
+run owner/upsert_task_summary ":collection='Cal'" ":link_id='todo'" ":uid='todo'" ":summary='Send the plan'" ":dtstart=NULL" \
+    ":dtstart_tzid=NULL" ":dtstart_value=NULL" ":due=NULL" ":due_tzid=NULL" ":due_value=NULL" ":status=NULL" \
+    ":completed=NULL" ":percent=NULL" ":recurring=NULL" ":until=NULL"
+run owner/upsert_journal_summary ":collection='Cal'" ":link_id='note'" ":uid='note'" ":summary='Standup'" \
+    ":dtstart=NULL" ":dtstart_tzid=NULL" ":dtstart_value=NULL"
+run owner/upsert_file_summary ":collection='Docs'" ":link_id='plan'" ":name='plan.pdf'" ":media_type=NULL" ":size=NULL" ":part=NULL"
+expect "describe: an endpoint's first live placement and its title, whatever the kind" \
+    "$(run read/describe_endpoint ":kind='$mail_kind'" ":link_id='m'")$(run read/describe_endpoint ":kind='$card_kind'" ":link_id='jane'")$(run read/describe_endpoint ":kind='$file_kind'" ":link_id='plan'")|$(run read/describe_endpoint ":kind='$card_kind'" ":link_id='plan'")" \
+    "INBOX|1|s mCards|2|Jane DoeDocs|7|plan.pdf|"
+sql "UPDATE items SET deleted = 1 WHERE link_id = 'note';"
+expect "search: contacts by name or email, A to Z" \
+    "$(run read/search_contacts ":collections='[\"Cards\"]'" ":pattern='%plan%'" ":after_key=NULL" ":after_seq=NULL" ":after_collection=NULL" ":limit=10" | cut -d'|' -f3)|$(run read/search_contacts ":collections='[\"Cards\"]'" ":pattern='%o%'" ":after_key='bob'" ":after_seq=3" ":after_collection='Cards'" ":limit=10" | cut -d'|' -f3)" \
+    "bob|jane"
+expect "search: calendar items by summary or an event's location, live only, naming their component" \
+    "$(run read/search_calendar ":collections='[\"Cal\"]'" ":pattern='%plan%'" ":after_key=NULL" ":after_seq=NULL" ":after_collection=NULL" ":limit=10" | cut -d'|' -f3,8 | tr '\n' ' ')|$(run read/search_calendar ":collections='[\"Cal\"]'" ":pattern='%room%'" ":after_key=NULL" ":after_seq=NULL" ":after_collection=NULL" ":limit=10" | cut -d'|' -f3)|$(run read/search_calendar ":collections='[\"Cal\"]'" ":pattern='%standup%'" ":after_key=NULL" ":after_seq=NULL" ":after_collection=NULL" ":limit=10")" \
+    "ev|event todo|task |ev|"
+expect "search: files by name" \
+    "$(run read/search_files ":collections='[\"Docs\"]'" ":pattern='%PLAN%'" ":after_key=NULL" ":after_seq=NULL" ":after_collection=NULL" ":limit=10" | cut -d'|' -f3,8)" "plan|plan.pdf"
 
 # --- Readers count and page under the chips (§14.1) --------------------------
 
@@ -829,6 +970,19 @@ expect "sum: under the chips across collections" \
     "3|50|21|50|0"
 expect "sum: nothing in range sums to zero" \
     "$(run read/sum_mail "$both" ":seen=NULL" ":attachment=NULL" ":since='2027-01-01T00:00:00Z'" ":until=NULL")" "0|0|0"
+expect "sum: a message filed in two collections counts once, at its largest size" \
+    "$(run read/sum_mail "$both" ":seen=NULL" ":attachment=NULL" ":since=NULL" ":until=NULL")" "4|150|2"
+object hc
+sql "UPDATE items SET object_hash = 'hc', level = 2 WHERE collection = 'INBOX' AND link_id = 'c';"
+expect "sum: held 1 is what a release frees, held 0 what a download fetches" \
+    "$(run read/sum_mail "$both" ":seen=NULL" ":attachment=NULL" ":held=1" ":since=NULL" ":until=NULL")|$(run read/sum_mail "$both" ":seen=NULL" ":attachment=NULL" ":held=0" ":since=NULL" ":until=NULL")" \
+    "1|50|0|3|100|2"
+sql "UPDATE items SET object_hash = 'hc', level = 2 WHERE collection = 'Sent' AND link_id = 'a';"
+expect "sum: a body one placement holds holds the message" \
+    "$(run read/sum_mail "$inbox" ":seen=NULL" ":attachment=NULL" ":held=0" ":since=NULL" ":until=NULL")|$(run read/sum_mail "$both" ":seen=NULL" ":attachment=NULL" ":held=0" ":since=NULL" ":until=NULL")" \
+    "3|100|2|2|0|2"
+expect "row: one mail row by key, in the page's shape" \
+    "$(run read/get_mail_row ":collection='INBOX'" ":link_id='c'" | cut -d'|' -f1,2,3,5,10)" "INBOX|3|c|hc|Invoice 100%"
 
 for statement in list_mail_page_filtered search_mail; do
     steps="$(plan "read/$statement" ":collections='[\"INBOX\",\"Sent\"]'" ":pattern='%a%'" ":seen=NULL" \

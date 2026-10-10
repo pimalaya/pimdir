@@ -217,6 +217,20 @@
       "sort_key": "jane doe"
     },
     {
+      "label": "card, full lowercase mapping",
+      "kind": "text/vcard",
+      "fixture": "fixtures/card-full-lowercase.vcf",
+      "note": "Annex A.2 and A.6 lowercase by the default full mapping, locale-independent: a dotted capital I becomes i and a combining dot above (U+0069 U+0307), never a bare i, and never the dotless i a Turkish locale gives",
+      "body": { "len": 138, "blake3": "qhil4dey5m4uvjyznnu5v6s7oszuvgfjizgztz5vkcoth6m5tj4q", "sha256-128": "pjtdxveml6gqpz5h4stvnsbgtm" },
+      "link_id": "urn:uuid:0c1d2e3f-4a5b-4c6d-8e7f-901234567890",
+      "table": "contact_summary",
+      "summary": { "uid": "urn:uuid:0c1d2e3f-4a5b-4c6d-8e7f-901234567890", "fn": "İlkay Şahin", "kind": null, "org": null },
+      "addresses": [
+        { "role": "email", "position": 0, "address": "i̇lkay.şahin@örnek.com", "name": null }
+      ],
+      "sort_key": "i̇lkay şahin"
+    },
+    {
       "label": "card, UID already claimed in the collection",
       "kind": "text/vcard",
       "fixture": "fixtures/card-basic.vcf",

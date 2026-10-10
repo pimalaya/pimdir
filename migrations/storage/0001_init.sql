@@ -41,14 +41,17 @@ CREATE TABLE collections (
     sort_order  INTEGER,
     conflict    TEXT NOT NULL DEFAULT 'manual'
                 CHECK (conflict IN ('manual', 'prefer-incoming', 'prefer-existing')),
-    -- What the source says the collection is for (§14), NULL when it says
-    -- nothing: a mail role is the JMAP Mailbox/role vocabulary (the IANA IMAP
-    -- mailbox name attributes lowercased, plus inbox), and `default` marks the
-    -- calendar or address book a source writes to when none is named.
+    -- What the collection is for (§14), as its source says, NULL when it says
+    -- nothing, or as its owner made it for `attachments`: a mail role is the
+    -- JMAP Mailbox/role vocabulary (the IANA IMAP mailbox name attributes
+    -- lowercased, plus inbox), and `default` marks the
+    -- calendar or address book a source writes to when none is named, and
+    -- `attachments` the file collection holding an account's stand-ins (§14.3).
     role        TEXT CHECK (role IS NULL
                 OR (kind = 'message/rfc822' AND role IN ('inbox', 'sent', 'drafts', 'trash',
                     'junk', 'archive', 'all', 'flagged', 'important'))
-                OR (kind IN ('text/calendar', 'text/vcard') AND role = 'default')),
+                OR (kind IN ('text/calendar', 'text/vcard') AND role = 'default')
+                OR (kind = 'application/octet-stream' AND role = 'attachments')),
     -- Handle-space epoch, bumped by the owner on a backend identity reset, so a
     -- reader derives an IMAP UIDVALIDITY from the store alone (§12).
     generation  INTEGER NOT NULL DEFAULT 1,
@@ -486,7 +489,13 @@ CREATE TABLE item_reference (
     created_at   TEXT NOT NULL,            -- stamped by add_reference (§13)
     -- The key leads with the link id, which items_drop_references seeks by.
     PRIMARY KEY (from_link_id, from_kind, to_link_id, to_kind, role),
-    CHECK (from_kind != to_kind OR from_link_id != to_link_id)
+    CHECK (from_kind != to_kind OR from_link_id != to_link_id),
+    -- A writer-derived key names no identity (§9), so no endpoint is one: a
+    -- message under it, and a part of such a message, take no reference.
+    CHECK (NOT (from_link_id GLOB 'alt:*' OR from_link_id GLOB 'dup:*' OR from_link_id GLOB 'hash:*'
+                OR from_link_id GLOB 'part:alt:*' OR from_link_id GLOB 'part:dup:*')),
+    CHECK (NOT (to_link_id GLOB 'alt:*' OR to_link_id GLOB 'dup:*' OR to_link_id GLOB 'hash:*'
+                OR to_link_id GLOB 'part:alt:*' OR to_link_id GLOB 'part:dup:*'))
 ) STRICT;
 
 -- references_to, and the trigger's seek on the other end.
@@ -512,13 +521,17 @@ END;
 -- A file holding no body and bound by no source stands for an attachment
 -- inside a message (§14.3), and goes once no reference names it: a message
 -- gone with its last row takes it, through items_drop_references. A file with
--- a body, or one a source syncs, is never collected here.
+-- a body, or one a source syncs, is never collected here. Only a reference
+-- with a file end fires it, and it seeks the ends' link ids on items_by_link
+-- (`+` keeping the body test off items_by_object, which every bodiless row
+-- fills).
 CREATE TRIGGER item_reference_collects_files AFTER DELETE ON item_reference
+WHEN OLD.from_kind = 'application/octet-stream' OR OLD.to_kind = 'application/octet-stream'
 BEGIN
     DELETE FROM items
-    WHERE object_hash IS NULL
-      AND ((OLD.from_kind = 'application/octet-stream' AND link_id = OLD.from_link_id)
-           OR (OLD.to_kind = 'application/octet-stream' AND link_id = OLD.to_link_id))
+    WHERE link_id IN (iif(OLD.from_kind = 'application/octet-stream', OLD.from_link_id, NULL),
+                      iif(OLD.to_kind = 'application/octet-stream', OLD.to_link_id, NULL))
+      AND +object_hash IS NULL
       AND (SELECT kind FROM collections c WHERE c.id = items.collection) = 'application/octet-stream'
       AND NOT EXISTS (SELECT 1 FROM bindings b
                       WHERE b.collection = items.collection AND b.link_id = items.link_id)

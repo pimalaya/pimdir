@@ -10,4 +10,5 @@ JOIN mail_summary s ON s.collection = mi.collection AND s.link_id = mi.link_id
 JOIN items e ON e.link_id = s.invitation AND e.deleted = 0
 JOIN collections ec ON ec.id = e.collection AND ec.kind = 'text/calendar'
 WHERE mi.link_id BETWEEN coalesce(:link_id, '') AND coalesce(:link_id, x'') AND mi.deleted = 0
+  AND NOT (mi.link_id GLOB 'alt:*' OR mi.link_id GLOB 'dup:*' OR mi.link_id GLOB 'hash:*') AND NOT (e.link_id GLOB 'alt:*' OR e.link_id GLOB 'dup:*' OR e.link_id GLOB 'hash:*')
 ON CONFLICT DO NOTHING;

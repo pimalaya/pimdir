@@ -28,6 +28,6 @@ From the algorithm and prose specifications, never by running an implementation.
 - **Read the fixtures as bytes.** They are CRLF throughout, as RFC 5322, RFC 6350 and RFC 5545 require, so a harness that opens them in text mode changes the body and therefore the object name. This repository pins them with a `-text` gitattribute, and a consumer that vendors them owes itself the same. Each case carries its fixture's `blake3` and `sha256-128` name for exactly this reason: check them first, and a mangled read fails there rather than somewhere confusing later.
 - **Vendoring is allowed, unchecked vendoring is not** (§16). An implementation that cannot read this directory from its own build may copy it, provided it records the digests and re-checks them against this repository in CI. A frozen copy that keeps passing while the format moves is worse than no copy.
 
-## What is deliberately not pinned
+## Case folding
 
-- **Non-ASCII case folding of a sort key.** card-casefold.vcf is ASCII on purpose. Annex A names the mapping (Unicode simple lowercase, locale-independent), but a non-ASCII vector would pin behaviour the two runtimes have not been checked against each other on. The decoded values of mail-encoded.eml and card-escaped.vcf are pinned, being what split the writers; only the folding of a key is not.
+Annex A lowercases by the Unicode default full mapping, locale-independent (Rust's `str::to_lowercase`, Java's `toLowerCase(Locale.ROOT)`, Python's `str.lower`). card-full-lowercase.vcf pins it on the one letter where the mappings part: a dotted capital I folds to `i` and a combining dot above, in the address the sender rule compares (A.6) and in the sort key (A.2). card-casefold.vcf stays ASCII.
