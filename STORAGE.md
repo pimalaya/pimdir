@@ -626,7 +626,7 @@ A file's bytes say nothing about it, so its summary is what its source or its wr
 | `size` | with the body, its octets; without it, as stated: an attachment's decoded octets, or the source's figure |
 | `part` | for an attachment, its section in the message's body (RFC 3501 §6.4.5, `1`, `2.1`), counted on the body as stored; `NULL` otherwise |
 
-The size read without the body is replaced by the body's own, as for mail (A.1). **Hint**: none, the bytes stating no identity. An attachment is keyed `part:`, its message's `link_id`, `#` and its `part` (`part:abc@host#2`), so every writer walking one message names its files alike; a file created in the store is keyed `file:` and 32 lowercase hexadecimal digits of 128 random bits. Neither is a protocol identity, nor parsed by a reader. The keys of files a source lists are left to the first file source. A file carries no flags (`'[]'`) and no addresses. **`sort_key`**: `name` on A.2's rule for `fn`, read ascending.
+The size read without the body is replaced by the body's own, as for mail (A.1). **Hint**: none, the bytes stating no identity. An attachment is keyed `part:`, its message's `link_id`, `#` and its `part` (`part:abc@host#2`), so every writer walking one message names its files alike; a file created in the store is keyed `file:` and 32 lowercase hexadecimal digits of 128 random bits. Neither is a protocol identity, nor parsed by a reader. A file a source lists is keyed by the id its server keeps across a rename and a move, which is also its handle (SYNC.md §4). A file carries no flags (`'[]'`) and no addresses. **`sort_key`**: `name` on A.2's rule for `fn`, read ascending.
 
 ## Annex B. Capabilities (normative)
 

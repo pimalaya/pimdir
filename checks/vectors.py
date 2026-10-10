@@ -29,6 +29,8 @@ TABLES = {
     "journal_summary": {"uid", "summary", "dtstart", "dtstart_tzid", "dtstart_value"},
 }
 
+FILE_SUMMARY = {"name", "media_type", "size", "part"}
+
 ROLES = {"from", "to", "cc", "bcc", "email", "organizer", "attendee"}
 
 failures = []
@@ -210,9 +212,16 @@ for path in sync_cases:
     for at, page in enumerate(remote.get("pages") or []):
         require(f"{label}: page {at} says whether it is the last", isinstance(page.get("last"), bool))
         require(f"{label}: page {at} carries a cursor unless it is the last", page.get("last") or page.get("cursor") is not None)
+    files = all(c["kind"] == "application/octet-stream" for c in store.get("collections", []))
     for page in pages:
         for member in page["items"]:
             meta = member.get("meta")
+            if files:
+                # A file's meta is what its source states (Annex A.7): its
+                # stable id and its summary, no body.
+                require(f"{label}: file member {member['handle']} states its key and summary", isinstance(meta, dict) and set(meta) == {"link_id", "summary"})
+                require(f"{label}: file member {member['handle']} summary is file_summary's", set(meta.get("summary", {})) == FILE_SUMMARY)
+                continue
             require(f"{label}: member {member['handle']} carries its meta", isinstance(meta, dict) and (root / meta.get("body", "")).is_file())
             # A meta is read off the fixture save what a source states
             # itself: its attachment flag and its size (Annex A.1).

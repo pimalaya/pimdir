@@ -1,0 +1,18 @@
+{
+  "label": "a Full upgrade of a file fetches its bytes, which become its body and base at the fetched ETag",
+  "note": "the row 55 left; the fetch carries the body and the summary its connector states, the size the body's octets (STORAGE Annex A.7, SYNC.md §6)",
+  "store": { "collections": [{ "id": "Docs", "account": null, "kind": "application/octet-stream", "conflict": "manual" }], "objects": { "n1": { "body": "fixtures/file-notes.txt" }, "n2": { "body": "fixtures/file-notes-edited.txt" } }, "items": [{ "collection": "Docs", "link_id": "00000042oc1nst4nce", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "notes.txt" }], "bindings": [{ "collection": "Docs", "link_id": "00000042oc1nst4nce", "source": "nextcloud", "handle": "00000042oc1nst4nce", "base_flags": [], "base_object": null, "base_revision": "e1", "base_present": 1, "round": 1 }], "summaries": [{ "table": "file_summary", "collection": "Docs", "link_id": "00000042oc1nst4nce", "row": { "name": "Notes.txt", "media_type": "text/plain", "size": 15, "part": null } }], "sources": [{ "collection": "Docs", "source": "nextcloud", "checkpoint": "e1" }] },
+  "run": { "verb": "upgrade", "collection": "Docs", "source": "nextcloud", "tier": "Full", "handles": ["00000042oc1nst4nce"] },
+  "remote": { "snapshot": null, "fetch": { "00000042oc1nst4nce": { "Full": { "body": "fixtures/file-notes.txt", "revision": "e1", "meta": { "link_id": "00000042oc1nst4nce", "summary": { "name": "Notes.txt", "media_type": "text/plain", "size": 15, "part": null } } } } } },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [{ "collection": "Docs", "link_id": "00000042oc1nst4nce", "seq": 1, "flags": [], "object": "n1", "level": 2, "deleted": 0, "sort_key": "notes.txt" }],
+      "bindings": [{ "collection": "Docs", "link_id": "00000042oc1nst4nce", "source": "nextcloud", "handle": "00000042oc1nst4nce", "base_flags": [], "base_object": "n1", "base_revision": "e1", "base_present": 1, "round": 1 }],
+      "summaries": [{ "table": "file_summary", "collection": "Docs", "link_id": "00000042oc1nst4nce", "row": { "name": "Notes.txt", "media_type": "text/plain", "size": 15, "part": null } }],
+      "sources": [{ "collection": "Docs", "source": "nextcloud", "checkpoint": "e1" }]
+    }
+  }
+}
