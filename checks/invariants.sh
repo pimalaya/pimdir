@@ -505,6 +505,69 @@ expect "collect: the body is released to the collector, the holder elsewhere unt
 expect "collect: no tombstone, no queued push, and the feed counts a purge" \
     "$(sql "SELECT count(*) FROM items WHERE deleted = 1;")$(sql "SELECT count(*) FROM queue;")$(sql "SELECT purges FROM store_meta;")" "00$((purges + 1))"
 
+# --- Releasing bodies below a date keeps the headers (§11.4) ----------------
+
+fresh
+collection INBOX
+collection Archive
+collection Both
+run owner/set_collection_kind ":collection='Cards'" ":account=NULL" ":kind='text/vcard'"
+for hash in h1 h2 h3 h4 h5 h6 h7 h8 h9 hc; do object $hash; done
+run owner/upsert_checkpoint ":collection='INBOX'" ":source='imap'" ":checkpoint=NULL"
+mail INBOX old 1 10 "'2026-08-01T10:00:00Z'"
+mail INBOX dirty 2 11 "'2026-08-01T10:00:00Z'" '["\\Flagged"]' '[]'
+mail INBOX nodate 3 12 NULL
+mail INBOX recent 4 13 "'2026-10-06T08:00:00Z'"
+mail INBOX conflicted 5 14 "'2026-08-01T10:00:00Z'"
+mail INBOX diverged 6 15 "'2026-08-01T10:00:00Z'"
+mail INBOX edited 7 16 "'2026-08-01T10:00:00Z'"
+mail INBOX witness 8 17 "'2026-08-01T10:00:00Z'"
+mail Archive old 1 10 "'2026-08-01T10:00:00Z'"
+mail Both full 9 20 "'2026-08-01T10:00:00Z'"
+mail Both half 10 21 "'2026-08-01T10:00:00Z'"
+sql "UPDATE items SET sort_key = coalesce((SELECT date FROM mail_summary s WHERE s.collection = items.collection AND s.link_id = items.link_id), ''), level = 2;
+     UPDATE items SET object_hash = CASE link_id WHEN 'old' THEN 'h1' WHEN 'dirty' THEN 'h2' WHEN 'nodate' THEN 'h3' WHEN 'recent' THEN 'h4'
+         WHEN 'conflicted' THEN 'h5' WHEN 'diverged' THEN 'h6' WHEN 'edited' THEN 'h7' WHEN 'witness' THEN 'h8' ELSE 'h9' END;
+     UPDATE bindings SET base_object = (SELECT object_hash FROM items i WHERE i.collection = bindings.collection AND i.link_id = bindings.link_id);
+     UPDATE items SET conflicted = 1, conflict_object = 'hc' WHERE link_id = 'conflicted';
+     UPDATE bindings SET conflicted = 1 WHERE link_id = 'diverged';
+     UPDATE bindings SET base_object = 'h1' WHERE link_id = 'edited';
+     UPDATE bindings SET base_present = 0, base_flags = NULL WHERE link_id = 'witness';
+     INSERT INTO items(collection, link_id, seq, flags, object_hash, sort_key, level) VALUES
+         ('INBOX', 'created', 20, '[]', 'h9', '2026-08-01T10:00:00Z', 2),
+         ('INBOX', 'lone', 21, '[]', 'h9', '2026-08-01T10:00:00Z', 2),
+         ('Cards', 'card', 22, NULL, 'h9', '2026-08-01', 2);
+     INSERT INTO bindings(collection, link_id, source, handle) VALUES('INBOX', 'created', 'imap', char(1) || 'created');
+     INSERT INTO bindings(collection, link_id, source, handle, base_present, base_object) VALUES('Cards', 'card', 'dav', 'c', 1, 'h9');
+     INSERT INTO bindings(collection, link_id, source, handle, base_flags, base_object, base_present)
+         VALUES('Both', 'full', 'graph', 'g20', '[]', 'h9', 1);
+     INSERT INTO sources(collection, source) VALUES('Both', 'imap'), ('Both', 'graph');"
+run owner/recompute_refcounts
+cursor="$(run read/load_change_cursor | cut -d'|' -f1)"
+set=":collections='[\"INBOX\",\"Both\",\"Cards\"]'"
+run owner/release_bases_before "$set" ":until='2026-09-01T00:00:00Z'"
+expect "release: below the date, what needs no body, the undated included, two sources' bases alike" \
+    "$(run owner/release_before "$set" ":until='2026-09-01T00:00:00Z'" | sort -n | tr '\n' ' ')" "1 2 3 8 9 "
+run owner/recompute_refcounts
+expect "release: a conflict, a diverged binding, a local edit, a pending create, no binding, an unbound source, another kind, the newer and an unnamed collection keep theirs" \
+    "$(sql "SELECT collection || ':' || link_id FROM items WHERE object_hash IS NOT NULL ORDER BY collection, link_id;" | tr '\n' ' ')" \
+    "Archive:old Both:half Cards:card INBOX:conflicted INBOX:created INBOX:diverged INBOX:edited INBOX:lone INBOX:recent "
+expect "release: back to Meta, flags, summary and addresses kept" \
+    "$(sql "SELECT level, flags FROM items WHERE collection = 'INBOX' AND link_id = 'dirty';")|$(sql "SELECT count(*) FROM mail_summary WHERE collection = 'INBOX' AND link_id IN ('old', 'dirty', 'nodate', 'witness');")" \
+    '1|["\\Flagged"]|4'
+expect "release: the bases let go of the body, every binding still based, its flags kept" \
+    "$(sql "SELECT count(*) FROM bindings WHERE link_id IN ('old', 'dirty', 'nodate', 'witness', 'full') AND collection != 'Archive' AND base_object IS NULL AND base_present = 1;")|$(sql "SELECT base_flags FROM bindings WHERE link_id = 'dirty';")" \
+    "6|[]"
+expect "release: a body held elsewhere stays pinned, the rest fall to the collector" \
+    "$(run owner/list_garbage_objects | sort | tr '\n' ' ')|$(sql "SELECT refcount FROM objects WHERE hash = 'h1';")" "h2 h3 h8 |3"
+expect "release: each released item moves in the feed" \
+    "$(run read/list_items_changed_since ":since=$cursor" ":limit=10" | cut -d'|' -f3 | sort -n | tr '\n' ' ')" "1 2 3 8 9 "
+expect "release: a second run finds nothing" \
+    "$(run owner/release_bases_before "$set" ":until='2026-09-01T00:00:00Z'")$(run owner/release_before "$set" ":until='2026-09-01T00:00:00Z'")" ""
+run owner/release_bases_before "$set" ":until=NULL"
+expect "release: no ceiling reaches the newest" \
+    "$(run owner/release_before "$set" ":until=NULL")" "4"
+
 # --- Readers count and page under the chips (§14.1) --------------------------
 
 fresh

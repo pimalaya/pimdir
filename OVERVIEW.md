@@ -106,7 +106,7 @@ Normative: SYNC §9; STORAGE §10.
 
 Removal from every source is not removal from the store. When an item's last binding goes, the row and its body are kept, hidden from sync and from the live reads, and listed in a trash view. Only an explicit purge deletes the row; the body then falls to the collector. An identity that comes back revives the retained row, keeping its public id and body, so a restore costs no network.
 
-Mail older than a sync's window is not removed either: it stays stored and readable until the owner, on the user's request, collects what lies below a date, which frees the space and tells no server anything. Widening the window later lists it again.
+Mail older than a sync's window is not removed either: it stays stored and readable until the owner, on the user's request, collects what lies below a date, which frees the space and tells no server anything. Widening the window later lists it again. The owner may instead release the bodies below a date and keep the headers: the mail stays listed and searchable, a message opened later is fetched again, and a message whose body is still needed (a conflict, an unsent message, a copy owed to another source) keeps it.
 
 Retention has no switch. How long to keep and when to purge is the owner's schedule, and a policy of purging immediately reproduces a store that never retained. A move is not a loss: when the item's identity is held live in another collection of the account with the same body, the source row is purged at once rather than kept in the trash beside its new home. The trash also shows a deletion a source may not carry out yet, so nothing the user deleted is invisible while it waits.
 

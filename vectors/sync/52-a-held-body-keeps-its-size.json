@@ -1,0 +1,65 @@
+{
+  "label": "a listing restates no size over a held body, and a Meta row takes the size the source states",
+  "note": "The source states sizes that are not the octets (Exchange's PidTagMessageSize, Gmail's sizeEstimate): 312 for 10, whose body the store holds and whose size it read from it, 260 for 11, held at Meta. 10 keeps 299, 11 takes 260 (STORAGE Annex A.1, SYNC.md §6)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {
+      "b1": { "body": "fixtures/mail-basic.eml" }
+    },
+    "items": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": "b1", "level": 2, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" },
+      { "collection": "INBOX", "link_id": "recent-1@example.org", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z" }
+    ],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": [], "base_object": "b1", "base_revision": null, "base_present": 1, "round": null },
+      { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "imap", "handle": "11", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": null }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0 } },
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "recent-1@example.org", "row": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 241, "attachment": 0 } }
+    ],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c0" }]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "INBOX",
+    "source": "imap",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual"
+    }
+  },
+  "remote": {
+    "snapshot": {
+      "items": [
+        { "handle": "10", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-basic.eml", "size": 312 } },
+        { "handle": "11", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-recent.eml", "size": 260 } }
+      ],
+      "vanished": [],
+      "complete": true,
+      "checkpoint": "c1"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": "b1", "level": 2, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" },
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z" }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": [], "base_object": "b1", "base_revision": null, "base_present": 1, "round": 1 },
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "imap", "handle": "11", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 }
+      ],
+      "summaries": [
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0 } },
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "recent-1@example.org", "row": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 260, "attachment": 0 } }
+      ],
+      "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+    }
+  }
+}

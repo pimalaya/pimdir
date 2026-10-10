@@ -203,6 +203,10 @@ for path in sync_cases:
         for member in page["items"]:
             meta = member.get("meta")
             require(f"{label}: member {member['handle']} carries its meta", isinstance(meta, dict) and (root / meta.get("body", "")).is_file())
+            # A meta is read off the fixture save what a source states
+            # itself: its attachment flag and its size (Annex A.1).
+            require(f"{label}: member {member['handle']} meta is body, attachment and size", set(meta) <= {"body", "attachment", "size"})
+            require(f"{label}: member {member['handle']} states a size in octets", isinstance(meta.get("size", 0), int))
     for source in store.get("sources", []) + case["expect"].get("store", {}).get("sources", []):
         if source.get("round_open") is False:
             require(f"{label}: a closed round carries no cursor", source.get("round_cursor") is None and source.get("round_checkpoint") is None)

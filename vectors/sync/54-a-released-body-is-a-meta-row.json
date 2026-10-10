@@ -1,0 +1,56 @@
+{
+  "label": "a member whose body was released is relisted as a Meta row: nothing fetched, nothing pushed, nothing deleted",
+  "note": "20's body was released (STORAGE §11.4): Meta, no object, the binding based with no base_object, the size and the mark still the ones its body gave (425, 0). A round relists it: its meta restates the summary, the stated 440 and the multipart/mixed mark 1 included, the level stays Meta and no fetch is asked for (SYNC.md §6)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {},
+    "items": [
+      { "collection": "INBOX", "link_id": "footer-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-05T07:00:00Z" }
+    ],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "footer-1@example.org", "source": "imap", "handle": "20", "base_flags": ["\\Seen"], "base_object": null, "base_revision": null, "base_present": 1, "round": null }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "footer-1@example.org", "row": { "message_id": "footer-1@example.org", "in_reply_to": [], "subject": "[list] Release notes", "sender": "robot@lists.example.org", "sender_name": "List Robot", "date": "2026-10-05T07:00:00Z", "size": 425, "attachment": 0 } }
+    ],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c0" }]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "INBOX",
+    "source": "imap",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual"
+    }
+  },
+  "remote": {
+    "snapshot": {
+      "items": [
+        { "handle": "20", "flags": ["\\Seen"], "revision": null, "meta": { "body": "fixtures/mail-mixed-footer.eml", "size": 440 } }
+      ],
+      "vanished": [],
+      "complete": true,
+      "checkpoint": "c1"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "footer-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-05T07:00:00Z" }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "footer-1@example.org", "source": "imap", "handle": "20", "base_flags": ["\\Seen"], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 }
+      ],
+      "summaries": [
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "footer-1@example.org", "row": { "message_id": "footer-1@example.org", "in_reply_to": [], "subject": "[list] Release notes", "sender": "robot@lists.example.org", "sender_name": "List Robot", "date": "2026-10-05T07:00:00Z", "size": 440, "attachment": 1 } }
+      ],
+      "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+    }
+  }
+}

@@ -24,7 +24,7 @@ The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are to be interpreted a
 8. [Concurrency and ownership](#8-concurrency-and-ownership)
 9. [Identity and dedup](#9-identity-and-dedup): [the public id](#91-the-public-id-seq), [accounts](#92-accounts), [the sort key](#93-the-sort-key)
 10. [Sync model](#10-sync-model)
-11. [Retention](#11-retention): [requirements](#111-requirements), [purging](#112-purging), [collecting below a date](#113-collecting-below-a-date)
+11. [Retention](#11-retention): [requirements](#111-requirements), [purging](#112-purging), [collecting below a date](#113-collecting-below-a-date), [releasing bodies below a date](#114-releasing-bodies-below-a-date)
 12. [Collection generation](#12-collection-generation)
 13. [Encodings](#13-encodings)
 14. [Operations](#14-operations): [reading the store](#141-reading-the-store)
@@ -256,7 +256,7 @@ A shared item holds the merged truth; a binding per source records the base last
 
 A binding records two agreement points and a store MUST keep both: `base_object`, what the source last agreed with its remote, moved only by a sync, so a pending push stays derivable; `shared_object`, what it last agreed with the shared item, moved by every absorbed upsert. Measuring the cross-source axis from the sync base reads a source's own pending edit as another source's.
 
-`level` is the tier an item reached, a claim; `object_hash IS NOT NULL` is the fact of a body, and a remote content change drops the body while the level stays. `deleted` carries a removal until every source has dropped it, and the item is then retained (§11).
+`level` is the tier an item reached, a claim; `object_hash IS NOT NULL` is the fact of a body, and a remote content change drops the body while the level stays, where a release (§11.4) drops both. `deleted` carries a removal until every source has dropped it, and the item is then retained (§11).
 
 Nothing reaches the store unnamed: a member a source lists arrives with its identity and summary (SYNC.md §4) and becomes an item and a binding in the write of the page that lists it.
 
@@ -300,6 +300,14 @@ A tombstone a source still binds, because that source may not remove it (SYNC.md
 Nothing in pimdir is deleted by inference, and a scope is no exception: mail older than a source's scope stays stored and readable, and a sync neither drops it nor pushes anything for it (SYNC.md §5). Freeing that space is the owner's, on the user's request, by **`collect_before(collection, before)`**: every live mail item of the collection whose `date` is older than the RFC 3339 instant `before` and that owes nothing, removed with its bindings, summary and addresses. An item owes something while it is conflicted, a binding of it is conflicted or has no base, or its flags differ from a binding's base flags, both known; it stays. An item with no `date` is never older.
 
 A collection is not a delete: it stamps no tombstone, queues nothing and derives no push, and the remote keeps every member, which a later widening lists and names again. It MUST run in one transaction with `recompute_refcounts`, the cascade dropping pins no statement returns, and the bodies fall to the collector; each row counts in `store_meta.purges` (§4.5). It MUST NOT run between two chunks of a verb (§5), and an owner SHOULD drain the queue first, an action addressing a collected item by `seq` being parked. An owner narrowing a scope and collecting below it records the narrower coverage with the next sync (SYNC.md §5), not before.
+
+### 11.4 Releasing bodies below a date
+
+An owner keeping the headers of a mail collection and only some of its bodies frees the others by **`release_before(collections, until)`**: every live mail item of a set of collections whose `sort_key` lies below `until`, an RFC 3339 instant or `NULL` for none, the undated below any, and that holds a body it does not need, goes back to `Meta`. `object_hash` is cleared and `level` set to `1`; the summary, the addresses, the flags, the bindings and `seq` stay, so the item is still listed, counted and searched. A binding whose `base_object` is the item's body releases it too (`release_bases_before`) and stays based, `base_present` set: one identity is one message, so the base an immutable kind keeps is that body and nothing else.
+
+An item needs its body, and keeps it, while it is conflicted, a binding of it is conflicted, has no base (a pending create) or holds another body as its base (a local edit), while it has no binding, or while a source of the collection (`sources`) binds it not, the body being what propagation offers that source (SYNC.md §9). An unpushed flag needs no body and does not hold one back. A released body is fetched again by the next `Full` upgrade, linked from another collection holding it when it can be (SYNC.md §6), and a released row is no claim: a sync names it at `Meta` and fetches nothing.
+
+A release is no delete and no collection: it stamps no tombstone, queues nothing, derives no push, and the remote keeps every body. `release_bases_before` then `release_before` MUST run in one transaction with `recompute_refcounts`, in that order, the first leaving true what the second selects; each released item is restamped (§4.5), and the bodies fall to the collector, unless another collection or a queued action still pins them. It MUST NOT run between two chunks of a verb (§5).
 
 ## 12. Collection generation
 
@@ -359,7 +367,7 @@ A store is opened as one source. `load` projects the shared items into that sour
   2. Settle the refcount of every object the batch touched: `adjust_refcount` by the batch's net change, or `recompute_refcounts` for the whole store, which is also §7's repair. A batch that stored or dropped no object MAY skip this.
   3. Commit. The batch reclaims nothing (§5).
 
-The queue adds **`enqueue`**, **`drain`**, **`cancel`** and **`prune_receipts`** (§15); retention adds **`purge`** and **`purge_retained_before`** (§11.2), and the owner's manual **`collect_before`** (§11.3), each reporting rows and never bytes. **`collect_garbage()`** is §5's collector, reporting the rows, files and bytes it freed.
+The queue adds **`enqueue`**, **`drain`**, **`cancel`** and **`prune_receipts`** (§15); retention adds **`purge`** and **`purge_retained_before`** (§11.2), the owner's manual **`collect_before`** (§11.3) and **`release_before`** (§11.4), each reporting rows and never bytes. **`collect_garbage()`** is §5's collector, reporting the rows, files and bytes it freed.
 
 A collection's `kind` is declared, never derived: `set_collection_kind(collection, account, kind)` sets it, `load_kind` reads it, and `ensure_collection` inserts an empty kind it MUST NOT overwrite. The account binds the same way; `set_collection_account` re-accounts a collection, `load_account` reads it.
 
@@ -483,7 +491,7 @@ An implementation that vendors vectors/ MUST record their digests and re-check t
 
 What a writer derives from an item before its row reaches the store: the identity hint §9 keys on, the row of the kind's summary table, the `item_address` rows and the `sort_key` (§9.3). The store parses no body; the tables fix the shape and vectors/summaries.json the values.
 
-A derivation is made from the body, or from a server-side summary (an IMAP `ENVELOPE`, a Graph `$select`, Gmail's metadata, a JMAP `Email/get`) where the kind has a cheap tier. Where a kind has both, the two MUST agree byte for byte, the attachment mark aside (A.1).
+A derivation is made from the body, or from a server-side summary (an IMAP `ENVELOPE`, a Graph `$select`, Gmail's metadata, a JMAP `Email/get`) where the kind has a cheap tier. Where a kind has both, the two MUST agree byte for byte, the attachment mark and the size aside (A.1).
 
 ### A.0 Common rules
 
@@ -503,10 +511,10 @@ A derivation is made from the body, or from a server-side summary (an IMAP `ENVE
 | `sender` | the first `From` address, canonical (A.6) |
 | `sender_name` | its display name, decoded |
 | `date` | `Date` as an instant; `NULL` when unparseable. From a server-side summary, the `Date` field the server states (IMAP `ENVELOPE`, Graph's `sentDateTime`, JMAP's `sentAt`), never a received date |
-| `size` | the raw octets, or `RFC822.SIZE` at the `Meta` tier |
+| `size` | with the body, its octets; without it, the size the source states (IMAP's `RFC822.SIZE`, Graph's `PidTagMessageSize`, Gmail's `sizeEstimate`, JMAP's `size`), which may be an estimate, `NULL` when it states none |
 | `attachment` | with the body, `1` when a part carries `Content-Disposition: attachment`, `0` when none does; without it, the source's own flag where it states one (Graph's `hasAttachments`, JMAP's `hasAttachment`), else `1` when the top-level `Content-Type` is `multipart/mixed` and `0` otherwise |
 
-The mark read without the body is replaced by the walk of the parts once the body is read, and a writer holding the body MUST NOT write one read without it over it. It misses both ways, each corrected when the body is read: a `multipart/mixed` with no attachment (a list footer, inline images) reads as one, an attachment under `multipart/signed` or `multipart/encrypted` as none. It saves an IMAP listing the `BODYSTRUCTURE`. A row an earlier draft wrote at the `Meta` tier holds `NULL`, examined by nobody.
+The size and the mark read without the body are replaced by the body's own once it is read, and a writer holding the body MUST NOT write either read without it over it; a row whose body was released (§11.4) holds it no more, and the next meta restates both. The mark misses both ways, each corrected when the body is read: a `multipart/mixed` with no attachment (a list footer, inline images) reads as one, an attachment under `multipart/signed` or `multipart/encrypted` as none. It saves an IMAP listing the `BODYSTRUCTURE`. A row an earlier draft wrote at the `Meta` tier holds `NULL`, examined by nobody.
 
 **Hint**: `message_id`, else `alt:` followed by the decoded subject, the `date` column and the `sender` column joined by `|`, each empty when absent (`alt:Stand-up notes|2026-08-01T10:00:00Z|alice@example.org`). **Addresses**: every `From`, `To`, `Cc`, `Bcc` under its role, in document order. `References` is the search part's (SEARCH.md §9). **`sort_key`**: the `date` column, or `''`; read descending.
 
