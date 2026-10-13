@@ -447,6 +447,9 @@ run owner/set_round_cursor ":collection='INBOX'" ":source='imap'" ":cursor=x'703
 run owner/set_round_cursor ":collection='INBOX'" ":source='imap'" ":cursor=x'7032'" ":checkpoint=NULL"
 expect "round: a page lands its cursor, a later page keeps the checkpoint it carries none of" \
     "$(run owner/load_round ":collection='INBOX'" ":source='imap'" | cut -d'|' -f5,6)" "p2|c1"
+run owner/set_round_cursor ":collection='INBOX'" ":source='imap'" ":cursor=NULL" ":checkpoint=x'6335'"
+expect "round: a delta head lands its checkpoint and keeps the cursor a page landed" \
+    "$(run owner/load_round ":collection='INBOX'" ":source='imap'" | cut -d'|' -f5,6)" "p2|c5"
 expect "round: the last page infers deletes in scope only, the undated always in it, never a pending create" \
     "$(run owner/list_unstamped_bindings ":collection='INBOX'" ":source='imap'" | tr '\n' ' ')" "20|nodate 25|gone "
 run owner/open_round ":collection='INBOX'" ":source='imap'" ":since='2026-09-01T00:00:00Z'" ":until=NULL" ":band=0"

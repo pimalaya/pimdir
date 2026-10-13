@@ -1,0 +1,72 @@
+{
+  "label": "a head lands the arrival of a pending create and derives no push for anything it did not list",
+  "note": "Archive is mid-round (cursor p1). A move's other half relocated basic-1, and the head from a1 lists its arrival under 7: the pending create is landed, its provisional handle superseded, the binding stamped. encoded-1, another pending create, stays held: the round's unlisted pages may still carry its arrival, and a head derives no Add. 9 is marked read locally and the head does not list it: a head's candidates are its members and vanished handles alone, so its flag waits for a page listing it or for the last page. The head's a2 becomes the round's checkpoint, the cursor p1 stays (SYNC.md §5, §6)",
+  "store": {
+    "collections": [{ "id": "Archive", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {
+      "m1": { "body": "fixtures/mail-basic.eml" },
+      "m2": { "body": "fixtures/mail-encoded.eml" }
+    },
+    "items": [
+      { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" },
+      { "collection": "Archive", "link_id": "encoded-1@example.org", "seq": 2, "flags": [], "object": "m2", "level": 2, "deleted": 0, "sort_key": "2026-08-04T09:15:00Z" },
+      { "collection": "Archive", "link_id": "recent-1@example.org", "seq": 3, "flags": ["\\Seen"], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z" }
+    ],
+    "bindings": [
+      { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0, "round": null },
+      { "collection": "Archive", "link_id": "encoded-1@example.org", "source": "imap", "handle": "\u0001encoded-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0, "round": null },
+      { "collection": "Archive", "link_id": "recent-1@example.org", "source": "imap", "handle": "9", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "Archive", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "Archive", "link_id": "encoded-1@example.org", "row": { "message_id": "encoded-1@example.org", "in_reply_to": [], "subject": "Réunion de rentrée", "sender": "zoe.bruck@example.org", "sender_name": "Zöe Brück", "date": "2026-08-04T09:15:00Z", "size": 348, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "Archive", "link_id": "recent-1@example.org", "row": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 241, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [
+      { "collection": "Archive", "source": "imap", "checkpoint": null, "round": 1, "round_open": true, "round_since": null, "round_until": null, "round_cursor": "p1", "round_checkpoint": "a1", "round_band": false, "covered": false, "covered_since": null, "covered_until": null }
+    ]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "Archive",
+    "source": "imap",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual"
+    }
+  },
+  "remote": {
+    "heads": ["delta"],
+    "head": {
+      "kind": "delta",
+      "from": "a1",
+      "items": [{ "handle": "7", "flags": ["\\Seen"], "revision": null, "meta": { "body": "fixtures/mail-basic.eml" } }],
+      "vanished": [],
+      "checkpoint": "a2"
+    },
+    "pages": [],
+    "interrupted_after": 0,
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [{ "kind": "Created", "handle": "7" }],
+    "store": {
+      "items": [
+        { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" },
+        { "collection": "Archive", "link_id": "encoded-1@example.org", "seq": 2, "flags": [], "object": "m2", "level": 2, "deleted": 0, "sort_key": "2026-08-04T09:15:00Z" },
+        { "collection": "Archive", "link_id": "recent-1@example.org", "seq": 3, "flags": ["\\Seen"], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z" }
+      ],
+      "bindings": [
+        { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "7", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1, "round": 1 },
+        { "collection": "Archive", "link_id": "encoded-1@example.org", "source": "imap", "handle": "\u0001encoded-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0, "round": null },
+        { "collection": "Archive", "link_id": "recent-1@example.org", "source": "imap", "handle": "9", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 }
+      ],
+      "sources": [
+        { "collection": "Archive", "source": "imap", "checkpoint": null, "round": 1, "round_open": true, "round_since": null, "round_until": null, "round_cursor": "p1", "round_checkpoint": "a2", "round_band": false, "covered": false, "covered_since": null, "covered_until": null }
+      ]
+    }
+  }
+}

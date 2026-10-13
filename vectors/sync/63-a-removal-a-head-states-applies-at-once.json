@@ -1,0 +1,66 @@
+{
+  "label": "a removal a delta head states applies at once, and a flag change it lists is pulled, the round staying open on its cursor",
+  "note": "the round's first page named 30 and 29; since then the source removed 29 and marked 30 read. The run lists the round's head from c1 and is cut before the next page: 29 is dropped Deleted at once, as a delta's vanished handle is, not at the round's close; 15, which the store does not bind, is nothing to drop; 30's flag is pulled. The head's checkpoint c2 becomes the round's, the cursor p1 stays, no delete is inferred from an absence and the round is still open (SYNC.md §4, §5)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {},
+    "items": [
+      { "collection": "INBOX", "link_id": "recent-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z" },
+      { "collection": "INBOX", "link_id": "future-1@example.org", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2035-01-01T00:00:00Z" }
+    ],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "imap", "handle": "30", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 },
+      { "collection": "INBOX", "link_id": "future-1@example.org", "source": "imap", "handle": "29", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "recent-1@example.org", "row": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 241, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "future-1@example.org", "row": { "message_id": "future-1@example.org", "in_reply_to": [], "subject": "Clock skew", "sender": "mallory@example.org", "sender_name": "Mallory Example", "date": "2035-01-01T00:00:00Z", "size": 194, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [
+      { "collection": "INBOX", "source": "imap", "checkpoint": null, "round": 1, "round_open": true, "round_since": null, "round_until": null, "round_cursor": "p1", "round_checkpoint": "c1", "round_band": false, "covered": false, "covered_since": null, "covered_until": null }
+    ]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "INBOX",
+    "source": "imap",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual"
+    }
+  },
+  "remote": {
+    "heads": ["delta"],
+    "head": {
+      "kind": "delta",
+      "from": "c1",
+      "items": [{ "handle": "30", "flags": ["\\Seen"], "revision": null, "meta": { "body": "fixtures/mail-recent.eml" } }],
+      "vanished": ["15", "29"],
+      "checkpoint": "c2"
+    },
+    "pages": [],
+    "interrupted_after": 0,
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [
+      { "kind": "Vanished", "handle": "29" },
+      { "kind": "FlagsChanged", "handle": "30" }
+    ],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z", "retained": false, "retained_by": null },
+        { "collection": "INBOX", "link_id": "future-1@example.org", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 1, "sort_key": "2035-01-01T00:00:00Z", "retained": true, "retained_by": "imap" }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "imap", "handle": "30", "base_flags": ["\\Seen"], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 }
+      ],
+      "sources": [
+        { "collection": "INBOX", "source": "imap", "checkpoint": null, "round": 1, "round_open": true, "round_since": null, "round_until": null, "round_cursor": "p1", "round_checkpoint": "c2", "round_band": false, "covered": false, "covered_since": null, "covered_until": null }
+      ]
+    }
+  }
+}

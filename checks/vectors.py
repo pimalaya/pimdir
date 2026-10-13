@@ -212,6 +212,28 @@ for path in sync_cases:
     for at, page in enumerate(remote.get("pages") or []):
         require(f"{label}: page {at} says whether it is the last", isinstance(page.get("last"), bool))
         require(f"{label}: page {at} carries a cursor unless it is the last", page.get("last") or page.get("cursor") is not None)
+    # A head (SYNC.md sections 4 and 5): listed only to resume an open round,
+    # of a kind the connector lists; a delta head asked from the round's
+    # checkpoint, or a band round's from the source's, and carrying the
+    # checkpoint it lands; a band head asked from the instant the round
+    # opened, stating no removal and carrying no checkpoint.
+    head = remote.get("head")
+    if head is not None:
+        kind = head.get("kind")
+        require(f"{label}: a head is a delta or a band head", kind in {"delta", "band"})
+        require(f"{label}: a {kind} head is one the connector lists", kind in remote.get("heads", []))
+        row = next((s for s in store.get("sources", [])
+                    if s["collection"] == case["run"]["collection"] and s["source"] == case["run"]["source"]), {})
+        require(f"{label}: a head resumes an open round", row.get("round_open") is True)
+        if kind == "delta":
+            position = row.get("round_checkpoint") or (row.get("checkpoint") if row.get("round_band") else None)
+            require(f"{label}: a delta head lists from the round's checkpoint, or a band round's from the source's", position is not None and head.get("from") == position)
+            require(f"{label}: a delta head carries the checkpoint it lands", bool(head.get("rejected")) or head.get("checkpoint") is not None)
+        if kind == "band":
+            require(f"{label}: a band head lists from the instant the round opened", head.get("since") is not None and head.get("since") == row.get("round_started_at"))
+            require(f"{label}: a band head carries no checkpoint and states no removal", head.get("checkpoint") is None and not head.get("vanished") and not head.get("rejected"))
+        if not head.get("rejected"):
+            pages = [head] + pages
     files = all(c["kind"] == "application/octet-stream" for c in store.get("collections", []))
     for page in pages:
         for member in page["items"]:

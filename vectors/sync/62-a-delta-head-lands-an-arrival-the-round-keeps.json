@@ -1,0 +1,75 @@
+{
+  "label": "a delta head lands an arrival during an open round, and the round keeps it when it closes, on the head's checkpoint",
+  "note": "a Gmail Inbox fills in a round that began at history id h1000; its later pages list older mail, so the invoice that arrived meanwhile would show only at the first delta after the round closed. The run resumes the round and lists its head first, from the round's checkpoint h1000: the invoice is named under a3 and stamped with the round's id, and h1001 becomes the round's checkpoint. The last page lists a0; a1, stamped by an abandoned listing of round 1 and listed by none of round 2, is found absent and dropped, but a3 is stamped and stays. The round closes on h1001, not h1000, since the head reported everything up to it (SYNC.md §4, §5)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {},
+    "items": [
+      { "collection": "INBOX", "link_id": "recent-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z" },
+      { "collection": "INBOX", "link_id": "encoded-1@example.org", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-04T09:15:00Z" }
+    ],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "gmail", "handle": "a2", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 2 },
+      { "collection": "INBOX", "link_id": "encoded-1@example.org", "source": "gmail", "handle": "a1", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "recent-1@example.org", "row": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 241, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "encoded-1@example.org", "row": { "message_id": "encoded-1@example.org", "in_reply_to": [], "subject": "Réunion de rentrée", "sender": "zoe.bruck@example.org", "sender_name": "Zöe Brück", "date": "2026-08-04T09:15:00Z", "size": 348, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [
+      { "collection": "INBOX", "source": "gmail", "checkpoint": null, "round": 2, "round_open": true, "round_since": null, "round_until": null, "round_cursor": "t1", "round_checkpoint": "h1000", "round_band": false, "covered": false, "covered_since": null, "covered_until": null }
+    ]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "INBOX",
+    "source": "gmail",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual"
+    }
+  },
+  "remote": {
+    "heads": ["delta"],
+    "head": {
+      "kind": "delta",
+      "from": "h1000",
+      "items": [{ "handle": "a3", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-attachment.eml" } }],
+      "vanished": [],
+      "checkpoint": "h1001"
+    },
+    "pages": [
+      { "items": [{ "handle": "a0", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-basic.eml" } }], "vanished": [], "last": true, "cursor": null, "checkpoint": null }
+    ],
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [
+      { "kind": "Added", "handle": "a3" },
+      { "kind": "Added", "handle": "a0" },
+      { "kind": "Vanished", "handle": "a1" }
+    ],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z", "retained": false, "retained_by": null },
+        { "collection": "INBOX", "link_id": "encoded-1@example.org", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 1, "sort_key": "2026-08-04T09:15:00Z", "retained": true, "retained_by": "gmail" },
+        { "collection": "INBOX", "link_id": "attach-1@example.org", "seq": 3, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-05T09:00:00Z", "retained": false, "retained_by": null },
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 4, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z", "retained": false, "retained_by": null }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "gmail", "handle": "a0", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 2 },
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "gmail", "handle": "a2", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 2 },
+        { "collection": "INBOX", "link_id": "attach-1@example.org", "source": "gmail", "handle": "a3", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 2 }
+      ],
+      "summaries": [
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "attach-1@example.org", "row": { "message_id": "attach-1@example.org", "in_reply_to": [], "subject": "Invoice", "sender": "billing@example.org", "sender_name": "Billing", "date": "2026-10-05T09:00:00Z", "size": 451, "attachment": 1, "invitation": null } }
+      ],
+      "sources": [
+        { "collection": "INBOX", "source": "gmail", "checkpoint": "h1001", "round": 2, "round_open": false, "round_since": null, "round_until": null, "round_cursor": null, "round_checkpoint": null, "round_band": false, "covered": true, "covered_since": null, "covered_until": null }
+      ]
+    }
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "label": "a band head lands an arrival unstamped and records no checkpoint",
+  "note": "a Graph Inbox fills in a whole-folder delta round, whose delta link comes only with its last page, so the round holds no checkpoint to list a delta head from. The connector lists band heads: the run asks for the members Graph dates from the instant the round opened, which the connector takes less two days, and is cut before the next page. g3, an arrival, is named but not stamped: no later listing would state its removal, so the round's last page decides it (vector 66). g2, which the first page listed, is marked read and its flag pulled. No checkpoint is recorded and the cursor n1 stays (SYNC.md §4, §5)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {},
+    "items": [
+      { "collection": "INBOX", "link_id": "recent-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z" }
+    ],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "msgraph", "handle": "g2", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "recent-1@example.org", "row": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 241, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [
+      { "collection": "INBOX", "source": "msgraph", "checkpoint": null, "round": 1, "round_open": true, "round_started_at": "2026-10-13T10:00:00.000Z", "round_since": null, "round_until": null, "round_cursor": "n1", "round_checkpoint": null, "round_band": false, "covered": false, "covered_since": null, "covered_until": null }
+    ]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "INBOX",
+    "source": "msgraph",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual"
+    }
+  },
+  "remote": {
+    "heads": ["band"],
+    "head": {
+      "kind": "band",
+      "since": "2026-10-13T10:00:00.000Z",
+      "items": [
+        { "handle": "g2", "flags": ["\\Seen"], "revision": null, "meta": { "body": "fixtures/mail-recent.eml" } },
+        { "handle": "g3", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-attachment.eml", "attachment": 1 } }
+      ]
+    },
+    "pages": [],
+    "interrupted_after": 0,
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [
+      { "kind": "FlagsChanged", "handle": "g2" },
+      { "kind": "Added", "handle": "g3" }
+    ],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z" },
+        { "collection": "INBOX", "link_id": "attach-1@example.org", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-05T09:00:00Z" }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "msgraph", "handle": "g2", "base_flags": ["\\Seen"], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 },
+        { "collection": "INBOX", "link_id": "attach-1@example.org", "source": "msgraph", "handle": "g3", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": null }
+      ],
+      "sources": [
+        { "collection": "INBOX", "source": "msgraph", "checkpoint": null, "round": 1, "round_open": true, "round_since": null, "round_until": null, "round_cursor": "n1", "round_checkpoint": null, "round_band": false, "covered": false, "covered_since": null, "covered_until": null }
+      ]
+    }
+  }
+}
