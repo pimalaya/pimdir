@@ -1,0 +1,65 @@
+{
+  "label": "a body entering the store stands for its attachments, in the write landing it",
+  "note": "30 was named at Meta. The Full fetch lands its body, which no row of its key held: the owner walks the parts (Annex A.7) and, in the same write, declares the account's attachments collection, here a single-account store's \\u0001attachments named attachments with the role attachments, and records a stand-in per part carrying Content-Disposition: attachment, at Meta with no body, keyed part:, its file_summary, and the attachment reference from the message, origin auto (STORAGE section 14.3). Binds an owner recording attachments; every other case leaves them out of its store",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {
+      "a1": { "body": "fixtures/mail-attachments.eml" }
+    },
+    "items": [
+      { "collection": "INBOX", "link_id": "attach-2@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T12:30:00Z" }
+    ],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "attach-2@example.org", "source": "imap", "handle": "30", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "attach-2@example.org", "row": { "message_id": "attach-2@example.org", "in_reply_to": [], "subject": "Report and notes", "sender": "carol@example.org", "sender_name": "Carol", "date": "2026-10-06T12:30:00Z", "size": 1073, "attachment": 1, "invitation": null } }
+    ],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+  },
+  "run": {
+    "verb": "upgrade",
+    "collection": "INBOX",
+    "source": "imap",
+    "tier": "Full",
+    "handles": ["30"]
+  },
+  "remote": {
+    "snapshot": null,
+    "fetch": {
+      "30": { "Full": { "body": "fixtures/mail-attachments.eml", "revision": null } }
+    }
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "collections": [
+        { "id": "INBOX", "account": null, "kind": "message/rfc822", "name": "INBOX", "role": null },
+        { "id": "\u0001attachments", "account": null, "kind": "application/octet-stream", "name": "attachments", "role": "attachments" }
+      ],
+      "items": [
+        { "collection": "INBOX", "link_id": "attach-2@example.org", "seq": 1, "flags": [], "object": "a1", "level": 2, "deleted": 0, "sort_key": "2026-10-06T12:30:00Z" },
+        { "collection": "\u0001attachments", "link_id": "part:attach-2@example.org#3", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "résumé.pdf" },
+        { "collection": "\u0001attachments", "link_id": "part:attach-2@example.org#4", "seq": 3, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "café notes.txt" },
+        { "collection": "\u0001attachments", "link_id": "part:attach-2@example.org#5", "seq": 4, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "" }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "attach-2@example.org", "source": "imap", "handle": "30", "base_flags": [], "base_object": "a1", "base_revision": null, "base_present": 1, "round": 1 }
+      ],
+      "summaries": [
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "attach-2@example.org", "row": { "message_id": "attach-2@example.org", "in_reply_to": [], "subject": "Report and notes", "sender": "carol@example.org", "sender_name": "Carol", "date": "2026-10-06T12:30:00Z", "size": 1073, "attachment": 1, "invitation": null } },
+        { "table": "file_summary", "collection": "\u0001attachments", "link_id": "part:attach-2@example.org#3", "row": { "name": "résumé.pdf", "media_type": "application/pdf", "size": 15, "part": "3" } },
+        { "table": "file_summary", "collection": "\u0001attachments", "link_id": "part:attach-2@example.org#4", "row": { "name": "café notes.txt", "media_type": "text/plain", "size": 13, "part": "4" } },
+        { "table": "file_summary", "collection": "\u0001attachments", "link_id": "part:attach-2@example.org#5", "row": { "name": "", "media_type": null, "size": 10, "part": "5" } }
+      ],
+      "references": [
+        { "from_kind": "message/rfc822", "from_link_id": "attach-2@example.org", "to_kind": "application/octet-stream", "to_link_id": "part:attach-2@example.org#3", "role": "attachment", "origin": "auto" },
+        { "from_kind": "message/rfc822", "from_link_id": "attach-2@example.org", "to_kind": "application/octet-stream", "to_link_id": "part:attach-2@example.org#4", "role": "attachment", "origin": "auto" },
+        { "from_kind": "message/rfc822", "from_link_id": "attach-2@example.org", "to_kind": "application/octet-stream", "to_link_id": "part:attach-2@example.org#5", "role": "attachment", "origin": "auto" }
+      ],
+      "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+    }
+  }
+}

@@ -12,6 +12,7 @@ import hashlib
 import json
 import sys
 from email import message_from_bytes
+from email.header import decode_header, make_header
 from pathlib import Path
 
 from blake3 import blake3
@@ -98,6 +99,37 @@ def body(case):
     return bytes(i % 251 for i in range(case["body_len"]))
 
 
+def attachments(message):
+    """The parts a message stands for as files: those carrying
+    Content-Disposition: attachment, by IMAP section (RFC 3501 section
+    6.4.5), the message itself 1 when it is no multipart, a multipart's
+    children numbered under it, a message/rfc822 part one part. The name is
+    the filename, else the Content-Type name, RFC 2231 and RFC 2047 decoded;
+    the media type NULL when no Content-Type is stated; the size the
+    transfer-decoded octets."""
+
+    def stated(part, section):
+        name = part.get_filename() or ""
+        if "=?" in name:
+            name = str(make_header(decode_header(name)))
+        media_type = part.get_content_type() if part.get("Content-Type") is not None else None
+        size = None if part.get_content_maintype() == "multipart" else len(part.get_payload(decode=True))
+        return {"part": section, "name": name, "media_type": media_type, "size": size}
+
+    def walk(part, prefix, found):
+        for at, child in enumerate(part.get_payload(), 1):
+            section = f"{prefix}{at}"
+            if child.get_content_disposition() == "attachment":
+                found.append(stated(child, section))
+            if child.get_content_maintype() == "multipart":
+                walk(child, f"{section}.", found)
+        return found
+
+    if message.get_content_maintype() != "multipart":
+        return [stated(message, "1")] if message.get_content_disposition() == "attachment" else []
+    return walk(message, "", [])
+
+
 root = Path(sys.argv[1] if len(sys.argv) > 1 else ".") / "vectors"
 objects = json.loads((root / "objects.json").read_text())
 summaries = json.loads((root / "summaries.json").read_text())
@@ -157,6 +189,9 @@ for case in summaries["cases"]:
                 invitation = uids[0] if uids else None
                 break
         check(f"{case['label']} invitation", case["summary"]["invitation"], invitation)
+        # The stand-ins' parts (STORAGE section 14.3, Annex A.7), read by the
+        # stdlib parser.
+        check(f"{case['label']} attachments", case.get("attachments"), attachments(message_from_bytes(bytes_)))
 
     for address in case["addresses"]:
         require(f"{case['label']} role {address['role']}", address["role"] in ROLES)
@@ -186,9 +221,24 @@ for path in sync_cases:
     labels = set(store.get("objects", {}))
     for object_label, spec in store.get("objects", {}).items():
         require(f"{label}: object {object_label} names a fixture", (root / spec["body"]).is_file())
-    collections = {c["id"] for c in store.get("collections", [])}
-    for item in store.get("items", []) + case["expect"].get("store", {}).get("items", []):
+    # A run may declare a collection, as an owner recording attachments
+    # declares the account's (STORAGE section 14.3).
+    expected = case["expect"].get("store", {})
+    declared = store.get("collections", []) + expected.get("collections", [])
+    collections = {c["id"] for c in declared}
+    for collection in declared:
+        if collection.get("role") == "attachments":
+            require(f"{label}: the attachments role marks a file collection", collection["kind"] == "application/octet-stream")
+    for item in store.get("items", []) + expected.get("items", []):
         require(f"{label}: item {item['link_id']} in a known collection", item["collection"] in collections)
+    # An expected reference names two ends the expected store holds (STORAGE
+    # section 14.2).
+    kinds = {c["id"]: c["kind"] for c in declared}
+    held = {(kinds.get(item["collection"]), item["link_id"]) for item in expected.get("items", [])}
+    for reference in expected.get("references", []):
+        for end in ("from", "to"):
+            endpoint = (reference[f"{end}_kind"], reference[f"{end}_link_id"])
+            require(f"{label}: reference {end} {endpoint} is held", endpoint in held)
         require(f"{label}: item {item['link_id']} names a known object", item.get("object") in labels | {None})
     for binding in store.get("bindings", []) + case["expect"].get("store", {}).get("bindings", []):
         require(f"{label}: binding {binding['handle']} names a known base", binding.get("base_object") in labels | {None})

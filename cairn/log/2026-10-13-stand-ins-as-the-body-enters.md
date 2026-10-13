@@ -1,0 +1,16 @@
+---
+cairn: log
+change: stand-ins-as-the-body-enters
+date: 2026-10-13
+---
+
+# Stand-ins are recorded as the body enters
+
+The Android app recorded a message's stand-ins itself, after storing a body; the other writers (neverest landing bodies through io-pimdir, himalaya's drafts through the queue) recorded none, so their stores had no files. The decision (Clément): it belongs to the write path every writer shares, at instant T, when a body enters the store, never as a pass over held bodies and never recomputed.
+
+- **When** (STORAGE §14.3, new bullet "Stand-ins are recorded as the body enters"): an owner recording attachments records a message's stand-ins in the transaction storing its body, whatever stores it. A body enters when no row of its key in the account held it before the write, which `lookup_objects` answers; a move, a copy, a second label and the same body again record nothing, a body released then fetched again finds its stand-ins in place, and a body held before the owner recorded attachments is never walked. Guarded by sync vector 70 (a Full fetch of a body with three attachments lands, in its write, the collection, three stand-ins, their `file_summary` rows and three `auto` references), which binds an engine whose owner records attachments; io-pimdir's tests/attachments.rs holds the cases a vector cannot (the second label, the release and re-fetch, no backfill), the engine's own.
+- **Which collection** (§14.3): the account's file collection holding the role `attachments`, else one the owner declares with it, named `attachments`, whose id SHOULD be the account, `/`, `U+0001` and `attachments`, or `U+0001` and `attachments` without an account: what the Android app already used, a name no server gives a mailbox, so two owners of one store declare the same. Guarded by vector 70's expected `collections`, and checks/vectors.py, which now checks that the attachments role marks a file collection and that every expected reference names two ends the expected store holds.
+- **What each stand-in states** (Annex A.7): the name RFC 2231 and RFC 2047 decoded, as A.0 already says of every header value; the size the part's body with its transfer encoding undone, the line break before the next delimiter belonging to the delimiter (RFC 2046 §5.1.1), `NULL` for a `multipart` part. Guarded by summaries.json's `attachments` on every mail case and the new fixture mail-attachments.eml (a nested alternative, an inline image standing for nothing, RFC 2231 continuations, an RFC 2047 filename winning over the type's name, a quoted-printable soft break, a part stating no type), which checks/vectors.py re-derives through the stdlib parser; a size altered fails it.
+- SYNC §11 and vectors/README.md: `expect` may state the collections a run declares, with `name` and `role`, and the `references` it records. GUIDE's files procedure says when, how the collection is found and named, and that nothing is backfilled; OVERVIEW says an attachment is recorded when its message's body enters.
+
+Implemented in io-pimdir (the write path's `apply`, `summary::mail::attachments`). Not stated: the bounds io-pimdir walks within (64 multipart levels, 1000 attachments a message), proposed with the depth bound of 2026-10-11. draft-04 is not tagged yet, so the number stays.

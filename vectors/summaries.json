@@ -18,7 +18,8 @@
         { "role": "to", "position": 1, "address": "carol@example.org", "name": null }
       ],
       "sort_key": "2026-08-01T10:00:00Z",
-      "meta_attachment": 0
+      "meta_attachment": 0,
+      "attachments": []
     },
     {
       "label": "mail, Message-ID already claimed in the collection",
@@ -37,7 +38,8 @@
         { "role": "to", "position": 1, "address": "carol@example.org", "name": null }
       ],
       "sort_key": "2026-08-01T10:00:00Z",
-      "meta_attachment": 0
+      "meta_attachment": 0,
+      "attachments": []
     },
     {
       "label": "mail, no Message-ID",
@@ -53,7 +55,8 @@
         { "role": "to", "position": 0, "address": "ops@example.org", "name": null }
       ],
       "sort_key": "2026-08-01T10:00:00Z",
-      "meta_attachment": 0
+      "meta_attachment": 0,
+      "attachments": []
     },
     {
       "label": "mail, encoded headers",
@@ -71,7 +74,8 @@
         { "role": "cc", "position": 1, "address": "dan@example.net", "name": "Dan" }
       ],
       "sort_key": "2026-08-04T09:15:00Z",
-      "meta_attachment": 0
+      "meta_attachment": 0,
+      "attachments": []
     },
     {
       "label": "mail, unparseable Date",
@@ -87,7 +91,8 @@
         { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
       ],
       "sort_key": "",
-      "meta_attachment": 0
+      "meta_attachment": 0,
+      "attachments": []
     },
     {
       "label": "mail, no Subject header",
@@ -103,7 +108,8 @@
         { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
       ],
       "sort_key": "2026-08-01T10:00:00Z",
-      "meta_attachment": 0
+      "meta_attachment": 0,
+      "attachments": []
     },
     {
       "label": "mail, two In-Reply-To ids",
@@ -119,7 +125,8 @@
         { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
       ],
       "sort_key": "2026-08-01T10:00:00Z",
-      "meta_attachment": 0
+      "meta_attachment": 0,
+      "attachments": []
     },
     {
       "label": "mail, a recent Date",
@@ -135,7 +142,8 @@
         { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
       ],
       "sort_key": "2026-10-06T08:30:00Z",
-      "meta_attachment": 0
+      "meta_attachment": 0,
+      "attachments": []
     },
     {
       "label": "mail, a Date in the future",
@@ -151,7 +159,8 @@
         { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
       ],
       "sort_key": "2035-01-01T00:00:00Z",
-      "meta_attachment": 0
+      "meta_attachment": 0,
+      "attachments": []
     },
     {
       "label": "mail, multipart/mixed with no attachment",
@@ -167,7 +176,8 @@
         { "role": "to", "position": 0, "address": "list@lists.example.org", "name": null }
       ],
       "sort_key": "2026-10-05T07:00:00Z",
-      "meta_attachment": 1
+      "meta_attachment": 1,
+      "attachments": []
     },
     {
       "label": "mail, an attachment",
@@ -183,7 +193,31 @@
         { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
       ],
       "sort_key": "2026-10-05T09:00:00Z",
-      "meta_attachment": 1
+      "meta_attachment": 1,
+      "attachments": [
+        { "part": "2", "name": "invoice.pdf", "media_type": "application/pdf", "size": 9 }
+      ]
+    },
+    {
+      "label": "mail, attachments",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-attachments.eml",
+      "note": "the stand-ins' parts (STORAGE section 14.3, Annex A.7): the parts carrying Content-Disposition: attachment, in document order, by IMAP section (RFC 3501 section 6.4.5), the multipart/alternative being 1 and its children 1.1 and 1.2, the inline image 2 standing for nothing. 3 is named by RFC 2231 continuations, one encoded, and measures 15 decoded octets of base64 across two lines; 4 is named by an RFC 2047 word in its filename, the Content-Disposition filename winning over the Content-Type name, and its quoted-printable soft line break joins the two lines into 13 octets; 5 states no Content-Type, so no media type, and no name, its two identity lines counting the line break between them and not the one before the delimiter (RFC 2046 section 5.1.1)",
+      "body": { "len": 1073, "blake3": "xav2pqoyfci5fjnyfwjcrm6tnnlu2bc4m6527z7jfudhnwqnpyua", "sha256-128": "2cccw4zgoij3jqfz6nv2kni6re" },
+      "link_id": "attach-2@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": "attach-2@example.org", "in_reply_to": [], "subject": "Report and notes", "sender": "carol@example.org", "sender_name": "Carol", "date": "2026-10-06T12:30:00Z", "size": 1073, "attachment": 1, "invitation": null },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "carol@example.org", "name": "Carol" },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sort_key": "2026-10-06T12:30:00Z",
+      "meta_attachment": 1,
+      "attachments": [
+        { "part": "3", "name": "résumé.pdf", "media_type": "application/pdf", "size": 15 },
+        { "part": "4", "name": "café notes.txt", "media_type": "text/plain", "size": 13 },
+        { "part": "5", "name": "", "media_type": null, "size": 10 }
+      ]
     },
     {
       "label": "mail, an invitation",
@@ -199,7 +233,8 @@
         { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
       ],
       "sort_key": "2026-08-07T08:00:00Z",
-      "meta_attachment": 0
+      "meta_attachment": 0,
+      "attachments": []
     },
     {
       "label": "card, every field present",
