@@ -18,23 +18,23 @@ change: round-head
 - [x] checks/vectors.py: a head resumes an open round, of a listed kind, from the round's checkpoint or a band round's source's, or from `round_started_at`; a band head states no removal and carries no checkpoint; a head's members carry their meta
 - [x] vectors/sync 62 to 69; vectors/README.md
 - [x] GUIDE.md §10 and the vectors entry; OVERVIEW.md
-- [ ] Review of the design (orchestrator, then Clément)
-- [ ] Commit; log entry `cairn/log/YYYY-MM-DD-round-head.md` once io-pimdir passes 62 to 69
+- [x] Review of the design (orchestrator, then Clément)
+- [x] Commit; log entry `cairn/log/YYYY-MM-DD-round-head.md` once io-pimdir passes 62 to 69
 
 ## 2. io-pimdir
 
-- [ ] `PimdirRemote::heads()` (delta, band); `PimdirListing::Head` (a delta from a checkpoint, a band from an instant); `PimdirEnumerated` answers a refused head and no head
-- [ ] `choose`: when resuming, plan a head before the next page from `round_checkpoint`, a band round's source checkpoint, or `PimdirRound::started_at`
-- [ ] merge a head as a page before the last (candidates, `Handles` load, `holds_creates` true); stamp and `SetRoundCursor { cursor: None, checkpoint }` for a delta head; nothing for a band head
-- [ ] a refused head restarts the round over `opts.scope`, never a band
-- [ ] re-vendor `set_round_cursor`; run vectors 62 to 69
+- [x] `PimdirRemote::heads()` (delta, band); `PimdirListing::Head` (a delta from a checkpoint, a band from an instant); `PimdirEnumerated` answers a refused head and no head
+- [x] `choose`: when resuming, plan a head before the next page from `round_checkpoint`, a band round's source checkpoint, or `PimdirRound::started_at`
+- [x] merge a head as a page before the last (candidates, `Handles` load, `holds_creates` true); stamp and `SetRoundCursor { cursor: None, checkpoint }` for a delta head; nothing for a band head
+- [x] a refused head restarts the round over `opts.scope`, never a band
+- [x] re-vendor `set_round_cursor`; run vectors 62 to 69
 
 ## 3. neverest
 
-- [ ] IMAP: delta head through `delta_page` from the round's checkpoint (QRESYNC), never falling back to a round page; band head by `UID SEARCH SINCE` without QRESYNC, and the last page relisting it
-- [ ] Gmail: delta head through the history read once a run, from each collection's round checkpoint; an expired history id refuses the head; page members whose labels no longer hold the collection are left out
-- [ ] Graph: band head on `/messages` by `lastModifiedDateTime` (measure first, else `receivedDateTime`); the whole-folder round's last page relists the head band after the delta link; a band round with a stored delta link may list a delta head from it
-- [ ] report heads per collection; Stalwart test: an arrival during an open round shows at the next run and survives the close
+- [x] IMAP: delta head through `delta_page` from the round's checkpoint (QRESYNC), never falling back to a round page; band head by `UID SEARCH SINCE` without QRESYNC, and the last page relisting it
+- [x] Gmail: delta head through the history read once a run, from each collection's round checkpoint; an expired history id refuses the head; page members whose labels no longer hold the collection are left out
+- [x] Graph: band head on `/messages` by `receivedDateTime` (`lastModifiedDateTime` left for a measure on a tenant); the whole-folder round's last page relists the head band after the delta link (a delta head from a stored link: not listed, Graph answers NoHead)
+- [x] Stalwart test (neverest tests/heads.rs, QRESYNC and band modes): an arrival during an open round shows at the next run and survives the close; heads per collection in the report left for later
 - [ ] live: Gmail and Graph test boxes
 
 ## 4. Clients
