@@ -34,7 +34,7 @@
       "since": "2026-10-13T10:00:00.000Z",
       "items": [
         { "handle": "g2", "flags": ["\\Seen"], "revision": null, "meta": { "body": "fixtures/mail-recent.eml" } },
-        { "handle": "g3", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-attachment.eml", "attachment": 1 } }
+        { "handle": "g3", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-attachment.eml" } }
       ]
     },
     "pages": [],

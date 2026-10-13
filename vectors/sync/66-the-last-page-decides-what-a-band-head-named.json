@@ -39,14 +39,14 @@
       "kind": "band",
       "since": "2026-10-13T10:00:00.000Z",
       "items": [
-        { "handle": "g3", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-attachment.eml", "attachment": 1 } }
+        { "handle": "g3", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-attachment.eml" } }
       ]
     },
     "pages": [
       {
         "items": [
-          { "handle": "g1", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-basic.eml", "attachment": 0 } },
-          { "handle": "g3", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-attachment.eml", "attachment": 1 } }
+          { "handle": "g1", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-basic.eml" } },
+          { "handle": "g3", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-attachment.eml" } }
         ],
         "vanished": [],
         "last": true,
