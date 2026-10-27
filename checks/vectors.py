@@ -302,6 +302,53 @@ def parse(query):
 
     disjunction(None)
 
+# The temporal coverage of SEARCH.md section 8.2, re-derived for a case whose
+# query is only `collection:`, `account:` and absolute `date:` terms: every
+# collection in scope rolled up from its sources' coverage (STORAGE section
+# 10), the highest floor above the range's start, the lowest ceiling below its
+# end, filling if a source never closed a round.
+def span_of(point):
+    if re.fullmatch(r"\d{4}", point):
+        return f"{point}-01-01T00:00:00Z", f"{int(point) + 1}-01-01T00:00:00Z"
+    if re.fullmatch(r"\d{4}-\d{2}", point):
+        year, month = int(point[:4]), int(point[5:])
+        after = f"{year + month // 12}-{month % 12 + 1:02d}"
+        return f"{point}-01T00:00:00Z", f"{after}-01T00:00:00Z"
+    return None
+
+
+def temporal_of(query, collections):
+    scope, since, until = list(collections), None, None
+    for word in query.split():
+        name, _, value = word.partition(":")
+        if name == "collection":
+            scope = [c for c in scope if c["id"] == value]
+        elif name == "account":
+            scope = [c for c in scope if c["account"] == value]
+        elif name == "date":
+            low, _, high = value.partition("..") if ".." in value else (value, "", value)
+            low_span, high_span = (span_of(low) if low else (None, None)), (span_of(high) if high else (None, None))
+            if low_span is None or high_span is None:
+                return None
+            since, until = low_span[0], high_span[1]
+        else:
+            return None
+    floor = ceiling = None
+    filling = False
+    for collection in scope:
+        for source in collection.get("sources", []):
+            if source["covered_at"] is None:
+                filling = True
+                continue
+            low, high = source["covered_since"], source["covered_until"]
+            if low is not None and (since is None or since < low) and (floor is None or low > floor):
+                floor = low
+            if high is not None and (until is None or until > high) and (ceiling is None or high < ceiling):
+                ceiling = high
+    if floor is None and ceiling is None and not filling:
+        return "full"
+    return {"since": floor, "until": ceiling, "filling": filling}
+
 
 # The chunk boundaries of SEARCH.md section 6, over a field's text as bytes.
 BLANK_LINES = re.compile(rb"\r?\n(?:[ \t]*\r?\n)+")
@@ -598,6 +645,15 @@ placements = {(item["collection"], item["seq"]) for item in store["items"]}
 accounts = {c["id"]: c["account"] for c in store["collections"]}
 hits = {(accounts[item["collection"]], item["seq"]) for item in store["items"]}
 
+# A source's coverage row (STORAGE section 10): never closed carries no bound.
+for collection in store["collections"]:
+    for source in collection.get("sources", []):
+        require(f"search store: {collection['id']} source {source.get('source')} states its coverage",
+                set(source) == {"source", "covered_since", "covered_until", "covered_at"})
+        if source.get("covered_at") is None:
+            require(f"search store: {collection['id']} never closed, so no bound",
+                    source.get("covered_since") is None and source.get("covered_until") is None)
+
 for item in store["items"]:
     require(f"search store: {item['link_id']} in a known collection", item["collection"] in accounts)
     if "fixture" in item:
@@ -614,7 +670,7 @@ for reference in store.get("references", []):
 
 # A case answers hits, a threaded listing or a refusal (SEARCH.md section 11),
 # and the grammar above accepts its query or refuses it as the case says.
-KEYS = {"query", "hits", "threads", "error", "sort", "ordered", "horizon_left", "note"}
+KEYS = {"query", "hits", "threads", "error", "sort", "ordered", "horizon_left", "temporal", "note"}
 for case in queries["cases"]:
     label = f"search {case['query']!r}"
     require(f"{label}: known keys only", set(case) <= KEYS)
@@ -628,17 +684,37 @@ for case in queries["cases"]:
     for thread in case.get("threads", []):
         require(f"{label}: thread {thread.get('thread')} states its id, count, first and last",
                 set(thread) == {"thread", "count", "first", "last", "hits"} and thread["first"] <= thread["last"])
+    temporal = case.get("temporal")
+    if temporal is not None:
+        require(f"{label}: temporal is full or bounded",
+                temporal == "full" or (isinstance(temporal, dict) and set(temporal) == {"since", "until", "filling"}))
+        derived = temporal_of(case["query"], store["collections"])
+        require(f"{label}: a temporal case is one checks/vectors.py re-derives", derived is not None)
+        check(f"{label}: temporal", temporal, derived)
     try:
         parse(case["query"])
         got = None
     except Refused as refused:
         got = {"code": refused.code, "start": refused.start, "end": refused.end}
     if "error" in case:
-        require(f"{label}: refusals carry no sort, order or coverage", not set(case) & {"sort", "ordered", "horizon_left"})
+        require(f"{label}: refusals carry no sort, order or coverage", not set(case) & {"sort", "ordered", "horizon_left", "temporal"})
         require(f"{label}: a known code", case["error"].get("code") in CODES)
         check(f"{label}: refusal", got, case["error"])
     else:
         check(f"{label}: accepted", got, None)
+
+# Every field of SEARCH.md section 8's table, read from the table, is the
+# parser's and is used by at least one answered case, so a field the compiler
+# maps wrong fails a case rather than a user.
+table = (root.parent / "SEARCH.md").read_text().split("| Field | Meaning |")[1].split("\n\n")[0]
+documented = {name for line in table.splitlines()[2:] for name in re.findall(r"`([a-z]+):", line.split("|")[1])}
+check("search fields: the grammar's are the table's", sorted(FIELDS), sorted(documented))
+answered = set()
+for case in queries["cases"]:
+    if "error" not in case:
+        answered |= {token["kind"] == "field" and case["query"][token["start"]:token["colon"]] for token in lex(case["query"])}
+for field in sorted(documented - answered):
+    failures.append(f"search field {field}: used by no hits or threads case")
 
 # The chunk cases (SEARCH.md section 6): every boundary re-derived from the rule.
 chunk_cases = json.loads((search / "chunks.json").read_text())["cases"]

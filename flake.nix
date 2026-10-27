@@ -64,7 +64,7 @@
         '';
 
         vectors = pkgs.runCommand "pimdir-vectors" { } ''
-          ${python pkgs}/bin/python3 ${./checks/vectors.py} ${format} | tee $out
+          ${python pkgs}/bin/python3 ${./checks/vectors.py} ${standard} | tee $out
         '';
       });
 
