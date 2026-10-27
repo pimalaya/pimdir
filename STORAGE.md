@@ -179,7 +179,7 @@ There are no down-migrations. An implementation meeting a newer or corrupt store
 
 A row an earlier draft wrote at `level` 0 is kept and read as 1 (§13).
 
-A column a rebuild added MUST be backfilled where `NULL` contradicts the existing rows, in the same transaction, the owner noting before the rebuild which columns were absent (`PRAGMA table_info`): `bindings.shared_object` from the item's `object_hash` (`backfill_shared_object`), or the first absorb files a source's own pending edit as a divergence; `mail_summary.invitation` re-derived from every held body (Annex A.1), then `link_invitations_of` over every mail (§14.2), since a held message is never read again. `list_held_mail` pages the rows holding a body for such a backfill.
+A column a rebuild added MUST be backfilled where `NULL` contradicts the existing rows, in the same transaction, the owner noting before the rebuild which columns were absent (`PRAGMA table_info`): `bindings.shared_object` from the item's `object_hash` (`backfill_shared_object`), or the first absorb files a source's own pending edit as a divergence; `mail_summary.invitation` re-derived from every held body (Annex A.1), then `link_invitations_of` over every mail (§14.2), since a held message is never read again; `task_summary`'s `priority`, `categories`, `parent` and `mid` re-derived from every held task body (Annex A.4), then `link_parents_of` and `link_sources_of` over every task, `link_parents_to` over every calendar item and `link_sources_to` over every mail (§14.2). `list_held_mail` and `list_held_tasks` page the rows holding a body for such a backfill.
 
 ## 7. Integrity
 

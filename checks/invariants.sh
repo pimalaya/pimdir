@@ -1032,6 +1032,13 @@ mail INBOX bare 11 21 "'2026-10-06T08:00:00Z'"
 sql "UPDATE items SET object_hash = 'hb' WHERE link_id = 'held';"
 expect "reconcile: list_held_mail pages the rows holding a body" \
     "$(run owner/list_held_mail ":after_collection=NULL" ":after_link_id=NULL" ":limit=10" | cut -d'|' -f2,4)|$(run owner/list_held_mail ":after_collection='INBOX'" ":after_link_id='held'" ":limit=10")" "held|hb|"
+run owner/set_collection_kind ":collection='Cal'" ":account=NULL" ":kind='$cal_kind'"
+item Cal tk 12 "'hb'"
+item Cal tn 13
+item Cal ev 14 "'hb'"
+sql "INSERT INTO task_summary (collection, link_id, summary) VALUES ('Cal', 'tk', 't'), ('Cal', 'tn', 't');"
+expect "reconcile: list_held_tasks pages the task rows holding a body, no event, no task without one" \
+    "$(run owner/list_held_tasks ":after_collection=NULL" ":after_link_id=NULL" ":limit=10" | cut -d'|' -f2,4)|$(run owner/list_held_tasks ":after_collection='Cal'" ":after_link_id='tk'" ":limit=10")" "tk|hb|"
 
 # --- Readers count and page under the chips (§14.1) --------------------------
 
