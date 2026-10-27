@@ -772,6 +772,72 @@ done
 expect "auto: link_invitations_to seeks the invitation" \
     "$(plan owner/link_invitations_to ":link_id='ev1'" | grep -c 'mail_summary_by_invitation' || true)" "1"
 
+# --- A task refers to its parent and to the mail it came from (§14.2) -------
+
+fresh
+collection INBOX
+run owner/set_collection_kind ":collection='Cal'" ":account=NULL" ":kind='$cal_kind'"
+run owner/set_collection_kind ":collection='Cards'" ":account=NULL" ":kind='$card_kind'"
+# task <link_id> <seq> <parent> <mid>: a live task naming both, or NULL.
+task() {
+    item Cal "$1" "$2"
+    run owner/upsert_task_summary ":collection='Cal'" ":link_id='$1'" ":uid='$1'" ":summary='t $1'" \
+        ":dtstart=NULL" ":dtstart_tzid=NULL" ":dtstart_value=NULL" ":due=NULL" ":due_tzid=NULL" \
+        ":due_value=NULL" ":status=NULL" ":completed=NULL" ":percent=NULL" ":recurring=0" \
+        ":until=NULL" ":priority=NULL" ":categories='[]'" ":parent=$3" ":mid=$4"
+}
+refs() {
+    sql "SELECT from_link_id || '>' || to_link_id || ':' || role || ':' || origin FROM item_reference ORDER BY 1;" | tr '\n' ' '
+}
+mail INBOX m1 1 11 NULL
+mail INBOX m2 2 12 NULL
+item Cards card 3
+task proj 4 NULL NULL
+task t1 5 "'proj'" "'m1'"
+task t2 6 "'gone'" "'m9'"
+task t3 7 "'proj'" "'m2'"
+task t4 8 "'t4'" NULL
+task t5 20 "'card'" NULL
+task t6 21 NULL "'card'"
+sql "UPDATE items SET deleted = 1 WHERE link_id = 't3';"
+for t in t1 t2 t3 t4 t5 t6; do
+    run owner/link_parents_of ":link_id='$t'"
+    run owner/link_sources_of ":link_id='$t'"
+done
+expect "auto: a task refers to its live parent calendar item and its live mail, never to one not held, of another kind, itself, nor from a deleted task" \
+    "$(refs)" "t1>m1:source:auto t1>proj:parent:auto "
+sql "DELETE FROM item_reference;"
+run owner/add_reference ":from_kind='$cal_kind'" ":from_link_id='t1'" ":to_kind='$cal_kind'" ":to_link_id='proj'" ":role='parent'" ":origin='user'" >/dev/null
+run owner/link_parents_to ":link_id='proj'"
+run owner/link_sources_to ":link_id='m1'"
+run owner/link_sources_to ":link_id='m2'"
+expect "auto: a parent and a mail backfill their tasks, a person's reference kept, a deleted task taking none" \
+    "$(refs)" "t1>m1:source:auto t1>proj:parent:user "
+item Cal gone 9
+mail INBOX m9 10 19 NULL
+run owner/link_parents_to ":link_id='gone'"
+run owner/link_sources_to ":link_id='m9'"
+expect "auto: a parent and a mail synced after the task are tied to it" \
+    "$(refs)" "t1>m1:source:auto t1>proj:parent:user t2>gone:parent:auto t2>m9:source:auto "
+sql "DELETE FROM item_reference;"
+run owner/link_parents_of ":link_id=NULL"
+run owner/link_sources_of ":link_id=NULL"
+expect "auto: a NULL link id backfills every live task" \
+    "$(refs)" "t1>m1:source:auto t1>proj:parent:auto t2>gone:parent:auto t2>m9:source:auto "
+for statement in link_parents_of link_sources_of; do
+    expect "auto: $statement seeks one link id" \
+        "$(plan "owner/$statement" ":link_id='t1'" | grep -c 'items_by_link (link_id>? AND link_id<?)' || true)" "1"
+done
+expect "auto: link_parents_to seeks the parent" \
+    "$(plan owner/link_parents_to ":link_id='proj'" | grep -c 'task_summary_by_parent' || true)" "1"
+expect "auto: link_sources_to seeks the mail" \
+    "$(plan owner/link_sources_to ":link_id='m1'" | grep -c 'task_summary_by_mid' || true)" "1"
+expect "task: a priority out of RFC 5545's range is refused" \
+    "$(fails owner/upsert_task_summary ":collection='Cal'" ":link_id='t1'" ":uid='t1'" ":summary='t'" \
+        ":dtstart=NULL" ":dtstart_tzid=NULL" ":dtstart_value=NULL" ":due=NULL" ":due_tzid=NULL" \
+        ":due_value=NULL" ":status=NULL" ":completed=NULL" ":percent=NULL" ":recurring=0" \
+        ":until=NULL" ":priority=10" ":categories='[]'" ":parent=NULL" ":mid=NULL" && echo refused)" "refused"
+
 # --- A file stands for an attachment until no reference names it (§14.3) ----
 
 fresh
@@ -889,7 +955,8 @@ run owner/upsert_event_summary ":collection='Cal'" ":link_id='ev'" ":uid='ev'" "
     ":dtstart=NULL" ":dtstart_tzid=NULL" ":dtstart_value=NULL" ":dtend=NULL" ":recurring=NULL" ":until=NULL"
 run owner/upsert_task_summary ":collection='Cal'" ":link_id='todo'" ":uid='todo'" ":summary='Send the plan'" ":dtstart=NULL" \
     ":dtstart_tzid=NULL" ":dtstart_value=NULL" ":due=NULL" ":due_tzid=NULL" ":due_value=NULL" ":status=NULL" \
-    ":completed=NULL" ":percent=NULL" ":recurring=NULL" ":until=NULL"
+    ":completed=NULL" ":percent=NULL" ":recurring=NULL" ":until=NULL" \
+    ":priority=NULL" ":categories='[]'" ":parent=NULL" ":mid=NULL"
 run owner/upsert_journal_summary ":collection='Cal'" ":link_id='note'" ":uid='note'" ":summary='Standup'" \
     ":dtstart=NULL" ":dtstart_tzid=NULL" ":dtstart_value=NULL"
 run owner/upsert_file_summary ":collection='Docs'" ":link_id='plan'" ":name='plan.pdf'" ":media_type=NULL" ":size=NULL" ":part=NULL"

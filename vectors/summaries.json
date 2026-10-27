@@ -430,7 +430,7 @@
       "body": { "len": 208, "blake3": "epf4hp2yp6jpiggtqcpmceuzhapqn5ujhpdi4yv2uhknelprhhha", "sha256-128": "456og4jtmdgomjse6axlr3hcny" },
       "link_id": "todo-due@example.org",
       "table": "task_summary",
-      "summary": { "uid": "todo-due@example.org", "summary": "File the return", "dtstart": null, "dtstart_tzid": null, "dtstart_value": null, "due": "20260930T170000Z", "due_tzid": null, "due_value": "date-time", "status": null, "completed": null, "percent": null, "recurring": 0, "until": null },
+      "summary": { "uid": "todo-due@example.org", "summary": "File the return", "dtstart": null, "dtstart_tzid": null, "dtstart_value": null, "due": "20260930T170000Z", "due_tzid": null, "due_value": "date-time", "status": null, "completed": null, "percent": null, "recurring": 0, "until": null, "priority": null, "categories": [], "parent": null, "mid": null },
       "addresses": [],
       "sort_key": "2026-09-30T17:00:00Z"
     },
@@ -442,9 +442,21 @@
       "body": { "len": 229, "blake3": "4olk7xdnk65jl5vlujf5t64nb73gy2hibzqlagwcnlkdopd36m3q", "sha256-128": "3kjp5xj5p6zc3lqoyvx2vk5iri" },
       "link_id": "todo-both@example.org",
       "table": "task_summary",
-      "summary": { "uid": "todo-both@example.org", "summary": "Long task", "dtstart": "20260901T090000Z", "dtstart_tzid": null, "dtstart_value": "date-time", "due": "20260930T170000Z", "due_tzid": null, "due_value": "date-time", "status": null, "completed": null, "percent": null, "recurring": 0, "until": null },
+      "summary": { "uid": "todo-both@example.org", "summary": "Long task", "dtstart": "20260901T090000Z", "dtstart_tzid": null, "dtstart_value": "date-time", "due": "20260930T170000Z", "due_tzid": null, "due_value": "date-time", "status": null, "completed": null, "percent": null, "recurring": 0, "until": null, "priority": null, "categories": [], "parent": null, "mid": null },
       "addresses": [],
       "sort_key": "2026-09-30T17:00:00Z"
+    },
+    {
+      "label": "todo, organised",
+      "kind": "text/calendar",
+      "fixture": "fixtures/todo-gtd.ics",
+      "note": "the columns a task list reads without the body: PRIORITY as an integer; every CATEGORIES value in document order, split on unescaped commas and unescaped, across two properties; the parent the first RELATED-TO of type PARENT names, a RELATED-TO with no RELTYPE being one (RFC 5545 section 3.2.15) and a SIBLING not; the message the first mid: URI names (RFC 2392), percent-decoded, an https ATTACH before it skipped. The X- property is kept in the body and in no column; with neither DUE nor DTSTART the sort key is empty",
+      "body": { "len": 508, "blake3": "nrz443krgoaxnnhmx4eaqf3cczs7xllgliqgo6lcokth3czicnza", "sha256-128": "vndafotwiz7dwyp7vtiplaaora" },
+      "link_id": "todo-gtd@example.org",
+      "table": "task_summary",
+      "summary": { "uid": "todo-gtd@example.org", "summary": "Ask the bank about the card limit", "dtstart": null, "dtstart_tzid": null, "dtstart_value": null, "due": null, "due_tzid": null, "due_value": null, "status": "NEEDS-ACTION", "completed": null, "percent": null, "recurring": 0, "until": null, "priority": 1, "categories": ["@phone", "Errands, small", "@home"], "parent": "todo-project@example.org", "mid": "card-limit@bank.example" },
+      "addresses": [],
+      "sort_key": ""
     },
     {
       "label": "event, no UID",

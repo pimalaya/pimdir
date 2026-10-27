@@ -108,6 +108,9 @@ A query is whitespace-separated terms, implicitly conjoined, with `or`, `not`, p
 | `is:` | `unread` the absence of `\Seen`; `read`, `flagged`, `answered`, `draft` the presence of `\Seen`, `\Flagged`, `\Answered`, `\Draft`; `encrypted` the extraction status (§6) |
 | `has:body` `has:attachment` | a stored body; `mail_summary.attachment` = 1 or a non-empty `attachment` field |
 | `kind:` | `mail`, `contact`, `event`, `task`, `journal`, `file` |
+| `status:` | a task's `STATUS` (`task_summary.status`): `needs-action`, `in-process`, `completed`, `cancelled`; a task stating none, and any other kind, matches none |
+| `priority:` | a task's `PRIORITY` (`task_summary.priority`, RFC 5545 §3.8.1.9): `high` 1 to 4, `medium` 5, `low` 6 to 9, `none` absent or 0; any other kind matches none |
+| `category:` | a task's `CATEGORIES` (`task_summary.categories`): one value whole, both sides folded as STORAGE Annex A.2 folds `fn`, never a word of it |
 | `account:` `collection:` `folder:` | the store's axes, `folder:` an alias |
 | `date:` `when:` | an instant or a range (§8.1) |
 | `thread:` `id:` | a thread id (§9); a link id or a `seq` |
@@ -157,6 +160,8 @@ pchar        = %x0-21 / %x23-D7FF / %xE000-10FFFF
 kind-value   = %s"mail" / %s"contact" / %s"event" / %s"task" / %s"journal" / %s"file"
 is-value     = %s"unread" / %s"read" / %s"flagged" / %s"answered" / %s"draft" / %s"encrypted"
 has-value    = %s"body" / %s"attachment"
+status-value = %s"needs-action" / %s"in-process" / %s"completed" / %s"cancelled"
+priority-value = %s"high" / %s"medium" / %s"low" / %s"none"
 date-value   = point / point ".." [ point ] / ".." point
 point        = year / month / day / %s"today" / %s"yesterday" / relative
 year         = 4DIGIT
@@ -172,7 +177,7 @@ stamp        = 1*DIGIT
 - **Fields.** A word holding a colon outside quotes is a field term, never free text: its field is the text before the first colon and MUST be a name of §8's table, as written; anything else is refused (`unknown-field`). To search a text holding a colon, a URL or a time, quote it. The value is the rest of the word, colons included, or the phrase right after the colon.
 - **Phrases** run to the next `"`, with no escape. Nothing inside one is an operator, a field or a wildcard: its text is tokenised as §5 says and matched as a phrase. A text or a phrase yielding no token matches no item.
 - **Wildcard.** A `*` MUST be the last character of a text or of a text field's value, after two characters or more, the text fields being `subject:`, `title:`, `summary:`, `body:`, the role fields, `with:`, `person:`, `attachment:`, `mimetype:` and `location:`, and a value holding `@` being an address and not text. Anywhere else outside a phrase it is refused (`invalid-wildcard`).
-- **Values.** `kind:`, `is:` and `has:` take `kind-value`, `is-value` and `has-value`; `date:` and `when:` take `date-value`, `changed:` `stamp-value`; every other field takes its value as written. A phrase value is read the same, its quotes aside.
+- **Values.** `kind:`, `is:`, `has:`, `status:` and `priority:` take `kind-value`, `is-value`, `has-value`, `status-value` and `priority-value`; `date:` and `when:` take `date-value`, `changed:` `stamp-value`; every other field takes its value as written. A phrase value is read the same, its quotes aside.
 
 ### 8.4 Refusals
 
@@ -193,7 +198,7 @@ A query the grammar does not accept, or whose field or value §8.3 does not know
 | `unbalanced-parenthesis` | a `)` with no `(`, or a `(` never closed | that parenthesis |
 | `dangling-operator` | an `and` or `or` missing a side, a `not` with nothing after it, a `-` followed by whitespace, a `)` or the end | the `-` so followed, else the `and` or `or` missing its side, else the first `not` or `-` of the run missing its term |
 | `unknown-field` | a field that is not in §8's table | the field and its colon |
-| `invalid-value` | an empty value, a value out of `kind-value`, `is-value` or `has-value`, a `changed:` value no `stamp-value` reads | the value, or the term when the value is empty |
+| `invalid-value` | an empty value, a value out of `kind-value`, `is-value`, `has-value`, `status-value` or `priority-value`, a `changed:` value no `stamp-value` reads | the value, or the term when the value is empty |
 | `invalid-date` | a `date:` or `when:` value no `date-value` reads | the value |
 | `invalid-wildcard` | a `*` §8.3 does not accept | the first `*` of the text or value |
 

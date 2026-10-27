@@ -424,9 +424,19 @@ CREATE TABLE task_summary (
     percent       INTEGER,                 -- PERCENT-COMPLETE, or NULL
     recurring     INTEGER,
     until         TEXT,
+    priority      INTEGER CHECK (priority BETWEEN 0 AND 9),  -- PRIORITY, or NULL
+    categories    TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(categories)),  -- JSON array of CATEGORIES values, decoded
+    parent        TEXT,                    -- the UID the first parent RELATED-TO names, or NULL
+    mid           TEXT,                    -- the Message-ID the first mid: URI names, bare, or NULL
     PRIMARY KEY (collection, link_id),
     FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
 ) STRICT;
+
+-- The tasks naming a calendar item their parent, and those naming a mail, for
+-- link_parents_to and link_sources_to (§14.2). Partial: most tasks name
+-- neither.
+CREATE INDEX task_summary_by_parent ON task_summary(parent) WHERE parent IS NOT NULL;
+CREATE INDEX task_summary_by_mid ON task_summary(mid) WHERE mid IS NOT NULL;
 
 CREATE TABLE journal_summary (
     collection    TEXT NOT NULL,
@@ -483,7 +493,7 @@ CREATE TABLE item_reference (
     to_link_id   TEXT NOT NULL,
     -- What the reference says: a name pimdir gives, or an application's own
     -- starting with x-, as for capabilities.
-    role         TEXT NOT NULL CHECK (role IN ('attachment', 'invitation', 'sender', 'related')
+    role         TEXT NOT NULL CHECK (role IN ('attachment', 'invitation', 'sender', 'parent', 'source', 'related')
                                       OR (substr(role, 1, 2) = 'x-' AND length(role) > 2)),
     origin       TEXT NOT NULL CHECK (origin IN ('auto', 'user')),  -- a writer's rule, or a person
     created_at   TEXT NOT NULL,            -- stamped by add_reference (§13)

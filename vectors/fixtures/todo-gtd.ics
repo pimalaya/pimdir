@@ -1,0 +1,19 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//pimalaya//pimdir vectors//EN
+BEGIN:VTODO
+UID:todo-gtd@example.org
+DTSTAMP:20261027T090000Z
+CREATED:20261027T090000Z
+SUMMARY:Ask the bank about the card limit
+STATUS:NEEDS-ACTION
+PRIORITY:1
+CATEGORIES:@phone,Errands\, small
+CATEGORIES:@home
+RELATED-TO;RELTYPE=SIBLING:todo-other@example.org
+RELATED-TO:todo-project@example.org
+ATTACH:https://example.org/statement.pdf
+ATTACH:mid:card-limit%40bank.example
+X-PIMALAYA-GTD:WAITING
+END:VTODO
+END:VCALENDAR

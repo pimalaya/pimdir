@@ -16,6 +16,7 @@ from datetime import date
 from email import message_from_bytes
 from email.header import decode_header, make_header
 from pathlib import Path
+from urllib.parse import unquote
 
 from blake3 import blake3
 
@@ -28,7 +29,7 @@ TABLES = {
     "mail_summary": {"message_id", "in_reply_to", "subject", "sender", "sender_name", "date", "size", "attachment", "invitation"},
     "contact_summary": {"uid", "fn", "kind", "org"},
     "event_summary": {"uid", "summary", "location", "dtstart", "dtstart_tzid", "dtstart_value", "dtend", "recurring", "until"},
-    "task_summary": {"uid", "summary", "dtstart", "dtstart_tzid", "dtstart_value", "due", "due_tzid", "due_value", "status", "completed", "percent", "recurring", "until"},
+    "task_summary": {"uid", "summary", "dtstart", "dtstart_tzid", "dtstart_value", "due", "due_tzid", "due_value", "status", "completed", "percent", "recurring", "until", "priority", "categories", "parent", "mid"},
     "journal_summary": {"uid", "summary", "dtstart", "dtstart_tzid", "dtstart_value"},
 }
 
@@ -112,9 +113,11 @@ CLOSED_FIELDS = {
     "kind": {"mail", "contact", "event", "task", "journal", "file"},
     "is": {"unread", "read", "flagged", "answered", "draft", "encrypted"},
     "has": {"body", "attachment"},
+    "status": {"needs-action", "in-process", "completed", "cancelled"},
+    "priority": {"high", "medium", "low", "none"},
 }
 DATE_FIELDS = {"date", "when"}
-OPEN_FIELDS = {"tag", "flag", "account", "collection", "folder", "thread", "id", "linked"}
+OPEN_FIELDS = {"tag", "flag", "account", "collection", "folder", "thread", "id", "linked", "category"}
 FIELDS = TEXT_FIELDS | set(CLOSED_FIELDS) | DATE_FIELDS | {"changed"} | OPEN_FIELDS
 CODES = {
     "empty-query", "unknown-field", "invalid-value", "invalid-date", "unterminated-phrase",
@@ -390,6 +393,33 @@ def chunk(text):
     return chunks
 
 
+def task_columns(bytes_):
+    """The task columns Annex A.4 reads without the body, by a second path:
+    the VTODO's lines unfolded and split by hand, nothing but the stdlib."""
+    text = bytes_.decode().replace("\r\n ", "").replace("\r\n\t", "")
+    lines = text.split("\r\n")
+    inside = lines[lines.index("BEGIN:VTODO") + 1:lines.index("END:VTODO")]
+    priority, categories, parent, mid = None, [], None, None
+    for line in inside:
+        head, value = line.split(":", 1)
+        prop, *params = head.split(";")
+        prop = prop.upper()
+        if prop == "PRIORITY" and priority is None:
+            priority = int(value) if value.isdigit() and int(value) <= 9 else None
+        elif prop == "CATEGORIES":
+            for raw in re.split(r"(?<!\\),", value):
+                decoded = re.sub(r"\\([\;,nN])", lambda m: "\n" if m.group(1) in "nN" else m.group(1), raw)
+                if decoded:
+                    categories.append(decoded)
+        elif prop == "RELATED-TO" and parent is None:
+            types = [p.split("=", 1)[1].upper() for p in params if p.upper().startswith("RELTYPE=")]
+            if not types or types[0] == "PARENT":
+                parent = value
+        elif prop in ("ATTACH", "URL") and mid is None and value.lower().startswith("mid:"):
+            mid = unquote(value[4:].split("/", 1)[0])
+    return {"priority": priority, "categories": categories, "parent": parent, "mid": mid}
+
+
 def text_of(parts):
     return "".join(part if isinstance(part, str) else part["repeat"] * part["times"] for part in parts).encode()
 
@@ -504,6 +534,12 @@ for case in summaries["cases"]:
         row = case["summary"]
         alt = "alt:" + "|".join(row[column] or "" for column in ("subject", "date", "sender"))
         check(f"{case['label']} alt: link_id", case["link_id"], alt)
+
+    if case["table"] == "task_summary":
+        check(f"{case['label']} task columns", {
+            column: case["summary"][column] for column in ("priority", "categories", "parent", "mid")
+        }, task_columns(bytes_))
+
 
 # The sync cases (SYNC.md section 11): shape and references only.
 sync_cases = sorted((root / "sync").glob("*.json"))

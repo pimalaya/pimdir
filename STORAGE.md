@@ -425,7 +425,7 @@ Three rules bind every read:
 A **reference** says that one item bears on another: a message and the file it attaches, an invitation and its event, a mail and the contact who sent it, two things a person linked. It is a fact recorded once, never derived from content nor recomputed, which is why it lives here and not in the rebuildable search index. Nothing requires one: an owner MAY record references and a reader MAY ignore them.
 
 - **Endpoints** are a collection kind and a `link_id`, never a collection: one identity filed in several collections is one endpoint, and a move keeps its references. The kind is part of it, a vCard and an event sharing a UID being two endpoints. No foreign key holds them. A writer-derived key (`alt:`, `hash:`, `dup:`, §9) names no identity, two unrelated messages sharing one `alt:` key, so it is no endpoint, nor a `part:` key over one: `add_reference` and the rules record nothing for it, and the schema refuses it. A message without a `Message-ID`, or a card without a `UID`, takes no reference.
-- **`role`** is an open vocabulary: `attachment`, `invitation`, `sender`, `related`, or an application's own starting with `x-`, anything else refused. **`origin`** is `auto`, recorded by a writer's rule, or `user`, by a person, so a reader can say why a reference exists and undo a rule's references without touching a person's.
+- **`role`** is an open vocabulary: `attachment`, `invitation`, `sender`, `parent`, `source`, `related`, or an application's own starting with `x-`, anything else refused. **`origin`** is `auto`, recorded by a writer's rule, or `user`, by a person, so a reader can say why a reference exists and undo a rule's references without touching a person's.
 - **`add_reference`** records one between two endpoints the store holds, each with at least one row of `items` in a collection of its kind, and records nothing otherwise. A reference is unique on its endpoints and role: recording it again changes nothing, save that `user` takes over `auto`, never the reverse. It answers the reference as it stands, recorded now or before, and no row when an end is missing or derived, so a caller tells "linked" from "cannot link". An item never refers to itself.
 - **`remove_reference`** deletes one, whatever its origin. A rule matching again records it anew; no suppression is kept.
 - **A reference goes with the last row of either endpoint.** `items_drop_references` deletes it when a delete leaves no row of `items`, live, tombstoned or retained, under that link id in a collection of that kind: a purge, a collection below a date or a collection's delete of the last copy. A move, a tombstone, a retention and the loss of one copy among several keep it, so a restore finds it. Every reference's two endpoints are therefore held. Whether an endpoint is live is the reader's to ask (`list_link_placements`).
@@ -436,6 +436,8 @@ A **reference** says that one item bears on another: a message and the file it a
 - **`sender`**: a mail to every contact holding one of its `from` addresses as an `email` (Annex A.6). `link_senders_of(link_id)` after a mail's addresses are written; `link_mail_from(link_id)` after a contact's, so a contact added, or given an address, has its history. An address removed removes nothing; two contacts holding one address both receive it.
 - **`invitation`**: a mail to the calendar item its `invitation` names by link id (Annex A.1). `link_invitations_of(link_id)` after a mail's body is read; `link_invitations_to(link_id)` after a calendar item's write, so an event synced after its invitation is tied to it.
 - **`attachment`**: a mail to the stand-ins of its parts, recorded with them (§14.3).
+- **`parent`**: a task to the calendar item its `parent` names by link id (Annex A.4), never itself. `link_parents_of(link_id)` after a task's summary is written; `link_parents_to(link_id)` after a calendar item's write, so a project synced after its actions is tied to them.
+- **`source`**: a task to the mail its `mid` names by link id (Annex A.4). `link_sources_of(link_id)` after a task's summary is written; `link_sources_to(link_id)` after a mail's, so a mail synced after the task made of it is tied to it.
 
 An item deleted for good takes its references with it, by the trigger above.
 
@@ -609,7 +611,12 @@ A series keys on its first occurrence, which `until` bounds for a reader that mu
 | `status` | `STATUS` uppercased verbatim |
 | `completed` | `COMPLETED` verbatim |
 | `percent` | `PERCENT-COMPLETE` as an integer |
+| `priority` | `PRIORITY` as an integer, 0 to 9 (RFC 5545 §3.8.1.9); `NULL` when absent or out of range |
+| `categories` | a JSON array of every `CATEGORIES` value in document order, each property's list split on unescaped commas and decoded, empty values dropped; `'[]'` when absent |
+| `parent` | the value of the first `RELATED-TO` whose `RELTYPE` is `PARENT` or absent (RFC 5545 §3.2.15), verbatim |
+| `mid` | the message the first `ATTACH` or `URL` holding a `mid:` URI (RFC 2392) names: its message-id part, before any `/`, percent-decoded, bare |
 
+An `X-` property, such as the bucket an organising client keeps, is the body's alone: no column carries one, and the client reads it from the body.
 **`sort_key`**: `DUE`, else `DTSTART`, as an instant on A.3's rules (RFC 5545 §3.8.2.3); `''` when neither.
 
 ### A.5 `text/calendar`, `VJOURNAL`
