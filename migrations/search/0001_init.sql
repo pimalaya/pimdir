@@ -18,7 +18,11 @@ CREATE TABLE index_meta (
     store_purges  INTEGER NOT NULL DEFAULT 0,
     -- The window occurrences are expanded within (§7), RFC 3339 Z.
     horizon_start TEXT    NOT NULL DEFAULT '',
-    horizon_end   TEXT    NOT NULL DEFAULT ''
+    horizon_end   TEXT    NOT NULL DEFAULT '',
+    -- The time zone database version the occurrences were expanded under (§7),
+    -- as the database names its release (IANA's `2026b`), '' with none: another
+    -- version re-expands the calendar items.
+    tzdb_version  TEXT    NOT NULL DEFAULT ''
 ) STRICT;
 
 -- One row per indexed body, keyed on the store's object hash. The input is
@@ -43,6 +47,19 @@ CREATE VIRTUAL TABLE object_text USING fts5(
     content = '', contentless_delete = 1,
     tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3'
 );
+
+-- The chunk boundaries of a body's long fields (§6), so a snippet is cut from
+-- them and an embedding index embeds the same chunks without extracting again.
+-- Only `body` and `note` are chunked. Offsets are UTF-8 bytes into the field's
+-- extracted text, which stays in the blob; the rows go with the object.
+CREATE TABLE chunk (
+    object INTEGER NOT NULL REFERENCES object(id) ON DELETE CASCADE,
+    ord    INTEGER NOT NULL,           -- 0-based, in text order across fields
+    field  TEXT    NOT NULL,           -- 'body' | 'note'
+    start  INTEGER NOT NULL,           -- UTF-8 byte offset into the text
+    end    INTEGER NOT NULL,           -- exclusive
+    PRIMARY KEY (object, ord)
+) STRICT;
 
 -- The placements the index knows, so a purge or a rename is reconciled by key
 -- (§4) and a mutable item's new body is found (§6). `id` is the stable rowid

@@ -1,0 +1,24 @@
+Message-ID: <sealed-1@example.org>
+Subject: Roadmap draft
+From: Carol <carol@example.org>
+To: bob@example.org
+Date: Mon, 03 Aug 2026 09:00:00 +0000
+MIME-Version: 1.0
+Content-Type: multipart/encrypted; protocol="application/pgp-encrypted"; boundary="b4"
+
+--b4
+Content-Type: application/pgp-encrypted
+
+Version: 1
+
+--b4
+Content-Type: application/octet-stream; name="encrypted.asc"
+Content-Disposition: inline; filename="encrypted.asc"
+
+-----BEGIN PGP MESSAGE-----
+
+hQEMA0placeholderAQf
+=abcd
+-----END PGP MESSAGE-----
+
+--b4--

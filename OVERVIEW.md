@@ -132,9 +132,9 @@ Normative: STORAGE §4.5.
 
 ## 10. Search
 
-The index answers what the store cannot: text, calendar time across a recurring series, and mail threads. An indexer folds the change feed, extracts each new body once by hash into a handful of fields (title, people, body, attachment, place, organisation, note), indexes a bodiless item from its summary instead, expands every calendar item's occurrences within a rolling horizon, and links messages into threads by their reply headers.
+The index answers what the store cannot: text, calendar time across a recurring series, and mail threads. An indexer folds the change feed, extracts each new body once by hash into a handful of fields (title, people, body, attachment, place, organisation, note), indexes a bodiless item from its summary instead, expands every calendar item's occurrences within a rolling horizon, and links messages into threads by their reply headers. Long texts are cut into chunks along their paragraphs as they are extracted, which snippets are drawn from and an embedding index can reuse. Occurrences are expanded again when the time zone database they were resolved through changes version, since a zoned time moves with it.
 
-A query is a list of terms, free text or field and value, joined by and, or and not. Structured terms compile to seeks on the store, text terms to matches on the index, and the answer is their intersection in the store's own order. A hit is one item per account with every placement it has, and the answer states its coverage: how many items in scope have no body to search, and whether the date range left the horizon.
+A query is a list of terms, free text or field and value, joined by and, or and not, under a formal grammar. A query the grammar does not accept, an unknown field included, is refused whole rather than guessed at, with the position at fault, what was expected there and the fields that exist, so a person or an agent can correct it. Structured terms compile to seeks on the store, text terms to matches on the index, and the answer is their intersection in the store's own order. A hit is one item per account with every placement it has, and the answer states its coverage: how many items in scope have no body to search, and whether the date range left the horizon.
 
 Normative: SEARCH.
 

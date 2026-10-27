@@ -1,0 +1,11 @@
+Message-ID: <reply-1@example.org>
+In-Reply-To: <basic-1@example.org>
+References: <parent-1@example.org> <basic-1@example.org>
+Subject: Re: Roadmap
+From: Bob <bob@example.org>
+To: alice@example.org
+Date: Sun, 02 Aug 2026 09:00:00 +0000
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Roadmap roadmap roadmap. The roadmap is not final.

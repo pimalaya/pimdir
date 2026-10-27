@@ -10,7 +10,9 @@ vectors/README.md asks for.
 import base64
 import hashlib
 import json
+import re
 import sys
+from datetime import date
 from email import message_from_bytes
 from email.header import decode_header, make_header
 from pathlib import Path
@@ -97,6 +99,253 @@ def body(case):
     if "body_hex" in case:
         return bytes.fromhex(case["body_hex"])
     return bytes(i % 251 for i in range(case["body_len"]))
+
+
+# The query language of SEARCH.md section 8.3, read from the prose, so every
+# refusal case's code and span, and every other case's query, is checked
+# against the grammar rather than against an implementation.
+TEXT_FIELDS = {
+    "subject", "title", "summary", "body", "from", "to", "cc", "bcc", "attendee", "organizer",
+    "email", "with", "person", "attachment", "mimetype", "location",
+}
+CLOSED_FIELDS = {
+    "kind": {"mail", "contact", "event", "task", "journal", "file"},
+    "is": {"unread", "read", "flagged", "answered", "draft", "encrypted"},
+    "has": {"body", "attachment"},
+}
+DATE_FIELDS = {"date", "when"}
+OPEN_FIELDS = {"tag", "flag", "account", "collection", "folder", "thread", "id", "linked"}
+FIELDS = TEXT_FIELDS | set(CLOSED_FIELDS) | DATE_FIELDS | {"changed"} | OPEN_FIELDS
+CODES = {
+    "empty-query", "unknown-field", "invalid-value", "invalid-date", "unterminated-phrase",
+    "unbalanced-parenthesis", "dangling-operator", "invalid-wildcard",
+}
+WHITESPACE = " \t\r\n"
+
+
+class Refused(Exception):
+    def __init__(self, code, start, end):
+        super().__init__(code)
+        self.code, self.start, self.end = code, start, end
+
+
+def lex(query):
+    """The tokens, in reading order: "(", ")", a phrase, an operator, a term
+    or a field term, each with its span in characters."""
+    tokens, at = [], 0
+    while at < len(query):
+        char = query[at]
+        if char in WHITESPACE:
+            at += 1
+        elif char in "()":
+            tokens.append({"kind": char, "start": at, "end": at + 1})
+            at += 1
+        elif char == "-":
+            # A `-` beginning a primary is `not`; one followed by whitespace, a
+            # `)` or the end has nothing to negate.
+            bare = at + 1 == len(query) or query[at + 1] in WHITESPACE + ")"
+            tokens.append({"kind": "operator", "start": at, "end": at + 1, "word": "not", "bare": bare})
+            at += 1
+        elif char == '"':
+            close = query.find('"', at + 1)
+            if close < 0:
+                raise Refused("unterminated-phrase", at, len(query))
+            tokens.append({"kind": "phrase", "start": at, "end": close + 1})
+            at = close + 1
+        else:
+            end = at
+            while end < len(query) and query[end] not in WHITESPACE + '()"':
+                end += 1
+            colon = query.find(":", at, end)
+            if colon < 0:
+                word = query[at:end]
+                kind = "operator" if word.lower() in {"and", "or", "not"} else "text"
+                tokens.append({"kind": kind, "start": at, "end": end, "word": word.lower()})
+                at = end
+                continue
+            token = {"kind": "field", "start": at, "end": end, "colon": colon, "phrase": False}
+            # A field whose value is a phrase: the phrase right after the colon.
+            if colon == end - 1 and end < len(query) and query[end] == '"':
+                close = query.find('"', end + 1)
+                if close < 0:
+                    raise Refused("unterminated-phrase", end, len(query))
+                token.update(end=close + 1, phrase=True)
+            tokens.append(token)
+            at = token["end"]
+    return tokens
+
+
+def check_wildcard(word, offset, allowed):
+    """A `*` only as the last character, after two or more."""
+    star = word.find("*")
+    if star >= 0 and not (allowed and star == len(word) - 1 and star >= 2):
+        raise Refused("invalid-wildcard", offset + star, offset + star + 1)
+
+
+def date_point(value):
+    if re.fullmatch(r"\d{4}", value) or value in {"today", "yesterday"} or re.fullmatch(r"\d+[dwy]", value):
+        return True
+    if re.fullmatch(r"\d{4}-\d{2}", value):
+        return 1 <= int(value[5:]) <= 12
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        try:
+            date.fromisoformat(value)
+            return True
+        except ValueError:
+            return False
+    return False
+
+
+def range_of(value, point):
+    if ".." not in value:
+        return point(value)
+    low, high = value.split("..", 1)
+    return (low or high) != "" and all(side == "" or point(side) for side in (low, high))
+
+
+def check_term(query, token):
+    if token["kind"] == "text":
+        check_wildcard(query[token["start"]:token["end"]], token["start"], True)
+        return
+    if token["kind"] != "field":
+        return
+    start, colon, end = token["start"], token["colon"], token["end"]
+    name = query[start:colon]
+    if name not in FIELDS:
+        raise Refused("unknown-field", start, colon + 1)
+    if end == colon + 1:
+        raise Refused("invalid-value", start, end)
+    value = query[colon + 2:end - 1] if token["phrase"] else query[colon + 1:end]
+    if not token["phrase"]:
+        check_wildcard(value, colon + 1, name in TEXT_FIELDS and "@" not in value)
+    if name in CLOSED_FIELDS and value not in CLOSED_FIELDS[name]:
+        raise Refused("invalid-value", colon + 1, end)
+    if name in DATE_FIELDS and not range_of(value, date_point):
+        raise Refused("invalid-date", colon + 1, end)
+    if name == "changed" and not range_of(value, lambda side: side.isascii() and side.isdigit()):
+        raise Refused("invalid-value", colon + 1, end)
+
+
+def parse(query):
+    """Raises Refused with the fault the first pass to find one answers:
+    the phrases, the parentheses, then the terms and operators in reading
+    order."""
+    tokens = lex(query)
+    if not tokens:
+        raise Refused("empty-query", 0, len(query))
+    opened, faults = [], []
+    for token in tokens:
+        if token["kind"] == "(":
+            opened.append(token["start"])
+        elif token["kind"] == ")":
+            if opened:
+                opened.pop()
+            else:
+                faults.append(token["start"])
+    if faults or opened:
+        first = min(faults + opened)
+        raise Refused("unbalanced-parenthesis", first, first + 1)
+
+    at = 0
+
+    def peek():
+        return tokens[at] if at < len(tokens) else None
+
+    def operator(token, *words):
+        return token is not None and token["kind"] == "operator" and token["word"] in words
+
+    def take():
+        nonlocal at
+        at += 1
+        return tokens[at - 1]
+
+    def dangling(token):
+        return Refused("dangling-operator", token["start"], token["end"])
+
+    def disjunction(expected_by):
+        conjunction(expected_by)
+        while operator(peek(), "or"):
+            conjunction(take())
+
+    def conjunction(expected_by):
+        negation(expected_by)
+        while True:
+            token = peek()
+            if operator(token, "and"):
+                negation(take())
+            elif token is not None and (token["kind"] in {"(", "phrase", "text", "field"} or operator(token, "not")):
+                negation(None)
+            else:
+                return
+
+    def negation(expected_by):
+        first = None
+        while operator(peek(), "not"):
+            token = take()
+            if token.get("bare"):
+                raise dangling(token)
+            first = first or token
+        primary(first or expected_by)
+
+    def primary(expected_by):
+        token = peek()
+        if token is None or token["kind"] == ")" or operator(token, "and", "or"):
+            raise dangling(expected_by or token)
+        take()
+        if token["kind"] == "(":
+            if peek()["kind"] == ")":
+                raise Refused("empty-query", token["start"], peek()["end"])
+            disjunction(None)
+            take()
+        else:
+            check_term(query, token)
+
+    disjunction(None)
+
+
+# The chunk boundaries of SEARCH.md section 6, over a field's text as bytes.
+BLANK_LINES = re.compile(rb"\r?\n(?:[ \t]*\r?\n)+")
+CHUNK_BYTES = 1024
+
+
+def chunk(text):
+    paragraphs, at = [], 0
+    for run in BLANK_LINES.finditer(text):
+        if run.start() > at:
+            paragraphs.append((at, run.start()))
+        at = run.end()
+    if len(text) > at:
+        paragraphs.append((at, len(text)))
+    chunks, current = [], None
+    for start, end in paragraphs:
+        while True:
+            if current is not None and end - current[0] <= CHUNK_BYTES:
+                current = (current[0], end)
+                break
+            if current is not None:
+                chunks.append(current)
+                current = None
+            if end - start <= CHUNK_BYTES:
+                current = (start, end)
+                break
+            window = text[start:start + CHUNK_BYTES]
+            space = max(window.rfind(byte) for byte in (b" ", b"\t", b"\r", b"\n"))
+            if space >= 0:
+                cut = start + space + 1
+            else:
+                cut = start + CHUNK_BYTES
+                while text[cut] & 0xC0 == 0x80:
+                    cut -= 1
+            chunks.append((start, cut))
+            start = cut
+    if current is not None:
+        chunks.append(current)
+    return chunks
+
+
+def text_of(parts):
+    return "".join(part if isinstance(part, str) else part["repeat"] * part["times"] for part in parts).encode()
+
 
 
 def attachments(message):
@@ -363,9 +612,42 @@ for reference in store.get("references", []):
         endpoint = (reference[f"{end}_kind"], reference[f"{end}_link_id"])
         require(f"search store: reference {end} {endpoint} is held", endpoint in endpoints)
 
+# A case answers hits, a threaded listing or a refusal (SEARCH.md section 11),
+# and the grammar above accepts its query or refuses it as the case says.
+KEYS = {"query", "hits", "threads", "error", "sort", "ordered", "horizon_left", "note"}
 for case in queries["cases"]:
-    for hit in case["hits"]:
-        require(f"search {case['query']!r}: hit {hit} exists", tuple(hit) in hits)
+    label = f"search {case['query']!r}"
+    require(f"{label}: known keys only", set(case) <= KEYS)
+    answers = [key for key in ("hits", "threads", "error") if key in case]
+    require(f"{label}: answers one of hits, threads or error", len(answers) == 1)
+    require(f"{label}: a known sort", case.get("sort", "date") in {"date", "name", "relevance"})
+    require(f"{label}: ordered and horizon_left are booleans",
+            isinstance(case.get("ordered", False), bool) and isinstance(case.get("horizon_left", False), bool))
+    for hit in case.get("hits", []) + [hit for thread in case.get("threads", []) for hit in thread["hits"]]:
+        require(f"{label}: hit {hit} exists", tuple(hit) in hits)
+    for thread in case.get("threads", []):
+        require(f"{label}: thread {thread.get('thread')} states its id, count, first and last",
+                set(thread) == {"thread", "count", "first", "last", "hits"} and thread["first"] <= thread["last"])
+    try:
+        parse(case["query"])
+        got = None
+    except Refused as refused:
+        got = {"code": refused.code, "start": refused.start, "end": refused.end}
+    if "error" in case:
+        require(f"{label}: refusals carry no sort, order or coverage", not set(case) & {"sort", "ordered", "horizon_left"})
+        require(f"{label}: a known code", case["error"].get("code") in CODES)
+        check(f"{label}: refusal", got, case["error"])
+    else:
+        check(f"{label}: accepted", got, None)
+
+# The chunk cases (SEARCH.md section 6): every boundary re-derived from the rule.
+chunk_cases = json.loads((search / "chunks.json").read_text())["cases"]
+for case in chunk_cases:
+    derived = []
+    for field in ("body", "note"):
+        for start, end in chunk(text_of(case["fields"].get(field, []))):
+            derived.append({"ord": len(derived), "field": field, "start": start, "end": end})
+    check(f"chunks {case['label']!r}", derived, case["chunks"])
 
 if failures:
     print("\n".join(failures), file=sys.stderr)
@@ -376,5 +658,5 @@ print(
     f"{len(objects['objects'])} object names, "
     f"{len(summaries['cases'])} summaries over {len(fixtures)} fixtures, "
     f"{sum('hint' in case for case in summaries['cases'])} minted link ids, "
-    f"{len(sync_cases)} sync cases and {len(queries['cases'])} search cases check"
+    f"{len(sync_cases)} sync cases, {len(queries['cases'])} search cases and {len(chunk_cases)} chunk cases check"
 )

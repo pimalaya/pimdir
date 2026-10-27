@@ -1,0 +1,16 @@
+{
+  "v": 1,
+  "note": "chunk boundaries (SEARCH.md §6) over a field's extracted text, given here rather than extracted, so a case pins the rule and not an extractor. A field is a list of parts concatenated, a part a string or { repeat, times }; offsets are UTF-8 bytes into the field, ord runs across body then note. checks/vectors.py re-derives every boundary",
+  "cases": [
+    { "label": "one short paragraph", "fields": { "body": ["Nothing to report.\r\n"] }, "chunks": [{ "ord": 0, "field": "body", "start": 0, "end": 20 }] },
+    { "label": "blank-line runs of either line ending, whitespace-only lines among them, leading ones uncovered", "fields": { "body": ["\r\n\r\nfirst\r\n \t\r\nsecond\n\n\nthird\n"] }, "chunks": [{ "ord": 0, "field": "body", "start": 4, "end": 30 }] },
+    { "label": "paragraphs packed greedily, the one that does not fit starting a chunk", "fields": { "body": [{ "repeat": "a", "times": 1000 }, "\n\n", { "repeat": "b", "times": 10 }, "\n\n", { "repeat": "c", "times": 20 }] }, "chunks": [{ "ord": 0, "field": "body", "start": 0, "end": 1012 }, { "ord": 1, "field": "body", "start": 1014, "end": 1034 }] },
+    { "label": "exactly the limit", "fields": { "body": [{ "repeat": "x", "times": 1024 }] }, "chunks": [{ "ord": 0, "field": "body", "start": 0, "end": 1024 }] },
+    { "label": "one byte over, no whitespace", "fields": { "body": [{ "repeat": "x", "times": 1025 }] }, "chunks": [{ "ord": 0, "field": "body", "start": 0, "end": 1024 }, { "ord": 1, "field": "body", "start": 1024, "end": 1025 }] },
+    { "label": "a long paragraph cut after its last whitespace within the limit, its rest packed with the next", "fields": { "body": [{ "repeat": "word ", "times": 300 }, "\n\ntail"] }, "chunks": [{ "ord": 0, "field": "body", "start": 0, "end": 1020 }, { "ord": 1, "field": "body", "start": 1020, "end": 1506 }] },
+    { "label": "a single line break is inside a paragraph and is whitespace to cut at", "fields": { "body": [{ "repeat": "line\n", "times": 250 }] }, "chunks": [{ "ord": 0, "field": "body", "start": 0, "end": 1020 }, { "ord": 1, "field": "body", "start": 1020, "end": 1250 }] },
+    { "label": "no whitespace: cut at the last character boundary", "fields": { "body": [{ "repeat": "€", "times": 400 }] }, "chunks": [{ "ord": 0, "field": "body", "start": 0, "end": 1023 }, { "ord": 1, "field": "body", "start": 1023, "end": 1200 }] },
+    { "label": "body then note, one order across fields", "fields": { "body": ["Agenda"], "note": ["First line\n\nSecond line"] }, "chunks": [{ "ord": 0, "field": "body", "start": 0, "end": 6 }, { "ord": 1, "field": "note", "start": 0, "end": 23 }] },
+    { "label": "a field of blank lines alone has no chunk", "fields": { "body": ["\n\n\n"], "note": ["x"] }, "chunks": [{ "ord": 0, "field": "note", "start": 0, "end": 1 }] }
+  ]
+}

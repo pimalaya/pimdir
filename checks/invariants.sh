@@ -1063,6 +1063,68 @@ done
 expect "sum: both bounds seek items_by_sort, open or not" \
     "$(plan read/sum_mail "$both" ":since=NULL" ":until=NULL" | grep -c 'items_by_sort (collection=? AND sort_key>? AND sort_key<?)' || true)" "1"
 
+# --- The search index (SEARCH.md) --------------------------------------------
+
+# index: an empty index.db at the canonical search schema.
+index() {
+    for migration in "$root"/migrations/search/*.sql; do
+        sqlite3 "$dir/index.db" "BEGIN; $(cat "$migration") PRAGMA user_version = 1; COMMIT;"
+    done
+}
+
+# isearch <name> [:param=literal...]: one statement of queries/search, bound,
+# on index.db with the store attached as `store` (SEARCH.md §3).
+isearch() {
+    local file="$1"; shift
+    {
+        echo "PRAGMA foreign_keys = ON;"
+        echo "ATTACH '$dir/pimdir.db' AS store;"
+        for binding in "$@"; do
+            echo ".parameter set ${binding%%=*} ${binding#*=}"
+        done
+        cat "$root/queries/search/$file.sql"
+    } | sqlite3 "$dir/index.db"
+}
+
+fresh
+index
+object_id="$(isearch insert_object ":hash='h1'" ":status='ok'")"
+isearch insert_chunk ":object=$object_id" ":ord=1" ":field='note'" ":start=0" ":end=4"
+isearch insert_chunk ":object=$object_id" ":ord=0" ":field='body'" ":start=0" ":end=10"
+expect "chunk: a body's chunks list in text order across fields" \
+    "$(isearch chunks_of ":hash='h1'" | tr '\n' ' ')" "0|body|0|10 1|note|0|4 "
+isearch delete_object ":rowid=$object_id"
+isearch delete_object_row ":hash='h1'"
+expect "chunk: the chunks go with their object" \
+    "$(sqlite3 "$dir/index.db" "SELECT count(*) FROM chunk;")" "0"
+
+fresh
+index
+run owner/set_collection_kind ":collection='Cal'" ":account=NULL" ":kind='text/calendar'"
+item Cal ev 1
+sql "UPDATE items SET sort_key = '2026-09-01T10:00:00Z' WHERE link_id = 'ev';"
+run owner/upsert_event_summary ":collection='Cal'" ":link_id='ev'" ":uid='ev'" ":summary='Review'" ":location=NULL" \
+    ":dtstart='20260901T120000'" ":dtstart_tzid='Europe/Paris'" ":dtstart_value=NULL" ":dtend=NULL" ":recurring=0" ":until=NULL"
+isearch init_index_meta ":version=1" ":tokenizer='unicode61 remove_diacritics 2'"
+isearch set_horizon ":horizon_start='2025-08-20T12:00:00Z'" ":horizon_end='2028-08-20T12:00:00Z'"
+isearch set_tzdb_version ":tzdb_version='2026a'"
+window=(":old_start='2025-08-20T12:00:00Z'" ":old_end='2028-08-20T12:00:00Z'"
+        ":new_start='2025-08-20T12:00:00Z'" ":new_end='2028-08-20T12:00:00Z'")
+expect "tzdb: the version the occurrences stand under re-expands nothing" \
+    "$(isearch items_to_reexpand "${window[@]}" ":tzdb_version='2026a'")" ""
+expect "tzdb: another version re-expands a single zoned event inside the horizon" \
+    "$(isearch items_to_reexpand "${window[@]}" ":tzdb_version='2026b'")" "Cal|1"
+
+
+run owner/set_collection_kind ":collection='Docs'" ":account=NULL" ":kind='application/octet-stream'"
+item Docs plan 2
+expect "coverage: a bodiless file hides nothing from search and is never counted" \
+    "$(isearch coverage)" "text/calendar|1"
+
+expect "feed: a batch reads each row's stamp, the cursor it may record" \
+    "$(isearch load_changed_items ":since=0" ":limit=10" | cut -d'|' -f2,10 | tr '\n' ' ')" \
+    "$(sql "SELECT link_id || '|' || changed FROM items ORDER BY changed;" | tr '\n' ' ')"
+
 if [ "$failures" -gt 0 ]; then
     echo "$failures invariant(s) broken" >&2
     exit 1
