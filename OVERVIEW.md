@@ -50,6 +50,8 @@ A **reference** links one item to another of any kind: a message to the contact 
 
 Nothing enters the store unnamed: a source lists each member with its identity and summary, so a listed message is an item from the moment its page lands, its body fetched later or never.
 
+A **task** carries its organisation in standard properties every client reads, nothing of the store's own. Pimalaya's task tools organise them the GTD way by three reserved categories, `inbox`, `waiting` and `someday`, a task carrying none being a next action, so a to-do captured or created anywhere takes part and each view is one search. Time spent on a task is an entry beside it, an event or a pair of journal entries tied to it, kept in a synced calendar or in a local time collection the store holds for the device alone. GUIDE §17 and §18 run both.
+
 Normative: STORAGE §2, §4.3, §14.2, Annex A.
 
 ## 3. Four identifiers

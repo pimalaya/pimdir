@@ -933,6 +933,31 @@ expect "file: an unbound file is deleted with the hashes to release, a bound one
     "$(run owner/delete_unbound_item ":collection='work/Docs'" ":link_id='local'" | cut -d'|' -f1)|$(run owner/delete_unbound_item ":collection='work/Docs'" ":link_id='synced'")|$(sql "SELECT count(*) FROM items WHERE link_id IN ('local', 'synced');")" \
     "hx||1"
 
+# --- The local time collection holds unbound time entries (§14.3) -----------
+
+fresh
+time_id=$'\x01time'
+run owner/set_collection_kind ":collection='$time_id'" ":account=NULL" ":kind='$cal_kind'"
+run owner/set_collection_name ":collection='$time_id'" ":account=NULL" ":name='time'"
+object he
+object hj
+item "$time_id" entry 1 "'he'"
+run owner/upsert_event_summary ":collection='$time_id'" ":link_id='entry'" ":uid='entry'" ":summary='Paint the hallway'" \
+    ":location=NULL" ":dtstart='2026-10-28T09:00:00Z'" ":dtstart_tzid=NULL" ":dtstart_value=NULL" ":dtend=NULL" \
+    ":recurring=0" ":until=NULL"
+item "$time_id" start 2 "'hj'"
+run owner/upsert_journal_summary ":collection='$time_id'" ":link_id='start'" ":uid='start'" ":summary='Paint the hallway'" \
+    ":dtstart='2026-10-28T09:00:00Z'" ":dtstart_tzid=NULL" ":dtstart_value=NULL"
+expect "time: the local time collection is a calendar collection under no account, no source syncing it" \
+    "$(run read/list_collections_by_account ":account=NULL" | cut -d'|' -f2,3,4 | tr -d '\001')|$(run owner/collection_sources ":collection='$time_id'")" \
+    "|text/calendar|time|"
+expect "time: a running entry is an event with no end, a journal entry has its instant" \
+    "$(sql "SELECT ifnull(dtend, 'running') FROM event_summary WHERE link_id = 'entry';")|$(sql "SELECT dtstart FROM journal_summary WHERE link_id = 'start';")" \
+    "running|2026-10-28T09:00:00Z"
+expect "time: an entry no source binds is deleted with its summary and the hash to release" \
+    "$(run owner/delete_unbound_item ":collection='$time_id'" ":link_id='entry'" | cut -d'|' -f1)|$(sql "SELECT count(*) FROM event_summary;")|$(run owner/delete_unbound_item ":collection='$time_id'" ":link_id='start'" | cut -d'|' -f1)|$(sql "SELECT count(*) FROM items;")" \
+    "he|0|hj|0"
+
 # --- A link picker reads one statement per kind (§14.1, §14.2) -------------
 
 fresh

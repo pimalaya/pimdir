@@ -24,6 +24,8 @@ A reader new to the model starts with [OVERVIEW.md](./OVERVIEW.md).
 14. [A reader](#14-a-reader)
 15. [The indexer and the query client](#15-the-indexer-and-the-query-client)
 16. [Running the vectors](#16-running-the-vectors)
+17. [Tasks by categories](#17-tasks-by-categories)
+18. [Time entries](#18-time-entries)
 
 ## 1. Conformance checklist
 
@@ -322,3 +324,33 @@ Never present a deleted row as live outside the trash view.
 - **vectors/search/**: build the fixture store from store.json, index it at the file's `now`, run each query with its sort, compare hits as `(account, seq)`, ordered where the case says `ordered`, the threads of a threaded case, and the coverage, `horizon_left` included, and the temporal coverage where a case states `temporal`, after writing each collection's `sources` coverage rows; a refusal compares its `code`, `start` and `end`. Cut each text of chunks.json into chunks and compare the boundaries. Every index.
 
 checks/vectors.py validates the files' shape and references without an implementation; only an implementation runs a case. Vendor the files if the build cannot read them in place, record their digests, and re-check them against this repository in CI.
+
+## 17. Tasks by categories
+
+How Pimalaya's task consumers (the Android app, unfog) organise to-dos the GTD way, from the columns the store already carries. It is a reading of `task_summary.categories` and `status`, not a rule of the store: another client sees and sets the same state, and a task created anywhere takes part.
+
+- **State**: three `CATEGORIES` values are reserved, `inbox` (captured, not yet clarified), `waiting` (someone else owes it) and `someday` (not a commitment). They are written as those English literals in every locale, compared as `category:` compares (folded as Annex A.2 folds `fn`, so `Inbox` is `inbox`), and shown under the reader's own labels. Every other value is the person's own: a context, a project, anything.
+- **Capture**: a VTODO with `CATEGORIES:inbox`, in any task collection, through the owner's write path (`upsert_task_summary` with the categories read off the body).
+- **Clarify**: an edit of the same item. The summary may be rephrased, `inbox` is replaced by `waiting`, `someday` or nothing, other categories are added; a writer edits only the three values and keeps every other category in order. Moving it to another collection, renamed or not, is an `add` there and a `remove` of the source item once the `add` was performed (STORAGE §15.3, §15.4), rather than a `move`, so a refused create keeps the capture.
+- **Next action**: an open task carrying none of the three. Open is any status but `COMPLETED` and `CANCELLED`, a task stating no `STATUS` included, so a to-do another client created is a next action.
+- **Links that decide nothing**: `CONTACT` may name who a waiting task waits on, and an `ATTACH` `mid:` URI the mail a capture came from (`task_summary.mid`, a `source` reference, STORAGE §14.2).
+
+The views are queries (SEARCH §8), global across accounts and collections, so every reader answers them alike; a category filter is one more `category:` term:
+
+| View | Query |
+| --- | --- |
+| Inbox | `kind:task -status:completed -status:cancelled category:inbox` |
+| Waiting | `kind:task -status:completed -status:cancelled category:waiting` |
+| Someday | `kind:task -status:completed -status:cancelled category:someday` |
+| Next | `kind:task -status:completed -status:cancelled -category:inbox -category:waiting -category:someday` |
+
+vectors/search/queries.json holds a case per view over items 17 to 21 of the fixture store, and checks/vectors.py re-derives their hits from the fixtures' bytes.
+
+## 18. Time entries
+
+No standard ties time spent to a task. A consumer tracking it writes entries tied to the task by `RELATED-TO` (the task's `UID`, `RELTYPE=PARENT` by default) in one of two shapes:
+
+- **Event**: a VEVENT with `DTSTART`, `DTEND` once stopped, the task's `SUMMARY` and `TRANSP:TRANSPARENT`, so it never reads as busy. A running entry has no `DTEND`. Any calendar holds it. Its summary is `upsert_event_summary`'s, `dtend` `NULL` while it runs.
+- **Journal**: a pair of VJOURNALs, `DTSTART` the instant and `CATEGORIES:start` or `stop`, as unfog 1.x logged it. A VJOURNAL has no end (RFC 5545 §3.6.3), hence the pair. Few servers take VJOURNAL. Its summary is `upsert_journal_summary`'s.
+
+Either shape lives in a synced calendar collection, or in the local time collection when the person keeps time on the device (STORAGE §14.3): declare it once, `set_collection_kind` with id `\u0001time`, no account and kind `text/calendar`, then `set_collection_name(collection, 'time')`; write each entry with `insert_item` and its summary, nothing binding it; remove one with `delete_unbound_item` then `release_pins`. No source syncs it, so nothing is pushed; moving entries to a synced collection later is a copy of the same bodies there and a delete here. checks/invariants.sh runs the collection, a running event, a journal entry and their deletion.

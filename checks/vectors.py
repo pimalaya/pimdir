@@ -739,6 +739,39 @@ for case in queries["cases"]:
     else:
         check(f"{label}: accepted", got, None)
 
+# The GTD views (GUIDE.md section 17): each query of the guide's table is a
+# case, and its hits are re-derived from the fixtures' bytes, a task's status
+# and categories read by task_columns' second path, never by the query.
+def task_state(bytes_):
+    text = bytes_.decode().replace("\r\n ", "").replace("\r\n\t", "")
+    status = next((line.split(":", 1)[1].upper() for line in text.split("\r\n")
+                   if line.split(":", 1)[0].split(";")[0].upper() == "STATUS"), None)
+    return status, {category.lower() for category in task_columns(bytes_)["categories"]}
+
+RESERVED = {"inbox", "waiting", "someday"}
+VIEWS = {
+    "Inbox": lambda categories: "inbox" in categories,
+    "Waiting": lambda categories: "waiting" in categories,
+    "Someday": lambda categories: "someday" in categories,
+    "Next": lambda categories: not categories & RESERVED,
+}
+guide = (root.parent / "GUIDE.md").read_text().split("## 17. Tasks by categories")[1].split("\n## ")[0]
+view_queries = dict(re.findall(r"^\| (\w+) \| `([^`]+)` \|$", guide, re.M))
+check("gtd views: the guide's table names the four", sorted(view_queries), sorted(VIEWS))
+tasks = []
+for item in store["items"]:
+    if "fixture" in item:
+        bytes_ = (root / item["fixture"]).read_bytes()
+        if b"BEGIN:VTODO" in bytes_:
+            tasks.append(((accounts[item["collection"]], item["seq"]), *task_state(bytes_)))
+cases = {case["query"]: case for case in queries["cases"]}
+for view, query in view_queries.items():
+    require(f"gtd view {view}: {query!r} is a case", query in cases and "hits" in cases.get(query, {}))
+    derived = sorted([*key] for key, status, categories in tasks
+                     if status not in ("COMPLETED", "CANCELLED") and VIEWS.get(view, lambda _: False)(categories))
+    if query in cases:
+        check(f"gtd view {view}: hits", sorted(cases[query].get("hits", [])), derived)
+
 # Every field of SEARCH.md section 8's table, read from the table, is the
 # parser's and is used by at least one answered case, so a field the compiler
 # maps wrong fails a case rather than a user.

@@ -1,0 +1,12 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//pimalaya//pimdir vectors//EN
+BEGIN:VTODO
+UID:todo-waiting@example.org
+DTSTAMP:20261028T080000Z
+SUMMARY:Lease signed by the landlord
+STATUS:NEEDS-ACTION
+CATEGORIES:Flat,waiting
+CONTACT:Landlord
+END:VTODO
+END:VCALENDAR

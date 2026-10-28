@@ -1,0 +1,16 @@
+---
+cairn: log
+change: tasks-by-categories
+date: 2026-10-28
+---
+
+# Tasks organised by categories, time on the side
+
+Pimalaya Android and unfog organise to-dos the GTD way. The first draft carried the method in an `X-PIMALAYA-GTD` property no other client reads, so it gives way to three reserved `CATEGORIES` values over plain VTODOs (cairn/changes/tasks-by-categories). No table, statement or search field changes: `task_summary.categories`, `status` and `category:` (2026-10-27, tasks-carry-their-organisation) carry it all.
+
+- **GUIDE.md §17** (informative): `inbox`, `waiting` and `someday`, folded as `category:` folds; capture, clarify as an edit (an `add` then a `remove` for another collection, never a `move`, so a refused create keeps the capture); and the four views as queries in a table. A next action is open with none of the three, open being any status but `COMPLETED` and `CANCELLED`. The draft proposal asked for `NEEDS-ACTION` or `IN-PROCESS`, which would have left out every task stating no `STATUS` (RFC 5545 makes it optional), item 7 of the fixture store among them. Guarded by vectors/search: items 17 to 21 in a new home/Tasks collection (a capture stating no STATUS, cased `Inbox`; a waiting task beside the person's `Flat`; a someday one; a completed capture; an in-process next action), a case per view and two `category:` cases. checks/vectors.py reads the four queries from the guide's table, requires each to be a case, and re-derives its hits from the fixtures' bytes by a second path (status and folded categories), so the guide, the cases and the predicate cannot drift; a Next case without item 7 fails it. Item 16's `X-PIMALAYA-GTD:WAITING` now shows that the X- property decides no view. `status:needs-action`, `not status:needs-action kind:task`, `status:completed`, `priority:none kind:task` and `changed:..1000000000` gain the new items, and `status:cancelled` takes the "no item states it" case.
+- **STORAGE §14.3**: the local time collection, a `text/calendar` collection under no account that no source syncs, its id SHOULD be `U+0001` and `time`, as the attachments id is, so two owners of one store find the same. "A collection no source syncs" names it and the event and journal summaries; `delete_unbound_item`, its comment and its bullet name a time entry (the statement was always kind-agnostic). Guarded by a scenario in checks/invariants.sh: the collection under no account with no source, a running event (`dtend` `NULL`) and a journal entry in it, both deleted with their summaries and the hashes to release. It guards the behaviour io-pimdir and unfog will rely on; the id itself, a SHOULD, is only exercised.
+- **GUIDE.md §18** (informative): time entries as an event (`TRANSP:TRANSPARENT`, no `DTEND` while running) or a VJOURNAL start/stop pair, tied by `RELATED-TO`, in a synced calendar or the local time collection.
+- **OVERVIEW.md §2** names the convention and the time collection.
+
+The draft number stays draft-04: it is not tagged yet. io-pimdir follows (cairn/changes/tasks-by-categories there): re-vendor the vectors, answer the view cases, and a writer for unbound calendar items. checks/schema.sh, names.sh, invariants.sh and vectors.py pass (`nix flake check path:.`).
