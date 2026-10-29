@@ -18,7 +18,7 @@ Track A of unfog cairn/changes/gtd-hardening.
 - [x] vectors/gtd/writers.json and fixtures, checks/vectors.py validating their shape; vectors/README.md
 - [x] queries/storage/read/list_replied.sql, STORAGE §14.1, GUIDE §14 and §17, an invariants scenario
 - [x] `nix flake check path:$PWD`
-- [ ] Log entry and landing: left to the user's review
+- [x] Log entry and landing (2026-10-29)
 
 ## Follow-up (2026-10-29): a filed task moved on its server
 
