@@ -313,6 +313,25 @@ run owner/delete_performer ":account=NULL" ":capability='mail.submit'"
 expect "performer: a withdrawn choice leaves the other account's" \
     "$(run read/load_performer ":account=NULL" ":capability='mail.submit'")$(run read/load_performer ":account='work'" ":capability='mail.submit'")" "work-smtp"
 
+
+# --- A calendar refusing tasks says so, before its first sync (§15.6) -------
+
+fresh
+collection Events
+collection Tasks
+# NOTE: a source registers each calendar it lists with no checkpoint, so its
+# declaration is read before the first item sync binds anything there.
+run owner/upsert_checkpoint ":collection='Events'" ":source='caldav'" ":checkpoint=NULL"
+run owner/upsert_checkpoint ":collection='Tasks'" ":source='caldav'" ":checkpoint=NULL"
+run owner/set_capability ":account=NULL" ":source='caldav'" ":collection='Events'" ":capability='x-vtodo'" ":support='none'" ":detail='VEVENT only'"
+expect "x-vtodo: a listed calendar never synced refuses tasks by its row" \
+    "$(run read/load_capabilities ":collection='Events'" | grep x-vtodo)" "caldav|x-vtodo|none|VEVENT only"
+expect "x-vtodo: a calendar with no row states nothing by it" \
+    "$(run read/load_capabilities ":collection='Tasks'" | grep -c x-vtodo)" "0"
+run owner/set_capability ":account=NULL" ":source='caldav'" ":collection=NULL" ":capability='x-vtodo'" ":support='none'" ":detail='events only'"
+run owner/set_capability ":account=NULL" ":source='caldav'" ":collection='Tasks'" ":capability='x-vtodo'" ":support='full'" ":detail=NULL"
+expect "x-vtodo: a calendar stating full wins over a source-wide none" \
+    "$(run read/load_capabilities ":collection='Tasks'" | grep x-vtodo)" "caldav|x-vtodo|full|"
 # --- A collection overrides its source's declaration there (§15.6) -----------
 
 fresh
