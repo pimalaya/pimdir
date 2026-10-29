@@ -1010,6 +1010,41 @@ expect "supersedes: a rename of the superseding collection cascades into the pai
 sql "DELETE FROM items WHERE collection = 'tasks-c';"
 expect "supersedes: the superseding row gone takes the pair" "$(sql "SELECT count(*) FROM supersessions;")" "0"
 
+# --- A superseding create of the same identity names what to move (§15.3) --
+
+fresh
+run owner/set_collection_kind ":collection='tasks-a'" ":account=NULL" ":kind='$cal_kind'"
+run owner/set_collection_kind ":collection='tasks-b'" ":account=NULL" ":kind='$cal_kind'"
+object ht
+object hn
+item tasks-a t1 1 "'ht'"
+bind tasks-a t1 caldav a.ics 1
+sql "UPDATE bindings SET base_revision = 'r1' WHERE collection = 'tasks-a';"
+sql "UPDATE items SET deleted = 1 WHERE collection = 'tasks-a' AND link_id = 't1';"
+item tasks-b t1 2 "'hn'"
+bind tasks-b t1 caldav $'\x01t1' 0
+run owner/supersede_item ":collection='tasks-a'" ":link_id='t1'" ":by_collection='tasks-b'" ":by_link_id='t1'"
+expect "supersedes: a create keeping the identity names the binding it may be moved from" \
+    "$(run owner/list_superseded_bindings ":collection='tasks-b'" ":source='caldav'")" "t1|tasks-a|a.ics|r1"
+expect "supersedes: another source binds nothing to move" \
+    "$(run owner/list_superseded_bindings ":collection='tasks-b'" ":source='other'")" ""
+expect "supersedes: the superseded collection has nothing to move in" \
+    "$(run owner/list_superseded_bindings ":collection='tasks-a'" ":source='caldav'")" ""
+item tasks-b n1 3 "'hn'"
+item tasks-a t2 4 "'ht'"
+bind tasks-a t2 caldav b.ics 1
+sql "UPDATE items SET deleted = 1 WHERE collection = 'tasks-a' AND link_id = 't2';"
+run owner/supersede_item ":collection='tasks-a'" ":link_id='t2'" ":by_collection='tasks-b'" ":by_link_id='n1'"
+expect "supersedes: a create of another identity is a plain create" \
+    "$(run owner/list_superseded_bindings ":collection='tasks-b'" ":source='caldav'")" "t1|tasks-a|a.ics|r1"
+sql "UPDATE items SET deleted = 0 WHERE collection = 'tasks-a' AND link_id = 't1';"
+expect "supersedes: a revived item is no member to move" \
+    "$(run owner/list_superseded_bindings ":collection='tasks-b'" ":source='caldav'")" ""
+sql "UPDATE items SET deleted = 1 WHERE collection = 'tasks-a' AND link_id = 't1';"
+sql "UPDATE bindings SET handle = 'a.ics', base_flags = '[]', base_present = 1 WHERE collection = 'tasks-b' AND link_id = 't1';"
+expect "supersedes: the create accepted has nothing left to move" \
+    "$(run owner/list_superseded_bindings ":collection='tasks-b'" ":source='caldav'")" ""
+
 fresh
 run owner/set_collection_kind ":collection='tasks-a'" ":account=NULL" ":kind='$cal_kind'"
 run owner/set_collection_kind ":collection='tasks-b'" ":account=NULL" ":kind='$cal_kind'"

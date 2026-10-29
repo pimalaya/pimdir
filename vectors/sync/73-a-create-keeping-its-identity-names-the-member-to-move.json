@@ -1,0 +1,65 @@
+{
+  "label": "a superseding create keeping the superseded identity names the member it may be moved from",
+  "note": "task todo-inbox was filed from tasks-a into tasks-b with its UID kept, an add carrying supersedes; tasks-b's sync pushes the create naming tasks-a's binding, which a connector able to move delivers by a MOVE then a write of the body, so a server keeping one UID per account never holds it twice; the move answered, the create lands under the moved member's handle (STORAGE §15.3, SYNC.md §3 and §4)",
+  "store": {
+    "collections": [
+      { "id": "tasks-a", "account": null, "kind": "text/calendar", "conflict": "manual" },
+      { "id": "tasks-b", "account": null, "kind": "text/calendar", "conflict": "manual" }
+    ],
+    "objects": {
+      "t1": { "body": "fixtures/todo-inbox.ics" },
+      "t3": { "body": "fixtures/todo-inbox-filed.ics" }
+    },
+    "items": [
+      { "collection": "tasks-a", "link_id": "todo-inbox@example.org", "seq": 1, "flags": [], "object": "t1", "level": 2, "deleted": 1 },
+      { "collection": "tasks-b", "link_id": "todo-inbox@example.org", "seq": 2, "flags": [], "object": "t3", "level": 2, "deleted": 0 }
+    ],
+    "bindings": [
+      { "collection": "tasks-a", "link_id": "todo-inbox@example.org", "source": "caldav", "handle": "inbox.ics", "base_flags": [], "base_object": "t1", "base_revision": "r1", "base_present": 1 },
+      { "collection": "tasks-b", "link_id": "todo-inbox@example.org", "source": "caldav", "handle": "\u0001todo-inbox@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }
+    ],
+    "supersessions": [
+      { "collection": "tasks-a", "link_id": "todo-inbox@example.org", "by_collection": "tasks-b", "by_link_id": "todo-inbox@example.org" }
+    ],
+    "sources": [
+      { "collection": "tasks-a", "source": "caldav", "checkpoint": "a0" },
+      { "collection": "tasks-b", "source": "caldav", "checkpoint": "b0" }
+    ]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "tasks-b",
+    "source": "caldav",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual"
+    }
+  },
+  "remote": {
+    "snapshot": { "items": [], "vanished": [], "complete": true, "checkpoint": "b1" },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [{ "kind": "Add", "handle": "\u0001todo-inbox@example.org", "link_id": "todo-inbox@example.org", "flags": [], "origin": null, "supersedes": { "collection": "tasks-a", "handle": "inbox.ics", "if_match": "r1" }, "object": "t3", "key": "b98c5f9f0e070987" }],
+    "outcomes": [{ "handle": "\u0001todo-inbox@example.org", "outcome": "Accepted", "assigned": "inbox.ics", "revision": "r2" }],
+    "events": [{ "kind": "Created", "handle": "inbox.ics" }],
+    "store": {
+      "items": [
+        { "collection": "tasks-a", "link_id": "todo-inbox@example.org", "seq": 1, "flags": [], "object": "t1", "level": 2, "deleted": 1 },
+        { "collection": "tasks-b", "link_id": "todo-inbox@example.org", "seq": 2, "flags": [], "object": "t3", "level": 2, "deleted": 0 }
+      ],
+      "bindings": [
+        { "collection": "tasks-a", "link_id": "todo-inbox@example.org", "source": "caldav", "handle": "inbox.ics", "base_flags": [], "base_object": "t1", "base_revision": "r1", "base_present": 1 },
+        { "collection": "tasks-b", "link_id": "todo-inbox@example.org", "source": "caldav", "handle": "inbox.ics", "base_flags": [], "base_object": "t3", "base_revision": "r2", "base_present": 1 }
+      ],
+      "supersessions": [
+        { "collection": "tasks-a", "link_id": "todo-inbox@example.org", "by_collection": "tasks-b", "by_link_id": "todo-inbox@example.org" }
+      ],
+      "sources": [
+        { "collection": "tasks-a", "source": "caldav", "checkpoint": "a0" },
+        { "collection": "tasks-b", "source": "caldav", "checkpoint": "b1" }
+      ]
+    }
+  }
+}

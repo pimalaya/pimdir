@@ -19,3 +19,8 @@ Track A of unfog cairn/changes/gtd-hardening.
 - [x] queries/storage/read/list_replied.sql, STORAGE §14.1, GUIDE §14 and §17, an invariants scenario
 - [x] `nix flake check path:$PWD`
 - [ ] Log entry and landing: left to the user's review
+
+## Follow-up (2026-10-29): a filed task moved on its server
+
+- [x] queries/storage/owner/list_superseded_bindings.sql; STORAGE §14 load and §15.3; SYNC §3 (Superseded), §4 (`Add.supersedes`, a delete of a gone member accepted, the key), §5 (the delete after a move), §11; GUIDE §9, the create step, §17 clarify
+- [x] checks/invariants.sh: the superseded binding named, another source, another identity, a revived item, an accepted create; vector 73 with fixture todo-inbox-filed.ics

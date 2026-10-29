@@ -1,0 +1,10 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//pimalaya//pimdir vectors//EN
+BEGIN:VTODO
+UID:todo-inbox@example.org
+DTSTAMP:20261029T080000Z
+SUMMARY:Call the plumber
+CATEGORIES:phone
+END:VTODO
+END:VCALENDAR

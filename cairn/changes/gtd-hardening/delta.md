@@ -26,6 +26,14 @@ An `add` MAY carry `supersedes: { "collection": id, "seq": n }`, naming the item
 - WHEN tasks-a syncs
 - THEN a plain `Remove` of t1 is pushed, with no destination, and accepted (vector 72)
 
+### Requirement: SYNC §3 and §4 A create keeping its identity is moved there
+A `Created` placement whose item superseded an item of its own identity in another collection SHALL name, when the same source binds that item with a base, the binding it may be moved from (`list_superseded_bindings`): its collection, handle and base revision, whatever body it holds. Its `Add` SHALL carry it as `supersedes`, outside the idempotency key. A connector whose source moves members between collections (WebDAV `MOVE`) MAY deliver the add by moving that member into the collection, gated on its revision, then writing `object` over it, accepted with the moved member's handle and the revision the write left; a source answering the move as one it cannot do (`405`, `501`, a `404` for the bound member) SHALL have it delivered by an upload, and one refusing it for the member's identity rejects it. A delete of a member already gone SHALL be accepted, so the superseded tombstone's delete after a move is.
+
+#### Scenario: a task filed elsewhere on a server keeping one UID per account
+- GIVEN task todo-inbox in tasks-a bound as inbox.ics at r1, tombstoned and superseded by todo-inbox in tasks-b, a pending create
+- WHEN tasks-b syncs
+- THEN it pushes an `Add` carrying `supersedes` tasks-a, inbox.ics, r1, and the move accepted lands the create as inbox.ics (vector 73)
+
 ### Requirement: STORAGE §15.6 Collections refusing tasks
 A source MAY declare `x-vtodo` source-wide or on one collection: `none` SHALL mean the collection takes no VTODO resource, `full` that it does. It is read only where a row states it: a source with no `x-vtodo` row refuses nothing by it. The producer's gate SHALL refuse, and the owner's backstop SHALL park, an `add` or `update` whose new resource is a VTODO, and a `move` or `copy` of one, into a collection a source concerned declares `none` for, naming `x-vtodo`, the source and its detail.
 
@@ -48,13 +56,13 @@ A source MAY declare `x-vtodo` source-wide or on one collection: `none` SHALL me
 `rename_queue_targets` SHALL also follow a pending `add`'s `supersedes.collection` into the new id, beside a `move` or `copy`'s `to`.
 
 ### Requirement: STORAGE §14 load
-`load` SHALL also answer the tombstones of the collection whose remove is held (`list_superseded_pending`).
+`load` SHALL also answer the tombstones of the collection whose remove is held (`list_superseded_pending`), and for each pending create superseding an item of its own identity the binding it may be moved from (`list_superseded_bindings`).
 
 ### Requirement: STORAGE Annex A.4 wording
 The note on `X-` properties SHALL no longer name "the bucket an organising client keeps", which no client keeps any more: an `X-` property is the body's alone, no column carries one.
 
 ### Requirement: GUIDE §17 Tasks by categories (informative)
-Capture SHALL read as a VTODO with `CATEGORIES:inbox`, `CREATED` and `DTSTAMP` at the capture instant, written as an `add` through the queue (GUIDE §13), or by the owner into a collection no source syncs. A move to another collection SHALL read as one `add` carrying `supersedes`. The writer rules the consumers share SHALL be stated: a task already in the target state untouched; a plain category edit keeping the state and replacing only the person's categories; every line an edit does not change kept byte for byte; `DTSTAMP` restated and `LAST-MODIFIED` restated only where present on an edit that changes a line; `CONTACT` carrying `ALTREP="mailto:..."` given an address; the category filter folded; Next ordered by due, then priority, then oldest captured, other views oldest captured first, "captured at" read from `CREATED`, else `DTSTAMP`.
+Capture SHALL read as a VTODO with `CATEGORIES:inbox`, `CREATED` and `DTSTAMP` at the capture instant, written as an `add` through the queue (GUIDE §13), or by the owner into a collection no source syncs. A move to another collection SHALL read as one `add` carrying `supersedes`. A filed task keeping its `UID` SHALL read as delivered, by a connector able to, as a server-side move then a write of its body. The writer rules the consumers share SHALL be stated: a task already in the target state untouched; a plain category edit keeping the state and replacing only the person's categories; every line an edit does not change kept byte for byte; `DTSTAMP` restated and `LAST-MODIFIED` restated only where present on an edit that changes a line; `CONTACT` carrying `ALTREP="mailto:..."` given an address; the category filter folded; Next ordered by due, then priority, then oldest captured, other views oldest captured first, "captured at" read from `CREATED`, else `DTSTAMP`.
 
 #### Scenario: writer vectors
 - GIVEN vectors/gtd/writers.json
