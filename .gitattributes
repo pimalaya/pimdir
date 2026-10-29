@@ -3,3 +3,4 @@
 # Without this git normalises them away under core.autocrlf and every recorded
 # digest stops matching what a clone holds.
 vectors/fixtures/** -text
+vectors/gtd/fixtures/** -text

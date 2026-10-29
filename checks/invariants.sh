@@ -958,6 +958,86 @@ expect "time: an entry no source binds is deleted with its summary and the hash 
     "$(run owner/delete_unbound_item ":collection='$time_id'" ":link_id='entry'" | cut -d'|' -f1)|$(sql "SELECT count(*) FROM event_summary;")|$(run owner/delete_unbound_item ":collection='$time_id'" ":link_id='start'" | cut -d'|' -f1)|$(sql "SELECT count(*) FROM items;")" \
     "he|0|hj|0"
 
+# --- An add superseding an item holds its delete until it is pushed (§15.3) --
+
+# bind <collection> <link_id> <source> <handle> <base_present>: one binding,
+# with a base or none.
+bind() {
+    local base="NULL"
+    [ "$5" = 1 ] && base="'[]'"
+    run owner/insert_binding ":collection='$1'" ":link_id='$2'" ":source='$3'" ":handle='$4'" \
+        ":base_flags=$base" ":base_object=NULL" ":base_revision=NULL" ":base_present=$5" \
+        ":conflicted=0" ":conflict_revision=NULL" ":conflict_object=NULL" ":shared_object=NULL"
+}
+
+fresh
+run owner/set_collection_kind ":collection='tasks-a'" ":account=NULL" ":kind='$cal_kind'"
+run owner/set_collection_kind ":collection='tasks-b'" ":account=NULL" ":kind='$cal_kind'"
+object ht
+object hn
+item tasks-a t1 1 "'ht'"
+bind tasks-a t1 caldav a.ics 1
+sql "UPDATE items SET deleted = 1 WHERE collection = 'tasks-a' AND link_id = 't1';"
+item tasks-b n1 2 "'hn'"
+bind tasks-b n1 caldav $'\x01n1' 0
+run owner/supersede_item ":collection='tasks-a'" ":link_id='t1'" ":by_collection='tasks-b'" ":by_link_id='n1'"
+expect "supersedes: a pending superseding create holds the tombstone" \
+    "$(run owner/list_superseded_pending ":collection='tasks-a'")" "t1"
+expect "supersedes: nothing is held in the superseding collection" \
+    "$(run owner/list_superseded_pending ":collection='tasks-b'")" ""
+sql "UPDATE bindings SET handle = 'n1.ics', base_flags = '[]', base_present = 1 WHERE collection = 'tasks-b';"
+expect "supersedes: the create accepted releases the hold" \
+    "$(run owner/list_superseded_pending ":collection='tasks-a'")" ""
+run owner/delete_item_bindings ":collection='tasks-b'" ":link_id='n1'"
+expect "supersedes: a collection no source syncs has no create to wait for" \
+    "$(run owner/list_superseded_pending ":collection='tasks-a'")" ""
+run owner/upsert_checkpoint ":collection='tasks-b'" ":source='caldav'" ":checkpoint=NULL"
+expect "supersedes: a source syncing it by its checkpoint alone and binding nothing of a body holds it again" \
+    "$(run owner/list_superseded_pending ":collection='tasks-a'")" "t1"
+run owner/retain_item ":collection='tasks-b'" ":link_id='n1'" ":source='caldav'"
+expect "supersedes: the superseding create withdrawn releases the hold" \
+    "$(run owner/list_superseded_pending ":collection='tasks-a'")" ""
+sql "UPDATE items SET deleted = 0, retained_at = NULL, retained_by = NULL WHERE collection = 'tasks-b';"
+run owner/supersede_item ":collection='tasks-a'" ":link_id='t1'" ":by_collection='tasks-b'" ":by_link_id='n1'"
+expect "supersedes: a second record of the pair is one row" "$(sql "SELECT count(*) FROM supersessions;")" "1"
+sql "UPDATE items SET deleted = 0 WHERE collection = 'tasks-a';"
+expect "supersedes: a revived item is no tombstone to hold" \
+    "$(run owner/list_superseded_pending ":collection='tasks-a'")" ""
+sql "UPDATE items SET deleted = 1 WHERE collection = 'tasks-a';"
+run owner/rename_collection ":collection='tasks-b'" ":new_id='tasks-c'"
+expect "supersedes: a rename of the superseding collection cascades into the pair" \
+    "$(sql "SELECT by_collection FROM supersessions;")|$(run owner/list_superseded_pending ":collection='tasks-a'")" "tasks-c|t1"
+sql "DELETE FROM items WHERE collection = 'tasks-c';"
+expect "supersedes: the superseding row gone takes the pair" "$(sql "SELECT count(*) FROM supersessions;")" "0"
+
+fresh
+run owner/set_collection_kind ":collection='tasks-a'" ":account=NULL" ":kind='$cal_kind'"
+run owner/set_collection_kind ":collection='tasks-b'" ":account=NULL" ":kind='$cal_kind'"
+run queue/enqueue_action ":producer='p'" ":collection='tasks-b'" ":action='add'" \
+    ":payload='{\"v\":1,\"flags\":[],\"supersedes\":{\"collection\":\"tasks-a\",\"seq\":1}}'" ":object_hash=NULL"
+run queue/enqueue_action ":producer='p'" ":collection='tasks-b'" ":action='add'" ":payload='{\"v\":1,\"flags\":[]}'" ":object_hash=NULL"
+run owner/rename_queue_targets ":collection='tasks-a'" ":new_id='tasks-2026'"
+run owner/rename_collection ":collection='tasks-a'" ":new_id='tasks-2026'"
+expect "supersedes: a rename follows into a pending add's supersedes, and leaves a plain add alone" \
+    "$(sql "SELECT ifnull(json_extract(payload, '\$.supersedes.collection'), '-') FROM queue ORDER BY id;" | tr '\n' ' ')" "tasks-2026 - "
+
+# --- A task's source mail answered is a reply another mail names (§14.1) ----
+
+fresh
+collection INBOX
+collection Sent
+run owner/set_collection_role ":collection='Sent'" ":role='sent'"
+mail INBOX r1 1 10 NULL
+sql "UPDATE mail_summary SET in_reply_to = '[\"other@x\",\"asked@x\"]' WHERE link_id = 'r1';"
+mail Sent r2 2 11 NULL
+sql "UPDATE mail_summary SET in_reply_to = '[\"mine@x\"]' WHERE link_id = 'r2';"
+mail INBOX r3 3 12 NULL
+sql "UPDATE mail_summary SET in_reply_to = '[\"gone@x\"]' WHERE link_id = 'r3'; UPDATE items SET deleted = 1 WHERE link_id = 'r3';"
+mail INBOX r4 4 13 NULL
+sql "UPDATE mail_summary SET in_reply_to = '[\"asked@x\"]' WHERE link_id = 'r4';"
+expect "replied: an id a live mail answers, once; the person's own reply and a deleted one answer nothing" \
+    "$(run read/list_replied ":ids='[\"asked@x\",\"mine@x\",\"gone@x\",\"never@x\"]'" | tr '\n' ' ')" "asked@x "
+
 # --- A link picker reads one statement per kind (§14.1, §14.2) -------------
 
 fresh

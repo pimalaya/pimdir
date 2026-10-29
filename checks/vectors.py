@@ -574,6 +574,15 @@ for path in sync_cases:
         require(f"{label}: item {item['link_id']} names a known object", item.get("object") in labels | {None})
     for binding in store.get("bindings", []) + case["expect"].get("store", {}).get("bindings", []):
         require(f"{label}: binding {binding['handle']} names a known base", binding.get("base_object") in labels | {None})
+    # A supersession pairs two items the store holds, the superseded one a
+    # tombstone (STORAGE sections 4.3 and 15.3).
+    for rows, side in ((store, "store"), (expected, "expected store")):
+        items = {(item["collection"], item["link_id"]): item for item in rows.get("items", [])}
+        for pair in rows.get("supersessions", []):
+            require(f"{label}: {side} supersession names its columns", set(pair) == {"collection", "link_id", "by_collection", "by_link_id"})
+            superseded = items.get((pair.get("collection"), pair.get("link_id")))
+            require(f"{label}: {side} supersession names a held tombstone", superseded is not None and superseded.get("deleted") == 1)
+            require(f"{label}: {side} supersession names a held superseding item", (pair.get("by_collection"), pair.get("by_link_id")) in items)
     require(f"{label}: run names a verb", case["run"].get("verb") in {"open", "sync", "upgrade", "mutate", "rekey"})
     if case["run"].get("verb") == "mutate":
         require(f"{label}: a mutate run carries its mutation", isinstance(case["run"].get("mutation"), dict))
@@ -785,6 +794,128 @@ for case in queries["cases"]:
 for field in sorted(documented - answered):
     failures.append(f"search field {field}: used by no hits or threads case")
 
+# The task writers (GUIDE.md section 17): every case's shape and references,
+# and what its edit may change, re-derived from the bytes on both sides by a
+# second path, so an expected fixture that touches a line the guide keeps, or
+# writes a state or a category the edit did not ask for, fails here.
+GTD_STAMPED = {"DTSTAMP", "LAST-MODIFIED"}
+GTD_OPS = {"set-state", "set-categories", "set-contact", "capture", "captured-at"}
+GTD_EXPECT = {"bytes", "unchanged", "refused", "vtodo", "value"}
+
+
+def gtd_groups(bytes_):
+    """The VTODO's properties as (name, params, value, raw bytes), a folded
+    line one group, nested components (an alarm) kept as their raw lines."""
+    require("gtd writers: a fixture is CRLF throughout", b"\n" not in bytes_.replace(b"\r\n", b""))
+    physical = bytes_.split(b"\r\n")
+    groups = []
+    for line in physical:
+        if line[:1] in (b" ", b"\t") and groups:
+            groups[-1] += b"\r\n" + line
+        else:
+            groups.append(line)
+    begin, end = groups.index(b"BEGIN:VTODO"), groups.index(b"END:VTODO")
+    require("gtd writers: a fixture holds one VTODO", groups.count(b"BEGIN:VTODO") == 1)
+    out, depth = [], 0
+    for raw in groups[begin + 1:end]:
+        text = raw.replace(b"\r\n ", b"").replace(b"\r\n\t", b"").decode()
+        head, value = re.match(r'^((?:[^:"]|"[^"]*")*):(.*)$', text).groups()
+        name, *params = re.findall(r'(?:[^;"]|"[^"]*")+', head)
+        name = name.upper()
+        if name == "BEGIN":
+            depth += 1
+        nested = depth > 0
+        if name == "END":
+            depth -= 1
+        out.append(("" if nested else name, params, value, raw))
+    return out
+
+
+def gtd_values(value):
+    return [re.sub(r"\\([\\;,nN])", lambda m: "\n" if m.group(1) in "nN" else m.group(1), raw)
+            for raw in re.split(r"(?<!\\),", value) if raw]
+
+
+def gtd_categories(groups):
+    values = [v for name, _, value, _ in groups if name == "CATEGORIES" for v in gtd_values(value)]
+    return [v for v in values if v.lower().strip() in RESERVED], [v for v in values if v.lower().strip() not in RESERVED]
+
+
+def gtd_person(categories):
+    kept = []
+    for category in (c.strip() for c in categories):
+        if category and all(category.lower() != known.lower() for known in kept):
+            kept.append(category)
+    return kept
+
+
+def gtd_contacts(groups):
+    return [(value, [p for p in params if p.upper().startswith("ALTREP=")]) for name, params, value, _ in groups if name == "CONTACT"]
+
+
+def gtd_contact_of(edit):
+    address = edit.get("address")
+    text = edit.get("name") or address
+    return (text, [f'ALTREP="mailto:{address}"'] if address else [])
+
+
+gtd_dir = root / "gtd"
+writers = json.loads((gtd_dir / "writers.json").read_text())
+now = writers.get("now", "")
+require("gtd writers: now is a UTC instant", re.fullmatch(r"\d{8}T\d{6}Z", now) is not None)
+for case in writers["cases"]:
+    label = f"gtd writer {case.get('label')!r}"
+    edit, expect = case.get("edit", {}), case.get("expect", {})
+    op = edit.get("op")
+    require(f"{label}: a known edit", op in GTD_OPS)
+    require(f"{label}: one known expectation", len(set(expect) & GTD_EXPECT) == 1 and set(expect) <= GTD_EXPECT | {"names"})
+    if op == "capture":
+        require(f"{label}: a capture reads no input", "input" not in case)
+        lines = set(expect.get("vtodo", []))
+        for line in (f"CREATED:{now}", f"DTSTAMP:{now}", "CATEGORIES:inbox", f"SUMMARY:{edit.get('summary')}"):
+            require(f"{label}: the capture holds {line}", line in lines)
+        require(f"{label}: the capture states a UID", "UID" in expect.get("names", []))
+        continue
+    require(f"{label}: its input is a fixture", (gtd_dir / case.get("input", "")).is_file())
+    before = gtd_groups((gtd_dir / case["input"]).read_bytes())
+    reserved, person = gtd_categories(before)
+    if op == "captured-at":
+        stamps = {name: value for name, _, value, _ in before if name in ("CREATED", "DTSTAMP")}
+        check(f"{label}: captured at", expect.get("value"), stamps.get("CREATED", stamps.get("DTSTAMP")))
+        continue
+    state = edit.get("state")
+    wanted = gtd_person(edit.get("categories", []))
+    noop = {
+        "set-state": {r.lower().strip() for r in reserved} == ({state} if state else set()),
+        "set-categories": person == wanted,
+        "set-contact": gtd_contacts(before) == [gtd_contact_of(edit)],
+    }[op]
+    refused = op == "set-categories" and any(c.lower().strip() in RESERVED for c in wanted)
+    check(f"{label}: refused exactly when a reserved value is asked for", "refused" in expect, refused)
+    check(f"{label}: unchanged exactly when the edit is a no-op", "unchanged" in expect, noop and not refused)
+    if "bytes" not in expect:
+        continue
+    require(f"{label}: its expectation is a fixture", (gtd_dir / expect["bytes"]).is_file())
+    after = gtd_groups((gtd_dir / expect["bytes"]).read_bytes())
+    touched = {"set-state": {"CATEGORIES"}, "set-categories": {"CATEGORIES"}, "set-contact": {"CONTACT"}}[op] | GTD_STAMPED
+    check(f"{label}: every other line kept byte for byte",
+          [raw for name, _, _, raw in after if name not in touched], [raw for name, _, _, raw in before if name not in touched])
+    stamps = {name: value for name, _, value, _ in after if name in GTD_STAMPED}
+    check(f"{label}: DTSTAMP restated", stamps.get("DTSTAMP"), now)
+    check(f"{label}: LAST-MODIFIED restated only where carried",
+          stamps.get("LAST-MODIFIED"), now if any(name == "LAST-MODIFIED" for name, *_ in before) else None)
+    reserved_after, person_after = gtd_categories(after)
+    if op == "set-state":
+        check(f"{label}: the state", reserved_after, [state] if state else [])
+        check(f"{label}: the person's categories kept", person_after, person)
+    if op == "set-categories":
+        check(f"{label}: the state kept", reserved_after, reserved)
+        check(f"{label}: the person's categories", person_after, wanted)
+    if op == "set-contact":
+        check(f"{label}: one contact", gtd_contacts(after), [gtd_contact_of(edit)])
+        check(f"{label}: the categories kept", [raw for name, _, _, raw in after if name == "CATEGORIES"],
+              [raw for name, _, _, raw in before if name == "CATEGORIES"])
+
 # The chunk cases (SEARCH.md section 6): every boundary re-derived from the rule.
 chunk_cases = json.loads((search / "chunks.json").read_text())["cases"]
 for case in chunk_cases:
@@ -803,5 +934,5 @@ print(
     f"{len(objects['objects'])} object names, "
     f"{len(summaries['cases'])} summaries over {len(fixtures)} fixtures, "
     f"{sum('hint' in case for case in summaries['cases'])} minted link ids, "
-    f"{len(sync_cases)} sync cases, {len(queries['cases'])} search cases and {len(chunk_cases)} chunk cases check"
+    f"{len(sync_cases)} sync cases, {len(queries['cases'])} search cases, {len(chunk_cases)} chunk cases and {len(writers['cases'])} task writer cases check"
 )

@@ -1,0 +1,12 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Example Corp//Other Client 1.0//EN
+BEGIN:VTODO
+UID:gtd-w8@example.org
+DTSTAMP:20261028T090000Z
+SUMMARY:Call the bank
+CATEGORIES:inbox
+CATEGORIES:money
+URL:https://bank.example.org/contact
+END:VTODO
+END:VCALENDAR

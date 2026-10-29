@@ -1,0 +1,69 @@
+{
+  "label": "once the superseding create is accepted, the superseded tombstone pushes a plain delete",
+  "note": "tasks-b's create was accepted, so its binding has a base and no pending create of todo-inbox's supersession remains: the hold lifts and tasks-a's tombstone derives a Remove with no destination, the identities differing; accepted, the binding goes and the row is retained (STORAGE §11, §15.3, SYNC.md §5)",
+  "store": {
+    "collections": [
+      { "id": "tasks-a", "account": null, "kind": "text/calendar", "conflict": "manual" },
+      { "id": "tasks-b", "account": null, "kind": "text/calendar", "conflict": "manual" }
+    ],
+    "objects": {
+      "t1": { "body": "fixtures/todo-inbox.ics" },
+      "t2": { "body": "fixtures/todo-waiting.ics" }
+    },
+    "items": [
+      { "collection": "tasks-a", "link_id": "todo-inbox@example.org", "seq": 1, "flags": [], "object": "t1", "level": 2, "deleted": 1 },
+      { "collection": "tasks-b", "link_id": "todo-waiting@example.org", "seq": 2, "flags": [], "object": "t2", "level": 2, "deleted": 0 }
+    ],
+    "bindings": [
+      { "collection": "tasks-a", "link_id": "todo-inbox@example.org", "source": "caldav", "handle": "inbox.ics", "base_flags": [], "base_object": "t1", "base_revision": "r1", "base_present": 1 },
+      { "collection": "tasks-b", "link_id": "todo-waiting@example.org", "source": "caldav", "handle": "waiting.ics", "base_flags": [], "base_object": "t2", "base_revision": "r7", "base_present": 1 }
+    ],
+    "supersessions": [
+      { "collection": "tasks-a", "link_id": "todo-inbox@example.org", "by_collection": "tasks-b", "by_link_id": "todo-waiting@example.org" }
+    ],
+    "sources": [
+      { "collection": "tasks-a", "source": "caldav", "checkpoint": "a0" },
+      { "collection": "tasks-b", "source": "caldav", "checkpoint": "b1" }
+    ]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "tasks-a",
+    "source": "caldav",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual"
+    }
+  },
+  "remote": {
+    "snapshot": {
+      "items": [{ "handle": "inbox.ics", "flags": [], "revision": "r1", "meta": { "body": "fixtures/todo-inbox.ics" } }],
+      "vanished": [],
+      "complete": true,
+      "checkpoint": "a1"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [{ "kind": "Remove", "handle": "inbox.ics", "to": null, "link_id": "todo-inbox@example.org", "if_match": "r1", "key": "16a361c572e3bfd4" }],
+    "outcomes": [{ "handle": "inbox.ics", "outcome": "Accepted" }],
+    "events": [],
+    "store": {
+      "items": [
+        { "collection": "tasks-a", "link_id": "todo-inbox@example.org", "seq": 1, "flags": [], "object": "t1", "level": 2, "deleted": 1, "retained": true, "retained_by": "caldav" },
+        { "collection": "tasks-b", "link_id": "todo-waiting@example.org", "seq": 2, "flags": [], "object": "t2", "level": 2, "deleted": 0, "retained": false, "retained_by": null }
+      ],
+      "bindings": [
+        { "collection": "tasks-b", "link_id": "todo-waiting@example.org", "source": "caldav", "handle": "waiting.ics", "base_flags": [], "base_object": "t2", "base_revision": "r7", "base_present": 1 }
+      ],
+      "supersessions": [
+        { "collection": "tasks-a", "link_id": "todo-inbox@example.org", "by_collection": "tasks-b", "by_link_id": "todo-waiting@example.org" }
+      ],
+      "sources": [
+        { "collection": "tasks-a", "source": "caldav", "checkpoint": "a1" },
+        { "collection": "tasks-b", "source": "caldav", "checkpoint": "b1" }
+      ]
+    }
+  }
+}

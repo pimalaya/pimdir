@@ -1,0 +1,116 @@
+{
+  "note": "The task edits GUIDE.md section 17 states, which every task consumer runs alike. Each case reads `input` (relative to this directory) as bytes, runs `edit` at the instant `now`, and compares with `expect`: `bytes`, a fixture the output equals byte for byte; `unchanged`, the output being the input's bytes and nothing written; `refused`, the edit refused and nothing written; `vtodo` with `names`, for a capture, the unfolded lines the new VTODO holds and the properties it states with any value; `value`, for a reading, the value read verbatim. Informative like the guide, authored from its prose.",
+  "now": "20261028T090000Z",
+  "cases": [
+    {
+      "label": "setting the state replaces the reserved value where it stood and restates both stamps",
+      "input": "fixtures/state-inbox.ics",
+      "edit": { "op": "set-state", "state": "waiting" },
+      "expect": { "bytes": "fixtures/state-inbox-waiting.ics" }
+    },
+    {
+      "label": "a task already in the target state is left untouched, its casing kept",
+      "input": "fixtures/state-already.ics",
+      "edit": { "op": "set-state", "state": "waiting" },
+      "expect": { "unchanged": true }
+    },
+    {
+      "label": "a next action drops the reserved value and the line it leaves empty, another line kept",
+      "input": "fixtures/state-two-lines.ics",
+      "edit": { "op": "set-state", "state": null },
+      "expect": { "bytes": "fixtures/state-two-lines-next.ics" }
+    },
+    {
+      "label": "a next action is untouched when no reserved value is carried",
+      "input": "fixtures/state-person-only.ics",
+      "edit": { "op": "set-state", "state": null },
+      "expect": { "unchanged": true }
+    },
+    {
+      "label": "with no reserved value to replace, the state is a line after the last CATEGORIES line",
+      "input": "fixtures/state-person-only.ics",
+      "edit": { "op": "set-state", "state": "someday" },
+      "expect": { "bytes": "fixtures/state-person-only-someday.ics" }
+    },
+    {
+      "label": "with no CATEGORIES at all, the state follows the last property, ahead of the alarm",
+      "input": "fixtures/state-none.ics",
+      "edit": { "op": "set-state", "state": "waiting" },
+      "expect": { "bytes": "fixtures/state-none-waiting.ics" }
+    },
+    {
+      "label": "foreign bytes are kept: the folded line, the X- properties, the parameters and the other CATEGORIES line, the escaped comma written back escaped",
+      "input": "fixtures/foreign.ics",
+      "edit": { "op": "set-state", "state": "someday" },
+      "expect": { "bytes": "fixtures/foreign-someday.ics" }
+    },
+    {
+      "label": "a plain category edit keeps the state and replaces the person's values where the first stood",
+      "input": "fixtures/person-one-line.ics",
+      "edit": { "op": "set-categories", "categories": ["errands"] },
+      "expect": { "bytes": "fixtures/person-one-line-errands.ics" }
+    },
+    {
+      "label": "a plain category edit across lines leaves the state's line byte for byte",
+      "input": "fixtures/person-two-lines.ics",
+      "edit": { "op": "set-categories", "categories": ["Home", " errands ", "", "home"] },
+      "expect": { "bytes": "fixtures/person-two-lines-home.ics" }
+    },
+    {
+      "label": "a plain category edit with no person's value yet writes a line of its own",
+      "input": "fixtures/person-none.ics",
+      "edit": { "op": "set-categories", "categories": ["money"] },
+      "expect": { "bytes": "fixtures/person-none-money.ics" }
+    },
+    {
+      "label": "the person's values already the new ones leave the task untouched",
+      "input": "fixtures/person-one-line.ics",
+      "edit": { "op": "set-categories", "categories": ["work", "home"] },
+      "expect": { "unchanged": true }
+    },
+    {
+      "label": "a reserved value among the person's categories is refused",
+      "input": "fixtures/person-one-line.ics",
+      "edit": { "op": "set-categories", "categories": ["work", "Someday"] },
+      "expect": { "refused": true }
+    },
+    {
+      "label": "the contact replaces every CONTACT where the first stood, ALTREP given the address",
+      "input": "fixtures/contact.ics",
+      "edit": { "op": "set-contact", "name": "Ann Smith", "address": "ann@example.org" },
+      "expect": { "bytes": "fixtures/contact-ann.ics" }
+    },
+    {
+      "label": "an address alone is the contact's text, the line following the last property",
+      "input": "fixtures/contact-none.ics",
+      "edit": { "op": "set-contact", "name": null, "address": "ann@example.org" },
+      "expect": { "bytes": "fixtures/contact-none-address.ics" }
+    },
+    {
+      "label": "the same contact already leaves the task untouched",
+      "input": "fixtures/contact-same.ics",
+      "edit": { "op": "set-contact", "name": "Ann Smith", "address": "ann@example.org" },
+      "expect": { "unchanged": true }
+    },
+    {
+      "label": "a capture states CREATED and DTSTAMP at the instant, in the inbox",
+      "edit": { "op": "capture", "summary": "Call Ann back" },
+      "expect": {
+        "vtodo": ["CREATED:20261028T090000Z", "DTSTAMP:20261028T090000Z", "SUMMARY:Call Ann back", "CATEGORIES:inbox"],
+        "names": ["UID"]
+      }
+    },
+    {
+      "label": "captured at reads CREATED",
+      "input": "fixtures/captured-created.ics",
+      "edit": { "op": "captured-at" },
+      "expect": { "value": "20261001T070000Z" }
+    },
+    {
+      "label": "captured at reads DTSTAMP when there is no CREATED",
+      "input": "fixtures/captured-stamp.ics",
+      "edit": { "op": "captured-at" },
+      "expect": { "value": "20261015T120000Z" }
+    }
+  ]
+}

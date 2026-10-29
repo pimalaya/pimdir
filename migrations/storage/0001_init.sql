@@ -352,6 +352,23 @@ CREATE TABLE bindings (
     FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
 ) STRICT;
 
+-- What an `add` carrying `supersedes` replaced (§15.3): the item it tombstoned,
+-- keyed as that item, and the item the add created. The tombstone's remove is
+-- held while the superseding item is a pending create (list_superseded_pending,
+-- SYNC.md §5). Each end cascades with its item: a superseded row purged takes
+-- its pair, and so does a superseding row purged, which then holds nothing.
+CREATE TABLE supersessions (
+    collection    TEXT NOT NULL,           -- the superseded item
+    link_id       TEXT NOT NULL,
+    by_collection TEXT NOT NULL,           -- the item the add created
+    by_link_id    TEXT NOT NULL,
+    PRIMARY KEY (collection, link_id),
+    FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE,
+    FOREIGN KEY (by_collection, by_link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
+) STRICT;
+-- The superseding end, which a purge or a rename of that item cascades by.
+CREATE INDEX supersessions_by ON supersessions(by_collection, by_link_id);
+
 -- The summaries (§4.4, Annex A): what a reader lists an item from without
 -- its body, one table per kind, at most one row per item, cascading with it.
 -- Written by the item's writer under Annex A; none references an object.

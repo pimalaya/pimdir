@@ -1,0 +1,12 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Example Corp//Other Client 1.0//EN
+BEGIN:VTODO
+UID:gtd-w10@example.org
+DTSTAMP:20261028T090000Z
+SUMMARY:Get the signed contract back
+CATEGORIES:waiting
+CONTACT;ALTREP="mailto:ann@example.org":Ann Smith
+DUE:20261105T170000Z
+END:VTODO
+END:VCALENDAR
