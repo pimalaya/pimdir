@@ -1,8 +1,8 @@
 # 📁 Pimdir [![Matrix](https://img.shields.io/badge/chat-%23pimalaya-blue?style=flat&logo=matrix&logoColor=white)](https://matrix.to/#/#pimalaya:matrix.org) [![Mastodon](https://img.shields.io/badge/news-%40pimalaya-blue?style=flat&logo=mastodon&logoColor=white)](https://fosstodon.org/@pimalaya) [![Sponsor](https://img.shields.io/badge/sponsor-pink?style=flat&logo=github-sponsors&logoColor=white)](https://pimalaya.org/sponsor/)
 
-A local-first standard for personal information (mail, contacts, calendars): a portable SQLite-plus-blobs store, with a sync layer that keeps it a replica of every source and a search layer that indexes and queries it
+**A local-first standard for personal information**: mail, contacts, calendars and tasks in **one portable store**, kept **a replica of every source**, and **searchable** through one query language.
 
-One standard in three parts, one store: the format any language with a SQLite binding reads and writes, the engine that keeps it a replica of every source, and the index and query language over it. The canonical part is the schema, the reference statements and the test vectors, so every implementation agrees on the same store. [io-pimdir](https://github.com/pimalaya/io-pimdir) is the reference implementation of the store and the sync layer; the search layer has none yet.
+The canonical part is the schema, the reference statements and the test vectors, so every implementation agrees on the same store. [io-pimdir](https://github.com/pimalaya/io-pimdir) is the reference implementation.
 
 ## Table of contents
 
@@ -19,80 +19,64 @@ One standard in three parts, one store: the format any language with a SQLite bi
 
 ## Features
 
-- **Cross-domain**: one store for mail, contacts, events, tasks and journals, keyed by media type, with typed summaries per kind and one address table across all of them, so "everything about this person" is one seek.
-- **Multi-account**: several accounts in one store, so a merged view is a query rather than a fan-out. The account groups collections and partitions no identifier.
-- **Scalable and indexed**: hundreds of thousands of items with real secondary indexes, a change feed for anything derived from the store, and keyset pages that cost the same at any depth.
-- **Portable**: one SQLite file, byte-identical across every OS and architecture, with none of the pitfalls of file-per-item layouts.
-- **Transactional**: a whole flag-set change or a multi-item move is one atomic commit a reader never catches half-done.
-- **Deduplicated**: bodies are stored once by content hash, so a message filed in two mailboxes costs one copy.
-- **Retentive**: an item the last source dropped is retained rather than erased, so an upstream expunge never destroys the local copy. Purging is explicit, and restoring costs no network.
-- **Offline-first**: every edit is staged locally and reconciled by a three-way merge against each source, several sources propagating through one item without a cross-merge.
-- **Searchable**: a full-text index over the bodies, calendar occurrences and threads, and a query language every client answers alike.
-- **Recoverable**: what the remotes hold comes back by re-sync, and the search index is derived and costs a rebuild; un-pushed edits, the queue, references and local collections live only in the database, so a rebuild is an operation the user confirms, never an automatic one.
+- **Cross-domain**: mail, contacts, events, tasks and journals in one store, with one address table across all kinds.
+- **Multi-account**: several accounts in one store, so a merged view is a query, not a fan-out.
+- **Portable**: one SQLite file plus a blob directory, identical on every OS and architecture.
+- **Scalable**: real indexes, a change feed, and keyset pages that cost the same at any depth.
+- **Transactional**: a flag change or a multi-item move is one atomic commit.
+- **Deduplicated**: a body is stored once, by content hash.
+- **Retentive**: an upstream expunge never erases the local copy; only an explicit purge does.
+- **Offline-first**: every edit is staged locally and reconciled by a three-way merge, never last-writer-wins.
+- **Searchable**: a full-text index over bodies, calendar occurrences and threads.
 
 ## Specification
 
-The standard is a base and two layers, each a normative part written to BCP 14 (RFC 2119, RFC 8174) with a status of its own, framed by two informative documents:
+Three normative parts (BCP 14), each versioned apart, framed by informative documents:
 
-- [OVERVIEW.md](./OVERVIEW.md), the **model**: what a store is, the entities, the identifiers, the roles and how sync, retention, the queue and search fit together, with no table, column or statement named. Read it first.
-- [STORAGE.md](./STORAGE.md), the **store**, binding by the profile an implementation meets, reader, producer or owner: a SQLite database (the queryable index and mutable state) plus a content-addressed blob directory (the bodies), the per-kind summaries and addresses, the change feed, retention and the action queue.
-- [SYNC.md](./SYNC.md), the **sync** layer: how one or more sources are reconciled through the store, the five verbs, the merge rules and what a connector hands the engine.
-- [SEARCH.md](./SEARCH.md), the **search** layer: the derived index beside the store, extraction per kind, calendar time, threads, and the query language every client answers alike.
-- [GUIDE.md](./GUIDE.md), the **implementation guide**: the parts' rules as numbered procedures and decision tables naming the statements and vectors at each step, and a conformance checklist.
+- [OVERVIEW.md](./OVERVIEW.md), the **model**: entities, identifiers and how the parts fit. Read it first.
+- [STORAGE.md](./STORAGE.md), the **store**: schema, blobs, summaries, change feed, retention and action queue.
+- [SYNC.md](./SYNC.md), the **sync** layer: sources reconciled through the store, merge rules, connector seam.
+- [SEARCH.md](./SEARCH.md), the **search** layer: the derived index and the query language.
+- [GUIDE.md](./GUIDE.md), the **implementation guide**: procedures, decision tables and a conformance checklist.
+- [GTD.md](./GTD.md), the **task conventions** Pimalaya's task apps share (informative, versioned apart).
 
-Beside them, [GTD.md](./GTD.md) holds the conventions Pimalaya's task consumers (the Android app, unfog) share to organise tasks the GTD way and keep time entries: informative, versioned apart (gtd-draft-01) so the store freezes without it, and reading only what the parts define.
+Sync and search are optional, but neither stands without the store. Where the overview or the guide disagrees with a part, the part wins.
 
-Either layer may be omitted, and an implementation offering one must conform to it. Neither stands without the store: a sync needs a base per source, what that source last agreed to, or a delete on one side and an add on the other are the same picture, and the bindings are that base; a search needs one index with one meaning of a match across sources, which only the store's summaries, addresses and bodies give. The overview and the guide restate and never rule: where either disagrees with a part, the part wins.
-
-Two properties are worth knowing before reading. Removal is a **soft delete**: when the last source drops an item, the store keeps the row and its body, hidden from the sync seam and from the live reads, and only an explicit purge deletes it. And the **action queue** is the write door for every process that does not own the store: a producer appends a kind plus a versioned JSON payload, the owner applies it in append order.
+Two things to know first: removal is a **soft delete** (only an explicit purge erases), and the **action queue** is how any process other than the store's owner writes to it.
 
 ## Using the standard
 
-There are three ways to use it, and the right one depends on the part.
+1. **Implement the documents** in any language with a SQLite binding: the vectors say when you are done.
+2. **Use io-pimdir's I/O-free core**: the derivations and verbs as coroutines, over your own SQLite and transport.
+3. **Use io-pimdir's std client**: store, engine and connector seam behind one handle per profile.
 
-1. **Implement the documents.** Any language with a SQLite binding. The store by profile, reader and producer being small; the engine in full; the index and the query language. The vectors say when it is done.
-2. **Use io-pimdir's I/O-free core.** The derivations and the five verbs as coroutines: your code answers the storage and remote requests they yield, so the store can be your own SQLite and the network your own transport, in any runtime.
-3. **Use io-pimdir's std client.** The whole thing: store, engine and connector seam, behind one handle per profile.
-
-Readers and producers of the store, and clients of the query language, are expected to implement the documents: that is what the format is for. Owning the store, syncing it and indexing it are large, and io-pimdir exists so nobody has to write them twice; SYNC in particular is doable from the document and the vectors, and is where writing from scratch costs the most and gains the least.
+Readers, producers and query clients are small and meant to be written from the documents. Owning, syncing and indexing a store are large: io-pimdir exists so nobody writes them twice.
 
 ## Layout
 
 ```
-OVERVIEW.md           the model (informative, read first)
-STORAGE.md            the store, the base (normative, BCP 14)
-SYNC.md               the sync layer (normative, optional)
-SEARCH.md             the search layer (normative, optional)
-GUIDE.md              the implementation guide (informative procedures)
-GTD.md                the task conventions Pimalaya's task consumers share (informative, gtd-draft-01)
-migrations/           canonical, forward-only schema migrations (SQL)
-  storage/            the store's, 0001_init.sql = schema version 1
-  search/             the search index's, 0001_init.sql = index version 1
-queries/              the reference statements, one file per statement named after it
-  storage/            the store's: read/ the reader's, queue/ the producer's, owner/ the rest
-  search/             the search index's, prepared with the store attached
-vectors/              the normative test data (STORAGE.md §16, SYNC.md §11, SEARCH.md §11)
-checks/               what a push checks, needing no implementation: the schema, the statements
-                      through the parts' scenarios, the names, the vectors
-flake.nix             the toolchain those checks run under
-cairn/                the dated history of what the spec did and why (log/), and the audit ledgers (changes/)
-AGENTS.md             how a contributing agent records a change here
-README.md             this file
-LICENSE-MIT           dual license
-LICENSE-APACHE
+OVERVIEW.md     the model (informative, read first)
+STORAGE.md      the store, the base (normative)
+SYNC.md         the sync layer (normative, optional)
+SEARCH.md       the search layer (normative, optional)
+GUIDE.md        the implementation guide (informative)
+GTD.md          the task conventions (informative)
+migrations/     canonical schema migrations: storage/ and search/
+queries/        the reference statements, one file each
+vectors/        the normative test data
+checks/         schema, statement, name and vector checks (nix flake check)
+cairn/          the dated history (log/) and audit ledgers (changes/)
 ```
 
-The history follows [Cairn](https://github.com/pimalaya/cairn), with one deviation while the format is draft: the three documents are the living spec, so cairn/spec/ stays empty rather than restating them, and a landed change is recorded by its log entry alone. [AGENTS.md](./AGENTS.md) states what ends that.
+The history follows [Cairn](https://github.com/pimalaya/cairn), the documents themselves being the living spec (see [AGENTS.md](./AGENTS.md)).
 
 ## Status
 
-Draft. Each normative part is versioned apart, and its Status line names its version and the versions of the others it requires: STORAGE is at **storage-draft-05**, SYNC at **sync-draft-05** and SEARCH at **search-draft-05**, each named by a git tag of the same name; the tags draft-01 to draft-04 named the three parts together. An implementation states the version of each part it conforms to. A change to a part after its tag bumps that part's number, in its Status line and here, tagged again; a version names a text, never a store. The overview and the guide are informative and carry no version; GTD.md, informative too, is versioned apart (gtd-draft-01) because task consumers state which conventions they follow.
+Draft: **storage-draft-05**, **sync-draft-05**, **search-draft-05** and gtd-draft-01, each named by a git tag. An implementation states the version of each part it conforms to.
 
-A released part is versioned `<part>-vX.Y.Z`, its major following its artefact: STORAGE major N is store schema version N (`PRAGMA user_version`), SEARCH's major the index schema version, SYNC's a breaking change to the connector seam or the engine. A minor version adds a rule, a statement or a vector breaking nothing; a patch is editorial.
+A released part is versioned `<part>-vX.Y.Z`: STORAGE's major is the store schema version, SEARCH's the index schema version, SYNC's a breaking change to the connector seam or the engine.
 
-The freeze is by part. STORAGE freezes first, since it is what readers and producers depend on and they are the many; SYNC and SEARCH stay draft behind the reference implementation until their vectors have run against a second implementation. The gate for freezing STORAGE is the reference implementation green on every check and vector in this repository, one real upgrade cycle of a store an earlier draft wrote, and the audit ledger under cairn/changes/ with no open item that touches the schema.
-
-While STORAGE is a draft, store schema version 1 is edited in place and a store an earlier draft wrote is reconciled to it on open (STORAGE §6), never recreated. Once storage-v1.0.0 is released, 0001_init.sql never changes: every change to the schema is a migration to the next version, which an older implementation refuses rather than rebuilds. The index has no migrations: a change to it is a rebuild, which loses nothing.
+STORAGE freezes first, once the reference implementation passes every check and vector and a real store survives one upgrade cycle. Until then, schema version 1 is edited in place and an older draft store is reconciled on open; after it, every schema change is a migration.
 
 ## License
 
