@@ -43,7 +43,7 @@
           ./SYNC.md
           ./SEARCH.md
           ./GUIDE.md
-          ./GTD.md
+          ./conventions
           ./README.md
         ];
       };

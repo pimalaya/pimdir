@@ -7,7 +7,7 @@ set -euo pipefail
 
 root="${1:-$PWD}"
 dir="$(mktemp -d)"
-documents=(OVERVIEW.md STORAGE.md SYNC.md SEARCH.md GUIDE.md GTD.md README.md vectors/README.md)
+documents=(OVERVIEW.md STORAGE.md SYNC.md SEARCH.md GUIDE.md conventions/gtd.md README.md vectors/README.md)
 failures=0
 
 for part in storage search; do

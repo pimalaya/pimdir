@@ -522,7 +522,7 @@ summaries = json.loads((root / "summaries.json").read_text())
 # another version, or a field the format does not name, fails here first.
 FORMATS = {
     "objects.json": "objects", "summaries.json": "summaries", "search/store.json": "search-store",
-    "search/queries.json": "search-queries", "search/chunks.json": "search-chunks", "gtd/writers.json": "gtd-writers",
+    "search/queries.json": "search-queries", "search/chunks.json": "search-chunks",
 }
 for path in sorted(root.rglob("*.json")):
     relative = path.relative_to(root).as_posix()
@@ -959,9 +959,10 @@ for case in queries["cases"]:
     else:
         check(f"{label}: accepted", got, None)
 
-# The GTD views (GTD.md section 1): each query of its table is a
-# case, and its hits are re-derived from the fixtures' bytes, a task's status
-# and categories read by task_columns' second path, never by the query.
+# The task views of Pimalaya's GTD convention (conventions/gtd.md section
+# 1): each query of its table is a case, and its hits are re-derived from the
+# fixtures' bytes, a task's status and categories read by task_columns' second
+# path, never by the query.
 def task_state(bytes_):
     text = bytes_.decode().replace("\r\n ", "").replace("\r\n\t", "")
     status = next((line.split(":", 1)[1].upper() for line in text.split("\r\n")
@@ -975,9 +976,9 @@ VIEWS = {
     "Someday": lambda categories: "someday" in categories,
     "Next": lambda categories: not categories & RESERVED,
 }
-guide = (root.parent / "GTD.md").read_text().split("## 1. Tasks by categories")[1].split("\n## ")[0]
+guide = (root.parent / "conventions" / "gtd.md").read_text().split("## 1. Tasks by categories")[1].split("\n## ")[0]
 view_queries = dict(re.findall(r"^\| (\w+) \| `([^`]+)` \|$", guide, re.M))
-check("gtd views: GTD.md's table names the four", sorted(view_queries), sorted(VIEWS))
+check("gtd views: conventions/gtd.md's table names the four", sorted(view_queries), sorted(VIEWS))
 tasks = []
 for item in store["items"]:
     if "fixture" in item:
@@ -1005,10 +1006,11 @@ for case in queries["cases"]:
 for field in sorted(documented - answered):
     failures.append(f"search field {field}: used by no hits or threads case")
 
-# The task writers (GTD.md section 1): every case's shape and references,
-# and what its edit may change, re-derived from the bytes on both sides by a
-# second path, so an expected fixture that touches a line the guide keeps, or
-# writes a state or a category the edit did not ask for, fails here.
+# The task writers (conventions/gtd.md section 1): every case's shape and
+# references, and what its edit may change, re-derived from the bytes on both
+# sides by a second path, so an expected fixture that touches a line the
+# guide keeps, or writes a state or a category the edit did not ask for, fails
+# here.
 GTD_STAMPED = {"DTSTAMP", "LAST-MODIFIED"}
 GTD_OPS = {"set-state", "set-categories", "set-contact", "capture", "captured-at"}
 GTD_EXPECT = {"bytes", "unchanged", "refused", "vtodo", "value"}
@@ -1070,8 +1072,11 @@ def gtd_contact_of(edit):
     return (text, [f'ALTREP="mailto:{address}"'] if address else [])
 
 
-gtd_dir = root / "gtd"
+gtd_dir = root.parent / "conventions" / "gtd"
 writers = json.loads((gtd_dir / "writers.json").read_text())
+require("gtd writers: states its format's version v", isinstance(writers.get("v"), int))
+for error in Draft202012Validator(json.loads((gtd_dir / "writers.schema.json").read_text())).iter_errors(writers):
+    failures.append(f"conventions/gtd/writers.json: {error.json_path}: {error.message}")
 now = writers.get("now", "")
 require("gtd writers: now is a UTC instant", re.fullmatch(r"\d{8}T\d{6}Z", now) is not None)
 for case in writers["cases"]:

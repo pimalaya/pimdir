@@ -16,7 +16,7 @@ Fold a change into the document it belongs to exactly as you would fold a delta 
 
 [OVERVIEW.md](./OVERVIEW.md) and [GUIDE.md](./GUIDE.md) are informative and stay so: no RFC 2119 word, no rule the parts do not state, and the parts win on any disagreement. The overview names no table, column or statement; the guide names them at every step. Rationale, history and measurements belong to the log, not to any of the five documents.
 
-[GTD.md](./GTD.md) holds Pimalaya's task conventions, informative too and versioned apart (`gtd-draft-01` on its Status line, naming the part versions it requires), so the parts freeze without it; a change to it bumps its own number and is logged like any other, its vectors under vectors/gtd/ guarded by checks/vectors.py.
+[conventions/](./conventions) holds Pimalaya's own conventions built on the parts, which are no part of the standard: conventions/gtd.md, the task conventions unfog and the Android app share, versioned apart (`gtd-draft-01` on its Status line) with its vectors under conventions/gtd/, guarded by checks/vectors.py. A change to it bumps its own number and is logged like any other.
 
 ### 2. While the format is `draft`, the log is the tracker
 

@@ -2,9 +2,9 @@
 
 Status: gtd-draft-01, informative, requiring storage-draft-05 and search-draft-05
 
-How Pimalaya's task consumers (the Android app, unfog) organise to-dos the GTD way over a pimdir store, and how they keep time spent on them, so that a task one of them writes reads as the other would have written it. Everything here is a reading of standard iCalendar properties and of what the store already holds ([STORAGE.md](./STORAGE.md), [SEARCH.md](./SEARCH.md)); it adds no table, column, statement or rule to the store, and another client that never read it sees and edits the same tasks.
+How Pimalaya's task consumers (the Android app, unfog) organise to-dos the GTD way over a pimdir store, and how they keep time spent on them, so that a task one of them writes reads as the other would have written it. Everything here is a reading of standard iCalendar properties and of what the store already holds ([STORAGE.md](../STORAGE.md), [SEARCH.md](../SEARCH.md)); it adds no table, column, statement or rule to the store, and another client that never read it sees and edits the same tasks.
 
-This document is informative and versioned apart from the three parts, so the store freezes without it: a task consumer states the version it follows, and a change here bumps `gtd-draft-NN` alone. Where it and a part disagree, the part wins. §n of a part is written STORAGE §n, SYNC §n, SEARCH §n; GUIDE §n is the [implementation guide](./GUIDE.md).
+This document is a Pimalaya convention, not part of the pimdir standard: no part requires it and the parts freeze without it. It is versioned apart: a task consumer states the version it follows, and a change here bumps `gtd-draft-NN` alone. Where it and a part disagree, the part wins. §n of a part is written STORAGE §n, SYNC §n, SEARCH §n; GUIDE §n is the [implementation guide](../GUIDE.md).
 
 ## Contents
 
@@ -49,7 +49,7 @@ Next lists the soonest `DUE` first, as an instant on STORAGE Annex A.3's rules, 
 | Any edit that changes a line | `DTSTAMP` restated to the instant of the edit, in UTC, where it stands, after the task's last property when absent; `LAST-MODIFIED` restated to the same instant only where the task carries one; `SEQUENCE` and `CREATED` untouched. |
 | Any edit | A line it does not change keeps its bytes, folding included. A line it writes is encoded afresh: text escaped as RFC 5545 §3.3.11 says, its parameters kept, folded at 75 octets. A task carrying the edit's result already is written back unchanged, and nothing is queued. |
 
-vectors/gtd/writers.json holds these edits as cases (§3).
+conventions/gtd/writers.json holds these edits as cases (§3).
 
 ## 2. Time entries
 
@@ -62,7 +62,7 @@ Either shape lives in a synced calendar collection, or in **the local time colle
 
 ## 3. Test vectors
 
-- **vectors/gtd/writers.json** with vectors/gtd/fixtures/: the edits of §1's writing table, each case an `input` task, an `edit` (`set-state`, `set-categories`, `set-contact`, `capture`, `captured-at`), the file's `now`, and what it expects: the output's `bytes`, `unchanged`, `refused`, for a capture the `vtodo` lines and `names` it states, for a reading its `value`. A task consumer reads the input as bytes, runs the edit at the case's `now`, and compares the output with the expected fixture byte for byte, a capture comparing the lines its VTODO holds, unfolded, and the properties it names. The file states `v` 1 and conforms to vectors/schema/gtd-writers.schema.json.
+- **conventions/gtd/writers.json** with conventions/gtd/fixtures/: the edits of §1's writing table, each case an `input` task, an `edit` (`set-state`, `set-categories`, `set-contact`, `capture`, `captured-at`), the file's `now`, and what it expects: the output's `bytes`, `unchanged`, `refused`, for a capture the `vtodo` lines and `names` it states, for a reading its `value`. A task consumer reads the input as bytes, runs the edit at the case's `now`, and compares the output with the expected fixture byte for byte, a capture comparing the lines its VTODO holds, unfolded, and the properties it names. The file states `v` 1 and conforms to vectors/schema/gtd-writers.schema.json.
 - **vectors/search/queries.json** holds a case per view of §1 over the tasks of the search fixture store (SEARCH §11), items 17 to 21 written for them, which every index answers.
 
 checks/vectors.py reads §1's view table from this document and re-derives each view's hits from the fixtures' bytes, and checks each writer case's shape and what its edit may change from the bytes on both sides.

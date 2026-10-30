@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/pimalaya/pimdir/vectors/schema/gtd-writers.schema.json",
-  "title": "The task writer cases (GTD.md), vectors/gtd/writers.json",
+  "$id": "https://github.com/pimalaya/pimdir/conventions/gtd/writers.schema.json",
+  "title": "The task writer cases (conventions/gtd.md), conventions/gtd/writers.json",
   "type": "object",
   "required": ["v", "now", "cases"],
   "additionalProperties": false,

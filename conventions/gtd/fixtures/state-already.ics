@@ -1,0 +1,10 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Example Corp//Other Client 1.0//EN
+BEGIN:VTODO
+UID:gtd-w2@example.org
+DTSTAMP:20261020T080000Z
+SUMMARY:Hear back from the garage
+CATEGORIES:Waiting,car
+END:VTODO
+END:VCALENDAR

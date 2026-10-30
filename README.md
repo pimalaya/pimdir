@@ -1,6 +1,6 @@
 # 📁 Pimdir [![Matrix](https://img.shields.io/badge/chat-%23pimalaya-blue?style=flat&logo=matrix&logoColor=white)](https://matrix.to/#/#pimalaya:matrix.org) [![Mastodon](https://img.shields.io/badge/news-%40pimalaya-blue?style=flat&logo=mastodon&logoColor=white)](https://fosstodon.org/@pimalaya) [![Sponsor](https://img.shields.io/badge/sponsor-pink?style=flat&logo=github-sponsors&logoColor=white)](https://pimalaya.org/sponsor/)
 
-**A local-first standard for personal information**: mail, contacts, calendars and tasks in **one portable store**, kept **a replica of every source**, and **searchable** through one query language.
+Pimdir is **local-first standard** for **personal information**: mail, contacts, calendars, tasks and files in **one portable store**, kept **a replica of every source**, and **searchable** through one query language.
 
 The canonical part is the schema, the reference statements and the test vectors, so every implementation agrees on the same store. [io-pimdir](https://github.com/pimalaya/io-pimdir) is the reference implementation.
 
@@ -19,26 +19,30 @@ The canonical part is the schema, the reference statements and the test vectors,
 
 ## Features
 
-- **Cross-domain**: mail, contacts, events, tasks and journals in one store, with one address table across all kinds.
-- **Multi-account**: several accounts in one store, so a merged view is a query, not a fan-out.
-- **Portable**: one SQLite file plus a blob directory, identical on every OS and architecture.
-- **Scalable**: real indexes, a change feed, and keyset pages that cost the same at any depth.
-- **Transactional**: a flag change or a multi-item move is one atomic commit.
-- **Deduplicated**: a body is stored once, by content hash.
-- **Retentive**: an upstream expunge never erases the local copy; only an explicit purge does.
-- **Offline-first**: every edit is staged locally and reconciled by a three-way merge, never last-writer-wins.
-- **Searchable**: a full-text index over bodies, calendar occurrences and threads.
+- **Cross-domain**: mail, contacts, events, tasks, journals and files, in one store
+- **Multi-account**: several accounts in one store, *in merged views*
+- **Portable**: one SQLite file plus a blob directory, identical on every OS and architecture
+- **Scalable**: real indexes, a change feed, and keyset pages that cost the same at any depth
+- **Transactional**: a flag change or a multi-item move is one atomic commit
+- **Deduplicated**: a body is stored once, by content hash
+- **Retentive**: an upstream expunge never erases the local copy; only an explicit purge does
+- **Offline-first**: every edit is staged locally and reconciled by a three-way merge
+- **Searchable**: a full-text index over bodies, occurrences and threads
 
 ## Specification
 
-Three normative parts (BCP 14), each versioned apart, framed by informative documents:
+Three normative parts (BCP 14), each versioned apart:
 
-- [OVERVIEW.md](./OVERVIEW.md), the **model**: entities, identifiers and how the parts fit. Read it first.
 - [STORAGE.md](./STORAGE.md), the **store**: schema, blobs, summaries, change feed, retention and action queue.
 - [SYNC.md](./SYNC.md), the **sync** layer: sources reconciled through the store, merge rules, connector seam.
 - [SEARCH.md](./SEARCH.md), the **search** layer: the derived index and the query language.
+
+Two informative documents around them:
+
+- [OVERVIEW.md](./OVERVIEW.md), the **model**: entities, identifiers and how the parts fit. Read it first.
 - [GUIDE.md](./GUIDE.md), the **implementation guide**: procedures, decision tables and a conformance checklist.
-- [GTD.md](./GTD.md), the **task conventions** Pimalaya's task apps share (informative, versioned apart).
+
+[conventions/gtd.md](./conventions/gtd.md) holds the task conventions Pimalaya's apps share. It builds on the standard but is not part of it.
 
 Sync and search are optional, but neither stands without the store. Where the overview or the guide disagrees with a part, the part wins.
 
@@ -60,11 +64,11 @@ STORAGE.md      the store, the base (normative)
 SYNC.md         the sync layer (normative, optional)
 SEARCH.md       the search layer (normative, optional)
 GUIDE.md        the implementation guide (informative)
-GTD.md          the task conventions (informative)
 migrations/     canonical schema migrations: storage/ and search/
 queries/        the reference statements, one file each
 vectors/        the normative test data
 checks/         schema, statement, name and vector checks (nix flake check)
+conventions/    Pimalaya's own conventions, outside the standard (gtd.md)
 cairn/          the dated history (log/) and audit ledgers (changes/)
 ```
 
@@ -72,7 +76,7 @@ The history follows [Cairn](https://github.com/pimalaya/cairn), the documents th
 
 ## Status
 
-Draft: **storage-draft-05**, **sync-draft-05**, **search-draft-05** and gtd-draft-01, each named by a git tag. An implementation states the version of each part it conforms to.
+Draft: **storage-draft-05**, **sync-draft-05** and **search-draft-05**, each named by a git tag. An implementation states the version of each part it conforms to.
 
 A released part is versioned `<part>-vX.Y.Z`: STORAGE's major is the store schema version, SEARCH's the index schema version, SYNC's a breaking change to the connector seam or the engine.
 
