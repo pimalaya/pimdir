@@ -99,7 +99,7 @@ Use the statements verbatim. Each prepares against the canonical schema (checks/
 
    The other permitted answer is refusing the store with a message naming what it lacks. Recreating or deleting it is not, nor is failing a query later.
 3. List migrations/storage/NNNN_*.sql ascending. For every NNNN above the current version: `BEGIN`, execute the script, `PRAGMA user_version = NNNN`, `set_store_version` with NNNN, `COMMIT`. On a fresh database, `init_store_meta` with version 1, the chosen `hash_algo` and your Annex A revision runs inside the transaction of 0001_init.sql. A failure rolls back and stops. A migration keeps every row of every table.
-4. Read `derivation` from `load_store_meta`. Below your Annex A revision, re-derive from the held bodies the columns the revisions between changed, paging as the backfills above do, and `set_derivation` with yours in the transaction of the last page; an interrupted pass runs again on the next open. Above yours, leave it.
+4. Read `derivation` from `load_store_meta`. Below your Annex A revision, re-derive from the held bodies the columns the revisions between changed, paging as the backfills above do, and `set_derivation` with yours in the transaction of the last page; an interrupted pass runs again on the next open. Above yours, leave it. From revision 1 to 2 that is each held task's capture, `backfill_task_capture`, and its addresses, `replace_addresses` then `insert_address` for each and `stamp_item`, over the bodies `list_held_tasks` pages.
 
 The index has no migrations: an index.db at another version, or with another tokenizer, is deleted and rebuilt (§15).
 
@@ -148,6 +148,7 @@ A statement ending in `RETURNING` (`add_reference`, `remove_reference`, `collect
 10. Never reorder the batch: a provisional handle superseded by an accepted one is two entries for one handle in one order, and a rebuild's drops all precede its upserts.
 11. Settle refcounts: `adjust_refcount` per hash by the batch's net change, or `recompute_refcounts` for the whole store. A batch that stored or dropped no object skips this.
 12. `COMMIT`. Reclaim nothing: an object at refcount zero stays for the collector.
+13. When you keep an index, refresh it (§15) once the batch is committed, so the filters a list asks of the index trail the rows it reads from the store by one batch at most.
 
 The stamps of the change feed are written by the schema's triggers; a writer never binds one, and `stamp_item` only asks for one.
 
@@ -530,7 +531,7 @@ Never present a deleted row as live outside the trash view.
    - The shape is each table, index and trigger that script creates, by name, compared by its `sqlite_schema` text as §3 compares a store's, FTS5's shadow tables and your own tables left out.
 2. `load_change_cursor` from the store before the pass: the last stamp drawn and the purge count.
 3. `load_changed_items` above the `store_change` recorded by the previous pass, in stamp order, in bounded batches, one index transaction each. A batch may record the `changed` of its last row through `set_index_cursor`, with the purge count and the `store_reconciled` the last completed pass recorded. Per row:
-   - `object_indexed`, else extract the body under SEARCH §6, the role fields beside `people`, and `insert_object`, with whether the `attachment` field holds any text, plus `insert_object_text`, then `insert_chunk` for each chunk SEARCH §6 cuts the `body` and `note` fields into; no `object` row for a blob that is not there;
+   - `object_indexed`, else extract the body under SEARCH §6, the role fields beside `people`, and `insert_object`, with whether the `attachment` field holds any text and, for a card, whether it holds a `TEL`, an `ADR`, a `BDAY` and a `PHOTO`, plus `insert_object_text` and, for a card, `insert_object_category` for each of its folded `CATEGORIES` values, then `insert_chunk` for each chunk SEARCH §6 cuts the `body` and `note` fields into; no `object` row for a blob that is not there;
    - `upsert_placement`;
    - `delete_summary_text` then `insert_summary_text` for a bodiless row, and `delete_summary_text` once it has a body;
    - `replace_flags` then `insert_flag`;
@@ -544,12 +545,14 @@ Never present a deleted row as live outside the trash view.
 **Query**, as a client, on index.db read-only with the store attached:
 
 1. Parse the query under SEARCH §8.3, answering a refusal as SEARCH §8.4 shapes it: the phrases, then the parentheses, then the terms and operators in reading order, the first fault found.
-2. Compile it. Structured terms go to seeks: `list_address_placements` on the store for an address, a range on the sort key, `flagged`, `occurring_between`, `thread_members` in the query's account, `status:`, `priority:` and `category:` to `task_summary` on the attached store. Text terms go to `match_objects` and `match_summaries`, with a role field named for a role term.
+2. Compile it. Structured terms go to seeks: `list_address_placements` on the store for an address, a range on the sort key, `flagged`, `occurring_between`, `thread_members` in the query's account, `status:`, `priority:` and a task's `category:` to `task_summary` on the attached store, and a card's `category:` to `categorised`. Text terms go to `match_objects` and `match_summaries`, with a role field named for a role term.
 
-   `has:attachment` reads the mark for mail and `attached` for a calendar item; `id:` with digits alone names a `seq` and a link id both.
+   `has:attachment` reads the mark for mail and `attached` for a calendar item; `has:phone`, `has:address`, `has:birthday` and `has:photo` read `holding`; `id:` with digits alone names a `seq` and a link id both.
 3. Intersect, and order by the store's sort key.
 4. Present each hit through `hit` with a snippet cut from its body's chunks (`chunks_of`), re-chunking the text you extract when another implementation built the index.
 5. Report beside the result `coverage` (bodiless mail, contacts and calendar items, never files) and `behind` (the stamps the index has yet to fold, store-wide), with whether a date range left the horizon (only when the query can reach a calendar item) and the temporal axis, from `list_coverage` for each queried collection against the query's date range.
+
+**Agenda**, as a client drawing a range of calendar time: `occurrences_between` over the range, in the order it answers, then each item's summary row from the store (`get_event`, `get_task` or `get_journal` by its `seq`), and its body only to open it. Say when the range leaves the horizon (`load_index_meta`).
 
 Tagging goes through the queue as a producer (§13), never through the index.
 
@@ -569,6 +572,7 @@ Tagging goes through the queue as a producer (§13), never through the index.
   - build the fixture store from store.json, index it at the file's `now`, run each query with its sort;
   - compare hits as `(account, seq)`, ordered where the case says `ordered`, the threads of a threaded case, and the coverage, `horizon_left` included, and the temporal coverage where a case states `temporal`, after writing each collection's `sources` coverage rows;
   - a refusal compares its `code`, `start` and `end`;
+  - list each window of `occurrences` with `occurrences_between` and compare its rows in order;
   - cut each text of chunks.json into chunks and compare the boundaries.
 
 checks/vectors.py validates the files' shape and references without an implementation; only an implementation runs a case. Vendor the files if the build cannot read them in place, record their digests, and re-check them against this repository in CI.

@@ -446,6 +446,7 @@ CREATE TABLE task_summary (
     categories    TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(categories)),  -- JSON array of CATEGORIES values, decoded
     parent        TEXT,                    -- the UID the first parent RELATED-TO names, or NULL
     mid           TEXT,                    -- the Message-ID the first mid: URI names, bare, or NULL
+    created       TEXT,                    -- CREATED, else DTSTAMP, as an instant (Annex A.4), or NULL
     PRIMARY KEY (collection, link_id),
     FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
 ) STRICT;
@@ -488,7 +489,7 @@ CREATE TABLE file_summary (
 CREATE TABLE item_address (
     collection TEXT NOT NULL,
     link_id    TEXT NOT NULL,
-    role       TEXT NOT NULL,              -- from, to, cc, bcc, email, organizer, attendee (§13)
+    role       TEXT NOT NULL,              -- from, to, cc, bcc, email, organizer, attendee, contact (§13)
     position   INTEGER NOT NULL,           -- 0-based document order within the role
     address    TEXT NOT NULL,              -- canonical addr-spec (§13)
     name       TEXT,                       -- display name, decoded, or NULL

@@ -1,0 +1,13 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//pimalaya//pimdir vectors//EN
+BEGIN:VTODO
+UID:todo-captured@example.org
+DTSTAMP:20261029T170000Z
+CREATED:20261028T090000Z
+SUMMARY:Lease signed by the landlord
+STATUS:NEEDS-ACTION
+CATEGORIES:waiting
+CONTACT;ALTREP="mailto:Landlord@Example.org":Mr Landlord
+END:VTODO
+END:VCALENDAR

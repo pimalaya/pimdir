@@ -3,7 +3,7 @@
   "$id": "https://github.com/pimalaya/pimdir/vectors/schema/search-queries.schema.json",
   "title": "The search cases (SEARCH.md section 11), vectors/search/queries.json",
   "type": "object",
-  "required": ["v", "now", "horizon", "coverage", "cases"],
+  "required": ["v", "now", "horizon", "coverage", "cases", "occurrences"],
   "additionalProperties": false,
   "properties": {
     "v": { "const": 1 },
@@ -11,6 +11,20 @@
     "horizon": { "type": "object", "required": ["start", "end"], "additionalProperties": false, "properties": { "start": { "type": "string" }, "end": { "type": "string" } } },
     "coverage": { "type": "object", "additionalProperties": { "type": "integer" } },
     "note": { "type": "string" },
-    "cases": { "type": "array", "items": { "type": "object", "required": ["query"] } }
+    "cases": { "type": "array", "items": { "type": "object", "required": ["query"] } },
+    "occurrences": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["start", "end", "rows"],
+        "additionalProperties": false,
+        "properties": {
+          "start": { "type": "string" },
+          "end": { "type": "string" },
+          "rows": { "type": "array", "items": { "type": "array", "prefixItems": [{ "type": "string" }, { "type": "integer" }, { "type": "string" }, { "type": "string" }], "items": false, "minItems": 4 } },
+          "note": { "type": "string" }
+        }
+      }
+    }
   }
 }

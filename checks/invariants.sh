@@ -1491,7 +1491,7 @@ isearch() {
 
 fresh
 index
-object_id="$(isearch insert_object ":hash='h1'" ":status='ok'" ":attachment=0")"
+object_id="$(isearch insert_object ":hash='h1'" ":status='ok'" ":attachment=0" ":tel=0" ":adr=0" ":bday=0" ":photo=0")"
 isearch insert_chunk ":object=$object_id" ":ord=1" ":field='note'" ":start=0" ":end=4"
 isearch insert_chunk ":object=$object_id" ":ord=0" ":field='body'" ":start=0" ":end=10"
 expect "chunk: a body's chunks list in text order across fields" \
@@ -1540,13 +1540,48 @@ expect "feed: a batch reads each row's stamp, the cursor it may record" \
 
 fresh
 index
-isearch insert_object ":hash='ha'" ":status='ok'" ":attachment=1" > /dev/null
-isearch insert_object ":hash='hn'" ":status='ok'" ":attachment=0" > /dev/null
+isearch insert_object ":hash='ha'" ":status='ok'" ":attachment=1" ":tel=0" ":adr=0" ":bday=0" ":photo=0" > /dev/null
+isearch insert_object ":hash='hn'" ":status='ok'" ":attachment=0" ":tel=0" ":adr=0" ":bday=0" ":photo=0" > /dev/null
 isearch upsert_placement ":collection='Cal'" ":seq=1" ":link_id='attach'" ":hash='ha'" > /dev/null
 isearch upsert_placement ":collection='Cal'" ":seq=2" ":link_id='plain'" ":hash='hn'" > /dev/null
 isearch upsert_placement ":collection='Cal'" ":seq=3" ":link_id='bare'" ":hash=NULL" > /dev/null
 expect "attached: a body whose attachment field holds text answers, an empty field and no body do not" \
     "$(isearch attached | tr '\n' ' ')|$(sqlite3 "$dir/index.db" "INSERT INTO object(hash, status) VALUES('hx', 'ok');" 2>&1 | grep -c 'NOT NULL')" "Cal|1 |1"
+
+# --- What a card holds is read by a seek (SEARCH.md §6, §8) ----------------
+
+fresh
+index
+tel_id="$(isearch insert_object ":hash='ct'" ":status='ok'" ":attachment=0" ":tel=1" ":adr=0" ":bday=0" ":photo=0")"
+full_id="$(isearch insert_object ":hash='cf'" ":status='ok'" ":attachment=0" ":tel=0" ":adr=1" ":bday=1" ":photo=1")"
+isearch insert_object_category ":object=$full_id" ":value='family'"
+isearch insert_object_category ":object=$full_id" ":value='family'"
+isearch insert_object_category ":object=$full_id" ":value='flat'"
+isearch upsert_placement ":collection='Contacts'" ":seq=1" ":link_id='tel'" ":hash='ct'" > /dev/null
+isearch upsert_placement ":collection='Contacts'" ":seq=2" ":link_id='full'" ":hash='cf'" > /dev/null
+expect "holding: each property answers the cards holding it alone" \
+    "$(for p in phone address birthday photo; do isearch holding ":property='$p'" | tr '\n' ' '; done)" \
+    "Contacts|1 Contacts|2 Contacts|2 Contacts|2 "
+expect "categorised: a value stated twice is one row, and a value matches whole" \
+    "$(isearch categorised ":value='family'" | tr '\n' ' ')|$(isearch categorised ":value='fam'")" "Contacts|2 |"
+isearch delete_object ":rowid=$full_id"
+isearch delete_object_row ":hash='cf'"
+expect "object_category: a card's categories go with its object" \
+    "$(sqlite3 "$dir/index.db" "SELECT count(*) FROM object_category;")" "0"
+
+# --- An agenda reads occurrences in time order (SEARCH.md §7) ---------------
+
+fresh
+index
+isearch upsert_placement ":collection='Cal'" ":seq=2" ":link_id='series'" ":hash=NULL" > /dev/null
+isearch upsert_placement ":collection='Cal'" ":seq=1" ":link_id='due'" ":hash=NULL" > /dev/null
+isearch insert_occurrence ":collection='Cal'" ":seq=2" ":start='2026-09-08T09:00:00Z'" ":end='2026-09-08T10:00:00Z'"
+isearch insert_occurrence ":collection='Cal'" ":seq=2" ":start='2026-09-01T09:00:00Z'" ":end='2026-09-01T10:00:00Z'"
+isearch insert_occurrence ":collection='Cal'" ":seq=1" ":start='2026-09-01T09:00:00Z'" ":end='2026-09-01T09:00:00Z'"
+isearch insert_occurrence ":collection='Cal'" ":seq=1" ":start='2026-09-15T00:00:00Z'" ":end='2026-09-15T00:00:00Z'"
+expect "occurrences_between: one row per occurrence, by start then seq, the one at the range's end left out" \
+    "$(isearch occurrences_between ":start='2026-09-01T00:00:00Z'" ":end='2026-09-15T00:00:00Z'" | tr '\n' ' ')" \
+    "Cal|1|2026-09-01T09:00:00Z|2026-09-01T09:00:00Z Cal|2|2026-09-01T09:00:00Z|2026-09-01T10:00:00Z Cal|2|2026-09-08T09:00:00Z|2026-09-08T10:00:00Z "
 
 # --- A rename a cut pass folded past is still reconciled (SEARCH.md §4, §8.2) -
 

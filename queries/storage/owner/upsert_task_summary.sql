@@ -1,9 +1,9 @@
 INSERT INTO task_summary(collection, link_id, uid, summary, dtstart, dtstart_tzid,
                          dtstart_value, due, due_tzid, due_value, status, completed,
-                         percent, recurring, until, priority, categories, parent, mid)
+                         percent, recurring, until, priority, categories, parent, mid, created)
 VALUES(:collection, :link_id, :uid, :summary, :dtstart, :dtstart_tzid,
        :dtstart_value, :due, :due_tzid, :due_value, :status, :completed,
-       :percent, :recurring, :until, :priority, :categories, :parent, :mid)
+       :percent, :recurring, :until, :priority, :categories, :parent, :mid, :created)
 ON CONFLICT(collection, link_id) DO UPDATE SET
     uid = excluded.uid, summary = excluded.summary, dtstart = excluded.dtstart,
     dtstart_tzid = excluded.dtstart_tzid, dtstart_value = excluded.dtstart_value,
@@ -11,4 +11,4 @@ ON CONFLICT(collection, link_id) DO UPDATE SET
     status = excluded.status, completed = excluded.completed,
     percent = excluded.percent, recurring = excluded.recurring, until = excluded.until,
     priority = excluded.priority, categories = excluded.categories,
-    parent = excluded.parent, mid = excluded.mid;
+    parent = excluded.parent, mid = excluded.mid, created = excluded.created;

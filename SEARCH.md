@@ -1,6 +1,6 @@
 # Pimdir search specification
 
-Status: search-draft-05, requiring storage-draft-05
+Status: search-draft-06, requiring storage-draft-06
 
 The search part of the pimdir standard: a full-text index over a store ([STORAGE.md](./STORAGE.md)) and the query language over it, cross-domain.
 
@@ -30,7 +30,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 
 ## 1. Scope
 
-The store answers the structured questions itself: a sender, a date range, a name, a flag, everything about an address (STORAGE §14.1, Annex A.6). The index adds the three it cannot: text, calendar time across a recurring series, threads.
+The store answers the structured questions itself: a sender, a date range, a name, a flag, everything about an address (STORAGE §14.1, Annex A.6). The index adds what it cannot: text, calendar time across a recurring series, threads, and what a card holds.
 
 A query composes both: a structured predicate is a seek on the store, a text predicate a match on the index, and the result is their intersection in the store's own order.
 
@@ -69,6 +69,8 @@ The index holds:
 ## 4. Refresh
 
 A refresh folds the change feed (STORAGE §4.5): every item stamped above `index_meta.store_change`, the last stamp drawn when the previous pass began, in stamp order, in read transactions of bounded size so the store's WAL still checkpoints.
+
+An owner keeping an index SHOULD refresh it after each write batch it commits (STORAGE §14), so a client reading its rows from the store and its filters from the index finds the two at most one batch apart. The lag stays part of every answer all the same (`behind`, §8.2).
 
 Per row:
 
@@ -120,6 +122,8 @@ Beside `people`, one field per address role of STORAGE Annex A.6 (`from`, `to`, 
 
 The body's `object` row records whether the extraction wrote any text into the `attachment` field (`object.attachment`, 1 or 0, written by `insert_object`). `has:attachment` thus reads a calendar item by a seek (`attached`): `object_text` is contentless and keeps no text to test, and no statement here reads its shadow tables, FTS5's own format.
 
+A card's row also records whether it holds a `TEL`, an `ADR`, a `BDAY` and a `PHOTO` (`object.tel`, `object.adr`, `object.bday`, `object.photo`, 1 or 0, every other kind's 0), so `has:phone`, `has:address`, `has:birthday` and `has:photo` read a card by a seek (`holding`). Its `CATEGORIES` values are recorded beside it, each property's list split on unescaped commas and decoded as STORAGE Annex A.4 splits a task's, empty values dropped, folded as Annex A.2 folds `fn`, each once (`object_category`, `insert_object_category`), so `category:` reads a card by a seek (`categorised`) as it reads a task on `task_summary`.
+
 Mail extraction MUST walk the MIME tree, decode transfer encodings, transcode charsets, decode RFC 2047 and RFC 2231, prefer `text/plain` and reduce `text/html` to text. Attachment content is out of scope.
 
 A `multipart/encrypted` or `application/pkcs7-mime` body is recorded `encrypted`, headers indexed and body not. Indexing decrypted content is an opt-in that writes plaintext into index.db and MUST be documented as such.
@@ -158,6 +162,8 @@ An implementation SHOULD bound the occurrences one item may write.
 
 A zoned time resolves through the resource's own `VTIMEZONE`, else a time zone database by `TZID`, else as floating, the same order as STORAGE Annex A.3. A floating time and a date are read in the time zone the indexer states, UTC when it states none, as §8.1 reads a query's dates.
 
+A range's occurrences are listed by `occurrences_between`, one row each with its instants, in the order `start`, then `seq`, then `collection`, on §8.1's overlap rule, an occurrence of zero length falling in the range it starts. A client drawing calendar time over a range, an agenda, reads them there and the summary rows of their items from the store (STORAGE Annex A), a body only to open one; a range outside the horizon is incomplete there as it is in a query's coverage (§8).
+
 An item is re-expanded when its body changes, when the horizon rolls and when the time zone database changes version.
 
 The roll re-expands the recurring items whose `until` is absent or not before the old horizon's end, and expands the single items whose start the new window covers and the old one did not (`items_to_reexpand`, bound to both horizons before `set_horizon` records the new one). A query outside the horizon MUST say so in its coverage (§8).
@@ -182,10 +188,11 @@ A query is whitespace-separated terms, implicitly conjoined, with `or`, `not`, p
 | `tag:` `flag:` | a store flag (§10), as written |
 | `is:` | `unread` the absence of `\Seen`; `read`, `flagged`, `answered`, `draft` the presence of `\Seen`, `\Flagged`, `\Answered`, `\Draft`; `encrypted` the extraction status (§6) |
 | `has:body` `has:attachment` | a stored body; a message whose `mail_summary.attachment` is 1, the mark read with or without its body (STORAGE Annex A.1), or a calendar item whose body's `attachment` field (§6) is non-empty, as `object.attachment` records it (`attached`); a contact or a file never |
+| `has:phone` `has:address` `has:birthday` `has:photo` | a card holding a `TEL`, an `ADR`, a `BDAY`, a `PHOTO`, as its body's `object` row records it (§6, `holding`); any other kind never |
 | `kind:` | `mail`, `contact`, `event`, `task`, `journal`, `file` |
 | `status:` | a task's `STATUS` (`task_summary.status`): `needs-action`, `in-process`, `completed`, `cancelled`; a task stating none, and any other kind, matches none |
 | `priority:` | a task's `PRIORITY` (`task_summary.priority`, RFC 5545 §3.8.1.9): `high` 1 to 4, `medium` 5, `low` 6 to 9, `none` absent or 0; any other kind matches none |
-| `category:` | a task's `CATEGORIES` (`task_summary.categories`): one value whole, both sides folded as STORAGE Annex A.2 folds `fn`, never a word of it |
+| `category:` | a task's `CATEGORIES` (`task_summary.categories`) or a card's (`object_category`, §6, `categorised`): one value whole, both sides folded as STORAGE Annex A.2 folds `fn`, never a word of it; any other kind never |
 | `account:` `collection:` `folder:` | the store's axes, `folder:` an alias |
 | `date:` `when:` | an instant or a range (§8.1) |
 | `thread:` `id:` | a thread id (§9); a link id or a `seq`: a value of ASCII digits alone names the item of that `seq` and every item whose link id it is, a hit set rather than a guess, any other value a link id |
@@ -256,7 +263,7 @@ pchar        = %x0-21 / %x23-D7FF / %xE000-10FFFF
 
 kind-value   = %s"mail" / %s"contact" / %s"event" / %s"task" / %s"journal" / %s"file"
 is-value     = %s"unread" / %s"read" / %s"flagged" / %s"answered" / %s"draft" / %s"encrypted"
-has-value    = %s"body" / %s"attachment"
+has-value    = %s"body" / %s"attachment" / %s"phone" / %s"address" / %s"birthday" / %s"photo"
 status-value = %s"needs-action" / %s"in-process" / %s"completed" / %s"cancelled"
 priority-value = %s"high" / %s"medium" / %s"low" / %s"none"
 date-value   = point / point ".." [ point ] / ".." point
@@ -326,7 +333,7 @@ Tagging from a query stages one `set-flags` action per placement of each hit thr
 vectors/search/ holds the fixture store and the queries every conforming implementation MUST answer alike, each file stating `v` 1 and conforming to its JSON Schema under vectors/schema/:
 
 - `store.json`: collections (`id`, `account`, `kind`), items (`collection`, `seq`, `link_id`, `flags`, and a `fixture` or a `summary` for a bodiless item) and the references the store records (`from_kind`, `from_link_id`, `to_kind`, `to_link_id`, `role`, `origin`), given rather than derived.
-- `queries.json`: the `now` relative dates resolve against, in UTC, the horizon and the coverage, and the cases.
+- `queries.json`: the `now` relative dates resolve against, in UTC, the horizon and the coverage, and the cases, then the `occurrences` windows, each a `start`, an `end` and the `rows` `occurrences_between` answers for it, `(collection, seq, start, end)` in its order.
 - `chunks.json`: field texts and the chunk boundaries §6 cuts them into.
 
 A case has a `query`, an optional `sort` (`date`, `name`, `relevance`), and one answer:
@@ -339,6 +346,6 @@ A case whose date range leaves the horizon says `horizon_left`. A case stating `
 
 An implementation builds the store, indexes it at `now`, and compares.
 
-checks/vectors.py validates that every fixture and placement resolves, re-derives every refusal and every chunk boundary from §8.3, §8.4 and §6, and checks that every other query is one the grammar accepts; only an implementation runs a case against the store.
+checks/vectors.py validates that every fixture and placement resolves, re-derives every refusal and every chunk boundary from §8.3, §8.4 and §6, and checks that every other query is one the grammar accepts, and that every occurrence row names a calendar item and overlaps its window in order; only an implementation runs a case against the store.
 
 Tokenisation is pinned by cases whose hits depend on diacritics, a domain token or a digits-only telephone number.

@@ -1,0 +1,12 @@
+BEGIN:VCARD
+VERSION:4.0
+UID:urn:uuid:5d2c9a7e-3b1f-4e6a-9c8d-7f0e1a2b3c4d
+FN:Quentin Marlowe
+N:Marlowe;Quentin;;;
+EMAIL:quentin@marlowe.example
+ADR;TYPE=home:;;12 Harbour Street;Brest;;29200;France
+BDAY:19850412
+PHOTO:https://marlowe.example/quentin.jpg
+CATEGORIES:Family,flat
+CATEGORIES:family
+END:VCARD

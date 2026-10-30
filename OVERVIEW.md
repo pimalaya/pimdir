@@ -68,7 +68,7 @@ An attachment is a file standing for a part of its message. It is recorded when 
 
 Nothing enters the store unnamed: a source lists each member with its identity and summary, so a listed message is an item from the moment its page lands, its body fetched later or never.
 
-A **task** carries its organisation in standard properties every client reads, nothing of the store's own. Its status, priority, categories, parent and the mail it came from are summary columns, so a to-do created by any client takes part in every view a search can ask for.
+A **task** carries its organisation in standard properties every client reads, nothing of the store's own. Its status, priority, categories, parent, the mail it came from and when it was captured are summary columns, and the person it waits on is one of the people it names, so a to-do created by any client takes part in every view a search can ask for.
 
 Normative: STORAGE §2, §4.3, §14.2, Annex A.
 
@@ -199,15 +199,16 @@ Normative: STORAGE §4.5.
 
 ## 10. Search
 
-The index answers what the store cannot: text, calendar time across a recurring series, and mail threads. An indexer folds the change feed and:
+A summary holds what a list row shows and sorts by; the index answers what the store cannot: text, calendar time across a recurring series, mail threads, and what a card holds. An indexer folds the change feed and:
 
 - extracts each new body once, by hash, into a handful of fields (title, people, body, attachment, place, organisation, note), and indexes a bodiless item from its summary instead;
 - expands every calendar item's occurrences within a rolling horizon;
+- records whether a card holds a phone, a postal address, a birthday or a photo, and its categories;
 - links messages into threads by their reply headers.
 
 Long texts are cut into chunks along their paragraphs as they are extracted; snippets are drawn from the chunks, and an embedding index can reuse them. Occurrences are expanded again when the time zone database they were resolved through changes version, since a zoned time moves with it.
 
-A refresh may stop between batches and resume where it stopped. The index remembers apart how far its last complete refresh reached, so a collection renamed while a refresh was cut short is still reconciled by the next one. An index an earlier draft built is told by its shape and rebuilt, which loses nothing.
+An owner keeping an index is expected to refresh it after each write it commits, so a list reading its rows from the store and its filters from the index sees them one write apart at most, and an agenda lists a window's occurrences in time order straight from the index. A refresh may stop between batches and resume where it stopped. The index remembers apart how far its last complete refresh reached, so a collection renamed while a refresh was cut short is still reconciled by the next one. An index an earlier draft built is told by its shape and rebuilt, which loses nothing.
 
 A query is a list of terms, free text or field and value, joined by and, or and not, under a formal grammar. A query the grammar does not accept, an unknown field included, is refused whole rather than guessed at. The refusal gives the position at fault, what was expected there and the fields that exist, so a person or an agent can correct it.
 

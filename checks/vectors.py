@@ -31,7 +31,7 @@ TABLES = {
     "mail_summary": {"message_id", "in_reply_to", "subject", "sender", "sender_name", "date", "size", "attachment", "invitation"},
     "contact_summary": {"uid", "fn", "kind", "org"},
     "event_summary": {"uid", "summary", "location", "dtstart", "dtstart_tzid", "dtstart_value", "dtend", "recurring", "until"},
-    "task_summary": {"uid", "summary", "dtstart", "dtstart_tzid", "dtstart_value", "due", "due_tzid", "due_value", "status", "completed", "percent", "recurring", "until", "priority", "categories", "parent", "mid"},
+    "task_summary": {"uid", "summary", "dtstart", "dtstart_tzid", "dtstart_value", "due", "due_tzid", "due_value", "status", "completed", "percent", "recurring", "until", "priority", "categories", "parent", "mid", "created"},
     "journal_summary": {"uid", "summary", "dtstart", "dtstart_tzid", "dtstart_value"},
 }
 
@@ -39,7 +39,7 @@ FILE_SUMMARY = {"name", "media_type", "size", "part"}
 # The prefixes of the keys a writer derives, and the escape (STORAGE section 9).
 RESERVED_PREFIXES = ("alt:", "hash:", "dup:", "part:", "file:", "esc:")
 
-ROLES = {"from", "to", "cc", "bcc", "email", "organizer", "attendee"}
+ROLES = {"from", "to", "cc", "bcc", "email", "organizer", "attendee", "contact"}
 # The closed set of collection kinds (STORAGE section 13), '' undeclared.
 KINDS = {"", "message/rfc822", "text/vcard", "text/calendar", "application/octet-stream"}
 
@@ -118,7 +118,7 @@ TEXT_FIELDS = {
 CLOSED_FIELDS = {
     "kind": {"mail", "contact", "event", "task", "journal", "file"},
     "is": {"unread", "read", "flagged", "answered", "draft", "encrypted"},
-    "has": {"body", "attachment"},
+    "has": {"body", "attachment", "phone", "address", "birthday", "photo"},
     "status": {"needs-action", "in-process", "completed", "cancelled"},
     "priority": {"high", "medium", "low", "none"},
 }
@@ -457,11 +457,25 @@ def task_columns(bytes_):
     lines = text.split("\r\n")
     inside = lines[lines.index("BEGIN:VTODO") + 1:lines.index("END:VTODO")]
     priority, categories, parent, mid = None, [], None, None
+    stamps, contacts = {}, []
     for line in inside:
-        head, value = line.split(":", 1)
+        head, value = split_property(line)
         prop, *params = head.split(";")
         prop = prop.upper()
-        if prop == "PRIORITY" and priority is None:
+        if prop in ("CREATED", "DTSTAMP") and prop not in stamps and re.fullmatch(r"\d{8}T\d{6}Z", value):
+            stamps[prop] = f"{value[0:4]}-{value[4:6]}-{value[6:8]}T{value[9:11]}:{value[11:13]}:{value[13:15]}Z"
+        elif prop == "CONTACT":
+            # Annex A.4, revision 2: the address a mailto: ALTREP names, else
+            # the text, lowercased (A.6); the text decoded as the name, none
+            # when the address was read from a text that is an addr-spec.
+            text = re.sub(r"\\([\;,nN])", lambda m: "\n" if m.group(1) in "nN" else m.group(1), value)
+            altrep = [p.split("=", 1)[1].strip('"') for p in params if p.upper().startswith("ALTREP=")]
+            if altrep and altrep[0].lower().startswith("mailto:"):
+                contacts.append((altrep[0][7:].lower(), text or None))
+            elif text:
+                addr_spec = re.fullmatch(r"[^\s@<>]+@[^\s@<>]+", text) is not None
+                contacts.append((text.lower(), None if addr_spec else text))
+        elif prop == "PRIORITY" and priority is None:
             priority = int(value) if value.isdigit() and int(value) <= 9 else None
         elif prop == "CATEGORIES":
             for raw in re.split(r"(?<!\\),", value):
@@ -474,7 +488,21 @@ def task_columns(bytes_):
                 parent = value
         elif prop in ("ATTACH", "URL") and mid is None and value.lower().startswith("mid:"):
             mid = unquote(value[4:].split("/", 1)[0])
-    return {"priority": priority, "categories": categories, "parent": parent, "mid": mid}
+    created = stamps.get("CREATED", stamps.get("DTSTAMP"))
+    return {"priority": priority, "categories": categories, "parent": parent, "mid": mid,
+            "created": created, "contacts": contacts}
+
+
+def split_property(line):
+    """A content line's name and parameters from its value, on the first
+    colon outside a quoted parameter value (RFC 5545 section 3.1)."""
+    quoted = False
+    for index, char in enumerate(line):
+        if char == '"':
+            quoted = not quoted
+        elif char == ":" and not quoted:
+            return line[:index], line[index + 1:]
+    return line, ""
 
 
 def text_of(parts):
@@ -624,9 +652,17 @@ for case in summaries["cases"]:
         check(f"{case['label']} alt: link_id", case["link_id"], alt)
 
     if case["table"] == "task_summary":
+        derived = task_columns(bytes_)
+        contacts = derived.pop("contacts")
         check(f"{case['label']} task columns", {
-            column: case["summary"][column] for column in ("priority", "categories", "parent", "mid")
-        }, task_columns(bytes_))
+            column: case["summary"][column] for column in ("priority", "categories", "parent", "mid", "created")
+        }, derived)
+        check(f"{case['label']} contact addresses", [
+            (address["address"], address["name"]) for address in case["addresses"] if address["role"] == "contact"
+        ], contacts)
+        check(f"{case['label']} contact positions", [
+            address["position"] for address in case["addresses"] if address["role"] == "contact"
+        ], list(range(len(contacts))))
 
 
 # The sync cases (SYNC.md section 11): shape and references only.
@@ -1005,6 +1041,27 @@ for case in queries["cases"]:
         answered |= {token["kind"] == "field" and case["query"][token["start"]:token["colon"]] for token in lex(case["query"])}
 for field in sorted(documented - answered):
     failures.append(f"search field {field}: used by no hits or threads case")
+
+# The occurrence windows (SEARCH.md section 7, occurrences_between): each row
+# an item of a calendar collection, inside the horizon, overlapping its window
+# on section 8.1's rule, and the rows in the statement's order; only an
+# implementation expands the series.
+calendar_items = {(item["collection"], item["seq"]) for item in store["items"]
+                  if any(c["id"] == item["collection"] and c["kind"] == "text/calendar" for c in store["collections"])}
+horizon = (instant(queries["horizon"]["start"]), instant(queries["horizon"]["end"]))
+for window in queries["occurrences"]:
+    label = f"occurrences {window['start']}..{window['end']}"
+    low, high = instant(window["start"]), instant(window["end"])
+    require(f"{label}: a range", low < high)
+    require(f"{label}: inside the horizon", horizon[0] <= low and high <= horizon[1])
+    for collection, seq, start, end in window["rows"]:
+        require(f"{label}: {collection} {seq} is a calendar item", (collection, seq) in calendar_items)
+        begins, ends = instant(start), instant(end)
+        require(f"{label}: {collection} {seq} at {start} ends after it starts or with it", begins <= ends)
+        require(f"{label}: {collection} {seq} at {start} overlaps the range",
+                begins < high and (ends > low or begins >= low))
+    order = [(instant(start), seq, collection) for collection, seq, start, end in window["rows"]]
+    check(f"{label}: rows by start, seq, collection", order, sorted(order))
 
 # The task writers (conventions/gtd.md section 1): every case's shape and
 # references, and what its edit may change, re-derived from the bytes on both

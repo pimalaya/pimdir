@@ -20,7 +20,7 @@ Fold a change into the document it belongs to exactly as you would fold a delta 
 
 ### 2. While the format is `draft`, the log is the tracker
 
-Each normative part is pinned by its own version, `storage-draft-05`, `sync-draft-05` and `search-draft-05` today, carried by its Status line (with the versions of the others it requires), the README and a git tag of the same name; the tags `draft-01` to `draft-04` pinned the three together. A change to a normative part after its tag bumps that part's number in those places, and the Status lines requiring it where the change matters to them, the tag being the user's to make; informative documents follow without a number of their own. README.md's Status section says what a major, a minor and a patch mean once a part is released.
+Each normative part is pinned by its own version, `storage-draft-06`, `sync-draft-05` and `search-draft-06` today, carried by its Status line (with the versions of the others it requires), the README and a git tag of the same name; the tags `draft-01` to `draft-04` pinned the three together. A change to a normative part after its tag bumps that part's number in those places, and the Status lines requiring it where the change matters to them, the tag being the user's to make; informative documents follow without a number of their own. README.md's Status section says what a major, a minor and a patch mean once a part is released.
 
 The format is not frozen (the gate is README.md's Status section; STORAGE.md §4.2 and §6 say what a draft allows) and the schema is still edited in place, a store an earlier draft wrote being reconciled on open, so a proposal and a task list per change would cost more than they buy. Until version 1 is frozen:
 

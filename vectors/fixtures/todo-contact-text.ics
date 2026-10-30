@@ -1,0 +1,12 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//pimalaya//pimdir vectors//EN
+BEGIN:VTODO
+UID:todo-contact-text@example.org
+DTSTAMP:20261029T080000Z
+SUMMARY:Quote for the roof
+CATEGORIES:waiting
+CONTACT:Roofer\, Brest
+CONTACT:bob@example.org
+END:VTODO
+END:VCALENDAR

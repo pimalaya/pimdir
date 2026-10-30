@@ -1,6 +1,6 @@
 # Pimdir storage specification
 
-Status: storage-draft-05, the base, requiring no other part
+Status: storage-draft-06, the base, requiring no other part
 
 The storage part of the pimdir standard, and its base: a **SQLite database** (the index and the mutable state) plus a **content-addressed blob directory** (the bodies). The two layers over it are [SYNC.md](./SYNC.md), how sources reconcile through the store, and [SEARCH.md](./SEARCH.md), the index and query language over it.
 
@@ -207,7 +207,7 @@ Meeting a store below its version, or a version 1 store its owner has not reconc
 - It runs no statement naming what the store lacks. In place of a canonical statement naming such a column, it runs the same text with each mention of the column replaced by that value, a predicate on it then reading the value. In place of one reading such a table, it answers no row.
 - Either way the statement's name, parameters and result columns are kept (§4.4), so every reader of one older store answers alike.
 
-A value so read means what it means in that column. An older store's collections have no role; its sources' coverage never closed (a reader says it is filling, never complete); its messages' invitations are unknown; its tasks' categories are none and their priority, parent and source mail unknown; its summaries were derived under revision 1 (below).
+A value so read means what it means in that column. An older store's collections have no role; its sources' coverage never closed (a reader says it is filling, never complete); its messages' invitations are unknown; its tasks' categories are none, their priority, parent, source mail and capture unknown, and they name no contact; its summaries were derived under revision 1 (below).
 
 It enqueues nothing the store's version does not define. A `level` 0 such a store may hold reads as 1 (§13).
 
@@ -233,6 +233,8 @@ A column a rebuild added MUST be backfilled where `NULL` contradicts the existin
 - `task_summary`'s `priority`, `categories`, `parent` and `mid`, re-derived from every held task body (Annex A.4) and written with `backfill_task_organisation`, then `link_parents_of` and `link_sources_of` over every task, `link_parents_to` over every calendar item and `link_sources_to` over every mail (§14.2).
 
 `list_held_mail` and `list_held_tasks` page the rows holding a body for such a backfill.
+
+`task_summary.created` and the `contact` addresses are revision 2's (Annex A): a rebuild adding the column leaves it `NULL`, and the re-derivation below fills both from every held task body, `created` with `backfill_task_capture` and the addresses with `replace_addresses`, `insert_address` and `stamp_item`.
 
 **Derivations are revised.** Annex A carries a revision, and `store_meta.derivation` the one a store's summaries, addresses and sort keys were derived under, written by `init_store_meta` as the creator's.
 
@@ -818,7 +820,9 @@ Every file under vectors/ states the version of its format as a top-level `v` an
 
 What a writer derives from an item before its row reaches the store: the identity hint §9 keys on, the row of the kind's summary table, the `item_address` rows and the `sort_key` (§9.3). The store parses no body; the tables fix the shape and vectors/summaries.json the values.
 
-This annex is at **revision 1**. A change to what a writer derives from a body bumps it, in a minor version of this part, and says which columns it changed; `store_meta.derivation` records the revision a store was derived under, and an owner at a later one re-derives those columns (§6).
+A summary holds what a list row shows, what it sorts by and what the store's own references read (§14.2). A question about an item's content, its text, its calendar time across a series or whether it holds a property, is the search part's (SEARCH.md), and no column is added to answer one.
+
+This annex is at **revision 2**. A change to what a writer derives from a body bumps it, in a minor version of this part, and says which columns it changed (revision 2 added `task_summary.created` and the `contact` addresses, A.4); `store_meta.derivation` records the revision a store was derived under, and an owner at a later one re-derives those columns (§6).
 
 A derivation is made from the body, or from a server-side summary (an IMAP `ENVELOPE`, a Graph `$select`, Gmail's metadata, a JMAP `Email/get`) where the kind has a cheap tier. Where a kind has both, the two MUST agree byte for byte, the attachment mark, the size and the invitation aside (A.1).
 
@@ -911,8 +915,11 @@ A series keys on its first occurrence, which `until` bounds for a reader that mu
 | `categories` | a JSON array of every `CATEGORIES` value in document order, each property's list split on unescaped commas and decoded, empty values dropped; `'[]'` when absent |
 | `parent` | the value of the first `RELATED-TO` whose `RELTYPE` is `PARENT` or absent (RFC 5545 §3.2.15), verbatim |
 | `mid` | the message the first `ATTACH` or `URL` holding a `mid:` URI (RFC 2392) names: its message-id part, before any `/`, percent-decoded, bare |
+| `created` | when it was captured: `CREATED` as an instant on A.3's rules, else `DTSTAMP` as one (both UTC, RFC 5545 §3.8.7.1, §3.8.7.2); `NULL` when neither reads as one |
 
 An `X-` property is the body's alone: no column carries one, and a client reads it from the body.
+
+**Addresses**: A.3's, and every `CONTACT` (RFC 5545 §3.8.4.2) under `contact`, in document order. Its address is the one its `ALTREP` names when that is a `mailto:` URI, else its text, canonical either way (A.6); its name is its text decoded, `NULL` when the address was read from a text that is an addr-spec. A `CONTACT` with an empty text and no such `ALTREP` files no row.
 
 **`sort_key`**: `DUE`, else `DTSTART`, as an instant on A.3's rules (RFC 5545 §3.8.2.3); `''` when neither.
 
@@ -922,9 +929,9 @@ An `X-` property is the body's alone: no column carries one, and a client reads 
 
 ### A.6 Addresses
 
-`item_address` holds every person an item names, one row per address per role, in document order within the role: `from`, `to`, `cc`, `bcc` for mail, `email` for a card, `organizer` and `attendee` for a calendar object.
+`item_address` holds every person an item names, one row per address per role, in document order within the role: `from`, `to`, `cc`, `bcc` for mail, `email` for a card, `organizer` and `attendee` for a calendar object, and `contact` for a task (A.4).
 
-The **canonical address** is the addr-spec alone, display name, comments, angle brackets and `mailto:` removed, lowercased whole by A.2's mapping, so `İ` becomes `i` and a combining dot above. A value that is not an addr-spec is kept lowercased as it is. The **name** is the display name decoded (a mail phrase, an `ATTENDEE`'s `CN`), or `NULL`; a card's addresses have none.
+The **canonical address** is the addr-spec alone, display name, comments, angle brackets and `mailto:` removed, lowercased whole by A.2's mapping, so `İ` becomes `i` and a combining dot above. A value that is not an addr-spec is kept lowercased as it is. The **name** is the display name decoded (a mail phrase, an `ATTENDEE`'s `CN`, a `CONTACT`'s text), or `NULL`; a card's addresses have none.
 
 ### A.7 `application/octet-stream`
 

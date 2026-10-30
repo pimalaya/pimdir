@@ -42,8 +42,26 @@ CREATE TABLE object (
     status TEXT    NOT NULL,                 -- 'ok' | 'encrypted' | 'unparseable' (§6)
     -- 1 when the extraction wrote any text into the attachment field (§6), so
     -- has:attachment reads a calendar item by a seek, the FTS rows keeping none.
-    attachment INTEGER NOT NULL CHECK (attachment IN (0, 1))
+    attachment INTEGER NOT NULL CHECK (attachment IN (0, 1)),
+    -- 1 when a card holds a TEL, an ADR, a BDAY, a PHOTO (§6), so has:phone,
+    -- has:address, has:birthday and has:photo read it by a seek; 0 for any
+    -- other kind.
+    tel    INTEGER NOT NULL CHECK (tel IN (0, 1)),
+    adr    INTEGER NOT NULL CHECK (adr IN (0, 1)),
+    bday   INTEGER NOT NULL CHECK (bday IN (0, 1)),
+    photo  INTEGER NOT NULL CHECK (photo IN (0, 1))
 ) STRICT;
+
+-- A card's CATEGORIES values (§6), folded, each once, so category: reads a
+-- card by a seek as it reads a task on the store's task_summary. Gone with
+-- the object.
+CREATE TABLE object_category (
+    object INTEGER NOT NULL REFERENCES object(id) ON DELETE CASCADE,
+    value  TEXT    NOT NULL,
+    PRIMARY KEY (object, value)
+) STRICT;
+
+CREATE INDEX object_category_by_value ON object_category(value);
 
 -- The text of a body, by field (§6): the seven fields, then one column per
 -- address role of Annex A.6 so `from:` and `to:` keep their role where the
