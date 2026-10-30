@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "two members stating no Message-ID with one alt: fallback are two items, the second minted",
   "note": "both members' meta derive the same alt: key from subject, date and sender; the fallback goes through the free and minted branches like a hint, decided from the handles in byte order, so 30 takes the bare key and 31 the minted one, each with its own seq (STORAGE §9, SYNC.md §6). attachment is 0 without the body, no Content-Type being text/plain",
   "store": {

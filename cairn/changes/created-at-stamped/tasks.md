@@ -18,4 +18,4 @@ change: created-at-stamped
 
 ## Deliberately not done here
 
-- [ ] A canonical insert for `store_meta`, the one row that fixes `hash_algo` store-wide and that no statement covers. Needs a seventh queries/ file and a §4.4 change, so it is its own change.
+- [x] A canonical insert for `store_meta`, the one row that fixes `hash_algo` store-wide and that no statement covers. Needs a seventh queries/ file and a §4.4 change, so it is its own change. Done: queries/storage/owner/init_store_meta.sql exists and STORAGE §6 runs it in the transaction applying 0001_init.sql (settled at ledger-housekeeping-2026-10-30).

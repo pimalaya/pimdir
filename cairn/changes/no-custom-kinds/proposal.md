@@ -1,7 +1,7 @@
 ---
 cairn: change
 id: no-custom-kinds
-status: active
+status: landed
 created: 2026-10-18
 ---
 
@@ -24,6 +24,12 @@ The rationale, for the log once this lands:
 - A schema `CHECK` on `collections.kind` so a writer that disagrees fails at the write, as the summary tables already do for their shape, guarded by a scenario in checks/invariants.sh (AGENTS.md §4).
 - STORAGE §1 "Generic" says the set is closed and grows by the standard alone; OVERVIEW.md says the same in its own words.
 
-## Open questions
+## Decided (2026-10-30)
 
-- An owner whose source offers a collection of another media type (a DAV collection of `text/x-vlist`, say): skip it silently, or record it as declared and kindless. The text should say which.
+The pimdir stable-release plan (edit 7) settled the open question: an owner whose source offers a collection of another media type (a DAV collection of `text/x-vlist`, say) records it kindless (`''`) and never syncs it. A collection an earlier draft declared with another media type is repaired to kindless by reconciliation (`repair_kinds`, every-vocabulary-is-open-or-closed).
+
+The `CHECK` and its scenario landed with every-vocabulary-is-open-or-closed (edit 6, 2026-10-30), which decided `kind` closed; the prose (STORAGE §1, §4.3, §14) and OVERVIEW remain, tracked in tasks.md.
+
+## Lands in
+
+storage-draft-05.

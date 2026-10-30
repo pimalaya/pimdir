@@ -5,8 +5,7 @@ change: a-source-states-its-write-guard
 
 # Tasks
 
-- [ ] Annex B.1: the guard capabilities and their `partial` and `none` details
-- [ ] SYNC §4 and §5: what a connector declaring `none` may claim, the re-read before an unguarded push
-- [ ] A sync vector: an unguarded source whose member moved between the listing and the push
-- [ ] GUIDE.md and OVERVIEW.md follow; bump the draft number if `draft-04` is tagged first; log entry
-- [ ] io-pimdir: the capability names, the re-read; neverest: each connector declares its guard (DAV `If-Match`, the others as they are)
+- [x] The general rule for a capability added later (a-capability-added-later-is-read-where-stated, 2026-10-30)
+- [x] The unguarded push window stated in SYNC §4 (a-merge-keeps-every-body, 2026-10-30)
+- [x] Annex B.1 guard names, SYNC §4 and §5 connector and re-read rules, their vector, GUIDE and OVERVIEW, the followers: moved to a-source-names-its-write-guard, after storage-v1.0.0 (decided 2026-10-30)
+- [x] Log entry

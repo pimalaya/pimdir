@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "the walk of the parts replaces the attachment mark read without the body",
   "note": "20 was named from a multipart/mixed Content-Type, marked 1; the Full fetch walks the parts, finds no Content-Disposition: attachment, and writes 0 over it. A later listing's meta never puts the 1 back over a walked mark (STORAGE Annex A.1, SYNC.md §6)",
   "store": {

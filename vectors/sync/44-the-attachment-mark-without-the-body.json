@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "without the body the attachment mark is the source's flag, else the top-level Content-Type",
   "note": "20 comes from a source stating its own flag (Graph hasAttachments, false here), which wins over a multipart/mixed Content-Type; 21 from one stating none, so its multipart/mixed reads as 1. Neither part list was walked (STORAGE Annex A.1)",
   "store": {

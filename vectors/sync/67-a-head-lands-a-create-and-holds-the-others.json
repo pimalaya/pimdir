@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a head lands the arrival of a pending create and derives no push for anything it did not list",
   "note": "Archive is mid-round (cursor p1). A move's other half relocated basic-1, and the head from a1 lists its arrival under 7: the pending create is landed, its provisional handle superseded, the binding stamped. encoded-1, another pending create, stays held: the round's unlisted pages may still carry its arrival, and a head derives no Add. 9 is marked read locally and the head does not list it: a head's candidates are its members and vanished handles alone, so its flag waits for a page listing it or for the last page. The head's a2 becomes the round's checkpoint, the cursor p1 stays (SYNC.md §5, §6)",
   "store": {

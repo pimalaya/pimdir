@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a listed identity lands the pending create keyed by it minted over its provisional handle",
   "note": "the move relocated the message into Trash, which already held it under 3; the listing carries it under 4 with the hint the create's key was minted from, so the page lands that create, keeping its key, rather than minting dup:basic-1@example.org#4 beside it; no Add is derived (SYNC.md §6, §7)",
   "store": {

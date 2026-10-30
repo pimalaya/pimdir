@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a band round's head lists from the source's checkpoint over the scope the run asks for, and the round closes on it",
   "note": "the coverage is [2026-09-01, open) on checkpoint c1 and a widening to [2026-07-01, open) is listing the band [2026-07-01, 2026-09-01), whose pages hand no checkpoint (vector 41). The round carries none of its own, so the head is a delta head from the source's c1, checked against the run's scope rather than the band: 14, an arrival dated 2026-10-05, outside the band and inside the coverage, is named and stamped. Its c2 becomes the round's checkpoint. The last page lists 10; nothing in the band is absent, 9 being stamped. The band round closes on c2, which serves the widened coverage, rather than keeping c1 (SYNC.md §5)",
   "store": {

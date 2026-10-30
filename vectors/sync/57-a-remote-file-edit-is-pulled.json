@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a remote file edit is a new ETag: the body is dropped to Meta and the listing restates the summary",
   "note": "the base holds e1, the listing e2; the member carries no body, so the local one goes and the next Full upgrade fetches the new bytes (SYNC.md §5, the content axis)",
   "store": { "collections": [{ "id": "Docs", "account": null, "kind": "application/octet-stream", "conflict": "manual" }], "objects": { "n1": { "body": "fixtures/file-notes.txt" }, "n2": { "body": "fixtures/file-notes-edited.txt" } }, "items": [{ "collection": "Docs", "link_id": "00000042oc1nst4nce", "seq": 1, "flags": [], "object": "n1", "level": 2, "deleted": 0, "sort_key": "notes.txt" }], "bindings": [{ "collection": "Docs", "link_id": "00000042oc1nst4nce", "source": "nextcloud", "handle": "00000042oc1nst4nce", "base_flags": [], "base_object": "n1", "base_revision": "e1", "base_present": 1 }], "summaries": [{ "table": "file_summary", "collection": "Docs", "link_id": "00000042oc1nst4nce", "row": { "name": "Notes.txt", "media_type": "text/plain", "size": 15, "part": null } }], "sources": [{ "collection": "Docs", "source": "nextcloud", "checkpoint": "e0" }] },

@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a message with no usable Date is in every scope",
   "note": "nodate-1's Date does not parse, so its summary date is NULL and its sort key empty: in every scope, so listed it is named (a page carries 15 with no Date) and absent it is dropped (11 here, the same identity under the handle it held before the server re-filed it). Never lost to a scope, and never out of one (SYNC.md §5)",
   "store": {

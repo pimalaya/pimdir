@@ -1,0 +1,9 @@
+Message-ID: <basic-1@example.org>
+Subject: Budget review
+From: Dan Example <dan@example.net>
+To: bob@example.org
+Date: Mon, 03 Aug 2026 09:00:00 +0000
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+A different message under a reused Message-ID.

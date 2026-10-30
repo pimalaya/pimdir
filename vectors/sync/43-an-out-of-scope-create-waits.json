@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a create with no origin whose Date the scope excludes waits; one it holds is pushed",
   "note": "two pending creates with no origin in a target synced over [2026-09-01, open). basic-1, dated August, may be its own arrival, relocated by the move's other half with its Date kept, which no page of this scope lists: pushing it would file a second copy, so it waits for a round whose scope holds it. attach-1 is in scope, the round's pages could have landed it and did not, so it is added once the last page has landed (SYNC.md §5)",
   "store": {

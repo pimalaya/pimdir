@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pimalaya/pimdir/vectors/schema/sync.schema.json",
+  "title": "A sync vector (SYNC.md section 11), one file under vectors/sync/",
+  "type": "object",
+  "required": ["v", "label", "note", "store", "run", "remote", "expect"],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "const": 1 },
+    "label": { "type": "string" },
+    "note": { "type": "string" },
+    "store": { "$ref": "#/$defs/store" },
+    "run": {
+      "type": "object",
+      "required": ["verb", "collection", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "verb": { "enum": ["open", "sync", "upgrade", "mutate", "rekey"] },
+        "collection": { "type": "string" },
+        "source": { "type": "string" },
+        "options": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "push": { "type": "boolean" },
+            "rights": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": { "flags": { "type": "boolean" }, "content": { "type": "boolean" }, "add": { "type": "boolean" }, "remove": { "type": "boolean" } }
+            },
+            "conflict": { "enum": ["manual", "prefer-remote", "prefer-local"] },
+            "scope": {
+              "type": "object",
+              "required": ["since", "until"],
+              "additionalProperties": false,
+              "properties": { "since": { "type": ["string", "null"] }, "until": { "type": ["string", "null"] } }
+            },
+            "accept_absences": { "type": "boolean" }
+          }
+        },
+        "mutation": { "type": "object", "required": ["kind"] },
+        "tier": { "enum": ["Meta", "Full"] },
+        "handles": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "remote": {
+      "type": "object",
+      "required": ["fetch"],
+      "additionalProperties": false,
+      "properties": {
+        "snapshot": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/page" }] },
+        "pages": { "type": "array", "items": { "$ref": "#/$defs/page" } },
+        "fetch": { "type": "object" },
+        "head": { "type": "object", "required": ["kind"] },
+        "heads": { "type": "array", "items": { "enum": ["delta", "band"] } },
+        "interrupted_after": { "type": "integer", "minimum": 0 },
+        "cursor_rejected": { "type": "boolean" },
+        "scope_bound": { "type": "boolean" }
+      }
+    },
+    "expect": {
+      "type": "object",
+      "required": ["pushes", "outcomes", "events", "store"],
+      "additionalProperties": false,
+      "properties": {
+        "pushes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["kind", "handle", "key"],
+            "additionalProperties": false,
+            "properties": {
+              "kind": { "enum": ["Add", "Remove", "SetFlags", "Update"] },
+              "handle": { "type": "string" },
+              "key": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
+              "link_id": { "type": ["string", "null"] },
+              "flags": { "type": ["array", "null"], "items": { "type": "string" } },
+              "add": { "type": "array", "items": { "type": "string" } },
+              "remove": { "type": "array", "items": { "type": "string" } },
+              "origin": { "type": ["object", "null"] },
+              "supersedes": { "type": ["object", "null"] },
+              "object": { "type": ["string", "null"] },
+              "to": { "type": ["string", "null"] },
+              "if_match": { "type": ["string", "null"] }
+            }
+          }
+        },
+        "outcomes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["handle", "outcome"],
+            "additionalProperties": false,
+            "properties": {
+              "handle": { "type": "string" },
+              "outcome": { "enum": ["Accepted", "Rejected"] },
+              "assigned": { "type": ["string", "null"] },
+              "revision": { "type": ["string", "null"] }
+            }
+          }
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["kind", "handle"],
+            "additionalProperties": false,
+            "properties": {
+              "kind": { "enum": ["Added", "FlagsChanged", "ContentChanged", "Vanished", "Conflicted", "Overruled", "Created"] },
+              "handle": { "type": "string" },
+              "link_id": { "type": "string" }
+            }
+          }
+        },
+        "parked": {
+          "type": "object",
+          "required": ["absent", "bound"],
+          "additionalProperties": false,
+          "properties": { "absent": { "type": "integer" }, "bound": { "type": "integer" } }
+        },
+        "failed": { "const": true },
+        "store": { "$ref": "#/$defs/rows" }
+      }
+    }
+  },
+  "$defs": {
+    "store": {
+      "type": "object",
+      "required": ["collections", "objects", "items", "bindings", "sources"],
+      "allOf": [{ "$ref": "#/$defs/rows" }]
+    },
+    "rows": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "collections": { "type": "array", "items": { "type": "object", "required": ["id", "kind"] } },
+        "objects": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["body"],
+            "additionalProperties": false,
+            "properties": { "body": { "type": "string" }, "blob": { "type": "boolean" }, "corrupt": { "type": "boolean" } }
+          }
+        },
+        "items": { "type": "array", "items": { "type": "object", "required": ["collection", "link_id"] } },
+        "bindings": { "type": "array", "items": { "type": "object", "required": ["collection", "link_id", "source", "handle"] } },
+        "sources": { "type": "array", "items": { "type": "object", "required": ["collection", "source"] } },
+        "summaries": { "type": "array", "items": { "type": "object", "required": ["table", "collection", "link_id", "row"] } },
+        "addresses": { "type": "array", "items": { "type": "object", "required": ["collection", "link_id", "role", "position", "address"] } },
+        "supersessions": { "type": "array", "items": { "type": "object" } },
+        "references": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "page": {
+      "type": "object",
+      "required": ["items"],
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": { "type": "object", "required": ["handle"] }
+        },
+        "vanished": { "type": "array", "items": { "type": "string" } },
+        "complete": { "type": "boolean" },
+        "last": { "type": "boolean" },
+        "cursor": { "type": ["string", "null"] },
+        "checkpoint": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a delta head lands an arrival during an open round, and the round keeps it when it closes, on the head's checkpoint",
   "note": "a Gmail Inbox fills in a round that began at history id h1000; its later pages list older mail, so the invoice that arrived meanwhile would show only at the first delta after the round closed. The run resumes the round and lists its head first, from the round's checkpoint h1000: the invoice is named under a3 and stamped with the round's id, and h1001 becomes the round's checkpoint. The last page lists a0; a1, stamped by an abandoned listing of round 1 and listed by none of round 2, is found absent and dropped, but a3 is stamped and stays. The round closes on h1001, not h1000, since the head reported everything up to it (SYNC.md §4, §5)",
   "store": {

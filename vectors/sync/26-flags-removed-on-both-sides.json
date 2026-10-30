@@ -1,6 +1,7 @@
 {
+  "v": 1,
   "label": "a flag removed on either side is removed, and both removals survive the merge",
-  "note": "the base held both flags; local removed \\Flagged and remote removed \\Seen, so the merge is empty, the empty set is pushed and the base follows (SYNC.md §5)",
+  "note": "the base held both flags; local removed \\Flagged and remote removed \\Seen, so the merge is empty, the push removes the \\Flagged the server still holds and the base follows (SYNC.md §4, §5)",
   "store": {
     "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
     "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },
@@ -11,7 +12,7 @@
   "run": { "verb": "sync", "collection": "INBOX", "source": "imap", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual" } },
   "remote": { "snapshot": { "items": [{ "handle": "10", "flags": ["\\Flagged"], "revision": null, "meta": { "body": "fixtures/mail-basic.eml" } }], "vanished": [], "complete": true, "checkpoint": "c1" }, "fetch": {} },
   "expect": {
-    "pushes": [{ "kind": "SetFlags", "handle": "10", "flags": [], "key": "ef68ccba6d35bf83" }],
+    "pushes": [{ "kind": "SetFlags", "handle": "10", "add": [], "remove": ["\\Flagged"], "key": "16ce74eec66a409f" }],
     "outcomes": [{ "handle": "10", "outcome": "Accepted" }],
     "events": [{ "kind": "FlagsChanged", "handle": "10" }],
     "store": {

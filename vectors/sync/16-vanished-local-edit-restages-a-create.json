@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a vanished member holding a local edit is re-staged as a pending create",
   "note": "the body left the base and the remote dropped the member; new content beats a delete on both sides, so the binding loses its base and moves to a provisional handle instead of being dropped, and the next run adds it (SYNC.md §5)",
   "store": {

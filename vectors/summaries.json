@@ -311,6 +311,20 @@
       "sort_key": ""
     },
     {
+      "label": "card, a UID beginning with a reserved prefix",
+      "kind": "text/vcard",
+      "fixture": "fixtures/card-reserved-uid.vcf",
+      "note": "the UID states an identity that begins like a hash: key; read verbatim it would draw its own seq, never link and take no reference (STORAGE §9), so the link id escapes it with esc:, and the uid column keeps it verbatim",
+      "body": { "len": 112, "blake3": "7xbx5iondhbsijlyu6cdxntvab67qlq4mm3iyovlmgzkvwosb5aa", "sha256-128": "mtgj474jdvo3m6axegyfoov63q" },
+      "link_id": "esc:hash:0123456789abcdef",
+      "table": "contact_summary",
+      "summary": { "uid": "hash:0123456789abcdef", "fn": "Reserved Prefix", "kind": null, "org": null },
+      "addresses": [
+        { "role": "email", "position": 0, "address": "reserved@example.org", "name": null }
+      ],
+      "sort_key": "reserved prefix"
+    },
+    {
       "label": "card, FN needing case and space normalisation",
       "kind": "text/vcard",
       "fixture": "fixtures/card-casefold.vcf",

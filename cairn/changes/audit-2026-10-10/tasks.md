@@ -28,4 +28,4 @@ Severity is high, medium or low. Each line names the rules it sets against each 
 
 ## Downstream, not the format
 
-- [ ] Android: minSdk 26 with `android.database.sqlite`, the platform SQLite (3.18 on API 26 up to 3.32 on API 33, 3.39 from API 34), below the 3.37 `STRICT` floor of STORAGE §4.1, which an older SQLite cannot even parse. Read off android/app/build.gradle.kts and the imports, not run on a device. Fix: bundle a SQLite (requery's sqlite-android or the Rust side's) or raise minSdk to 34. Left open, the app's to settle.
+- [x] Android: minSdk 26 with `android.database.sqlite`, the platform SQLite (3.18 on API 26 up to 3.32 on API 33, 3.39 from API 34), below the 3.37 `STRICT` floor of STORAGE §4.1, which an older SQLite cannot even parse. Read off android/app/build.gradle.kts and the imports, not run on a device. Fix: bundle a SQLite (requery's sqlite-android or the Rust side's) or raise minSdk to 34. Left open, the app's to settle. **Settled 2026-10-30**: the app bundles SQLite 3.49.0 with JSON1 (requery's sqlite-android, android/android/app/build.gradle.kts:190), above the 3.37 floor whatever the API level; closed at ledger-housekeeping-2026-10-30.

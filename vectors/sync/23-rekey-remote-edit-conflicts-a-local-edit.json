@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a rekey meeting a remote edit over a local edit carries a conflict, not a base it never saw",
   "note": "the listed revision r2 is not the old base's r1 and the body left the base too; the placement lands on its new handle conflicted at r2 with its base untouched, so the next sync pushes nothing last-writer-wins (SYNC.md §8)",
   "store": {

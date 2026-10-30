@@ -16,11 +16,13 @@ Fold a change into the document it belongs to exactly as you would fold a delta 
 
 [OVERVIEW.md](./OVERVIEW.md) and [GUIDE.md](./GUIDE.md) are informative and stay so: no RFC 2119 word, no rule the parts do not state, and the parts win on any disagreement. The overview names no table, column or statement; the guide names them at every step. Rationale, history and measurements belong to the log, not to any of the five documents.
 
+[GTD.md](./GTD.md) holds Pimalaya's task conventions, informative too and versioned apart (`gtd-draft-01` on its Status line, naming the part versions it requires), so the parts freeze without it; a change to it bumps its own number and is logged like any other, its vectors under vectors/gtd/ guarded by checks/vectors.py.
+
 ### 2. While the format is `draft`, the log is the tracker
 
-The text is pinned by a draft number, `draft-04` today, carried by the three normative Status lines, the README and a git tag of the same name. A change to a normative part after the tag bumps the number in those places, the tag being the user's to make; informative documents follow without a number of their own.
+Each normative part is pinned by its own version, `storage-draft-05`, `sync-draft-05` and `search-draft-05` today, carried by its Status line (with the versions of the others it requires), the README and a git tag of the same name; the tags `draft-01` to `draft-04` pinned the three together. A change to a normative part after its tag bumps that part's number in those places, and the Status lines requiring it where the change matters to them, the tag being the user's to make; informative documents follow without a number of their own. README.md's Status section says what a major, a minor and a patch mean once a part is released.
 
-The format is not frozen (STORAGE.md §6), the schema is still edited in place, and no store depends on it, so a proposal and a task list per change would cost more than they buy. Until version 1 is frozen:
+The format is not frozen (the gate is README.md's Status section; STORAGE.md §4.2 and §6 say what a draft allows) and the schema is still edited in place, a store an earlier draft wrote being reconciled on open, so a proposal and a task list per change would cost more than they buy. Until version 1 is frozen:
 
 - **Every landed change gets a log entry**, `cairn/log/YYYY-MM-DD-<change-id>.md`, kebab-case id, frontmatter `cairn: log`. That, and the check §4 asks for, is the whole obligation.
 - A change folder under `cairn/changes/` is **optional**, and worth writing only when the intent needs review before the edit (a shape that is hard to reverse, or one another repository must follow).

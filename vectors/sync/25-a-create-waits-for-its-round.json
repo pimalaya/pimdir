@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a pending create derives no add while its round is open",
   "note": "a page not landed yet may carry the create's own arrival, relocated by the move's other half, and pushing before it lands makes a second copy; the first page of the resumed round names another member and the run stops, so nothing is pushed until the last page has landed, which lands the create (vector 21) or frees it (SYNC.md §5)",
   "store": {

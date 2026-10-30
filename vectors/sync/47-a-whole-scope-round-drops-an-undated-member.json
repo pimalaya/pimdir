@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a round over the whole scope still drops an undated member it does not list",
   "note": "the counterpart of 46: the same store and the same widening to [2026-07-01, open), but the source's checkpoint is bound to its scope, so the round lists the whole scope asked for, undated mail included. 11, undated and unlisted, is absent from a listing that would have carried it and is dropped with 9; 12 and 10 are listed (SYNC.md §5)",
   "store": {

@@ -1,0 +1,6 @@
+BEGIN:VCARD
+VERSION:4.0
+UID:hash:0123456789abcdef
+FN:Reserved Prefix
+EMAIL:reserved@example.org
+END:VCARD

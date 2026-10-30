@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a band head lands an arrival unstamped and records no checkpoint",
   "note": "a Graph Inbox fills in a whole-folder delta round, whose delta link comes only with its last page, so the round holds no checkpoint to list a delta head from. The connector lists band heads: the run asks for the members Graph dates from the instant the round opened, which the connector takes less two days, and is cut before the next page. g3, an arrival, is named but not stamped: no later listing would state its removal, so the round's last page decides it (vector 66). g2, which the first page listed, is marked read and its flag pulled. No checkpoint is recorded and the cursor n1 stays (SYNC.md §4, §5)",
   "store": {

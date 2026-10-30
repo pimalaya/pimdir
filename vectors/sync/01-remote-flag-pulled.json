@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a remote flag change is pulled, nothing is pushed",
   "note": "local equals base, so the remote's added flag wins the three-way merge and the base follows it (SYNC.md §5)",
   "store": {

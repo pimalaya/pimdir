@@ -28,17 +28,19 @@ One standard in three parts, one store: the format any language with a SQLite bi
 - **Retentive**: an item the last source dropped is retained rather than erased, so an upstream expunge never destroys the local copy. Purging is explicit, and restoring costs no network.
 - **Offline-first**: every edit is staged locally and reconciled by a three-way merge against each source, several sources propagating through one item without a cross-merge.
 - **Searchable**: a full-text index over the bodies, calendar occurrences and threads, and a query language every client answers alike.
-- **Rebuildable**: the database is a derived index over the bodies and the remote, and the search index is derived from both, so corruption is survivable by re-sync and a dropped index costs a rebuild.
+- **Recoverable**: what the remotes hold comes back by re-sync, and the search index is derived and costs a rebuild; un-pushed edits, the queue, references and local collections live only in the database, so a rebuild is an operation the user confirms, never an automatic one.
 
 ## Specification
 
-The standard is a base and two layers, each a normative part written to RFC 2119 with a status of its own, framed by two informative documents:
+The standard is a base and two layers, each a normative part written to BCP 14 (RFC 2119, RFC 8174) with a status of its own, framed by two informative documents:
 
 - [OVERVIEW.md](./OVERVIEW.md), the **model**: what a store is, the entities, the identifiers, the roles and how sync, retention, the queue and search fit together, with no table, column or statement named. Read it first.
 - [STORAGE.md](./STORAGE.md), the **store**, binding by the profile an implementation meets, reader, producer or owner: a SQLite database (the queryable index and mutable state) plus a content-addressed blob directory (the bodies), the per-kind summaries and addresses, the change feed, retention and the action queue.
 - [SYNC.md](./SYNC.md), the **sync** layer: how one or more sources are reconciled through the store, the five verbs, the merge rules and what a connector hands the engine.
 - [SEARCH.md](./SEARCH.md), the **search** layer: the derived index beside the store, extraction per kind, calendar time, threads, and the query language every client answers alike.
 - [GUIDE.md](./GUIDE.md), the **implementation guide**: the parts' rules as numbered procedures and decision tables naming the statements and vectors at each step, and a conformance checklist.
+
+Beside them, [GTD.md](./GTD.md) holds the conventions Pimalaya's task consumers (the Android app, unfog) share to organise tasks the GTD way and keep time entries: informative, versioned apart (gtd-draft-01) so the store freezes without it, and reading only what the parts define.
 
 Either layer may be omitted, and an implementation offering one must conform to it. Neither stands without the store: a sync needs a base per source, what that source last agreed to, or a delete on one side and an add on the other are the same picture, and the bindings are that base; a search needs one index with one meaning of a match across sources, which only the store's summaries, addresses and bodies give. The overview and the guide restate and never rule: where either disagrees with a part, the part wins.
 
@@ -58,10 +60,11 @@ Readers and producers of the store, and clients of the query language, are expec
 
 ```
 OVERVIEW.md           the model (informative, read first)
-STORAGE.md            the store, the base (normative, RFC 2119)
+STORAGE.md            the store, the base (normative, BCP 14)
 SYNC.md               the sync layer (normative, optional)
 SEARCH.md             the search layer (normative, optional)
 GUIDE.md              the implementation guide (informative procedures)
+GTD.md                the task conventions Pimalaya's task consumers share (informative, gtd-draft-01)
 migrations/           canonical, forward-only schema migrations (SQL)
   storage/            the store's, 0001_init.sql = schema version 1
   search/             the search index's, 0001_init.sql = index version 1
@@ -83,11 +86,13 @@ The history follows [Cairn](https://github.com/pimalaya/cairn), with one deviati
 
 ## Status
 
-Draft, pinned as **draft-04**: the three normative parts carry `Status: draft-04` and the git tag `draft-04` names the text. An implementation states the draft it conforms to, and a change to a normative part after the tag bumps the number in the three Status lines and here, tagged again; a draft number names a text, never a store. Store schema version 1 and index schema version 1 are defined and stable in shape; the sync and search parts are edited in place between drafts.
+Draft. Each normative part is versioned apart, and its Status line names its version and the versions of the others it requires: STORAGE is at **storage-draft-05**, SYNC at **sync-draft-05** and SEARCH at **search-draft-05**, each named by a git tag of the same name; the tags draft-01 to draft-04 named the three parts together. An implementation states the version of each part it conforms to. A change to a part after its tag bumps that part's number, in its Status line and here, tagged again; a version names a text, never a store. The overview and the guide are informative and carry no version; GTD.md, informative too, is versioned apart (gtd-draft-01) because task consumers state which conventions they follow.
 
-The freeze is by profile. STORAGE freezes first, since it is what readers and producers depend on and they are the many; SYNC and SEARCH stay draft behind the reference implementation until their vectors have run against a second implementation. The gate for freezing STORAGE is the reference implementation green on every check and vector in this repository, and the audit ledger under cairn/changes/ with no open item that touches the schema.
+A released part is versioned `<part>-vX.Y.Z`, its major following its artefact: STORAGE major N is store schema version N (`PRAGMA user_version`), SEARCH's major the index schema version, SYNC's a breaking change to the connector seam or the engine. A minor version adds a rule, a statement or a vector breaking nothing; a patch is editorial.
 
-While a part is draft, its version is edited in place: a change folds into the migration, the version stays 1, and a store or index created by an earlier draft is recreated rather than migrated. After a freeze, a breaking change to the store bumps the version and ships as a new migration; a change to the index is always a rebuild.
+The freeze is by part. STORAGE freezes first, since it is what readers and producers depend on and they are the many; SYNC and SEARCH stay draft behind the reference implementation until their vectors have run against a second implementation. The gate for freezing STORAGE is the reference implementation green on every check and vector in this repository, one real upgrade cycle of a store an earlier draft wrote, and the audit ledger under cairn/changes/ with no open item that touches the schema.
+
+While STORAGE is a draft, store schema version 1 is edited in place and a store an earlier draft wrote is reconciled to it on open (STORAGE §6), never recreated. Once storage-v1.0.0 is released, 0001_init.sql never changes: every change to the schema is a migration to the next version, which an older implementation refuses rather than rebuilds. The index has no migrations: a change to it is a rebuild, which loses nothing.
 
 ## License
 

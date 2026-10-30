@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "after a collection a sync removes nothing, and an old message's flag still pushes",
   "note": "the owner narrowed the scope to October and collected what lies below it (STORAGE §11.3): basic-1 is gone from the store and still on the server, and encoded-1 stayed, owing a flag. The next run is a delta inside the coverage: the collected message is not listed and derives nothing, no Remove above all, and the old message's local change pushes whatever the scope (SYNC.md §5)",
   "store": {
@@ -36,7 +37,7 @@
     "fetch": {}
   },
   "expect": {
-    "pushes": [{ "kind": "SetFlags", "handle": "9", "flags": ["\\Flagged"], "key": "f722628b9b619540" }],
+    "pushes": [{ "kind": "SetFlags", "handle": "9", "add": ["\\Flagged"], "remove": [], "key": "395b5007ae9370cd" }],
     "outcomes": [{ "handle": "9", "outcome": "Accepted" }],
     "events": [],
     "store": {

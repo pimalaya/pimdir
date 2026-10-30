@@ -1,0 +1,39 @@
+{
+  "v": 1,
+  "label": "the body a pull left unread fills the item and leaves its conflict standing",
+  "note": "the store 81 left. a's upgrade fetches c2 at r2, the body of the pull that emptied the item: a's base names no body, so the upsert fills the item, which adopts c2 without measuring a divergence against it, and the item's conflict with b's c3 stands. Both bodies and their ancestor c1, the shared_object of both bindings, are held and pinned: a resolver reads all three (SYNC.md §6, §9; STORAGE §5, §10)",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
+    "objects": { "c1": { "body": "fixtures/card-basic.vcf" }, "c2": { "body": "fixtures/card-basic-edited.vcf" }, "c3": { "body": "fixtures/card-basic-renamed.vcf" } },
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "conflicted": 1, "conflict_object": "c3" }],
+    "bindings": [
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": null, "base_revision": "r2", "base_present": 1, "shared_object": "c1" },
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "b", "handle": "b.vcf", "base_flags": [], "base_object": "c3", "base_revision": "s2", "base_present": 1, "shared_object": "c1" }
+    ],
+    "sources": [
+      { "collection": "Contacts", "source": "a", "checkpoint": "a2" },
+      { "collection": "Contacts", "source": "b", "checkpoint": "b1" }
+    ]
+  },
+  "run": { "verb": "upgrade", "collection": "Contacts", "source": "a", "tier": "Full", "handles": ["a.vcf"] },
+  "remote": {
+    "snapshot": null,
+    "fetch": { "a.vcf": { "Full": { "body": "fixtures/card-basic-edited.vcf", "revision": "r2" } } }
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c2", "level": 2, "deleted": 0, "conflicted": 1, "conflict_object": "c3" }],
+      "bindings": [
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": "c2", "base_revision": "r2", "base_present": 1, "shared_object": "c1" },
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "b", "handle": "b.vcf", "base_flags": [], "base_object": "c3", "base_revision": "s2", "base_present": 1, "shared_object": "c1" }
+      ],
+      "sources": [
+        { "collection": "Contacts", "source": "a", "checkpoint": "a2" },
+        { "collection": "Contacts", "source": "b", "checkpoint": "b1" }
+      ]
+    }
+  }
+}

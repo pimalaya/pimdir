@@ -38,6 +38,10 @@ Constraints already agreed:
 
 The corpus is a separate repository; this change records it here because pimdir's vectors/ are the store's fixtures and the `count` profile is the store's load. A store built from a seed is how io-pimdir's and the Android store's performance numbers become reproducible (the 2026-10-11 performance audit seeded its own).
 
+## Decided (2026-10-30)
+
+The pimdir stable-release plan (edit 11): the corpus moves out of this repository, to the repository its name settles; this change folder goes with it at ledger-housekeeping-2026-10-30. Nothing in it touches the format.
+
 ## Open questions
 
 - Name: `io-pim-corpus` with an off-by-default `cli` feature (the core emits items and the caller writes them), or `pim-corpus` if `io-` stays reserved for substrate rather than dev tooling.

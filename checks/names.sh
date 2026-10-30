@@ -7,7 +7,7 @@ set -euo pipefail
 
 root="${1:-$PWD}"
 dir="$(mktemp -d)"
-documents=(OVERVIEW.md STORAGE.md SYNC.md SEARCH.md GUIDE.md README.md vectors/README.md)
+documents=(OVERVIEW.md STORAGE.md SYNC.md SEARCH.md GUIDE.md GTD.md README.md vectors/README.md)
 failures=0
 
 for part in storage search; do
@@ -28,7 +28,8 @@ known="$(
         foreign_key_check table_info table_list contentless_delete json_each json_valid legacy_alter_table sqlite_sequence \
         sqlite_schema core_autocrlf recurrence_id base32 body_hex body_len input_hex input_utf8 digest_hex \
         name_chars digest_bytes if_match set_flags no_uid_conflict collect_garbage \
-        meta_attachment round_open cursor_rejected interrupted_after scope_bound horizon_left
+        meta_attachment round_open cursor_rejected interrupted_after scope_bound horizon_left \
+        accept_absences
 )"
 
 # A backticked identifier, the name alone: a call's parameters are dropped and

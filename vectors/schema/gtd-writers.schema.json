@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pimalaya/pimdir/vectors/schema/gtd-writers.schema.json",
+  "title": "The task writer cases (GTD.md), vectors/gtd/writers.json",
+  "type": "object",
+  "required": ["v", "now", "cases"],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "const": 1 },
+    "now": { "type": "string" },
+    "note": { "type": "string" },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["label", "edit", "expect"],
+        "properties": {
+          "label": { "type": "string" },
+          "input": { "type": "string" },
+          "edit": { "type": "object", "required": ["op"] },
+          "expect": { "type": "object" }
+        }
+      }
+    }
+  }
+}

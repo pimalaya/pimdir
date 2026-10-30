@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "the round's last page keeps a band head's member by listing it again, and finds absent the one the source removed",
   "note": "earlier band heads named g3 and g4, unstamped. Since then the source removed g4. This run's band head lists g3 alone: a band head states no removal and infers none, so g4 stays for now. The last page carries the delta link d1 and, as a connector listing band heads must, lists again every member Graph dates from the heads' instant, read after that link: g3, now stamped, and g1, an older member. g4, in scope and stamped by no page, is found absent and dropped; had a head stamped it, it would have stayed, and no delta from d1 would have stated its removal. The round closes on the last page's d1 (SYNC.md §4, §5)",
   "store": {

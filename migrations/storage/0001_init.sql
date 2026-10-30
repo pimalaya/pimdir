@@ -3,15 +3,20 @@
 -- Applied by a migration runner (§6) against an empty database, inside a
 -- transaction; the runner sets `PRAGMA user_version = 1` on success. Pure DDL,
 -- so every implementation applies the identical bytes. Requires SQLite >= 3.37
--- for STRICT tables and DROP COLUMN.
+-- for STRICT tables and DROP COLUMN. While STORAGE.md is a draft this file is
+-- edited in place; once version 1 is released it never changes, and a change
+-- to the schema is a migration to the next version (§6).
 
 -- Store-level metadata: exactly one row.
 CREATE TABLE store_meta (
     id          INTEGER PRIMARY KEY CHECK (id = 1),
     format      TEXT    NOT NULL DEFAULT 'pimdir',
-    version     INTEGER NOT NULL,           -- tracks user_version
+    version     INTEGER NOT NULL,           -- tracks user_version (§4.2)
     hash_algo   TEXT    NOT NULL,           -- 'blake3' (default) or 'sha256-128'
     created_at  TEXT    NOT NULL,           -- RFC 3339, Z (§13)
+    -- The Annex A revision the summaries were derived under (§6): an owner at
+    -- a later one re-derives what changed, then records it, never lowering it.
+    derivation  INTEGER NOT NULL DEFAULT 1,
     -- Hands out the next item `seq`; only ever increases, so a public id is
     -- never reused store-wide (§9.1).
     next_seq    INTEGER NOT NULL DEFAULT 1,
@@ -33,7 +38,9 @@ CREATE TABLE store_meta (
 CREATE TABLE collections (
     id          TEXT PRIMARY KEY,          -- stable id (base32 uuid or backend id), unique store-wide
     account     TEXT,                      -- owning account, NULL in a single-account store
-    kind        TEXT NOT NULL,             -- media type: message/rfc822, text/vcard, text/calendar, application/octet-stream
+    -- The media type every item shares, a closed set (§13), '' until declared.
+    kind        TEXT NOT NULL CHECK (kind IN ('', 'message/rfc822', 'text/vcard', 'text/calendar',
+                'application/octet-stream')),
     name        TEXT NOT NULL,             -- logical name (INBOX, Contacts)
     parent      TEXT REFERENCES collections(id) ON UPDATE CASCADE ON DELETE SET NULL,
     color       TEXT,                      -- optional presentation
@@ -44,14 +51,11 @@ CREATE TABLE collections (
     -- What the collection is for (§14), as its source says, NULL when it says
     -- nothing, or as its owner made it for `attachments`: a mail role is the
     -- JMAP Mailbox/role vocabulary (the IANA IMAP mailbox name attributes
-    -- lowercased, plus inbox), and `default` marks the
-    -- calendar or address book a source writes to when none is named, and
-    -- `attachments` the file collection holding an account's stand-ins (§14.3).
-    role        TEXT CHECK (role IS NULL
-                OR (kind = 'message/rfc822' AND role IN ('inbox', 'sent', 'drafts', 'trash',
-                    'junk', 'archive', 'all', 'flagged', 'important'))
-                OR (kind IN ('text/calendar', 'text/vcard') AND role = 'default')
-                OR (kind = 'application/octet-stream' AND role = 'attachments')),
+    -- lowercased, plus inbox), and `default` marks the calendar or address
+    -- book a source writes to when none is named, and `attachments` the file
+    -- collection holding an account's stand-ins (§14.3). An open vocabulary,
+    -- checked by no constraint: a reader reads a role it does not know as none.
+    role        TEXT,
     -- Handle-space epoch, bumped by the owner on a backend identity reset, so a
     -- reader derives an IMAP UIDVALIDITY from the store alone (§12).
     generation  INTEGER NOT NULL DEFAULT 1,
@@ -189,14 +193,13 @@ END;
 -- What the item says about itself is its kind's summary row (§4.4).
 CREATE TABLE items (
     collection      TEXT NOT NULL REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
-    link_id         TEXT NOT NULL,         -- the key the item is filed under: the identity hint, a kind fallback, or a minted dup:<hint>#<handle> (§9)
+    link_id         TEXT NOT NULL,         -- the key the item is filed under: the identity hint, escaped as esc:<hint> when it begins like a derived key, a kind fallback, or a minted dup:<hint>#<handle> (§9)
     seq             INTEGER NOT NULL,      -- public id, shared by every placement of the link id (§9.1)
     flags           TEXT CHECK (flags IS NULL OR json_valid(flags)),  -- JSON array of flag strings
     object_hash     TEXT REFERENCES objects(hash),  -- current body, NULL until hydrated
     sort_key        TEXT NOT NULL DEFAULT '',  -- the kind's ordering key, '' when unknown (§9.3)
-    -- The detail ladder: 1 meta, 2 full. 0 is what an earlier draft wrote for a
-    -- probed or pulled row, never written now and read as 1 (§13).
-    level           INTEGER NOT NULL CHECK (level IN (0, 1, 2)),
+    -- The detail ladder: 1 meta, 2 full (§13).
+    level           INTEGER NOT NULL CHECK (level IN (1, 2)),
     deleted         INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0, 1)),  -- 1 while a delete propagates across sources
     retained_at     TEXT,                  -- RFC 3339 instant the last binding vanished (§11)
     retained_by     TEXT,                  -- the source whose removal retired it, diagnostic
@@ -334,11 +337,9 @@ CREATE TABLE bindings (
     -- remote and only a sync moves it, so a body this source folded in and has
     -- not pushed yet leaves it behind; read as the shared base it would have
     -- the source disagree with itself. Meaningful whether or not the binding
-    -- is conflicted. It names an object and pins none, hence no REFERENCES and
-    -- no refcount: the value is only ever compared for equality, never read as
-    -- bytes, and a content hash compares the same after the body it named has
-    -- been swept.
-    shared_object     TEXT,
+    -- is conflicted. Pinned like the base (§5): it is the common ancestor a
+    -- merge reads, one body per binding, released when the binding next agrees.
+    shared_object     TEXT REFERENCES objects(hash),
     -- The id of the last round whose listing carried this handle (SYNC.md
     -- §5), NULL until one did: a round's last page drops the in-scope
     -- bindings it did not stamp.
@@ -518,7 +519,8 @@ CREATE TABLE item_reference (
     PRIMARY KEY (from_link_id, from_kind, to_link_id, to_kind, role),
     CHECK (from_kind != to_kind OR from_link_id != to_link_id),
     -- A writer-derived key names no identity (§9), so no endpoint is one: a
-    -- message under it, and a part of such a message, take no reference.
+    -- message under it, and a part of such a message, take no reference. A
+    -- stated identity beginning like one is keyed esc:<hint> and passes.
     CHECK (NOT (from_link_id GLOB 'alt:*' OR from_link_id GLOB 'dup:*' OR from_link_id GLOB 'hash:*'
                 OR from_link_id GLOB 'part:alt:*' OR from_link_id GLOB 'part:dup:*')),
     CHECK (NOT (to_link_id GLOB 'alt:*' OR to_link_id GLOB 'dup:*' OR to_link_id GLOB 'hash:*'
@@ -601,17 +603,27 @@ CREATE INDEX queue_by_collection ON queue(collection, id);
 -- (§15.2). Partial, so it holds only what is pending.
 CREATE INDEX queue_pending ON queue(id) WHERE error IS NULL;
 
+-- A collection holding a pending or parked action is not deleted (§14): the
+-- cascade would drop the action, an intent included, with no receipt and no
+-- report. The operator cancels or lets the drain apply each row first.
+CREATE TRIGGER collections_keep_queued BEFORE DELETE ON collections
+WHEN EXISTS (SELECT 1 FROM queue WHERE collection = OLD.id)
+BEGIN
+    SELECT RAISE(ABORT, 'collection holds queued actions');
+END;
+
 -- Cross-source identity lookup (dedup, thread stitching) and refcount navigation.
 CREATE INDEX items_by_object ON items(object_hash);
 CREATE INDEX bindings_by_object ON bindings(base_object);
 -- The collector's scan (§5). Partial, so it holds only what is about to be
 -- collected and is empty at rest.
 CREATE INDEX objects_garbage ON objects(refcount) WHERE refcount <= 0;
--- The other three pointers at an object, so recompute_refcounts reaches every
+-- The other four pointers at an object, so recompute_refcounts reaches every
 -- reference by index rather than scanning items, bindings and queue once per
 -- object.
 CREATE INDEX items_by_conflict_object ON items(conflict_object);
 CREATE INDEX bindings_by_conflict_object ON bindings(conflict_object);
+CREATE INDEX bindings_by_shared_object ON bindings(shared_object);
 CREATE INDEX queue_by_object ON queue(object_hash);
 -- The bindings waiting for a decision (list_conflicted_bindings). Partial, so
 -- it holds only what is outstanding and is empty at rest: a run reports that

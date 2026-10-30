@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a remove staged on a conflicted binding is the decision, and the tombstone pushes against the observed revision",
   "note": "the binding diverged from its remote at r2 (vector 13), the diverging body not fetched yet; the user deletes the contact. The conflict clears and the base adopts r2 with the body it holds, unknown here, so the Remove the next sync derives is gated on what the remote holds and a revival by another source reads Dirty rather than in sync with c1; without this the delete would project Conflict for ever and never push (SYNC.md §7, §3)",
   "store": {

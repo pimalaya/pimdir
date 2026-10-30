@@ -7,7 +7,8 @@
 -- own next edit as a divergence (§13). An existing store's sources agree with
 -- the body they hold, so that body is what the rows already imply. Guarded on
 -- IS NULL, which is every row of a column just added and no row of one already
--- backfilled, so running it twice is a no-op.
+-- backfilled, so running it twice is a no-op. Each value it writes is a pin,
+-- counted by the recompute_refcounts that closes the reconciliation (§5, §6).
 UPDATE bindings SET shared_object =
        (SELECT object_hash FROM items
         WHERE items.collection = bindings.collection AND items.link_id = bindings.link_id)

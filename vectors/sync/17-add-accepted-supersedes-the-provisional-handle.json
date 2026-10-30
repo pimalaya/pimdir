@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "an accepted add moves the binding onto the assigned handle with the reported revision as its base",
   "note": "a pending create derives an Add carrying the body; Accepted with an assigned handle and a revision, the provisional handle is superseded in the same batch and the base is what the server now holds (SYNC.md §5, §10)",
   "store": {

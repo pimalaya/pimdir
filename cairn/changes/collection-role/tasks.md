@@ -15,9 +15,9 @@ change: collection-role
 
 ## Left to io-pimdir
 
-- [ ] Re-vendor the schema and the statements; reconcile the column, the index and both triggers on open.
-- [ ] `set_collection_role` on the owner, `role` on `PimdirCollection`, `NULL` on a store not reconciled yet.
-- [ ] Tests: the reconcile, the setter, the move, the feed.
+- [x] Re-vendor the schema and the statements; reconcile the column, the index and both triggers on open. io-pimdir vendors both and reconciles on open (checked 2026-10-30, ledger-housekeeping-2026-10-30).
+- [x] `set_collection_role` on the owner, `role` on `PimdirCollection`, `NULL` on a store not reconciled yet. io-pimdir src/client.rs `set_collection_role`, the reader's collection `role` (src/client/reader.rs) (checked 2026-10-30).
+- [x] Tests: the reconcile, the setter, the move, the feed. io-pimdir tests/collection_role.rs (checked 2026-10-30).
 
 ## Left to neverest
 

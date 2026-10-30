@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a superseding create keeping the superseded identity names the member it may be moved from",
   "note": "task todo-inbox was filed from tasks-a into tasks-b with its UID kept, an add carrying supersedes; tasks-b's sync pushes the create naming tasks-a's binding, which a connector able to move delivers by a MOVE then a write of the body, so a server keeping one UID per account never holds it twice; the move answered, the create lands under the moved member's handle (STORAGE §15.3, SYNC.md §3 and §4)",
   "store": {

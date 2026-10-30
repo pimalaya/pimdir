@@ -2,8 +2,9 @@
 --
 -- Applied to index.db, beside pimdir.db, by the same runner shape (§3), the
 -- index's own `PRAGMA user_version` set to 1 on success. Derived state: a
--- mismatch is a rebuild, never a migration. Requires SQLite >= 3.43 for
--- contentless_delete, above the store's floor (§2).
+-- mismatch, of the version or of the shape this text gives (§2), is a rebuild,
+-- never a migration. Requires SQLite >= 3.43 for contentless_delete, above
+-- the store's floor (§2).
 
 -- Index-level metadata: exactly one row.
 CREATE TABLE index_meta (
@@ -16,6 +17,10 @@ CREATE TABLE index_meta (
     -- at purge count store_purges.
     store_change  INTEGER NOT NULL DEFAULT 0,
     store_purges  INTEGER NOT NULL DEFAULT 0,
+    -- The store_change of the last completed pass, which a batch never moves:
+    -- a collection stamped above it may have left placements under an old id
+    -- for the key reconciliation (§4), a rename a cut pass folded past.
+    store_reconciled INTEGER NOT NULL DEFAULT 0,
     -- The window occurrences are expanded within (§7), RFC 3339 Z.
     horizon_start TEXT    NOT NULL DEFAULT '',
     horizon_end   TEXT    NOT NULL DEFAULT '',
@@ -34,7 +39,10 @@ CREATE TABLE index_meta (
 CREATE TABLE object (
     id     INTEGER PRIMARY KEY,
     hash   TEXT    NOT NULL UNIQUE,
-    status TEXT    NOT NULL                  -- 'ok' | 'encrypted' | 'unparseable' (§6)
+    status TEXT    NOT NULL,                 -- 'ok' | 'encrypted' | 'unparseable' (§6)
+    -- 1 when the extraction wrote any text into the attachment field (§6), so
+    -- has:attachment reads a calendar item by a seek, the FTS rows keeping none.
+    attachment INTEGER NOT NULL CHECK (attachment IN (0, 1))
 ) STRICT;
 
 -- The text of a body, by field (§6): the seven fields, then one column per

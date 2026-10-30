@@ -1,0 +1,39 @@
+{
+  "v": 1,
+  "label": "a second source's other message under a Message-ID the store holds is minted, never merged",
+  "note": "source a holds basic-1@example.org, the stand-up notes. Source b lists a member stating the same Message-ID whose summary names another message: another subject, sender and date. One identity is one message only when the summaries agree, so the member is named under the key minted over b's handle, an item of its own with a seq of its own, and a's message is left as it was, offered to b as any item b lacks whose body the store holds (SYNC.md §3), its Add pushed by the round's last page and left pending, the remote reporting no outcome; the same message served differently, agreeing on subject, date and sender, joins the held item as vector 09's does (SYNC.md §6, §9; STORAGE §9)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },
+    "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "a", "handle": "10", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1, "shared_object": "m1" }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [{ "collection": "INBOX", "source": "a", "checkpoint": "a1" }, { "collection": "INBOX", "source": "b", "checkpoint": "b0" }]
+  },
+  "run": { "verb": "sync", "collection": "INBOX", "source": "b", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual" } },
+  "remote": { "snapshot": { "items": [{ "handle": "77", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-reused-message-id.eml" } }], "vanished": [], "complete": true, "checkpoint": "b1" }, "fetch": {} },
+  "expect": {
+    "pushes": [{ "kind": "Add", "handle": "\u0001basic-1@example.org", "link_id": "basic-1@example.org", "flags": ["\\Seen"], "origin": null, "object": "m1", "key": "8fb3856ec86e0cec" }],
+    "outcomes": [],
+    "events": [{ "kind": "Added", "handle": "77" }],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 },
+        { "collection": "INBOX", "link_id": "dup:basic-1@example.org#77", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-03T09:00:00Z" }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "a", "handle": "10", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1, "shared_object": "m1" },
+        { "collection": "INBOX", "link_id": "dup:basic-1@example.org#77", "source": "b", "handle": "77", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1 }
+      ],
+      "summaries": [
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } },
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "dup:basic-1@example.org#77", "row": { "message_id": "basic-1@example.org", "in_reply_to": [], "subject": "Budget review", "sender": "dan@example.net", "sender_name": "Dan Example", "date": "2026-08-03T09:00:00Z", "size": 266, "attachment": 0, "invitation": null } }
+      ],
+      "sources": [{ "collection": "INBOX", "source": "a", "checkpoint": "a1" }, { "collection": "INBOX", "source": "b", "checkpoint": "b1" }]
+    }
+  }
+}

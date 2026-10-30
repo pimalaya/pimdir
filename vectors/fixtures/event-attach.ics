@@ -1,0 +1,13 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//pimalaya//pimdir vectors//EN
+BEGIN:VEVENT
+UID:event-attach@example.org
+DTSTAMP:20260201T000000Z
+DTSTART:20260302T090000Z
+DTEND:20260302T100000Z
+SUMMARY:Quarterly review
+ATTACH;FILENAME=agenda.odt;FMTTYPE=application/vnd.oasis.opendocument.tex
+ t:https://example.org/agenda.odt
+END:VEVENT
+END:VCALENDAR

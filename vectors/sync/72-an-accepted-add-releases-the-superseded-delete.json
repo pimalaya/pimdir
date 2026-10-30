@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "once the superseding create is accepted, the superseded tombstone pushes a plain delete",
   "note": "tasks-b's create was accepted, so its binding has a base and no pending create of todo-inbox's supersession remains: the hold lifts and tasks-a's tombstone derives a Remove with no destination, the identities differing; accepted, the binding goes and the row is retained (STORAGE §11, §15.3, SYNC.md §5)",
   "store": {

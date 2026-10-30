@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a member the source no longer lists is retained, not deleted",
   "note": "a complete enumeration without the handle is a remote delete; the last binding goes and the row is retained with its body (STORAGE §11, SYNC.md §10). retained_at is stamped by the clock and not compared",
   "store": {

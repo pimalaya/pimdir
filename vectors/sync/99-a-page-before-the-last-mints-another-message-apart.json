@@ -1,0 +1,48 @@
+{
+  "v": 1,
+  "label": "a page before the last keys another message under a held Message-ID apart, its load seeing only its own source's holders",
+  "note": "vector 93's member, listed by the first page of b's round rather than by its last: that page loads the Handles of its members and the Links of the hints it carries, which answer b's holders alone (SYNC.md §10), so the engine does not see a's item under basic-1@example.org and cannot compare the summaries. The write keys it apart all the same, the member's subject, date and sender disagreeing with the held item's: an item of its own under the key minted over b's handle, a's message left as it was. The run is cut after that page: the round stays open on its cursor and nothing is pushed (SYNC.md §5, §6, §10; STORAGE §9)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },
+    "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "a", "handle": "10", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1, "shared_object": "m1" }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [{ "collection": "INBOX", "source": "a", "checkpoint": "a1" }]
+  },
+  "run": { "verb": "sync", "collection": "INBOX", "source": "b", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual" } },
+  "remote": {
+    "pages": [
+      { "items": [{ "handle": "77", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-reused-message-id.eml" } }], "vanished": [], "last": false, "cursor": "p1", "checkpoint": "b1" }
+    ],
+    "interrupted_after": 1,
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [{ "kind": "Added", "handle": "77" }],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 },
+        { "collection": "INBOX", "link_id": "dup:basic-1@example.org#77", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-03T09:00:00Z" }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "a", "handle": "10", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1, "shared_object": "m1" },
+        { "collection": "INBOX", "link_id": "dup:basic-1@example.org#77", "source": "b", "handle": "77", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 }
+      ],
+      "summaries": [
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } },
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "dup:basic-1@example.org#77", "row": { "message_id": "basic-1@example.org", "in_reply_to": [], "subject": "Budget review", "sender": "dan@example.net", "sender_name": "Dan Example", "date": "2026-08-03T09:00:00Z", "size": 266, "attachment": 0, "invitation": null } }
+      ],
+      "sources": [
+        { "collection": "INBOX", "source": "a", "checkpoint": "a1" },
+        { "collection": "INBOX", "source": "b", "checkpoint": null, "round": 1, "round_open": true, "round_cursor": "p1", "round_checkpoint": "b1", "covered": false }
+      ]
+    }
+  }
+}

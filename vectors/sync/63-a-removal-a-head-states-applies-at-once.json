@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a removal a delta head states applies at once, and a flag change it lists is pulled, the round staying open on its cursor",
   "note": "the round's first page named 30 and 29; since then the source removed 29 and marked 30 read. The run lists the round's head from c1 and is cut before the next page: 29 is dropped Deleted at once, as a delta's vanished handle is, not at the round's close; 15, which the store does not bind, is nothing to drop; 30's flag is pulled. The head's checkpoint c2 becomes the round's, the cursor p1 stays, no delete is inferred from an absence and the round is still open (SYNC.md §4, §5)",
   "store": {

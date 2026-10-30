@@ -1,0 +1,42 @@
+{
+  "v": 1,
+  "label": "under prefer-existing an item conflict fetched late keeps the shared body and retains the fetched one",
+  "note": "the case of 90 under prefer-existing: once a's upgrade fetches c2, the policy keeps c3 and the item's conflict clears, c2, the body it refused, kept as a retained item under the key minted over a's handle and reported Overruled. a's base takes c2 at r2, what its server holds, and its shared_object moves to c3, the body the item settled on, so a owes c3 and pushes it on its next sync (SYNC.md §6, §9; STORAGE §11)",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "prefer-existing" }],
+    "objects": { "c1": { "body": "fixtures/card-basic.vcf" }, "c2": { "body": "fixtures/card-basic-edited.vcf" }, "c3": { "body": "fixtures/card-basic-renamed.vcf" } },
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c3", "level": 2, "deleted": 0, "conflicted": 1, "conflict_object": null }],
+    "bindings": [
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": null, "base_revision": "r2", "base_present": 1, "shared_object": "c1" },
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "b", "handle": "b.vcf", "base_flags": [], "base_object": "c3", "base_revision": "s2", "base_present": 1, "shared_object": "c3" }
+    ],
+    "sources": [
+      { "collection": "Contacts", "source": "a", "checkpoint": "a2" },
+      { "collection": "Contacts", "source": "b", "checkpoint": "b1" }
+    ]
+  },
+  "run": { "verb": "upgrade", "collection": "Contacts", "source": "a", "tier": "Full", "handles": ["a.vcf"] },
+  "remote": {
+    "snapshot": null,
+    "fetch": { "a.vcf": { "Full": { "body": "fixtures/card-basic-edited.vcf", "revision": "r2" } } }
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [{ "kind": "Overruled", "handle": "a.vcf", "link_id": "dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#a.vcf" }],
+    "store": {
+      "items": [
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c3", "level": 2, "deleted": 0, "conflicted": 0, "conflict_object": null },
+        { "collection": "Contacts", "link_id": "dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#a.vcf", "seq": 2, "flags": [], "object": "c2", "level": 2, "deleted": 1, "retained": true, "retained_by": "a" }
+      ],
+      "bindings": [
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": "c2", "base_revision": "r2", "base_present": 1, "shared_object": "c3" },
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "b", "handle": "b.vcf", "base_flags": [], "base_object": "c3", "base_revision": "s2", "base_present": 1, "shared_object": "c3" }
+      ],
+      "sources": [
+        { "collection": "Contacts", "source": "a", "checkpoint": "a2" },
+        { "collection": "Contacts", "source": "b", "checkpoint": "b1" }
+      ]
+    }
+  }
+}

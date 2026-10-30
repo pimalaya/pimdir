@@ -1,0 +1,36 @@
+{
+  "v": 1,
+  "label": "an add accepted without a handle stays a pending create until a page lands it",
+  "note": "an IMAP server without UIDPLUS (RFC 4315) answers an APPEND with no UID, so the connector reports the add Accepted and assigns no handle. Nothing names the member yet: the binding keeps its provisional handle and no base, no Superseded drop is written and no Created is reported, and the run pushes it no second time. The next listing names the member, and the page naming it lands the create as vector 21 does (SYNC.md §4, §5, §6)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": { "m1": { "body": "fixtures/mail-recent.eml" } },
+    "items": [{ "collection": "INBOX", "link_id": "recent-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+    "bindings": [{ "collection": "INBOX", "link_id": "recent-1@example.org", "source": "imap", "handle": "\u0001recent-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c0" }]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "INBOX",
+    "source": "imap",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual"
+    }
+  },
+  "remote": {
+    "snapshot": { "items": [], "vanished": [], "complete": true, "checkpoint": "c1" },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [{ "kind": "Add", "handle": "\u0001recent-1@example.org", "link_id": "recent-1@example.org", "flags": ["\\Seen"], "origin": null, "object": "m1", "key": "25aa45a9b57e700c" }],
+    "outcomes": [{ "handle": "\u0001recent-1@example.org", "outcome": "Accepted", "assigned": null, "revision": null }],
+    "events": [],
+    "store": {
+      "items": [{ "collection": "INBOX", "link_id": "recent-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+      "bindings": [{ "collection": "INBOX", "link_id": "recent-1@example.org", "source": "imap", "handle": "\u0001recent-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }],
+      "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+    }
+  }
+}

@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a listed member is named by the page that lists it",
   "note": "a member arrives with its meta, so the page's write keys it (STORAGE §9) and inserts the item at level 1, its binding with a base equal to what the source reported, and the summary and address rows of Annex A.1 read without the body; the attachment mark is the top-level Content-Type's, text/plain here. A complete one-page enumeration is a round: it stamps the binding and closes with the coverage of no scope (SYNC.md §4, §5)",
   "store": {

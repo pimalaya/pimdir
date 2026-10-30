@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pimalaya/pimdir/vectors/schema/search-store.schema.json",
+  "title": "The search fixture store (SEARCH.md section 11), vectors/search/store.json",
+  "type": "object",
+  "required": ["v", "collections", "items", "references"],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "const": 1 },
+    "note": { "type": "string" },
+    "collections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "account", "kind"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "account": { "type": ["string", "null"] },
+          "kind": { "type": "string" },
+          "role": { "type": "string" },
+          "sources": { "type": "array", "items": { "type": "object" } }
+        }
+      }
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["collection", "seq", "link_id", "flags"],
+        "additionalProperties": false,
+        "properties": {
+          "collection": { "type": "string" },
+          "seq": { "type": "integer" },
+          "link_id": { "type": "string" },
+          "flags": { "type": "array", "items": { "type": "string" } },
+          "fixture": { "type": "string" },
+          "summary": { "type": "object" }
+        },
+        "oneOf": [{ "required": ["fixture"] }, { "required": ["summary"] }]
+      }
+    },
+    "references": {
+      "type": "array",
+      "items": { "type": "object", "required": ["from_kind", "from_link_id", "to_kind", "to_link_id", "role", "origin"], "additionalProperties": false, "properties": { "from_kind": { "type": "string" }, "from_link_id": { "type": "string" }, "to_kind": { "type": "string" }, "to_link_id": { "type": "string" }, "role": { "type": "string" }, "origin": { "enum": ["auto", "user"] } } }
+    }
+  }
+}

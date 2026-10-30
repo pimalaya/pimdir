@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "both sides edited under the manual policy marks the binding conflicted",
   "note": "the local body left the base and the remote revision did too; Manual records the observed revision on the binding, asks for the diverging body by leaving conflict_object empty, and touches neither the item nor the base (SYNC.md §5)",
   "store": {

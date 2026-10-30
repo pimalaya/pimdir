@@ -8,7 +8,7 @@ change: cross-implementation-vectors
 ## Landed in this repository
 
 - [x] `vectors/objects.json`: body to object name for `blake3` and `sha256-128`, with the sharded blob path, the empty body, and the RFC 4648 §10 encoding vectors.
-- [x] `vectors/meta.json` and `vectors/fixtures/`: 17 cases over the three kinds, including every case Annex A hedges (no `FN`; unparseable `Date`; zoned `DTSTART` on a fold and on a gap; `VTODO` with `DUE` and no `DTSTART`).
+- [x] `vectors/meta.json` (now vectors/summaries.json, renamed with the typed summaries; noted at ledger-housekeeping-2026-10-30) and `vectors/fixtures/`: 17 cases over the three kinds, including every case Annex A hedges (no `FN`; unparseable `Date`; zoned `DTSTART` on a fold and on a gap; `VTODO` with `DUE` and no `DTSTART`).
 - [x] Author the expected values from the algorithm and the prose, not by running either implementation.
 - [x] SPEC.md §16: a normative section naming vectors/ as part of the format.
 - [x] SPEC.md §5: say what an object name *is*, which authoring the vectors showed it never had (digest width, truncation, alphabet, what the shard prefix comes off).

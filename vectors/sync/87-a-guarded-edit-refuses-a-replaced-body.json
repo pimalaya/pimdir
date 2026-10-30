@@ -1,0 +1,28 @@
+{
+  "v": 1,
+  "label": "an edit stating the body it replaced is refused once another write replaced that body",
+  "note": "two producers read the card at c1 and each queued an update stating if_match c1; the first applied and the item holds c2. The second, c3 over c1, is refused and stages nothing, which the drain parks naming both bodies, rather than applied over c2 without a merge (SYNC.md §7; STORAGE §15.3)",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
+    "objects": { "c1": { "body": "fixtures/card-basic.vcf" }, "c2": { "body": "fixtures/card-basic-edited.vcf" }, "c3": { "body": "fixtures/card-basic-renamed.vcf" } },
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c2", "level": 2, "deleted": 0 }],
+    "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": "c2", "base_revision": "r2", "base_present": 1, "shared_object": "c2" }],
+    "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d1" }]
+  },
+  "run": { "verb": "mutate", "collection": "Contacts", "source": "dav", "mutation": { "kind": "Edit", "seq": 1, "object": "c3", "if_match": "c1" } },
+  "remote": {
+    "snapshot": null,
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "failed": true,
+    "store": {
+      "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c2", "level": 2, "deleted": 0 }],
+      "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": "c2", "base_revision": "r2", "base_present": 1, "shared_object": "c2" }],
+      "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d1" }]
+    }
+  }
+}

@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "an explicit removal applies whatever the date",
   "note": "10 predates the coverage and is kept from an earlier, wider scope; the scope is inside the coverage, so the run is a delta from c1, and the delta names 10 vanished (an IMAP VANISHED, a Graph @removed). Absence says nothing out of scope, a removal the source states says it everywhere: dropped Deleted, retained, reported. The coverage stays (SYNC.md §5)",
   "store": {

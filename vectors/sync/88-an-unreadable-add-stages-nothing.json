@@ -1,0 +1,27 @@
+{
+  "v": 1,
+  "label": "an add whose body cannot be read fails and stages nothing",
+  "note": "a producer's add names m1, whose row is held and whose blob file is not. The add cannot derive its summary nor push anything, so it fails, staging no item, and the drain retries the row, then parks it, never applying it without its body (SYNC.md §7; STORAGE §15.2)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": { "m1": { "body": "fixtures/mail-basic.eml", "blob": false } },
+    "items": [],
+    "bindings": [],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c0" }]
+  },
+  "run": { "verb": "mutate", "collection": "INBOX", "source": "imap", "mutation": { "kind": "Add", "flags": [], "object": "m1" } },
+  "remote": {
+    "snapshot": null,
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "failed": true,
+    "store": {
+      "items": [],
+      "bindings": []
+    }
+  }
+}

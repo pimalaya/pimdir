@@ -1,0 +1,38 @@
+{
+  "v": 1,
+  "label": "a pending create whose body fails its name pushes nothing",
+  "note": "the store holds c1 under its name, but the file's bytes no longer hash to it (corrupt), as after a bad sector or a truncated copy of the directory. The body is read whole to push the Add and fails verification, so it reads as no body at all: nothing is pushed, the create stays pending under its provisional handle, and the engine reports it. The checkpoint lands as usual (STORAGE §7, SYNC.md §5)",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
+    "objects": {
+      "c1": { "body": "fixtures/card-basic.vcf", "corrupt": true }
+    },
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0 }],
+    "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "\u0001urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }],
+    "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d0" }]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "Contacts",
+    "source": "dav",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual"
+    }
+  },
+  "remote": {
+    "snapshot": { "items": [], "vanished": [], "complete": true, "checkpoint": "d1" },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0 }],
+      "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "\u0001urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }],
+      "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d1" }]
+    }
+  }
+}

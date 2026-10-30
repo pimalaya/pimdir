@@ -1,0 +1,47 @@
+{
+  "v": 1,
+  "label": "a page that is not the last and carries no cursor fails the run, closing nothing",
+  "note": "the first page lands as any page does, stamping 12 and recording p1 and c1. The second says it is not the last and hands no cursor, so the round can neither resume from it nor close on it: the engine refuses it before its write and the run fails, the round open at p1. Closing on it would have dropped 10, which no page reached (SYNC.md §4, §5)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {},
+    "items": [
+      { "collection": "INBOX", "link_id": "recent-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z" },
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" }
+    ],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "imap", "handle": "12", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": null },
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": null }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "recent-1@example.org", "row": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 241, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c0", "round": 0, "round_open": false, "round_since": null, "round_until": null, "round_cursor": null, "round_checkpoint": null, "round_band": false, "covered": false, "covered_since": null, "covered_until": null }]
+  },
+  "run": { "verb": "sync", "collection": "INBOX", "source": "imap", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual" } },
+  "remote": {
+    "pages": [
+      { "items": [{ "handle": "12", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-recent.eml" } }], "vanished": [], "last": false, "cursor": "p1", "checkpoint": "c1" },
+      { "items": [], "vanished": [], "last": false, "cursor": null, "checkpoint": null }
+    ],
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "failed": true,
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z" },
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "imap", "handle": "12", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 },
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": null }
+      ],
+      "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c0", "round": 1, "round_open": true, "round_since": null, "round_until": null, "round_cursor": "p1", "round_checkpoint": "c1", "round_band": false, "covered": false, "covered_since": null, "covered_until": null }]
+    }
+  }
+}

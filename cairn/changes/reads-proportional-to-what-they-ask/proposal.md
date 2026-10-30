@@ -1,7 +1,7 @@
 ---
 cairn: change
 id: reads-proportional-to-what-they-ask
-status: active
+status: landed
 created: 2026-10-18
 ---
 
@@ -24,6 +24,15 @@ The P1/P2 performance audit of 2026-10-11 (synthetic stores of 10k, 100k and 1M 
    - a store-side FTS5 external-content table over `mail_summary(subject, sender, sender_name)`, trigram tokenizer, kept by triggers, with search_mail and a count through `MATCH`. It makes FTS5 a store requirement (STORAGE §4.1 asks for none today) and puts text in the store, which SEARCH §1 leaves to the index;
    - or the store keeps `LIKE` under the sargable bound and a page cap, and the text half moves to SEARCH.md's index once io-pimdir implements it (search-milestones, M4).
 4. **The plans are asserted** in checks/invariants.sh, bound to a three-collection list, a mid keyset and a floor, no `ANALYZE`: a cursor page reads `items_by_sort_global (sort_key>? AND sort_key<?)`; every page statement carries its bound in the index constraint; the counts with every chip null plan no `mail_summary` access and `items_by_sort` covering; search_mail scans no `items_by_sort_global` once item 3 lands.
+
+## Decided (2026-10-30)
+
+The pimdir stable-release plan (edit 7) settled the two choices this change waited on:
+
+- **Flag spelling**: a flag set is written as `json()` writes it, sorted by code point (delta.md, STORAGE §13), so `\Seen` is found by its bytes and no `seen` column is added.
+- **No store-side FTS5**: item 3 takes its second form. The store keeps `LIKE` under the sargable bound, FTS5 stays no store requirement, and text search is SEARCH.md's index.
+
+The statement rewrites and the plan asserts moved to keyset-reads-seek-their-bound on 2026-10-30, so this change lands the two decisions alone: they are what the store's text fixes, and the rewrites change no name, parameter or result column, a patch (STORAGE §4.4).
 
 ## Consequence
 

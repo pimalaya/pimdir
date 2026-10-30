@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pimalaya/pimdir/vectors/schema/summaries.schema.json",
+  "title": "Summaries (STORAGE.md section 16, Annex A), vectors/summaries.json",
+  "type": "object",
+  "required": ["v", "conventions", "fixtures_are_crlf", "cases"],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "const": 2 },
+    "conventions": { "type": "string" },
+    "fixtures_are_crlf": { "const": true },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["label", "kind", "fixture", "body", "link_id", "table", "summary", "addresses", "sort_key"],
+        "additionalProperties": false,
+        "properties": {
+          "label": { "type": "string" },
+          "kind": { "enum": ["message/rfc822", "text/vcard", "text/calendar", "application/octet-stream"] },
+          "fixture": { "type": "string" },
+          "note": { "type": "string" },
+          "body": {
+            "type": "object",
+            "required": ["len", "blake3", "sha256-128"],
+            "additionalProperties": false,
+            "properties": { "len": { "type": "integer" }, "blake3": { "type": "string" }, "sha256-128": { "type": "string" } }
+          },
+          "hint": { "type": "string" },
+          "handle": { "type": "string" },
+          "link_id": { "type": "string" },
+          "table": { "enum": ["mail_summary", "contact_summary", "event_summary", "task_summary", "journal_summary"] },
+          "summary": { "type": "object" },
+          "meta_attachment": { "enum": [0, 1] },
+          "attachments": { "type": "array" },
+          "addresses": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["role", "position", "address", "name"],
+              "additionalProperties": false,
+              "properties": { "role": { "type": "string" }, "position": { "type": "integer" }, "address": { "type": "string" }, "name": { "type": ["string", "null"] } }
+            }
+          },
+          "sort_key": { "type": "string" }
+        }
+      }
+    }
+  }
+}

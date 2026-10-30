@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a remove staged on a pending create withdraws it, and the item is retained",
   "note": "the contact was created offline and never pushed; the user deletes it. Nothing is owed to the source, so the binding goes in the mutation's own write and the row is retained, rather than a tombstone left for a sync to drop, which a collection no sync visits would keep for ever (SYNC.md §7, §3, STORAGE §11)",
   "store": {

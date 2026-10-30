@@ -43,11 +43,15 @@
           ./SYNC.md
           ./SEARCH.md
           ./GUIDE.md
+          ./GTD.md
           ./README.md
         ];
       };
 
-      python = pkgs: pkgs.python3.withPackages (ps: [ ps.blake3 ]);
+      python = pkgs: pkgs.python3.withPackages (ps: [
+        ps.blake3
+        ps.jsonschema
+      ]);
     in
     {
       checks = eachSystem (pkgs: {

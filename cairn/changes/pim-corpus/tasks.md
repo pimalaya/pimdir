@@ -15,3 +15,4 @@ change: pim-corpus
 - [ ] A seeder independent of every system under test; a run-scoped header for cleanup
 - [ ] Vendor the ical-rs and vcard-rs corpora rather than generate them
 - [ ] First consumers: neverest against local server containers, io-pimdir and the Android store benches on the `count` profile
+- [ ] Move this change out of pimdir to the corpus's own repository (decided 2026-10-30, ledger-housekeeping-2026-10-30)

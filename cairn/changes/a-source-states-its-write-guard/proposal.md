@@ -1,7 +1,7 @@
 ---
 cairn: change
 id: a-source-states-its-write-guard
-status: draft
+status: landed
 created: 2026-10-18
 ---
 
@@ -20,6 +20,10 @@ One constraint has no name. An `Update` and a `Remove` are "gated on `if_match` 
 - Annex B.1: a guard capability per mutable kind (`contacts.card.guard`, `calendar.item.guard`, `file.guard` if files sync), `full` when every update and remove is gated on the revision, `partial` with a detail when only some are, `none` when writes are unconditional.
 - SYNC §4: a connector to a source declaring `none` MUST NOT claim a gated push; SYNC §5: the engine, before pushing a content change to such a source, re-reads the member's revision in the same run and treats a moved one as a remote edit.
 - A producer MAY warn on an edit to an item held by an unguarded source.
+
+## Decided (2026-10-30)
+
+The pimdir stable-release plan (edit 7): the general capability rule comes first and the guard names later. The rule landed as a-capability-added-later-is-read-where-stated (storage-draft-05): a capability added after the base set is read only where a row states it, so the guard names, when they arrive after v1, read an older owner's declaration as stating nothing rather than `none`. The guard names themselves wait. Edit 4 of the same plan (a-merge-keeps-every-body) states the unguarded push window in SYNC meanwhile.
 
 ## Open questions
 

@@ -1,0 +1,16 @@
+---
+cairn: log
+change: sync-gaps-io-pimdir-found
+date: 2026-10-30
+---
+
+# Three sync gaps io-pimdir found
+
+io-pimdir's engine audit and the neverest port (io-pimdir logs sync-audit-2026-10-30 and the-engine-follows-sync-draft-05, 2026-10-30) met three places sync-draft-05 was silent or unenforceable. Lands in sync-draft-05 itself, no number bump.
+
+- **SYNC §6, a mutable arrival carrying no body landing a pending create** (normative, audit item S8): the prose gave the base the listed revision and "the body when carried", silent on none. The arrival is the both-changed case with its incoming body unknown: nothing read what the server holds at that revision, which another client may have edited after the add landed, and a push gated on that revision guards nothing changed before the listing. Whatever the source's policy the binding is recorded as `Manual` records a divergence (conflicted at the listed revision, no `conflict_object`, the base at that revision naming no body), reported `Conflicted` beside the landing's `Created`, nothing pushed; the upgrade's fetch clears it when the body equals the staged one, else the policy settles it as for a carried body, as §9 already does for an item conflict ("no policy chooses between a body and one nobody has read"). §6's conflict upgrade now says an equal body clears, as §5 already did. Guarded by vectors 97 (the landing, under `prefer-local`) and 98 (the upgrade fetching the staged body clears).
+- **SYNC §8, a rekey reusing a gone handle** (normative wording, already io-pimdir's behaviour): every drop, `Rekeyed` or `Deleted`, precedes every upsert, and an old binding no member resolves to by link id is dropped `Deleted` whether or not the new space reuses its handle. The text said "a handle the new space lacks", which read by handle keeps a gone member whose handle a server numbering from 1 again reuses, and an upsert before that drop folds the carried member into the gone one's item. Guarded by vector 95 (UIDs 1 to 3 renumbered 1 and 2, the first message gone). Vector 96 pins the match order among copies of one hint: revision first, against handle order, then handle order among copies at one revision; the vector format carries no listed body, so the body criterion between them is not held by a vector.
+- **SYNC §10, the write keys another message apart** (normative): a `Links` load answers this source's holders alone, so a page before the last, a head and an upgrade cannot see another source's item under the hint, and §6's rule for a reused `Message-ID` is enforced by the write, keying the upsert over its handle whichever step named it; an engine whose load showed the item mints it first, alike. This is where io-pimdir enforces it (src/client/write.rs). STORAGE §9's branch points at it. Guarded by vector 99 (vector 93's member listed by a page before the last).
+- **GUIDE §5, §11** (informative) follow.
+
+io-pimdir's tests/vectors_sync.rs passes 95, 96, 98 and 99 and fails 97 ("events differ": no `Conflicted`; its binding lands with `base_object` c1 at r1, unconflicted). io-pimdir is wrong there: its base claims the server holds the staged body at r1, which nothing read, so an edit another client made before the listing is never fetched, and a later local edit pushes over it gated on r1. `nix flake check path:$PWD` passes.

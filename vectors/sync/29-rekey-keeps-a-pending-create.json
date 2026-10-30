@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a rekey carries a pending create untouched, no handle space ever having held its provisional handle",
   "note": "the source renumbered a.vcf into b.vcf; the based binding follows through a Rekeyed drop, the baseless one stays as it is rather than being dropped Deleted for a handle the new space lacks, and the generation moves once (SYNC.md §8)",
   "store": {

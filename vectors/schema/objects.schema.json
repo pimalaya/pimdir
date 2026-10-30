@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pimalaya/pimdir/vectors/schema/objects.schema.json",
+  "title": "Object names (STORAGE.md section 16), vectors/objects.json",
+  "type": "object",
+  "required": ["v", "algorithms", "base32", "objects"],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "const": 1 },
+    "algorithms": { "type": "object" },
+    "base32": {
+      "type": "object",
+      "required": ["cases"],
+      "properties": {
+        "cases": { "type": "array", "items": { "type": "object", "required": ["input_hex", "input_utf8", "base32"] } }
+      }
+    },
+    "objects": {
+      "type": "array",
+      "items": { "type": "object", "required": ["label", "body_len", "blake3", "sha256-128"] }
+    }
+  }
+}

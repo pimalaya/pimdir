@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "the body replaces the size the source stated with its own octets",
   "note": "11 was named at Meta with the 260 its source stated; the Full fetch reads 241 octets and writes them over it (STORAGE Annex A.1, SYNC.md §6)",
   "store": {

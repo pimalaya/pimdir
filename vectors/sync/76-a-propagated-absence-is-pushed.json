@@ -1,0 +1,58 @@
+{
+  "v": 1,
+  "label": "the tombstone an absence on one source left is pushed to the other",
+  "note": "the store 75 left: basic-1 deleted by imap's closed round, still bound by jmap. jmap's round still lists Mb, but the item is a tombstone, so jmap pushes the Remove, and the item, bound by nobody once it is accepted, is retained. jmap holds no coverage, so its run opens its first round and stamps Ma with its id, as vector 75 stamps imap's 12. A Remove derived from a tombstone the store holds, whichever source's delete left it (SYNC.md §5, §9)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {},
+    "items": [
+      { "collection": "INBOX", "link_id": "recent-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z" },
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 1, "sort_key": "2026-08-01T10:00:00Z" }
+    ],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "imap", "handle": "12", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 },
+      { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "jmap", "handle": "Ma", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": null },
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "jmap", "handle": "Mb", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": null }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "recent-1@example.org", "row": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 241, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [
+      { "collection": "INBOX", "source": "imap", "checkpoint": "c1", "round": 1, "round_open": false, "round_since": null, "round_until": null, "round_cursor": null, "round_checkpoint": null, "round_band": false, "covered": true, "covered_since": null, "covered_until": null },
+      { "collection": "INBOX", "source": "jmap", "checkpoint": "j1" }
+    ]
+  },
+  "run": { "verb": "sync", "collection": "INBOX", "source": "jmap", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual" } },
+  "remote": {
+    "snapshot": {
+      "items": [
+        { "handle": "Ma", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-recent.eml" } },
+        { "handle": "Mb", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-basic.eml" } }
+      ],
+      "vanished": [],
+      "complete": true,
+      "checkpoint": "j2"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [{ "kind": "Remove", "handle": "Mb", "key": "8c78900fd3a7cb96" }],
+    "outcomes": [{ "handle": "Mb", "outcome": "Accepted" }],
+    "events": [],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z", "retained": false, "retained_by": null },
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 1, "sort_key": "2026-08-01T10:00:00Z", "retained": true, "retained_by": "jmap" }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "imap", "handle": "12", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 },
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "jmap", "handle": "Ma", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 }
+      ],
+      "sources": [
+        { "collection": "INBOX", "source": "imap", "checkpoint": "c1", "round": 1, "round_open": false, "round_since": null, "round_until": null, "round_cursor": null, "round_checkpoint": null, "round_band": false, "covered": true, "covered_since": null, "covered_until": null },
+        { "collection": "INBOX", "source": "jmap", "checkpoint": "j2" }
+      ]
+    }
+  }
+}

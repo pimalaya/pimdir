@@ -1,7 +1,7 @@
 ---
 cairn: change
 id: a-read-body-is-verified
-status: draft
+status: landed
 created: 2026-10-18
 ---
 
@@ -24,7 +24,14 @@ What is not here: a read trusts the file. §7 makes a store "self-checking" by r
 - STORAGE §7: what an owner does with the bad file (moved aside under a period-prefixed name the collector leaves alone, or unlinked), and that the row is repaired from what the source hands back.
 - No body is pushed to another source without having been verified in the same run.
 
-## Open questions
+## Decided (2026-10-30)
 
-- The cost on large bodies read in part (an attachment opened by range): verify only whole reads, or keep a verified mark per object.
-- Whether an object row whose file is missing and one whose file is wrong are the same state.
+The pimdir stable-release plan (edit 7): no new column. A read verifies only what it reads whole or streams to its end; a body read in part (an attachment opened by range) is not verified, and no verified mark is kept per object, so the schema does not move for it.
+
+## Decided (2026-10-30)
+
+- A missing file and a wrong one are the same state for every reader, the item holding no body. An owner unlinks a wrong file under the staging lock taken exclusively, as the collector would, rather than moving it aside under a period-prefixed name the collector would then leave for ever; the row stays and the next `Full` upgrade fetches the body again.
+
+## Lands in
+
+storage-draft-05 if done before its tag, else the next draft.

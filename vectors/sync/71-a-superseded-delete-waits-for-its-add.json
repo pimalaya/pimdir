@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a tombstone an add superseded pushes no delete while the add's create is pending",
   "note": "task todo-inbox was filed from tasks-a into tasks-b as an add carrying supersedes; tasks-b's create is still pending, its server having refused it or tasks-b not synced yet, so tasks-a's tombstone is held: the listed member derives no Remove, nothing is dropped, and the task stays on the server (STORAGE §15.3, SYNC.md §5)",
   "store": {

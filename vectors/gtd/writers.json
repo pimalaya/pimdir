@@ -1,5 +1,6 @@
 {
-  "note": "The task edits GUIDE.md section 17 states, which every task consumer runs alike. Each case reads `input` (relative to this directory) as bytes, runs `edit` at the instant `now`, and compares with `expect`: `bytes`, a fixture the output equals byte for byte; `unchanged`, the output being the input's bytes and nothing written; `refused`, the edit refused and nothing written; `vtodo` with `names`, for a capture, the unfolded lines the new VTODO holds and the properties it states with any value; `value`, for a reading, the value read verbatim. Informative like the guide, authored from its prose.",
+  "v": 1,
+  "note": "The task edits GTD.md section 1 states, which every task consumer runs alike. Each case reads `input` (relative to this directory) as bytes, runs `edit` at the instant `now`, and compares with `expect`: `bytes`, a fixture the output equals byte for byte; `unchanged`, the output being the input's bytes and nothing written; `refused`, the edit refused and nothing written; `vtodo` with `names`, for a capture, the unfolded lines the new VTODO holds and the properties it states with any value; `value`, for a reading, the value read verbatim. Informative like the guide, authored from its prose.",
   "now": "20261028T090000Z",
   "cases": [
     {

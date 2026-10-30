@@ -170,6 +170,39 @@ purges="$(sql "SELECT purges FROM store_meta;")"
 run owner/delete_garbage_objects
 expect "feed: a collected object counts as a purge" "$(sql "SELECT purges FROM store_meta;")" "$((purges + 1))"
 
+# --- The agreed body stays pinned until its binding agrees again (§5) ------
+
+fresh
+run owner/set_collection_kind ":collection='Cards'" ":account=NULL" ":kind='text/vcard'"
+object c1
+object c2
+item Cards card 1 "'c2'"
+run owner/insert_binding ":collection='Cards'" ":link_id='card'" ":source='a'" ":handle='a.vcf'" \
+    ":base_flags='[]'" ":base_object='c2'" ":base_revision='r2'" ":base_present=1" \
+    ":conflicted=0" ":conflict_revision=NULL" ":conflict_object=NULL" ":shared_object='c2'"
+run owner/insert_binding ":collection='Cards'" ":link_id='card'" ":source='b'" ":handle='b.vcf'" \
+    ":base_flags='[]'" ":base_object=NULL" ":base_revision='r9'" ":base_present=1" \
+    ":conflicted=0" ":conflict_revision=NULL" ":conflict_object=NULL" ":shared_object='c1'"
+run owner/recompute_refcounts
+expect "shared: the body a binding last agreed with is counted, alone" \
+    "$(sql "SELECT refcount FROM objects WHERE hash = 'c1';")|$(run owner/list_garbage_objects)" "1|"
+run owner/set_collection_kind ":collection='Emptied'" ":account=NULL" ":kind='text/vcard'"
+item Emptied card 1
+run owner/insert_binding ":collection='Emptied'" ":link_id='card'" ":source='a'" ":handle='e.vcf'" \
+    ":base_flags='[]'" ":base_object=NULL" ":base_revision='r2'" ":base_present=1" \
+    ":conflicted=0" ":conflict_revision=NULL" ":conflict_object=NULL" ":shared_object='c1'"
+expect "shared: a collection holding only an agreed body holds an object" \
+    "$(run owner/collection_holds_objects ":collection='Emptied'")" "1"
+expect "shared: the agreed body cannot be deleted under it" \
+    "$(sql "DELETE FROM objects WHERE hash = 'c1';" 2>&1 | grep -c 'FOREIGN KEY')" "1"
+run owner/delete_collection ":collection='Emptied'"
+run owner/update_binding ":collection='Cards'" ":link_id='card'" ":source='b'" \
+    ":base_flags='[]'" ":base_object='c2'" ":base_revision='r10'" ":base_present=1" \
+    ":conflicted=0" ":conflict_revision=NULL" ":conflict_object=NULL" ":shared_object='c2'"
+run owner/recompute_refcounts
+expect "shared: once the binding agrees again, the old body falls to the collector" \
+    "$(run owner/list_garbage_objects)|$(sql "SELECT refcount FROM objects WHERE hash = 'c2';")" "c1|5"
+
 # --- A performed intent replaced by the change it leaves (§15.5) ------------
 
 fresh
@@ -211,6 +244,17 @@ run owner/recompute_refcounts
 expect "collection: the cascade's pins are settled by the recompute" \
     "$(sql "SELECT refcount FROM objects WHERE hash = 'h1';")" "0"
 expect "collection: the cascade counts its rows as purges" "$(sql "SELECT purges FROM store_meta;")" "1"
+collection Outbox
+object m9
+run queue/pin_object ":hash='m9'"
+run queue/enqueue_action ":producer='p'" ":collection='Outbox'" ":action='submit'" ":payload='{\"v\":1,\"source\":\"smtp\"}'" ":object_hash='m9'"
+run owner/park_action ":id=1" ":error='refused'"
+expect "collection: a collection holding a parked action is not deleted" \
+    "$(fails owner/delete_collection ":collection='Outbox'" && echo refused)|$(sql "SELECT count(*) FROM queue;")" "refused|1"
+pin="$(run owner/cancel_action ":id=1")"
+run owner/release_pins ":hashes='[\"$pin\"]'"
+run owner/delete_collection ":collection='Outbox'"
+expect "collection: once its actions are cancelled it is" "$(sql "SELECT count(*) FROM collections WHERE id = 'Outbox';")" "0"
 
 # --- A name is a label, not an address (§14) ---------------------------------
 
@@ -252,16 +296,45 @@ expect "role: a direct second holder is refused by the index" \
     "$(sql "DROP TRIGGER collections_role_moves; UPDATE collections SET role = 'inbox' WHERE id = 'Sent';" 2>&1 | grep -c UNIQUE)" "1"
 fresh
 collection INBOX
-expect "role: a value outside the kind's vocabulary is refused" \
-    "$(fails owner/set_collection_role ":collection='INBOX'" ":role='default'" && echo refused)" "refused"
+run owner/set_collection_role ":collection='INBOX'" ":role='snoozed'"
+expect "role: the vocabulary is open, a role it does not list yet is recorded" \
+    "$(sql "SELECT role FROM collections WHERE id = 'INBOX';")" "snoozed"
 run owner/set_collection_kind ":collection='Cal'" ":account=NULL" ":kind='text/calendar'"
 run owner/set_collection_role ":collection='Cal'" ":role='default'"
 expect "role: a calendar is the default one" "$(sql "SELECT role FROM collections WHERE id = 'Cal';")" "default"
 run owner/set_collection_role ":collection='Cal'" ":role=NULL"
-expect "role: a source no longer saying it clears it" "$(sql "SELECT count(*) FROM collections WHERE role IS NOT NULL;")" "0"
-run owner/set_collection_name ":collection='Bare'" ":account=NULL" ":name='Bare'"
-expect "role: an undeclared kind takes none" \
-    "$(fails owner/set_collection_role ":collection='Bare'" ":role='sent'" && echo refused)" "refused"
+expect "role: a source no longer saying it clears it" "$(sql "SELECT count(*) FROM collections WHERE id = 'Cal' AND role IS NOT NULL;")" "0"
+
+# --- Closed vocabularies are held by the schema (§13) -----------------------
+
+fresh
+run owner/set_collection_kind ":collection='Lists'" ":account=NULL" ":kind='text/x-vlist'" >/dev/null 2>&1 || true
+expect "kind: a fifth kind is refused, the collection never declared with it" \
+    "$(sql "SELECT count(*) FROM collections WHERE id = 'Lists';")" "0"
+run queue/ensure_collection ":collection='Bare'" ":account=NULL"
+expect "kind: an undeclared collection is kindless, then takes a kind of the set" \
+    "$(sql "SELECT kind FROM collections WHERE id = 'Bare';")|$(run owner/set_collection_kind ":collection='Bare'" ":account=NULL" ":kind='text/vcard'")$(sql "SELECT kind FROM collections WHERE id = 'Bare';")" "|text/vcard"
+expect "kind: a fifth kind is refused over a declared one, which stays" \
+    "$(fails owner/set_collection_kind ":collection='Bare'" ":account=NULL" ":kind='text/x-vlist'" && echo refused)|$(sql "SELECT kind FROM collections WHERE id = 'Bare';")" "refused|text/vcard"
+expect "level: the ladder is 1 and 2, an earlier draft's 0 refused" \
+    "$(fails owner/insert_item ":collection='Bare'" ":link_id='a'" ":seq=1" ":flags='[]'" ":object_hash=NULL" ":sort_key=''" ":level=0" ":deleted=0" ":conflicted=0" ":conflict_object=NULL" && echo refused)" "refused"
+expect "vocabulary: conflict and support outside their sets are refused" \
+    "$(sql "UPDATE collections SET conflict = 'newest' WHERE id = 'Bare';" 2>&1 | grep -c CHECK)$(fails owner/set_capability ":account=NULL" ":source='s'" ":collection=NULL" ":capability='mail.message.add'" ":support='some'" ":detail=NULL" && echo refused)" "1refused"
+
+# --- A migration stamps its version; a revision is never lowered (§6) -------
+
+rm -f "$dir/pimdir.db"
+sqlite3 "$dir/pimdir.db" "BEGIN; $(cat "$root/migrations/storage/0001_init.sql") PRAGMA user_version = 1; COMMIT;"
+run owner/init_store_meta ":version=1" ":hash_algo='blake3'" ":derivation=2"
+expect "version: init_store_meta stamps version 1 and the creator's Annex A revision" \
+    "$(run read/load_store_meta | cut -d'|' -f1,2,3,8)" "pimdir|1|blake3|2"
+run owner/set_store_version ":version=2"
+expect "version: a migration's stamp moves store_meta.version" \
+    "$(run read/load_store_meta | cut -d'|' -f2)" "2"
+run owner/set_derivation ":derivation=3"
+run owner/set_derivation ":derivation=1"
+expect "derivation: a later revision is recorded, an earlier one never lowers it" \
+    "$(run read/load_store_meta | cut -d'|' -f8)" "3"
 
 # --- Sources declare what they can do (§15.6) ---------------------------------
 
@@ -590,7 +663,8 @@ mail Both half 10 21 "'2026-08-01T10:00:00Z'"
 sql "UPDATE items SET sort_key = coalesce((SELECT date FROM mail_summary s WHERE s.collection = items.collection AND s.link_id = items.link_id), ''), level = 2;
      UPDATE items SET object_hash = CASE link_id WHEN 'old' THEN 'h1' WHEN 'dirty' THEN 'h2' WHEN 'nodate' THEN 'h3' WHEN 'recent' THEN 'h4'
          WHEN 'conflicted' THEN 'h5' WHEN 'diverged' THEN 'h6' WHEN 'edited' THEN 'h7' WHEN 'witness' THEN 'h8' ELSE 'h9' END;
-     UPDATE bindings SET base_object = (SELECT object_hash FROM items i WHERE i.collection = bindings.collection AND i.link_id = bindings.link_id);
+     UPDATE bindings SET base_object = (SELECT object_hash FROM items i WHERE i.collection = bindings.collection AND i.link_id = bindings.link_id),
+         shared_object = (SELECT object_hash FROM items i WHERE i.collection = bindings.collection AND i.link_id = bindings.link_id);
      UPDATE items SET conflicted = 1, conflict_object = 'hc' WHERE link_id = 'conflicted';
      UPDATE bindings SET conflicted = 1 WHERE link_id = 'diverged';
      UPDATE bindings SET base_object = 'h1' WHERE link_id = 'edited';
@@ -620,11 +694,13 @@ expect "release: a tombstone, a newer item, a conflicted one and another kind ke
 expect "release: back to Meta, flags, summary and addresses kept" \
     "$(sql "SELECT level, flags FROM items WHERE collection = 'INBOX' AND link_id = 'dirty';")|$(sql "SELECT count(*) FROM mail_summary WHERE collection = 'INBOX' AND link_id IN ('old', 'dirty', 'nodate', 'witness');")" \
     '1|["\\Flagged"]|4'
+expect "release: a shared body naming the released body lets go of it, another stays" \
+    "$(sql "SELECT count(*) FROM bindings WHERE link_id IN ('old', 'dirty', 'nodate', 'witness') AND collection = 'INBOX' AND shared_object IS NULL;")|$(sql "SELECT shared_object FROM bindings WHERE link_id = 'edited';")" "4|h7"
 expect "release: the bases let go of the body, every binding still based, its flags kept" \
     "$(sql "SELECT count(*) FROM bindings WHERE link_id IN ('old', 'dirty', 'nodate', 'witness', 'full') AND collection != 'Archive' AND base_object IS NULL AND base_present = 1;")|$(sql "SELECT base_flags FROM bindings WHERE link_id = 'dirty';")" \
     "6|[]"
 expect "release: a body held elsewhere stays pinned, the rest fall to the collector" \
-    "$(run owner/list_garbage_objects | sort | tr '\n' ' ')|$(sql "SELECT refcount FROM objects WHERE hash = 'h1';")" "h2 h3 h8 |3"
+    "$(run owner/list_garbage_objects | sort | tr '\n' ' ')|$(sql "SELECT refcount FROM objects WHERE hash = 'h1';")" "h2 h3 h8 |4"
 expect "release: each released item moves in the feed" \
     "$(run read/list_items_changed_since ":since=$cursor" ":limit=10" | cut -d'|' -f3 | sort -n | tr '\n' ' ')" "1 2 3 8 9 "
 expect "release: a second run finds nothing" \
@@ -900,8 +976,8 @@ expect "file: saved to a folder, the stand-in still reads, held by the saved cop
 expect "file: one public id for the stand-in and the saved copy" \
     "$(sql "SELECT count(DISTINCT seq) FROM items WHERE link_id = 'part:m#2';")" "1"
 run owner/set_collection_role ":collection='work/Attachments'" ":role='attachments'"
-expect "file: the attachments role marks a file collection, and no other kind takes it" \
-    "$(sql "SELECT role FROM collections WHERE id = 'work/Attachments';")$(fails owner/set_collection_role ":collection='work/INBOX'" ":role='attachments'" && echo refused)" "attachmentsrefused"
+expect "file: the attachments role marks a file collection" \
+    "$(sql "SELECT role FROM collections WHERE id = 'work/Attachments';")" "attachments"
 expect "file: every stand-in of an account with its message, newest first, paged" \
     "$(run read/list_attachments_by_account ":account='work'" ":after_key=NULL" ":after_seq=NULL" ":limit=10" | cut -d'|' -f3,8,12 | tr '\n' ' ')|$(run read/list_attachments_by_account ":account='work'" ":after_key=''" ":after_seq=3" ":limit=10" | cut -d'|' -f3)" \
     "part:m#3|m|alice@example.org part:m#2|m|alice@example.org |part:m#2"
@@ -976,6 +1052,27 @@ expect "time: a running entry is an event with no end, a journal entry has its i
 expect "time: an entry no source binds is deleted with its summary and the hash to release" \
     "$(run owner/delete_unbound_item ":collection='$time_id'" ":link_id='entry'" | cut -d'|' -f1)|$(sql "SELECT count(*) FROM event_summary;")|$(run owner/delete_unbound_item ":collection='$time_id'" ":link_id='start'" | cut -d'|' -f1)|$(sql "SELECT count(*) FROM items;")" \
     "he|0|hj|0"
+
+# --- An action on an item no source binds is the store's to settle (§15.3) --
+
+fresh
+collection Local
+collection INBOX
+run owner/upsert_checkpoint ":collection='INBOX'" ":source='imap'" ":checkpoint=NULL"
+object hn
+item Local note 1 "'hn'"
+item Local gone 2 "'hn'"
+item INBOX fresh 3 "'hn'"
+expect "unbound: a collection no source syncs answers none, one whose source holds a checkpoint and no binding answers it, and no source binds either item" \
+    "$(run owner/collection_sources ":collection='Local'")|$(run owner/collection_sources ":collection='INBOX'")|$(run read/list_item_bindings ":collection='Local'" ":link_id='note'")$(run read/list_item_bindings ":collection='INBOX'" ":link_id='fresh'")" \
+    "|imap|"
+before="$(sql "SELECT changed FROM items WHERE link_id = 'note';")"
+run owner/update_item ":collection='Local'" ":link_id='note'" ":flags='[\"\\\\Flagged\"]'" ":object_hash='hn'" ":sort_key=''" \
+    ":level=2" ":deleted=0" ":conflicted=0" ":conflict_object=NULL"
+run owner/retain_item ":collection='Local'" ":link_id='gone'" ":source='owner'"
+expect "unbound: a set-flags applies to the item directly and moves its stamp; a remove retains it, its body still pinned" \
+    "$(sql "SELECT flags, changed > $before FROM items WHERE link_id = 'note';")|$(sql "SELECT deleted, retained_at IS NOT NULL, object_hash FROM items WHERE link_id = 'gone';")|$(run read/count_retained ":collection='Local'")" \
+    "[\"\\\\Flagged\"]|1|1|1|hn|1"
 
 # --- An add superseding an item holds its delete until it is pushed (§15.3) --
 
@@ -1171,18 +1268,53 @@ collection INBOX
 run queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='remove'" ":payload='{\"v\":1}'" ":object_hash=NULL" >/dev/null
 run queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='remove'" ":payload='{\"v\":1}'" ":object_hash=NULL" >/dev/null
 sql "DELETE FROM queue WHERE id = 2;"
+# An earlier draft's shape: no derivation, a closed role, an open kind, a
+# ladder taking 0, edited comments, a shared body pinned by nothing.
+sql "ALTER TABLE store_meta DROP COLUMN derivation;"
 printf '.dbconfig defensive off\n%s\n' "PRAGMA writable_schema = ON;
-    UPDATE sqlite_schema SET sql = replace(sql, ' OR (kind = ''application/octet-stream'' AND role = ''attachments'')', '') WHERE name = 'collections';
+    UPDATE sqlite_schema SET sql = replace(sql, 'role        TEXT,', 'role        TEXT CHECK (role IS NULL OR role IN (''inbox'', ''sent'')),') WHERE name = 'collections';
+    UPDATE sqlite_schema SET sql = replace(sql, ' CHECK (kind IN ('''', ''message/rfc822'', ''text/vcard'', ''text/calendar'',' || char(10) || '                ''application/octet-stream''))', '') WHERE name = 'collections';
+    UPDATE sqlite_schema SET sql = replace(sql, 'CHECK (level IN (1, 2))', 'CHECK (level IN (0, 1, 2))') WHERE name = 'items';
     UPDATE sqlite_schema SET sql = replace(sql, '-- global append order', '-- an edited comment') WHERE name = 'queue';
+    UPDATE sqlite_schema SET sql = replace(sql, 'shared_object     TEXT REFERENCES objects(hash),', 'shared_object     TEXT,') WHERE name = 'bindings';
     UPDATE sqlite_schema SET sql = replace(sql, 'AUTOINCREMENT,', 'AUTOINCREMENT, -- a comment of an earlier owner') WHERE name = 'queue';" | sqlite3 "$dir/pimdir.db" >/dev/null
-expect "reconcile: a table whose constraint moved differs, a comment does not" "$(differs)" "collections "
+sql "INSERT INTO collections(id, kind, name) VALUES('Lists', 'text/x-vlist', 'Lists');
+     INSERT INTO items(collection, link_id, seq, flags, level) VALUES('INBOX', 'old', 9, '[]', 0);
+     DROP INDEX bindings_by_shared_object;
+     INSERT INTO bindings(collection, link_id, source, handle, base_present, shared_object) VALUES('INBOX', 'old', 'imap', '9', 1, 'swept');"
+# What another implementation kept in the store: a table and a column of its
+# own, which pimdir.db does not hold (§6).
+sql "CREATE TABLE x_notes (id INTEGER PRIMARY KEY, note TEXT) STRICT;
+     INSERT INTO x_notes(note) VALUES('mine');
+     ALTER TABLE queue ADD COLUMN x_note TEXT;"
+expect "reconcile: a table whose constraint or column moved differs, a comment does not, nor does a table or column of another's" "$(differs)" "bindings bindings_by_shared_object collections items queue store_meta x_notes "
+expect "reconcile: the closed ladder refuses an earlier draft's 0 until it is repaired" \
+    "$(rebuild items 2>&1 | grep -c CHECK)|$(sql "SELECT level FROM items WHERE link_id = 'old';")" "1|0"
+run owner/recompute_refcounts
+run owner/repair_levels
+run owner/repair_kinds
 rebuild collections
+rebuild items
+rebuild bindings
+expect "reconcile: a shared body an earlier draft let the collector sweep dangles under the new key until it is repaired" \
+    "$(sql "PRAGMA foreign_key_check;" | cut -d'|' -f1)|$(run owner/repair_shared_objects)$(sql "PRAGMA foreign_key_check;")|$(sql "SELECT shared_object IS NULL FROM bindings WHERE link_id = 'old';")" "bindings||1"
 rebuild queue
+rebuild store_meta
+# Step 3: drop every table the canonical schema lacks.
+for extra in $(sql "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%';"); do
+    if [ -z "$(sqlite3 "$dir/scratch.db" "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = '$extra';")" ]; then
+        sql "DROP TABLE $extra;"
+    fi
+done
+expect "reconcile: a table and a column the canonical schema lacks do not survive an owner's open" \
+    "$(sql "SELECT count(*) FROM sqlite_schema WHERE name = 'x_notes';")|$(sql "SELECT count(*) FROM pragma_table_info('queue') WHERE name = 'x_note';")|$(sql "SELECT count(*) FROM queue;")" "0|0|1"
 expect "reconcile: rebuilt from the canonical text, nothing differs and no key dangles" \
-    "$(differs)|$(sql "PRAGMA foreign_key_check;")|$(sql "SELECT count(*) FROM collections;")" "||1"
-expect "reconcile: the rebuilt table takes the new constraint, its triggers back" \
-    "$(run owner/set_collection_kind ":collection='Files'" ":account=NULL" ":kind='application/octet-stream'")$(run owner/set_collection_role ":collection='Files'" ":role='attachments'")$(sql "SELECT role FROM collections WHERE id = 'Files';")$(sql "SELECT count(*) FROM sqlite_schema WHERE tbl_name = 'collections' AND type = 'trigger';")" \
-    "attachments$(sqlite3 "$dir/scratch.db" "SELECT count(*) FROM sqlite_schema WHERE tbl_name = 'collections' AND type = 'trigger';")"
+    "$(differs)|$(sql "PRAGMA foreign_key_check;")|$(sql "SELECT count(*) FROM collections;")" "||2"
+expect "reconcile: a 0 is repaired to Meta, a kind outside the set to undeclared, the revision added at 1" \
+    "$(sql "SELECT level FROM items WHERE link_id = 'old';")|$(sql "SELECT kind FROM collections WHERE id = 'Lists';")|$(run read/load_store_meta | cut -d'|' -f2,8)" "1||1|1"
+expect "reconcile: the rebuilt tables take the new constraints, their triggers back" \
+    "$(run owner/set_collection_kind ":collection='Files'" ":account=NULL" ":kind='application/octet-stream'")$(run owner/set_collection_role ":collection='Files'" ":role='attachments'")$(run owner/set_collection_role ":collection='INBOX'" ":role='snoozed'")$(sql "SELECT group_concat(role, ' ') FROM (SELECT role FROM collections WHERE role IS NOT NULL ORDER BY id);")|$(fails owner/set_collection_kind ":collection='Lists'" ":account=NULL" ":kind='text/x-vlist'" && echo refused)|$(sql "UPDATE items SET level = 0 WHERE link_id = 'old';" 2>&1 | grep -c CHECK)|$(sql "SELECT count(*) FROM sqlite_schema WHERE tbl_name = 'collections' AND type = 'trigger';")" \
+    "attachments snoozed|refused|1|$(sqlite3 "$dir/scratch.db" "SELECT count(*) FROM sqlite_schema WHERE tbl_name = 'collections' AND type = 'trigger';")"
 expect "reconcile: an AUTOINCREMENT counter carries over, no id reused" \
     "$(run queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='remove'" ":payload='{\"v\":1}'" ":object_hash=NULL")$(sql "SELECT max(id) FROM queue;")" "3"
 object hb
@@ -1198,6 +1330,44 @@ item Cal ev 14 "'hb'"
 sql "INSERT INTO task_summary (collection, link_id, summary) VALUES ('Cal', 'tk', 't'), ('Cal', 'tn', 't');"
 expect "reconcile: list_held_tasks pages the task rows holding a body, no event, no task without one" \
     "$(run owner/list_held_tasks ":after_collection=NULL" ":after_link_id=NULL" ":limit=10" | cut -d'|' -f2,4)|$(run owner/list_held_tasks ":after_collection='Cal'" ":after_link_id='tk'" ":limit=10")" "tk|hb|"
+run owner/backfill_invitation ":collection='INBOX'" ":link_id='held'" ":invitation='ev'"
+run owner/backfill_invitation ":collection='INBOX'" ":link_id='held'" ":invitation=NULL"
+run owner/backfill_task_organisation ":collection='Cal'" ":link_id='tk'" ":priority=1" ":categories='[\"inbox\"]'" ":parent='proj'" ":mid='m1'"
+expect "reconcile: the backfills write what the body gives, a known invitation never cleared" \
+    "$(sql "SELECT invitation FROM mail_summary WHERE link_id = 'held';")|$(sql "SELECT priority, categories, parent, mid FROM task_summary WHERE link_id = 'tk';")" "ev|1|[\"inbox\"]|proj|m1"
+
+# --- A reader reads an older store as its reconciliation would (§6) ---------
+
+# reader <profile/name> <sed -E substitution> [:param=literal...]: a canonical
+# statement as a reader runs it on a store lacking a column, every mention of
+# the column replaced by the value it reads as.
+reader() {
+    local file="$1" subst="$2"; shift 2
+    {
+        echo "PRAGMA foreign_keys = ON;"
+        for binding in "$@"; do
+            echo ".parameter set ${binding%%=*} ${binding#*=}"
+        done
+        sed -E "$subst" "$root/queries/storage/$file.sql"
+    } | sqlite3 "$dir/pimdir.db"
+}
+
+fresh
+collection INBOX
+# An earlier draft's shape: sources with no coverage, store_meta with no
+# derivation revision.
+sql "DROP TABLE sources;
+     CREATE TABLE sources (collection TEXT NOT NULL, source TEXT NOT NULL, checkpoint BLOB,
+         round INTEGER NOT NULL DEFAULT 0, round_since TEXT, round_until TEXT, round_cursor BLOB,
+         round_checkpoint BLOB, round_started_at TEXT, round_band INTEGER NOT NULL DEFAULT 0,
+         PRIMARY KEY (collection, source)) STRICT;
+     INSERT INTO sources(collection, source) VALUES('INBOX', 'imap');
+     ALTER TABLE store_meta DROP COLUMN derivation;"
+expect "reader: a canonical statement naming a column an older store lacks fails as written" \
+    "$(fails read/list_coverage ":collection='INBOX'" && echo refused)|$(fails read/load_store_meta && echo refused)" "refused|refused"
+expect "reader: a nullable column reads NULL, so the source answers with a coverage never closed; a NOT NULL one its default" \
+    "$(reader read/list_coverage 's/\b(covered_since|covered_until|covered_at)\b/NULL/g' ":collection='INBOX'")|$(reader read/load_store_meta 's/\bderivation\b/1/g' | cut -d'|' -f8)" \
+    "imap|||||||1"
 
 # --- Readers count and page under the chips (§14.1) --------------------------
 
@@ -1321,7 +1491,7 @@ isearch() {
 
 fresh
 index
-object_id="$(isearch insert_object ":hash='h1'" ":status='ok'")"
+object_id="$(isearch insert_object ":hash='h1'" ":status='ok'" ":attachment=0")"
 isearch insert_chunk ":object=$object_id" ":ord=1" ":field='note'" ":start=0" ":end=4"
 isearch insert_chunk ":object=$object_id" ":ord=0" ":field='body'" ":start=0" ":end=10"
 expect "chunk: a body's chunks list in text order across fields" \
@@ -1354,9 +1524,51 @@ item Docs plan 2
 expect "coverage: a bodiless file hides nothing from search and is never counted" \
     "$(isearch coverage)" "text/calendar|1"
 
+# --- A zero-length occurrence falls in the range it starts (SEARCH.md §8.1) --
+
+isearch upsert_placement ":collection='Cal'" ":seq=1" ":link_id='ev'" ":hash=NULL" > /dev/null
+isearch insert_occurrence ":collection='Cal'" ":seq=1" ":start='2026-09-01T00:00:00Z'" ":end='2026-09-01T00:00:00Z'"
+day=(":start='2026-09-01T00:00:00Z'" ":end='2026-09-02T00:00:00Z'")
+expect "occurrence: a zero-length one at the start of a range is in it, one at its end is not" \
+    "$(isearch occurring_between "${day[@]}")|$(isearch occurring_between ":start='2026-08-31T00:00:00Z'" ":end='2026-09-01T00:00:00Z'")" "Cal|1|"
+
 expect "feed: a batch reads each row's stamp, the cursor it may record" \
     "$(isearch load_changed_items ":since=0" ":limit=10" | cut -d'|' -f2,10 | tr '\n' ' ')" \
     "$(sql "SELECT link_id || '|' || changed FROM items ORDER BY changed;" | tr '\n' ' ')"
+
+# --- A calendar item's attachment field is read by a seek (SEARCH.md §6, §8) -
+
+fresh
+index
+isearch insert_object ":hash='ha'" ":status='ok'" ":attachment=1" > /dev/null
+isearch insert_object ":hash='hn'" ":status='ok'" ":attachment=0" > /dev/null
+isearch upsert_placement ":collection='Cal'" ":seq=1" ":link_id='attach'" ":hash='ha'" > /dev/null
+isearch upsert_placement ":collection='Cal'" ":seq=2" ":link_id='plain'" ":hash='hn'" > /dev/null
+isearch upsert_placement ":collection='Cal'" ":seq=3" ":link_id='bare'" ":hash=NULL" > /dev/null
+expect "attached: a body whose attachment field holds text answers, an empty field and no body do not" \
+    "$(isearch attached | tr '\n' ' ')|$(sqlite3 "$dir/index.db" "INSERT INTO object(hash, status) VALUES('hx', 'ok');" 2>&1 | grep -c 'NOT NULL')" "Cal|1 |1"
+
+# --- A rename a cut pass folded past is still reconciled (SEARCH.md §4, §8.2) -
+
+fresh
+index
+collection INBOX
+item INBOX a 1
+isearch init_index_meta ":version=1" ":tokenizer='unicode61 remove_diacritics 2'"
+head="$(run read/load_change_cursor | cut -d'|' -f1)"
+isearch set_index_cursor ":store_change=$head" ":store_purges=0" ":store_reconciled=$head"
+expect "behind: an index a pass completed over every stamp is not behind" "$(isearch behind)" "0"
+run owner/rename_collection ":collection='INBOX'" ":new_id='Archive'"
+moved="$(run read/load_change_cursor | cut -d'|' -f1)"
+expect "behind: a rename draws the stamps the index has yet to fold" "$(isearch behind)" "$((moved - head))"
+# A batch folds the restamped item, records its stamp, and the deadline cuts
+# the pass before it completes.
+isearch set_index_cursor ":store_change=$moved" ":store_purges=0" ":store_reconciled=$head"
+reconciled="$(isearch load_index_meta | cut -d'|' -f8)"
+change="$(isearch load_index_meta | cut -d'|' -f3)"
+expect "reconciled: past a batch, the collection's stamp lies above store_reconciled and not above store_change" \
+    "$(run read/list_collections_changed_since ":since=$reconciled" ":limit=10" | cut -d'|' -f1)|$(run read/list_collections_changed_since ":since=$change" ":limit=10")|$(isearch behind)" \
+    "Archive||0"
 
 if [ "$failures" -gt 0 ]; then
     echo "$failures invariant(s) broken" >&2

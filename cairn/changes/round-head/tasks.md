@@ -5,7 +5,7 @@ change: round-head
 
 # Tasks
 
-## 1. pimdir (this repository, in the working tree, not committed)
+## 1. pimdir (this repository; committed since, the "not committed" of 2026-10-13 is stale, ledger-housekeeping-2026-10-30)
 
 - [x] SYNC §2: the head in the terminology; a page belongs to a round, a head or a delta
 - [x] SYNC §4: `Enumerate` takes a head's position; **Heads.**: delta and band heads, what each carries, rejection (restart), rekey, none; band-head connectors relist the band in every round's last page; delta-head connectors read pages fresh

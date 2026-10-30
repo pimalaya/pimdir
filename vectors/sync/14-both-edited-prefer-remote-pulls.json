@@ -1,6 +1,7 @@
 {
+  "v": 1,
   "label": "both sides edited under prefer-remote drops the local edit and pulls",
-  "note": "the divergence is settled by the source's policy: the local body goes as a pull would take it, the level lowers to Meta and the base revision moves, no conflict is recorded (SYNC.md §5)",
+  "note": "the divergence is settled by the source's policy: the local body leaves the item as a pull would take it, the level lowers to Meta and the base revision moves, no conflict is recorded. The local edit c2, a body the base never held, is not lost: it is kept as a retained item under the key minted over the handle, its own seq, and reported Overruled. The pull carried no body, so the shared_object stays c2 (SYNC.md §5, §9; STORAGE §11)",
   "store": {
     "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
     "objects": {
@@ -8,7 +9,7 @@
       "c2": { "body": "fixtures/card-basic-edited.vcf" }
     },
     "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c2", "level": 2, "deleted": 0 }],
-    "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1 }],
+    "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1, "shared_object": "c2" }],
     "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d0" }]
   },
   "run": {
@@ -33,10 +34,13 @@
   "expect": {
     "pushes": [],
     "outcomes": [],
-    "events": [{ "kind": "ContentChanged", "handle": "a.vcf" }],
+    "events": [{ "kind": "ContentChanged", "handle": "a.vcf" }, { "kind": "Overruled", "handle": "a.vcf", "link_id": "dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#a.vcf" }],
     "store": {
-      "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0 }],
-      "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": null, "base_revision": "r2", "base_present": 1 }],
+      "items": [
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0 },
+        { "collection": "Contacts", "link_id": "dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#a.vcf", "seq": 2, "flags": [], "object": "c2", "level": 2, "deleted": 1, "retained": true, "retained_by": "dav" }
+      ],
+      "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": null, "base_revision": "r2", "base_present": 1, "shared_object": "c2" }],
       "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d1" }]
     }
   }

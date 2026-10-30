@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "both sides edited under prefer-local pushes the local body gated on the observed revision",
   "note": "the precondition is the revision the enumeration reported, r2, never the stale base; accepted with r3, the base moves to the local body at r3 (SYNC.md §5)",
   "store": {

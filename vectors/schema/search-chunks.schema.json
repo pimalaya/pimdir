@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pimalaya/pimdir/vectors/schema/search-chunks.schema.json",
+  "title": "The chunk cases (SEARCH.md section 6), vectors/search/chunks.json",
+  "type": "object",
+  "required": ["v", "cases"],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "const": 1 },
+    "note": { "type": "string" },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["label", "fields", "chunks"],
+        "properties": {
+          "label": { "type": "string" },
+          "fields": { "type": "object" },
+          "chunks": { "type": "array", "items": { "type": "object", "required": ["ord", "field", "start", "end"], "additionalProperties": false, "properties": { "ord": { "type": "integer" }, "field": { "enum": ["body", "note"] }, "start": { "type": "integer" }, "end": { "type": "integer" } } } }
+        }
+      }
+    }
+  }
+}

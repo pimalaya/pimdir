@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "an interrupted round resumes from its cursor and infers deletes in scope only when its last page lands",
   "note": "the round of vector 34 resumes from p1 over a store an earlier draft synced with no coverage; the last page lists 8, stamped like the first page's. Then the in-scope bindings no page stamped are dropped Deleted: 11, whose unknown Date is always in scope, is retained; 10, whose Date predates the scope, is out of it and stays, neither dropped nor pushed. The round closes with the checkpoint c1 the first page carried and the coverage of its scope (SYNC.md §5)",
   "store": {

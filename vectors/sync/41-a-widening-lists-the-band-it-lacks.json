@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a widening lists only the band the coverage lacks when the source's cursor is bound to no scope",
   "note": "the coverage is [2026-09-01, open) and the scope widens to [2026-07-01, open). An IMAP cursor is filtered locally and bound to no scope, so the round lists the band [2026-07-01, 2026-09-01) alone and keeps c1, handing no checkpoint: 10 is named; 9, in the band and unlisted, is dropped; 12, outside the band, is neither listed nor dropped; 11, undated, is left alone, a band's date filter never returning undated mail. Closing, the coverage spans both and the checkpoint stays (SYNC.md §5)",
   "store": {

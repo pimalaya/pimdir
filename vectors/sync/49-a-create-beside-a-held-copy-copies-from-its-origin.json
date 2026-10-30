@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "the target half of a move into a collection already holding the identity copies from its origin",
   "note": "the create in Trash is keyed by the identity minted over its provisional handle, and INBOX binds the identity itself: the pairing finds the origin all the same, so the Add is a server-side copy from INBOX 10, the one way to deliver a create holding no body; Trash's own copy under 3 is never its origin, being in the same collection (SYNC.md §3, §5)",
   "store": {

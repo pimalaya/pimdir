@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a file a source lists is named at Meta from what the listing states, keyed by its stable id",
   "note": "a Nextcloud member: handle and link id are its oc:id, the summary its name, type and length, the revision its ETag; no body is fetched (STORAGE Annex A.7, §14.3, SYNC.md §4)",
   "store": { "collections": [{ "id": "Docs", "account": null, "kind": "application/octet-stream", "conflict": "manual" }], "objects": {}, "items": [], "bindings": [], "sources": [{ "collection": "Docs", "source": "nextcloud", "checkpoint": "e0" }] },

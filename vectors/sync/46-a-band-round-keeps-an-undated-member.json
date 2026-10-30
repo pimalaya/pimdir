@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a band round keeps an undated member it does not list",
   "note": "the coverage is [2026-09-01, open) and the scope widens to [2026-07-01, open) for a source whose cursor is bound to no scope, so the round lists the band [2026-07-01, 2026-09-01) alone, by a date filter that never returns undated mail, in two pages. The first names 10 and opens the round as a band round; the last, empty, finds 9 absent in the band and drops it, and leaves 11, undated, alone: a band's absence proves nothing of a member it could not list. 12, above the band, is neither listed nor dropped (SYNC.md §5)",
   "store": {

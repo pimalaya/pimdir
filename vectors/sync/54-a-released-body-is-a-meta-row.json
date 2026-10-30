@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a member whose body was released is relisted as a Meta row: nothing fetched, nothing pushed, nothing deleted",
   "note": "20's body was released (STORAGE §11.4): Meta, no object, the binding based with no base_object, the size and the mark still the ones its body gave (425, 0). A round relists it: its meta restates the summary, the stated 440 and the multipart/mixed mark 1 included, the level stays Meta and no fetch is asked for (SYNC.md §6)",
   "store": {

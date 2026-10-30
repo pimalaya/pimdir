@@ -12,13 +12,15 @@ import hashlib
 import json
 import re
 import sys
-from datetime import date
+from datetime import date, datetime, timedelta
 from email import message_from_bytes
 from email.header import decode_header, make_header
+from email.utils import parseaddr
 from pathlib import Path
 from urllib.parse import unquote
 
 from blake3 import blake3
+from jsonschema import Draft202012Validator
 
 ALGORITHMS = {
     "blake3": lambda body: blake3(body).digest(),
@@ -34,8 +36,12 @@ TABLES = {
 }
 
 FILE_SUMMARY = {"name", "media_type", "size", "part"}
+# The prefixes of the keys a writer derives, and the escape (STORAGE section 9).
+RESERVED_PREFIXES = ("alt:", "hash:", "dup:", "part:", "file:", "esc:")
 
 ROLES = {"from", "to", "cc", "bcc", "email", "organizer", "attendee"}
+# The closed set of collection kinds (STORAGE section 13), '' undeclared.
+KINDS = {"", "message/rfc822", "text/vcard", "text/calendar", "application/octet-stream"}
 
 failures = []
 
@@ -89,7 +95,7 @@ def change_key(collection, push):
     elif kind == "Remove":
         fields += [b"remove"] + option(push.get("to"))
     elif kind == "SetFlags":
-        fields += [b"set-flags"] + flags(push.get("flags"))
+        fields += [b"set-flags"] + flags(push.get("add")) + flags(push.get("remove"))
     elif kind == "Update":
         fields += [b"update", push["object"].encode()]
     return fnv1a(b"".join(field + b"\x00" for field in fields))
@@ -353,6 +359,57 @@ def temporal_of(query, collections):
     return {"since": floor, "until": ceiling, "filling": filling}
 
 
+# Whether a case's date range leaves the horizon (SEARCH.md section 8.1),
+# re-derived for a query of plain terms: only a range a calendar item could
+# answer leaves it, a query whose kinds or collections hold no calendar
+# comparing sort keys alone. None for a query this does not read.
+def instant(text):
+    return datetime.fromisoformat(text.replace("Z", "+00:00"))
+
+
+def point_span(point, now):
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if point == "today":
+        return midnight, midnight + timedelta(days=1)
+    if point == "yesterday":
+        return midnight - timedelta(days=1), midnight
+    amount = re.fullmatch(r"(\d+)([dwy])", point)
+    if amount:
+        n, unit = int(amount.group(1)), amount.group(2)
+        start = now.replace(year=now.year - n) if unit == "y" else now - timedelta(days=n * (7 if unit == "w" else 1))
+        return start, now
+    low, high = span_of(point) or (None, None)
+    if low is None and re.fullmatch(r"\d{4}-\d{2}-\d{2}", point):
+        low = f"{point}T00:00:00Z"
+        high = (instant(low) + timedelta(days=1)).isoformat().replace("+00:00", "Z")
+    return (instant(low), instant(high)) if low else (None, None)
+
+
+def horizon_left_of(query, collections, now, horizon):
+    terms = query.split()
+    if any(not re.fullmatch(r"[a-z]+:\S+", term) for term in terms) or "(" in query:
+        return None
+    kinds, scope, dated = set(), list(collections), None
+    for term in terms:
+        name, _, value = term.partition(":")
+        if name == "kind":
+            kinds.add(value)
+        elif name in ("collection", "folder"):
+            scope = [c for c in scope if c["id"] == value]
+        elif name == "account":
+            scope = [c for c in scope if c["account"] == value]
+        elif name in ("date", "when"):
+            dated = value
+    if dated is None:
+        return None
+    calendar = any(c["kind"] == "text/calendar" for c in scope) and (not kinds or kinds & {"event", "task", "journal"})
+    low, _, high = dated.partition("..") if ".." in dated else (dated, "", dated)
+    start = point_span(low, now)[0] if low else None
+    end = point_span(high, now)[1] if high else None
+    leaves = start is None or end is None or start < instant(horizon["start"]) or end > instant(horizon["end"])
+    return bool(calendar and leaves)
+
+
 # The chunk boundaries of SEARCH.md section 6, over a field's text as bytes.
 BLANK_LINES = re.compile(rb"\r?\n(?:[ \t]*\r?\n)+")
 CHUNK_BYTES = 1024
@@ -460,6 +517,27 @@ root = Path(sys.argv[1] if len(sys.argv) > 1 else ".") / "vectors"
 objects = json.loads((root / "objects.json").read_text())
 summaries = json.loads((root / "summaries.json").read_text())
 
+# Every vector file carries its format's version `v` and conforms to the JSON
+# Schema of its format under vectors/schema/, so a consumer reading a file of
+# another version, or a field the format does not name, fails here first.
+FORMATS = {
+    "objects.json": "objects", "summaries.json": "summaries", "search/store.json": "search-store",
+    "search/queries.json": "search-queries", "search/chunks.json": "search-chunks", "gtd/writers.json": "gtd-writers",
+}
+for path in sorted(root.rglob("*.json")):
+    relative = path.relative_to(root).as_posix()
+    if relative.startswith("schema/"):
+        continue
+    format_ = "sync" if relative.startswith("sync/") else FORMATS.get(relative)
+    if format_ is None:
+        failures.append(f"{relative}: a vector file of no known format")
+        continue
+    document = json.loads(path.read_text())
+    require(f"{relative}: states its format's version v", isinstance(document, dict) and isinstance(document.get("v"), int))
+    schema = json.loads((root / "schema" / f"{format_}.schema.json").read_text())
+    for error in Draft202012Validator(schema).iter_errors(document):
+        failures.append(f"{relative}: {error.json_path}: {error.message}")
+
 for case in objects["base32"]["cases"]:
     encoded = name(bytes.fromhex(case["input_hex"]))
     check(f"base32 of {case['input_utf8']!r}", encoded, case["base32"])
@@ -480,6 +558,8 @@ for case in objects["objects"]:
         )
 
 fixtures = set()
+# A fixture's link id where Annex A gives it alone, no key minted over it.
+links_of_fixtures = {case["fixture"]: case["link_id"] for case in summaries["cases"] if "hint" not in case}
 
 for case in summaries["cases"]:
     fixtures.add(case["fixture"])
@@ -530,6 +610,14 @@ for case in summaries["cases"]:
     if case["summary"].get("uid") is None and case["table"] != "mail_summary":
         check(f"{case['label']} hash: link_id", case["link_id"], "hash:" + fnv1a(bytes_))
 
+    # A stated identity is the link id verbatim, escaped when it begins with a
+    # prefix the writer derives keys under (STORAGE section 9), so a UID
+    # stating hash: never reads as a key derived from the bytes.
+    stated = case["summary"].get("message_id" if case["table"] == "mail_summary" else "uid")
+    if stated is not None and "hint" not in case:
+        escaped = "esc:" + stated if stated.startswith(RESERVED_PREFIXES) else stated
+        check(f"{case['label']} link_id of a stated identity", case["link_id"], escaped)
+
     if case["table"] == "mail_summary" and case["summary"]["message_id"] is None and "hint" not in case:
         row = case["summary"]
         alt = "alt:" + "|".join(row[column] or "" for column in ("subject", "date", "sender"))
@@ -561,8 +649,20 @@ for path in sync_cases:
     for collection in declared:
         if collection.get("role") == "attachments":
             require(f"{label}: the attachments role marks a file collection", collection["kind"] == "application/octet-stream")
+    # The closed vocabularies (STORAGE section 13): a kind of the set, the
+    # ladder 1 and 2.
+    for collection in declared:
+        require(f"{label}: collection {collection['id']} has a kind of the set", collection["kind"] in KINDS)
+    # Under a prefer- policy an item conflict is recorded only for want of the
+    # incoming body, and the upgrade fetching it settles it by the policy
+    # (SYNC.md sections 6 and 9), so no such conflict holds a body.
+    policies = {c["id"]: c.get("conflict", "manual") for c in declared}
     for item in store.get("items", []) + expected.get("items", []):
         require(f"{label}: item {item['link_id']} in a known collection", item["collection"] in collections)
+        if policies.get(item["collection"], "manual") != "manual" and item.get("conflicted") == 1:
+            require(f"{label}: item {item['link_id']} under {policies[item['collection']]}, an item conflict holds no body", item.get("conflict_object") is None)
+        if "level" in item:
+            require(f"{label}: item {item['link_id']} has a level of the ladder", item["level"] in (1, 2))
     # An expected reference names two ends the expected store holds (STORAGE
     # section 14.2).
     kinds = {c["id"]: c["kind"] for c in declared}
@@ -602,7 +702,7 @@ for path in sync_cases:
     pages = remote.get("pages") or ([remote["snapshot"]] if remote.get("snapshot") else [])
     for at, page in enumerate(remote.get("pages") or []):
         require(f"{label}: page {at} says whether it is the last", isinstance(page.get("last"), bool))
-        require(f"{label}: page {at} carries a cursor unless it is the last", page.get("last") or page.get("cursor") is not None)
+        require(f"{label}: page {at} carries a cursor unless it is the last, or the run fails on it", page.get("last") or page.get("cursor") is not None or case["expect"].get("failed") is True)
     # A head (SYNC.md sections 4 and 5): listed only to resume an open round,
     # of a kind the connector lists; a delta head asked from the round's
     # checkpoint, or a band round's from the source's, and carrying the
@@ -648,8 +748,9 @@ for path in sync_cases:
             require(f"{label}: no coverage carries no bound", source.get("covered_since") is None and source.get("covered_until") is None)
 
     # A sync never deletes on the server on its own account (SYNC.md section
-    # 5): every Remove pushed names a handle the consumer tombstoned, a
-    # binding of a deleted item, or the one a mutate run removes.
+    # 5): every Remove pushed names a binding of an item the store held as a
+    # tombstone, the consumer's or one a delete on another source left there
+    # (section 9), or the one a mutate run removes.
     staged = {
         binding["handle"]
         for binding in store.get("bindings", [])
@@ -661,6 +762,99 @@ for path in sync_cases:
     for push in case["expect"].get("pushes", []):
         if push.get("kind") == "Remove":
             require(f"{label}: Remove {push['handle']} was staged by the consumer", push["handle"] in staged)
+
+    # Which absences delete (SYNC.md section 5): a based binding of the run's
+    # source leaves the store only for a removal its remote stated, an absence
+    # from a round the run closed, in that round's scope and not parked, a
+    # tombstone pushed, or a rekey. A round whose absences would drop more
+    # than half of a scope of at least 20 bound members parks unless the run
+    # accepts them.
+    run, after = case["run"], case["expect"].get("store", {})
+    # A member stating a Message-ID the store holds under a summary naming
+    # another message (another subject or sender, SYNC.md sections 6 and 9)
+    # is minted apart, never bound to the held item.
+    held_rows = {(s["collection"], s["link_id"]): s["row"] for s in store.get("summaries", []) if s["table"] == "mail_summary"}
+    for page in pages:
+        for member in page["items"]:
+            meta = member.get("meta") or {}
+            if files or not (root / meta.get("body", "")).is_file() or not meta["body"].endswith(".eml"):
+                continue
+            headers = message_from_bytes((root / meta["body"]).read_bytes())
+            message_id = (headers.get("Message-ID") or "").strip().strip("<>")
+            row = held_rows.get((run["collection"], message_id))
+            if row is None:
+                continue
+            subject = str(make_header(decode_header(headers.get("Subject", ""))))
+            sender = parseaddr(headers.get("From", ""))[1].lower()
+            if (subject, sender) != (row["subject"], row["sender"]):
+                require(f"{label}: member {member['handle']} names another message under {message_id} and is minted apart",
+                        all(binding["link_id"] != message_id for binding in after.get("bindings", [])
+                            if binding["handle"] == member["handle"] and binding["source"] == run["source"]))
+    options = run.get("options", {})
+    row = next((s for s in store.get("sources", []) if s["collection"] == run["collection"] and s["source"] == run["source"]), {})
+    listed = {member["handle"] for page in pages for member in page["items"]}
+    vanished = {handle for page in pages for handle in page.get("vanished", [])}
+    interrupted = remote.get("interrupted_after")
+    if remote.get("pages"):
+        closes = remote["pages"][-1].get("last") is True and (interrupted is None or interrupted >= len(remote["pages"]))
+    else:
+        closes = bool(remote.get("snapshot") and remote["snapshot"].get("complete"))
+    closes = closes and not case["expect"].get("failed") and run.get("verb") == "sync"
+    scope = options.get("scope") or {"since": row.get("round_since"), "until": row.get("round_until")}
+    band = row.get("round_open") is True and row.get("round_band") is True
+    dates = {s["link_id"]: s["row"].get("date") for s in store.get("summaries", [])
+             if s["table"] == "mail_summary" and s["collection"] == run["collection"]}
+
+    def in_scope(link_id):
+        if link_id not in dates:
+            return True
+        date_ = dates[link_id]
+        if date_ is None:
+            return not band
+        return (scope.get("since") is None or scope["since"] <= date_) and (scope.get("until") is None or date_ < scope["until"])
+
+    held = {(item["collection"], item["link_id"]) for item in store.get("items", []) if item.get("deleted") == 1}
+    bound = [binding for binding in store.get("bindings", [])
+             if binding["collection"] == run["collection"] and binding["source"] == run["source"]
+             and binding.get("base_present", 0) == 1 and in_scope(binding["link_id"])]
+    absent = [binding for binding in bound if binding["handle"] not in listed | vanished
+              and (binding["collection"], binding["link_id"]) not in held]
+    mass = len(bound) >= 20 and 2 * len(absent) > len(bound) and not options.get("accept_absences")
+    parked = case["expect"].get("parked")
+    # A rekey (SYNC.md section 8) lists the whole collection, so a based
+    # binding of the run's source that no member resolves to by link id is
+    # absent, and the same guard parks it, writing nothing.
+    rekey = run.get("verb") == "rekey"
+    if rekey:
+        resolved = {links_of_fixtures.get(member.get("meta", {}).get("body")) for page in pages for member in page["items"]}
+        bound = [binding for binding in store.get("bindings", [])
+                 if binding["collection"] == run["collection"] and binding["source"] == run["source"]
+                 and binding.get("base_present", 0) == 1]
+        absent = [binding for binding in bound if binding["link_id"] not in resolved
+                  and (binding["collection"], binding["link_id"]) not in held]
+        mass = len(bound) >= 20 and 2 * len(absent) > len(bound) and not options.get("accept_absences")
+        closes = not case["expect"].get("failed")
+    if mass and closes:
+        require(f"{label}: a mass absence parks", parked == {"absent": len(absent), "bound": len(bound)})
+    if parked is not None:
+        require(f"{label}: only a mass absence parks", mass and closes)
+        if rekey:
+            for rows in ("bindings", "sources", "collections"):
+                require(f"{label}: a parked rekey writes nothing to {rows}", after.get(rows, store.get(rows)) == store.get(rows))
+        else:
+            require(f"{label}: a parked round stays open", any(s.get("round_open") is True for s in after.get("sources", [])
+                                                                if s["source"] == run["source"]))
+    if "bindings" in after and run.get("verb") != "rekey":
+        kept = {binding["link_id"] for binding in after["bindings"]
+                if binding["collection"] == run["collection"] and binding["source"] == run["source"]}
+        for binding in store.get("bindings", []):
+            if binding["collection"] != run["collection"] or binding["source"] != run["source"]:
+                continue
+            if binding.get("base_present", 0) != 1 or binding["link_id"] in kept:
+                continue
+            stated = binding["handle"] in vanished or binding["handle"] in staged or binding["handle"] in listed
+            inferred = closes and parked is None and not mass and binding in absent
+            require(f"{label}: binding {binding['handle']} leaves only for a stated removal or a closed round's absence in scope", stated or inferred)
     for binding in store.get("bindings", []) + case["expect"].get("store", {}).get("bindings", []):
         provisional = binding["handle"].startswith("\u0001")
         require(f"{label}: binding {binding['handle']!r} is provisional iff it has no base", provisional == (binding.get("base_present", 0) == 0))
@@ -671,6 +865,11 @@ for path in sync_cases:
     # blake3 for the derivation, so an engine's keys are checked against the
     # prose and never against another engine.
     names = {object_label: name(blake3((root / spec["body"]).read_bytes()).digest()) for object_label, spec in store.get("objects", {}).items()}
+    # A body whose bytes fail its name, or with no blob, is no body (STORAGE
+    # section 7): no push carries it.
+    unread = {object_label for object_label, spec in store.get("objects", {}).items() if spec.get("corrupt") or spec.get("blob") is False}
+    for push in case["expect"].get("pushes", []):
+        require(f"{label}: push {push.get('handle')} carries no body it could not verify", push.get("object") not in unread)
     for push in case["expect"].get("pushes", []):
         require(f"{label}: push {push.get('handle')} names a kind", push.get("kind") in {"Add", "Remove", "SetFlags", "Update"})
         require(f"{label}: push {push.get('handle')} carries a key", "key" in push)
@@ -681,6 +880,12 @@ for path in sync_cases:
         check(f"{label}: push {push.get('handle')} key", push.get("key"), change_key(case["run"]["collection"], resolved))
     for outcome in case["expect"].get("outcomes", []):
         require(f"{label}: outcome {outcome.get('handle')} is Accepted or Rejected", outcome.get("outcome") in {"Accepted", "Rejected"})
+        # An add accepted with no handle (SYNC.md section 4) names no member:
+        # its create stays pending under the provisional handle until a page
+        # lands it.
+        if outcome.get("outcome") == "Accepted" and "assigned" in outcome and outcome["assigned"] is None and outcome.get("handle", "").startswith("\u0001"):
+            require(f"{label}: an add accepted without a handle keeps its provisional binding",
+                    any(binding["handle"] == outcome["handle"] for binding in case["expect"].get("store", {}).get("bindings", [])))
 
 # The search cases (SEARCH.md section 11): every fixture and placement resolves.
 search = root / "search"
@@ -698,6 +903,9 @@ for collection in store["collections"]:
         if source.get("covered_at") is None:
             require(f"search store: {collection['id']} never closed, so no bound",
                     source.get("covered_since") is None and source.get("covered_until") is None)
+
+for collection in store["collections"]:
+    require(f"search store: {collection['id']} has a kind of the set", collection["kind"] in KINDS)
 
 for item in store["items"]:
     require(f"search store: {item['link_id']} in a known collection", item["collection"] in accounts)
@@ -736,6 +944,9 @@ for case in queries["cases"]:
         derived = temporal_of(case["query"], store["collections"])
         require(f"{label}: a temporal case is one checks/vectors.py re-derives", derived is not None)
         check(f"{label}: temporal", temporal, derived)
+    left = None if "error" in case else horizon_left_of(case["query"], store["collections"], instant(queries["now"]), queries["horizon"])
+    if left is not None:
+        check(f"{label}: horizon_left", case.get("horizon_left", False), left)
     try:
         parse(case["query"])
         got = None
@@ -748,7 +959,7 @@ for case in queries["cases"]:
     else:
         check(f"{label}: accepted", got, None)
 
-# The GTD views (GUIDE.md section 17): each query of the guide's table is a
+# The GTD views (GTD.md section 1): each query of its table is a
 # case, and its hits are re-derived from the fixtures' bytes, a task's status
 # and categories read by task_columns' second path, never by the query.
 def task_state(bytes_):
@@ -764,9 +975,9 @@ VIEWS = {
     "Someday": lambda categories: "someday" in categories,
     "Next": lambda categories: not categories & RESERVED,
 }
-guide = (root.parent / "GUIDE.md").read_text().split("## 17. Tasks by categories")[1].split("\n## ")[0]
+guide = (root.parent / "GTD.md").read_text().split("## 1. Tasks by categories")[1].split("\n## ")[0]
 view_queries = dict(re.findall(r"^\| (\w+) \| `([^`]+)` \|$", guide, re.M))
-check("gtd views: the guide's table names the four", sorted(view_queries), sorted(VIEWS))
+check("gtd views: GTD.md's table names the four", sorted(view_queries), sorted(VIEWS))
 tasks = []
 for item in store["items"]:
     if "fixture" in item:
@@ -794,7 +1005,7 @@ for case in queries["cases"]:
 for field in sorted(documented - answered):
     failures.append(f"search field {field}: used by no hits or threads case")
 
-# The task writers (GUIDE.md section 17): every case's shape and references,
+# The task writers (GTD.md section 1): every case's shape and references,
 # and what its edit may change, re-derived from the bytes on both sides by a
 # second path, so an expected fixture that touches a line the guide keeps, or
 # writes a state or a category the edit did not ask for, fails here.

@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a head whose position the source rejects restarts the round",
   "note": "the round was left open for long enough that the source can no longer list changes from c1, as Gmail forgets an old history id: the head is refused. The checkpoint the round would close with is void, so the run restarts the round under a new id from its first page, as a rejected cursor does; that page is also the last and carries the fresh checkpoint c9. 30 is listed and stamped by round 2; 10, stamped by round 1 only, is found absent (SYNC.md §4, §5)",
   "store": {

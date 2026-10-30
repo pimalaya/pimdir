@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a Meta upgrade revisits a claim the row does not hold",
   "note": "the row claims level 1 and holds no summary, which no listing names any more since the member is bound; the Meta upgrade, kept for exactly this, fetches it and writes the summary, the addresses and the sort key, the level unchanged and the base untouched (SYNC.md §6)",
   "store": {

@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a paged round lands each page in its own write, the round left open on an interruption",
   "note": "the first scoped sync of a mailbox lists newest first in pages; the first page names its members, stamps their bindings with round 1, and lands the resume cursor p1 and the checkpoint c1 the source gave up front, the old checkpoint (none) staying until the round closes. The run is cut after it: what landed stays, the round is open, no delete is inferred and nothing is pushed (SYNC.md §4, §5)",
   "store": {

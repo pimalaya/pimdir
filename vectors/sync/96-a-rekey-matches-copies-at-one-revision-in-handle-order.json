@@ -1,0 +1,53 @@
+{
+  "v": 1,
+  "label": "a rekey matches copies of one hint by revision first, then in handle order among copies at one revision",
+  "note": "the server holds three resources under one UID: a.vcf at r1 (the bare key), b.vcf at r1 and c.vcf at r2 (each minted over its handle), and renumbered them x, y and z. The revision tells z's old copy apart: x lists r2 and takes c.vcf's key, though handle order alone would give it the bare one. y and z both list r1, which a.vcf's and b.vcf's bases both name, and no carried body tells them apart, so they are matched in handle order, y to a.vcf and z to b.vcf: every copy keeps its item, its seq and its base, none is minted afresh and none is dropped (SYNC.md §8)",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual", "generation": 1 }],
+    "objects": { "c1": { "body": "fixtures/card-basic.vcf" } },
+    "items": [
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0 },
+      { "collection": "Contacts", "link_id": "dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#b.vcf", "seq": 2, "flags": [], "object": "c1", "level": 2, "deleted": 0 },
+      { "collection": "Contacts", "link_id": "dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#c.vcf", "seq": 3, "flags": [], "object": "c1", "level": 2, "deleted": 0 }
+    ],
+    "bindings": [
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1 },
+      { "collection": "Contacts", "link_id": "dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#b.vcf", "source": "dav", "handle": "b.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1 },
+      { "collection": "Contacts", "link_id": "dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#c.vcf", "source": "dav", "handle": "c.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r2", "base_present": 1 }
+    ],
+    "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d0" }]
+  },
+  "run": { "verb": "rekey", "collection": "Contacts", "source": "dav" },
+  "remote": {
+    "snapshot": {
+      "items": [
+        { "handle": "x.vcf", "flags": [], "revision": "r2", "meta": { "body": "fixtures/card-basic.vcf" } },
+        { "handle": "y.vcf", "flags": [], "revision": "r1", "meta": { "body": "fixtures/card-basic.vcf" } },
+        { "handle": "z.vcf", "flags": [], "revision": "r1", "meta": { "body": "fixtures/card-basic.vcf" } }
+      ],
+      "vanished": [],
+      "complete": true,
+      "checkpoint": "e0"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual", "generation": 2 }],
+      "items": [
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0 },
+        { "collection": "Contacts", "link_id": "dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#b.vcf", "seq": 2, "flags": [], "object": "c1", "level": 2, "deleted": 0 },
+        { "collection": "Contacts", "link_id": "dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#c.vcf", "seq": 3, "flags": [], "object": "c1", "level": 2, "deleted": 0 }
+      ],
+      "bindings": [
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "y.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1 },
+        { "collection": "Contacts", "link_id": "dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#b.vcf", "source": "dav", "handle": "z.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1 },
+        { "collection": "Contacts", "link_id": "dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#c.vcf", "source": "dav", "handle": "x.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r2", "base_present": 1 }
+      ],
+      "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "e0" }]
+    }
+  }
+}

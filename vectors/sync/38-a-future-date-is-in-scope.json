@@ -1,4 +1,5 @@
 {
+  "v": 1,
   "label": "a Date in the future is in a scope with an open ceiling",
   "note": "a clock set ahead dated 13 in 2035: the scope [2026-09-01, open) holds it, so when the round's listing lacks it the last page drops it as deleted, as it would any in-scope member. The drop is local: the row is retained and nothing is pushed (SYNC.md §5)",
   "store": {
