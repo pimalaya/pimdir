@@ -1,6 +1,6 @@
 -- Which of the message ids :ids names (a JSON array of bare ids, as Annex A.1
 -- stores in_reply_to and A.4 a task's mid) some live mail replies to, its
--- in_reply_to naming the id: a waiting task's mail answered (GTD.md §1). Mail
+-- in_reply_to naming the id: the mail a task came from answered. Mail
 -- filed under the sent or drafts role is the person's own and answers nothing.
 -- Each id answered once, in code point order. A scan of mail_summary, no index
 -- reading into a JSON array; the search part's thread tables answer it by seek.
