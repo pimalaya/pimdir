@@ -2,10 +2,11 @@
 --
 -- Applied by a migration runner (§6) against an empty database, inside a
 -- transaction; the runner sets `PRAGMA user_version = 1` on success. Pure DDL,
--- so every implementation applies the identical bytes. Requires SQLite >= 3.37
--- for STRICT tables and DROP COLUMN. While STORAGE.md is a draft this file is
--- edited in place; once version 1 is released it never changes, and a change
--- to the schema is a migration to the next version (§6).
+-- so every implementation of the canonical shape (§4.1) applies the identical
+-- bytes. Needs SQLite >= 3.37 for STRICT tables and DROP COLUMN, and no JSON
+-- function. While STORAGE.md is a draft this file is edited in place; once
+-- version 1 is released it never changes, and a change to the schema is a
+-- migration to the next version (§6).
 
 -- Store-level metadata: exactly one row.
 CREATE TABLE store_meta (
@@ -25,7 +26,10 @@ CREATE TABLE store_meta (
     next_change INTEGER NOT NULL DEFAULT 1,
     -- Rows that left without a stamp (§4.5): purged items and collected
     -- objects, counted by the delete triggers below.
-    purges      INTEGER NOT NULL DEFAULT 0
+    purges      INTEGER NOT NULL DEFAULT 0,
+    -- The statements the store is written in (§4.1): `pimdir` for the canonical
+    -- text, an implementation's own name for a shape of its own.
+    shape       TEXT    NOT NULL DEFAULT 'pimdir'
 ) STRICT;
 
 -- Collections: mailboxes, address books, calendars. Hierarchy is by `parent`,
@@ -195,7 +199,9 @@ CREATE TABLE items (
     collection      TEXT NOT NULL REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
     link_id         TEXT NOT NULL,         -- the key the item is filed under: the identity hint, escaped as esc:<hint> when it begins like a derived key, a kind fallback, or a minted dup:<hint>#<handle> (§9)
     seq             INTEGER NOT NULL,      -- public id, shared by every placement of the link id (§9.1)
-    flags           TEXT CHECK (flags IS NULL OR json_valid(flags)),  -- JSON array of flag strings
+    -- Whether the flag set is known: 1 its placement_flag rows are the set,
+    -- none being known-empty; 0 unknown, and then it holds no row.
+    flags_known     INTEGER NOT NULL DEFAULT 0 CHECK (flags_known IN (0, 1)),
     object_hash     TEXT REFERENCES objects(hash),  -- current body, NULL until hydrated
     sort_key        TEXT NOT NULL DEFAULT '',  -- the kind's ordering key, '' when unknown (§9.3)
     -- The detail ladder: 1 meta, 2 full (§13).
@@ -252,9 +258,9 @@ BEGIN
 END;
 
 CREATE TRIGGER items_stamp_update AFTER UPDATE OF
-    flags, object_hash, sort_key, level, deleted, retained_at, conflicted, conflict_object
+    flags_known, object_hash, sort_key, level, deleted, retained_at, conflicted, conflict_object
 ON items
-WHEN OLD.flags IS NOT NEW.flags
+WHEN OLD.flags_known IS NOT NEW.flags_known
   OR OLD.object_hash IS NOT NEW.object_hash
   OR OLD.sort_key IS NOT NEW.sort_key
   OR OLD.level IS NOT NEW.level
@@ -279,6 +285,46 @@ END;
 CREATE TRIGGER items_count_purge AFTER DELETE ON items
 BEGIN
     UPDATE store_meta SET purges = purges + 1 WHERE id = 1;
+END;
+
+-- A placement's flags (§13), one row per flag, while items.flags_known is 1.
+-- A flag is printable and holds no space, so a reader joins a set with spaces
+-- and splits it back (§14.1). The flag index answers a flag predicate by a
+-- seek rather than a scan of every placement.
+CREATE TABLE placement_flag (
+    collection TEXT NOT NULL,
+    link_id    TEXT NOT NULL,
+    flag       TEXT NOT NULL CHECK (flag != '' AND flag NOT GLOB '*[^!-~]*'),
+    PRIMARY KEY (collection, link_id, flag),
+    FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
+) STRICT, WITHOUT ROWID;
+
+CREATE INDEX placement_flag_by_flag ON placement_flag(flag, collection);
+
+-- An unknown set holds no row: a flag written under it fails here, and a set
+-- becoming unknown loses its rows.
+CREATE TRIGGER placement_flag_needs_known BEFORE INSERT ON placement_flag
+WHEN (SELECT flags_known FROM items WHERE collection = NEW.collection AND link_id = NEW.link_id) IS NOT 1
+BEGIN
+    SELECT RAISE(ABORT, 'flags unknown');
+END;
+
+CREATE TRIGGER items_forget_flags AFTER UPDATE OF flags_known ON items
+WHEN NEW.flags_known = 0
+BEGIN
+    DELETE FROM placement_flag WHERE collection = NEW.collection AND link_id = NEW.link_id;
+END;
+
+-- A flag added or removed requests the placement's stamp (§4.5), so a set
+-- written again as it was, which moves no row, stamps nothing.
+CREATE TRIGGER placement_flag_stamp_insert AFTER INSERT ON placement_flag
+BEGIN
+    UPDATE items SET changed = -1 WHERE collection = NEW.collection AND link_id = NEW.link_id;
+END;
+
+CREATE TRIGGER placement_flag_stamp_delete AFTER DELETE ON placement_flag
+BEGIN
+    UPDATE items SET changed = -1 WHERE collection = OLD.collection AND link_id = OLD.link_id;
 END;
 
 CREATE TRIGGER collections_stamp_insert AFTER INSERT ON collections
@@ -317,7 +363,9 @@ CREATE TABLE bindings (
     -- a write resolving this binding to another handle is refused, and the one
     -- licensed rebind is the handle-space rebuild (§10, §12).
     handle            TEXT NOT NULL,
-    base_flags        TEXT CHECK (base_flags IS NULL OR json_valid(base_flags)),  -- JSON array of strings, or NULL
+    -- Whether the base flag set is known, as items.flags_known says of the
+    -- item's: 1 its binding_base_flag rows are the set, 0 unknown.
+    base_flags_known  INTEGER NOT NULL DEFAULT 0 CHECK (base_flags_known IN (0, 1)),
     base_object       TEXT REFERENCES objects(hash),
     base_revision     TEXT,                -- etag/modseq for mutable-content backends
     -- Whether a base exists at all, which its three value columns cannot say: a
@@ -353,6 +401,33 @@ CREATE TABLE bindings (
     FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
 ) STRICT;
 
+-- A binding's base flags (§13), one row per flag, while
+-- bindings.base_flags_known is 1, spelled as placement_flag's. A base carries
+-- no stamp, so its writes draw none.
+CREATE TABLE binding_base_flag (
+    collection TEXT NOT NULL,
+    link_id    TEXT NOT NULL,
+    source     TEXT NOT NULL,
+    flag       TEXT NOT NULL CHECK (flag != '' AND flag NOT GLOB '*[^!-~]*'),
+    PRIMARY KEY (collection, link_id, source, flag),
+    FOREIGN KEY (collection, link_id, source) REFERENCES bindings(collection, link_id, source)
+        ON UPDATE CASCADE ON DELETE CASCADE
+) STRICT, WITHOUT ROWID;
+
+CREATE TRIGGER binding_base_flag_needs_known BEFORE INSERT ON binding_base_flag
+WHEN (SELECT base_flags_known FROM bindings
+      WHERE collection = NEW.collection AND link_id = NEW.link_id AND source = NEW.source) IS NOT 1
+BEGIN
+    SELECT RAISE(ABORT, 'base flags unknown');
+END;
+
+CREATE TRIGGER bindings_forget_base_flags AFTER UPDATE OF base_flags_known ON bindings
+WHEN NEW.base_flags_known = 0
+BEGIN
+    DELETE FROM binding_base_flag
+    WHERE collection = NEW.collection AND link_id = NEW.link_id AND source = NEW.source;
+END;
+
 -- What an `add` carrying `supersedes` replaced (§15.3): the item it tombstoned,
 -- keyed as that item, and the item the add created. The tombstone's remove is
 -- held while the superseding item is a pending create (list_superseded_pending,
@@ -379,7 +454,6 @@ CREATE TABLE mail_summary (
     collection   TEXT NOT NULL,
     link_id      TEXT NOT NULL,
     message_id   TEXT,                     -- bare Message-ID, angle brackets stripped
-    in_reply_to  TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(in_reply_to)),  -- JSON array of bare msg-ids, document order
     subject      TEXT NOT NULL,            -- decoded (RFC 2047), may be empty
     sender       TEXT,                     -- first From addr-spec, canonical (§13)
     sender_name  TEXT,                     -- its display name, decoded, or NULL
@@ -394,6 +468,19 @@ CREATE TABLE mail_summary (
 -- The mail inviting to a calendar item, for link_invitations_to (§14.2).
 -- Partial: most mail invites to nothing.
 CREATE INDEX mail_summary_by_invitation ON mail_summary(invitation) WHERE invitation IS NOT NULL;
+
+-- A message's In-Reply-To ids (Annex A.1), bare, `position` their 0-based
+-- document order. By id, for list_replied.
+CREATE TABLE mail_in_reply_to (
+    collection TEXT    NOT NULL,
+    link_id    TEXT    NOT NULL,
+    position   INTEGER NOT NULL,
+    msg_id     TEXT    NOT NULL,
+    PRIMARY KEY (collection, link_id, position),
+    FOREIGN KEY (collection, link_id) REFERENCES mail_summary(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
+) STRICT;
+
+CREATE INDEX mail_in_reply_to_by_id ON mail_in_reply_to(msg_id);
 
 -- text/vcard (Annex A.2). Every EMAIL is an item_address row.
 CREATE TABLE contact_summary (
@@ -443,7 +530,6 @@ CREATE TABLE task_summary (
     recurring     INTEGER,
     until         TEXT,
     priority      INTEGER CHECK (priority BETWEEN 0 AND 9),  -- PRIORITY, or NULL
-    categories    TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(categories)),  -- JSON array of CATEGORIES values, decoded
     parent        TEXT,                    -- the UID the first parent RELATED-TO names, or NULL
     mid           TEXT,                    -- the Message-ID the first mid: URI names, bare, or NULL
     created       TEXT,                    -- CREATED, else DTSTAMP, as an instant (Annex A.4), or NULL
@@ -456,6 +542,17 @@ CREATE TABLE task_summary (
 -- neither.
 CREATE INDEX task_summary_by_parent ON task_summary(parent) WHERE parent IS NOT NULL;
 CREATE INDEX task_summary_by_mid ON task_summary(mid) WHERE mid IS NOT NULL;
+
+-- A task's CATEGORIES values (Annex A.4), decoded, `position` their 0-based
+-- document order.
+CREATE TABLE task_category (
+    collection TEXT    NOT NULL,
+    link_id    TEXT    NOT NULL,
+    position   INTEGER NOT NULL,
+    value      TEXT    NOT NULL,
+    PRIMARY KEY (collection, link_id, position),
+    FOREIGN KEY (collection, link_id) REFERENCES task_summary(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
+) STRICT;
 
 CREATE TABLE journal_summary (
     collection    TEXT NOT NULL,
@@ -559,8 +656,8 @@ CREATE TRIGGER item_reference_collects_files AFTER DELETE ON item_reference
 WHEN OLD.from_kind = 'application/octet-stream' OR OLD.to_kind = 'application/octet-stream'
 BEGIN
     DELETE FROM items
-    WHERE link_id IN (iif(OLD.from_kind = 'application/octet-stream', OLD.from_link_id, NULL),
-                      iif(OLD.to_kind = 'application/octet-stream', OLD.to_link_id, NULL))
+    WHERE link_id IN (CASE WHEN OLD.from_kind = 'application/octet-stream' THEN OLD.from_link_id END,
+                      CASE WHEN OLD.to_kind = 'application/octet-stream' THEN OLD.to_link_id END)
       AND +object_hash IS NULL
       AND (SELECT kind FROM collections c WHERE c.id = items.collection) = 'application/octet-stream'
       AND NOT EXISTS (SELECT 1 FROM bindings b
@@ -579,6 +676,10 @@ CREATE TABLE queue (
     collection  TEXT    NOT NULL REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
     action      TEXT    NOT NULL,                   -- 'add' | 'set-flags' | 'remove' | 'move' | 'copy' | 'update' | 'set-performer' | an intent (§15.3, Annex B)
     payload     TEXT    NOT NULL,                   -- versioned JSON, shape per action (§15)
+    -- The collection a `move` or a `copy` targets, or the one holding the item
+    -- a superseding `add` replaces (§15.3): written beside the payload, so a
+    -- rename follows it, and read in place of the payload's own.
+    target_collection TEXT,
     object_hash TEXT    REFERENCES objects(hash),   -- pins the payload's body against the collector, or NULL
     attempts    INTEGER NOT NULL DEFAULT 0,
     error       TEXT                                -- last failure; non-NULL means parked

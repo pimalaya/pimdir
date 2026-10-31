@@ -1,6 +1,6 @@
 # Pimdir sync specification
 
-Status: sync-draft-05, requiring storage-draft-05
+Status: sync-draft-06, requiring storage-draft-07
 
 The sync part of the pimdir standard: how one or more sources reconcile through a store ([STORAGE.md](./STORAGE.md)), so the store is an offline replica of each source and every source sees every other's changes. It fixes what an engine derives from the store's rows and a source's answers, and what it writes back.
 
@@ -73,10 +73,10 @@ Placements are read from the store, never stored. For a collection and a source,
 1. `Conflict` when `bindings.conflicted` is 1, carrying `conflict_revision` and `conflict_object`; or when `items.conflicted` is 1, two sources disagreeing on the body (§9), which every binding of the item projects until an `Edit` or a `Remove` settles it (§7). Neither is downgraded.
 2. `Tombstone` when `items.deleted` is 1 and the source binds the item; the content is kept so an edit still beats the delete (§5). A tombstone whose binding has no base is a create the consumer withdrew: it derives no `Remove`, the write drops the binding and the item is retained (STORAGE §11).
 3. `Created` when the binding has no base (`base_present` 0, every base column `NULL`), or when the source does not bind the item, `items.deleted` is 0 and `object_hash` is present.
-4. `Dirty` when the flags differ from `base_flags`, both known; or, for a mutable kind, when `object_hash` is present and differs from `base_object` (a base naming no body differs from every body). A placement holding no body owes no body, whatever its base names.
+4. `Dirty` when the flags differ from the base flags as sets (`placement_flag` against `binding_base_flag`, STORAGE §13), both known; or, for a mutable kind, when `object_hash` is present and differs from `base_object` (a base naming no body differs from every body). A placement holding no body owes no body, whatever its base names.
 5. `Clean` otherwise.
 
-An unknown flag set (`NULL`) holds no opinion: neither an addition nor a removal. An unknown base is no base on the flag axis.
+An unknown flag set (`flags_known` or `base_flags_known` 0) holds no opinion: neither an addition nor a removal. An unknown base is no base on the flag axis.
 
 An immutable kind never owes a body: one identity is one message, and the write adopts the shared body as its base (§9).
 

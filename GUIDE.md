@@ -37,7 +37,7 @@ A **reader** opens the store and lists it:
 
 | Step | What | Where |
 | --- | --- | --- |
-| 1 | SQLite 3.37 or later, `PRAGMA foreign_keys = ON`, a read-only open, no lock | STORAGE §4.1, §8 |
+| 1 | SQLite 3.37 or later for the canonical shape, `PRAGMA foreign_keys = ON`, a read-only open, no lock; refuse a store whose `store_meta.shape` you do not implement | STORAGE §4.1, §8 |
 | 2 | Decode the columns as §13 says | STORAGE §13 |
 | 3 | Serve the reads from queries/storage/read/, live rows only, level-aware, snapshot-consistent | STORAGE §14.1 |
 | 4 | Follow the change feed for anything derived from the store | STORAGE §4.5 |
@@ -53,14 +53,14 @@ An **owner** is the one process that mutates the store:
 
 | Step | What | Where |
 | --- | --- | --- |
-| 7 | `STRICT` tables and WAL on a local store; apply migrations/storage/ through the runner of §3 | STORAGE §4.1, §6 |
+| 7 | WAL on a local store; apply migrations/storage/ through the runner of §3, or run a shape of your own that keeps the model and names itself in `store_meta.shape` | STORAGE §4.1, §6 |
 | 8 | Take the owner lock before any write; fail at once when it is held | STORAGE §8 |
 | 9 | Run the write transaction of §5 for every batch, with queries/storage/owner/ | STORAGE §14 |
 | 10 | Derive summaries, addresses and sort keys under Annex A for each kind written; pass vectors/summaries.json for that kind | STORAGE Annex A, §16 |
 | 11 | Retain rather than delete, purge a moved or requested row only, collect only under both locks and never between chunks | STORAGE §5, §11 |
 | 12 | Declare every source's capabilities before draining for it; drain the queue store-wide with claim-first, roll back before parking, park or skip as §13 says | STORAGE §15, §15.6 |
 
-An **engine** (SYNC) is an owner that reproduces every case under vectors/sync/. An **index** (SEARCH) adds SQLite 3.43 with FTS5, migrations/search/ and queries/search/, and every **query client** on it answers the cases under vectors/search/ alike.
+An **engine** (SYNC) is an owner that reproduces every case under vectors/sync/. An **index** (SEARCH) adds, for the canonical shape, SQLite 3.43 with FTS5, migrations/search/ and queries/search/, or a shape of its own answering the same hit sets, and every **query client** on it answers the cases under vectors/search/ alike.
 
 Use the statements verbatim. Each prepares against the canonical schema (checks/schema.sh proves it on every push), and checks/invariants.sh runs them through the scenarios the parts argue from. A substitute is yours to keep equivalent under STORAGE §7's invariants.
 
@@ -87,13 +87,15 @@ Use the statements verbatim. Each prepares against the canonical schema (checks/
 ## 3. The migration runner
 
 1. Read `PRAGMA user_version`; `0` is a fresh database. Above the highest NNNN you ship, refuse the store, naming both versions, and write nothing: never reconcile, migrate or rebuild it. A reader and a producer refuse the same way and stop here.
+   Read `store_meta.shape` (`pimdir` when the column is absent): a shape you do not implement is refused the same way, naming it; one of your own is reconciled by your own rules, never by these steps.
 2. At version 1, reconcile on open: while the store part is a draft, version 1 is edited in place, so a store stamped `1` may hold an earlier draft's shape.
-   - Build 0001_init.sql alone in an in-memory database. Compare each table, index and trigger with the store's by its `sqlite_schema` text, `--` comments dropped and whitespace collapsed. Note which canonical columns `PRAGMA table_info` lacks.
+   - Build 0001_init.sql alone in an in-memory database. Compare each table, index and trigger with the store's by its `sqlite_master` text, `--` comments dropped and whitespace collapsed. Note which canonical columns `PRAGMA table_info` lacks. On a store still holding `items.flags`, `bindings.base_flags`, `mail_summary.in_reply_to` or `task_summary.categories` (storage-draft-06 or earlier), read every such JSON array now with a `SELECT` of your own, before a rebuild drops the column.
    - Set `PRAGMA foreign_keys = OFF` and `PRAGMA legacy_alter_table = ON`, then `BEGIN`.
    - Run `repair_shared_objects`, `recompute_refcounts`, `repair_levels`, `repair_kinds`; the first two after `bindings` is rebuilt on a store lacking `shared_object`.
    - For each table whose text differs: drop its indexes and triggers, rename it to a scratch name, create it from the canonical text, copy the columns both hold, carry its `sqlite_sequence` counter, drop the scratch table.
    - Create what is missing, recreate what differs, drop what the canonical schema lacks (the probes table among them).
-   - Backfill the noted columns: `backfill_shared_object`; or `mail_summary.invitation` from the bodies `list_held_mail` pages, then `link_invitations_of` with `NULL`; or the four new `task_summary` columns from the bodies `list_held_tasks` pages, then the four task rules with `NULL`.
+   - Backfill the noted columns: `backfill_shared_object`; or `mail_summary.invitation` from the bodies `list_held_mail` pages, then `link_invitations_of` with `NULL`; or the new `task_summary` columns and its categories from the bodies `list_held_tasks` pages, then the four task rules with `NULL`.
+   - Write the arrays read before the rebuild to their tables: a known set with `backfill_flags_known`, `retain_flags` and `add_flags`, a known base with `backfill_base_flags_known`, `retain_base_flags` and `add_base_flags`, the ids with `insert_in_reply_to`, the categories with `insert_category`. A `NULL` set stays unknown. A flag §13 refuses aborts the transaction, the store refused naming it. A queue rebuilt with `target_collection` takes each `move`, `copy` and superseding `add` row's target from its payload (`backfill_target_collection`).
    - Run `recompute_refcounts` again, counting what the backfills wrote.
    - `PRAGMA foreign_key_check`; `COMMIT`; both pragmas back.
 
@@ -136,12 +138,12 @@ A statement ending in `RETURNING` (`add_reference`, `remove_reference`, `collect
    - Each `DropPlacement` names a handle: `link_for_handle` gives its link id; a handle nothing binds drops nothing.
    - Each `UpsertPlacement` carries a link id, and its handle is resolved the same way, so a handle bound to another link id is in the batch's diff. One carrying none for a handle nothing binds is refused: nothing enters the store unnamed.
    - A mail upsert naming by its bare hint an item another source binds and this one does not, whose `mail_summary` (`load_mail_summaries`) disagrees with the upsert's on subject, date or sender, is keyed `dup:<hint>#<handle>` instead, minted again over a held key, whichever step named it. A page before the last, a head and an upgrade load this source's holders alone, so the write enforces SYNC §10's rule.
-6. Read what the batch touches and nothing else: `load_items_by_link`, `load_bindings_by_link`, the kind's `load_<kind>_summaries` and `load_addresses_by_link`, bound to a JSON array of the batch's link ids, so step 7 writes a summary or an address set only when it moved.
+6. Read what the batch touches and nothing else: `load_items_by_link`, `load_bindings_by_link`, the kind's `load_<kind>_summaries`, `load_addresses_by_link`, and for mail and tasks `load_in_reply_to` and `load_categories`, the batch's link ids in the `links` slot (`clear_param`, then `bind_param` per id), so step 7 writes a summary, an address set or a list only when it moved.
 7. Merge each placement into its shared item and binding under SYNC §9 and §10, then persist the diff:
-   - a new item: `seq_for_link_any` for a stated hint, `bump_next_seq` when it returns nothing or the key is derived (`alt:`, `hash:`, `dup:`), then `insert_item`; a retained row under the same key (`retained_item`) is revived instead, `revive_item`, keeping its body when the placement carries none and releasing only the pins the revive replaced; a tombstone still propagating is revived the same way;
-   - a new binding: `insert_binding`; a binding whose handle differs from the incoming one is a refused write unless a `Superseded` or `Rekeyed` drop for the old handle precedes it in the same batch; a handle `link_for_handle` resolves to another link id is retired first, `delete_binding` and the retention of step 7's last bullet when it was the item's last (STORAGE §10);
-   - a moved item or binding: `update_item`, `update_binding`, which carries no handle;
-   - a named placement's summary and addresses, derived under Annex A: `upsert_<kind>_summary`, `replace_addresses` then one `insert_address` per row, and `stamp_item` when only those rows moved;
+   - a new item: `seq_for_link_any` for a stated hint, `bump_next_seq` when it returns nothing or the key is derived (`alt:`, `hash:`, `dup:`), then `insert_item`; its flags then follow, `retain_flags` and `add_flags` with the set in the `flags` slot, an unknown set leaving the slot empty and `flags_known` 0; a retained row under the same key (`retained_item`) is revived instead, `revive_item`, keeping its body when the placement carries none and releasing only the pins the revive replaced; a tombstone still propagating is revived the same way;
+   - a new binding: `insert_binding`, then `retain_base_flags` and `add_base_flags` for its base set; a binding whose handle differs from the incoming one is a refused write unless a `Superseded` or `Rekeyed` drop for the old handle precedes it in the same batch; a handle `link_for_handle` resolves to another link id is retired first, `delete_binding` and the retention of step 7's last bullet when it was the item's last (STORAGE §10);
+   - a moved item or binding: `update_item`, `update_binding`, which carries no handle, each followed by its set as above, a set written again as it was moving no row and drawing no stamp;
+   - a named placement's summary and addresses, derived under Annex A: `upsert_<kind>_summary`, `replace_addresses` then one `insert_address` per row, for mail `replace_in_reply_to` then one `insert_in_reply_to` per id, for a task `replace_categories` then one `insert_category` per value, and `stamp_item` when only those rows moved;
    - a `Deleted` drop of a binding: `delete_binding`; of the item's last binding: `delete_item_bindings` and `retain_item`, which stamps `retained_at` and keeps the body pinned; then, when `held_elsewhere`, bound to the retiring row's `object_hash`, finds the link id live in another collection of the account with that body, `purge_item` on `retained_item`'s seq and `release_pins`.
 8. A `Rekeyed` drop anywhere in the batch makes it a rebuild: `bump_generation` for the collection, once, in this transaction.
 9. `SetCheckpoint`: `upsert_checkpoint` for this source, last in the batch, with `set_coverage` for a `SetCoverage`. A round's ops, in batch order: `OpenRound`, `open_round` before the first page's upserts; `Stamp`, `stamp_bindings` with the page's handles after them; `SetRoundCursor`, `set_round_cursor`; `CloseRound`, `close_round`, last in the write after the last chunk.
@@ -170,7 +172,7 @@ Retention needs no step of its own: `retain_item` in the write transaction (§5 
 
 1. `BEGIN`.
 2. `purge_item` for one item by `(collection, seq)`, or `purge_retained_before` with an RFC 3339 cutoff the owner computed from its own policy. Both refuse a live row and return each removed row's `object_hash` and `conflict_object`.
-3. `release_pins` with a JSON array of those hashes.
+3. `release_pins` with those hashes in the `hashes` slot.
 4. `COMMIT`. The purge trigger counts the rows in `store_meta.purges` for the feed's consumers.
 5. Run the collector (§6) when convenient; that is where the bytes go.
 
@@ -192,7 +194,7 @@ Retention needs no step of its own: `retain_item` in the write transaction (§5 
 - **Display name**: `set_collection_name(collection, account, name)` records what the collection is called, which is not what addresses it. A frontend namespacing its ids (`work/INBOX`, `caldav/<uuid>`) writes the bare name here and renders it; the id stays the key, and nothing joins on the name.
 - **Role**: `set_collection_role(collection, role)` records what the source states a collection is for (`sent`, `trash`, `default`), or clears it with `NULL`. Write it on every sync from the source's own listing, next to the name, never from the name. Setting a role on one collection takes it from the one that held it; `list_collections` returns it.
 - **Policy**: `set_conflict` sets the collection's cross-source policy, `manual`, `prefer-incoming` or `prefer-existing`.
-- **Rename**: `rename_collection(collection, new_id)` with `rename_queue_targets(collection, new_id)` in one transaction: the first cascades every foreign key and restamps the items, the second follows the id into pending `move` and `copy` payloads. Deleting and recreating the row instead loses every staged edit. An account rename is one `rename_collection` per collection plus `set_collection_account`, in one transaction.
+- **Rename**: `rename_collection(collection, new_id)` with `rename_queue_targets(collection, new_id)` in one transaction: the first cascades every foreign key and restamps the items, the second follows the id into the `target_collection` of pending `move`, `copy` and superseding `add` rows, which the owner reads in place of the payload's. Deleting and recreating the row instead loses every staged edit. An account rename is one `rename_collection` per collection plus `set_collection_account`, in one transaction.
 - **Removal**: refused while the collection holds a pending or parked action, so cancel those first (§13). Then `delete_collection(collection)` then `recompute_refcounts`, in one transaction, then the collector when convenient. Ask `collection_holds_objects` first, and skip the store-wide recount when it answers false. Nothing under it is retained.
 - **Generation**: `bump_generation` in the same transaction as a rekey (§11) and nowhere else; `load_generation` for a frontend that advertises an epoch (an IMAP `UIDVALIDITY`).
 
@@ -430,7 +432,7 @@ Every other source then projects the change as its own `Dirty` or `Tombstone` an
 **Enqueue**, as a producer, under a shared lock on objects.lock held across the whole procedure:
 
 1. Write the body the action needs, if any (§4).
-2. `BEGIN`; `ensure_collection`; at most one `store_object` followed by `pin_object`; `enqueue_action` with the kind, the versioned JSON payload and the body's hash in `object_hash`; `COMMIT`. The statement stamps `created_at`.
+2. `BEGIN`; `ensure_collection`; at most one `store_object` followed by `pin_object`; `enqueue_action` with the kind, the versioned JSON payload, the collection it targets in `target_collection` (a `move` or `copy` `to`, a superseding `add`'s `supersedes.collection`) and the body's hash in `object_hash`; `COMMIT`. The statement stamps `created_at`.
 3. Release the lock. Do not assume when the owner will run. Keep the row's id, the one `enqueue_action` inserted, to follow it.
 
 **Follow** a row, as a producer or a reader: `load_action(id)` while it is pending or parked (`error` set); once gone, `load_receipt(id)`, whose `seq` is the item an `add` created. A performed intent has one too, its `seq` the item it left when its performer knew it. In neither, it was withdrawn or applied too long ago for its receipt.
@@ -492,7 +494,7 @@ Operators read `load_parked_actions` store-wide; a reader overlays `load_pending
 - **A sweep** that must see every row once: `list_items_page`, cursor on link id.
 - **People**: `list_address_placements(address, role)`, `role` `NULL` for any; `list_domain_placements` for a domain, by scan.
 - **Identity across collections**: `list_link_placements(link_id)`, `list_object_placements(hash)`, `seq_by_link`.
-- **Replies**: `list_replied(ids)`, the message ids among a JSON array of bare ones that a live mail answers, its `in_reply_to` naming them, mail under the `sent` or `drafts` role aside; a scan of `mail_summary`.
+- **Replies**: `list_replied(ids)`, the message ids among the bare ones of the `ids` slot that a live mail answers, its `mail_in_reply_to` rows naming them, mail under the `sent` or `drafts` role aside; a seek per id.
 - **References**: `references_from(kind, link_id)` and `references_to(kind, link_id)`, the kind being the collection's, then `describe_endpoint` on the other end to show it (`list_link_placements` for every placement), since a reference outlives a tombstone and a retention.
   - As the owner, `add_reference` with an `origin` of `auto` for a rule's and `user` for a person's. It answers the reference as it stands, new or not, and nothing for an end the store holds no row of or one under a derived key. `remove_reference` unlinks.
   - The last row of an endpoint takes its references with it, by trigger.
@@ -528,9 +530,10 @@ Never present a deleted row as live outside the trash view.
 
 1. Open index.db read-write and attach pimdir.db read-only as `store`. `load_index_meta`.
    - On a version or tokenizer mismatch, or a shape differing from migrations/search/0001_init.sql's: delete index.db, apply migrations/search/0001_init.sql, `init_index_meta` and `set_tzdb_version` with the version of the time zone database in use.
-   - The shape is each table, index and trigger that script creates, by name, compared by its `sqlite_schema` text as §3 compares a store's, FTS5's shadow tables and your own tables left out.
+   - The shape is each table, index and trigger that script creates, by name, compared by its `sqlite_master` text as §3 compares a store's, FTS5's shadow tables and your own tables left out.
 2. `load_change_cursor` from the store before the pass: the last stamp drawn and the purge count.
 3. `load_changed_items` above the `store_change` recorded by the previous pass, in stamp order, in bounded batches, one index transaction each. A batch may record the `changed` of its last row through `set_index_cursor`, with the purge count and the `store_reconciled` the last completed pass recorded. Per row:
+   - Fold every text you write under SEARCH §5 (lowercase, NFD, the marks of U+0300 to U+036F dropped, NFC), the tokenizer folding none.
    - `object_indexed`, else extract the body under SEARCH §6, the role fields beside `people`, and `insert_object`, with whether the `attachment` field holds any text and, for a card, whether it holds a `TEL`, an `ADR`, a `BDAY` and a `PHOTO`, plus `insert_object_text` and, for a card, `insert_object_category` for each of its folded `CATEGORIES` values, then `insert_chunk` for each chunk SEARCH §6 cuts the `body` and `note` fields into; no `object` row for a blob that is not there;
    - `upsert_placement`;
    - `delete_summary_text` then `insert_summary_text` for a bodiless row, and `delete_summary_text` once it has a body;
@@ -545,7 +548,7 @@ Never present a deleted row as live outside the trash view.
 **Query**, as a client, on index.db read-only with the store attached:
 
 1. Parse the query under SEARCH §8.3, answering a refusal as SEARCH §8.4 shapes it: the phrases, then the parentheses, then the terms and operators in reading order, the first fault found.
-2. Compile it. Structured terms go to seeks: `list_address_placements` on the store for an address, a range on the sort key, `flagged`, `occurring_between`, `thread_members` in the query's account, `status:`, `priority:` and a task's `category:` to `task_summary` on the attached store, and a card's `category:` to `categorised`. Text terms go to `match_objects` and `match_summaries`, with a role field named for a role term.
+2. Compile it. Structured terms go to seeks: `list_address_placements` on the store for an address, a range on the sort key, `flagged`, `occurring_between`, `thread_members` in the query's account, `status:` and `priority:` to `task_summary` and a task's `category:` to `task_category` on the attached store, and a card's `category:` to `categorised`. Text terms, folded as the indexer folds (SEARCH §5), go to `match_objects` and `match_summaries`, with a role field named for a role term.
 
    `has:attachment` reads the mark for mail and `attached` for a calendar item; `has:phone`, `has:address`, `has:birthday` and `has:photo` read `holding`; `id:` with digits alone names a `seq` and a link id both.
 3. Intersect, and order by the store's sort key.

@@ -1,4 +1,4 @@
--- Resolve link ids (a JSON array) to a hydrated body hash, scoped to the
+-- Resolve link ids (the `links` slot) to a hydrated body hash, scoped to the
 -- caller's account, the only axis a link id is trustworthy on: two unrelated
 -- servers may mint the same vCard UID (§9.2), and answering across accounts
 -- hands one account's body to the other's sync. A single-account store binds
@@ -14,6 +14,6 @@ SELECT i.link_id, i.object_hash, o.size FROM items i
 JOIN collections c ON c.id = i.collection
 JOIN objects o ON o.hash = i.object_hash
 WHERE i.object_hash IS NOT NULL
-  AND i.link_id IN (SELECT value FROM json_each(:links))
+  AND i.link_id IN (SELECT value FROM temp.param WHERE slot = 'links')
   AND i.link_id NOT LIKE 'alt:%' AND i.link_id NOT LIKE 'hash:%' AND i.link_id NOT LIKE 'dup:%'
   AND c.account IS :account;

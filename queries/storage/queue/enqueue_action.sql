@@ -2,5 +2,8 @@
 -- the store_object upsert when the payload references a body (§15). SQLite
 -- stamps created_at (§13): the producer is a different process from the owner
 -- and may be differently skewed, and ordering is `id` either way.
-INSERT INTO queue(created_at, producer, collection, action, payload, object_hash)
-VALUES(strftime('%Y-%m-%dT%H:%M:%fZ','now'), :producer, :collection, :action, :payload, :object_hash);
+-- :target_collection is the collection the payload's `to` or
+-- `supersedes.collection` names, NULL for any other action (§15.3).
+INSERT INTO queue(created_at, producer, collection, action, payload, target_collection, object_hash)
+VALUES(strftime('%Y-%m-%dT%H:%M:%fZ','now'), :producer, :collection, :action, :payload,
+       :target_collection, :object_hash);

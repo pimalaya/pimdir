@@ -22,15 +22,71 @@ sql() {
     sqlite3 "$dir/pimdir.db" "PRAGMA foreign_keys = ON; $*"
 }
 
+# flags <collection> <link_id>, base_flags <collection> <link_id> <source>: a
+# set, sorted, joined with spaces.
+flags() {
+    sql "SELECT group_concat(flag, ' ') FROM (SELECT flag FROM placement_flag
+         WHERE collection = '$1' AND link_id = '$2' ORDER BY flag);"
+}
+
+base_flags() {
+    sql "SELECT group_concat(flag, ' ') FROM (SELECT flag FROM binding_base_flag
+         WHERE collection = '$1' AND link_id = '$2' AND source = '$3' ORDER BY flag);"
+}
+
+# params <slot> <'["a","b"]'>: fills one slot of the list parameters' table
+# (create_param) the way bind_param does, one row per value in order. The
+# harness spells a list as JSON for brevity; the canonical text reads none.
+params() {
+    echo "INSERT INTO temp.param(slot, position, value) SELECT '$1', key, value FROM json_each($2);"
+}
+
 # run <profile/name> [:param=literal...]: runs one canonical statement, bound.
+# A list parameter is written as a JSON array literal, `:links='["a"]'`, and
+# bound through its slot (§4.4), `:links` NULL standing for :scoped 0. A
+# `:flags` or `:base_flags` list on a row write binds the set as known and
+# writes it after the row with retain_flags and add_flags (or their base
+# twins), NULL binding it unknown. A `.name=value` binding is a dot command.
+bindings() {
+    local binding name value
+    cat "$root/queries/storage/read/create_param.sql"
+    for binding in "$@"; do
+        name="${binding%%=*}"
+        value="${binding#*=}"
+        case "$name:$value" in
+            :flags:NULL | :base_flags:NULL)
+                echo ".parameter set ${name}_known 0" ;;
+            ":flags:'["* | ":base_flags:'["*)
+                echo ".parameter set ${name}_known 1"
+                params flags "$value" ;;
+            .*)
+                echo "$name $value" ;;
+            :links:NULL)
+                echo ".parameter set :scoped 0" ;;
+            *":'["*)
+                params "${name#:}" "$value"
+                echo ".parameter set :scoped 1" ;;
+            *)
+                echo ".parameter set $name $value" ;;
+        esac
+    done
+}
+
 run() {
     local file="$1"; shift
+    local after=""
+    case " $* " in
+        *" :flags='["*) after=flags ;;
+        *" :base_flags='["*) after=base_flags ;;
+    esac
     {
         echo "PRAGMA foreign_keys = ON;"
-        for binding in "$@"; do
-            echo ".parameter set ${binding%%=*} ${binding#*=}"
-        done
+        bindings "$@"
         cat "$root/queries/storage/$file.sql"
+        case "$after" in
+            flags) cat "$root/queries/storage/owner/retain_flags.sql" "$root/queries/storage/owner/add_flags.sql" ;;
+            base_flags) cat "$root/queries/storage/owner/retain_base_flags.sql" "$root/queries/storage/owner/add_base_flags.sql" ;;
+        esac
     } | sqlite3 "$dir/pimdir.db"
 }
 
@@ -54,9 +110,7 @@ expect() {
 plan() {
     local file="$1"; shift
     {
-        for binding in "$@"; do
-            echo ".parameter set ${binding%%=*} ${binding#*=}"
-        done
+        bindings "$@"
         echo "EXPLAIN QUERY PLAN"
         cat "$root/queries/storage/$file.sql"
     } | sqlite3 "$dir/pimdir.db"
@@ -110,6 +164,66 @@ cursor="$(run read/load_change_cursor | cut -d'|' -f1)"
 run owner/rename_collection ":collection='INBOX'" ":new_id='Archive'"
 expect "feed: a rename restamps every item under the new id" \
     "$(run read/list_items_changed_since ":since=$cursor" ":limit=10" | cut -d'|' -f1 | sort -u)" "Archive"
+
+# --- Flags are rows, read as a set (§13, §14.1) ------------------------------
+
+fresh
+collection INBOX
+item INBOX a 1
+item INBOX u 2
+run owner/update_item ":collection='INBOX'" ":link_id='u'" ":flags=NULL" ":object_hash=NULL" ":sort_key=''" \
+    ":level=2" ":deleted=0" ":conflicted=0" ":conflict_object=NULL"
+write_flags() {
+    run owner/update_item ":collection='INBOX'" ":link_id='a'" ":flags=$1" ":object_hash=NULL" ":sort_key=''" \
+        ":level=2" ":deleted=0" ":conflicted=0" ":conflict_object=NULL"
+}
+expect "flags: known-empty reads as '', unknown as NULL" \
+    "$(run read/get_item ":collection='INBOX'" ":seq=1" ".nullvalue=NULL" | cut -d'|' -f3)|$(run read/get_item ":collection='INBOX'" ":seq=2" ".nullvalue=NULL" | cut -d'|' -f3)" "|NULL"
+before="$(sql "SELECT changed FROM items WHERE link_id = 'a';")"
+write_flags "'[\"\\\\Seen\",\"\$label\"]'"
+expect "flags: a set is its rows, read joined with spaces, and moves the stamp" \
+    "$(run read/get_item ":collection='INBOX'" ":seq=1" | cut -d'|' -f3 | tr ' ' '\n' | sort | tr '\n' ' ')|$(sql "SELECT changed > $before FROM items WHERE link_id = 'a';")" \
+    "\$label \\Seen |1"
+before="$(sql "SELECT changed FROM items WHERE link_id = 'a';")"
+write_flags "'[\"\$label\",\"\\\\Seen\",\"\\\\Seen\"]'"
+expect "flags: a set written again as it was stamps nothing, a flag named twice once" \
+    "$(sql "SELECT changed = $before FROM items WHERE link_id = 'a';")|$(flags INBOX a)" "1|\$label \\Seen"
+write_flags "'[\"\\\\Seen\"]'"
+expect "flags: a flag the set no longer names goes and moves the stamp" \
+    "$(sql "SELECT changed > $before FROM items WHERE link_id = 'a';")|$(flags INBOX a)" "1|\\Seen"
+expect "flags: an unknown set refuses a flag" \
+    "$(sql "INSERT INTO placement_flag(collection, link_id, flag) VALUES('INBOX', 'u', '\\Seen');" 2>&1 | grep -c 'flags unknown')" "1"
+expect "flags: a flag holding a space or a control character, or empty, is refused" \
+    "$(sql "INSERT INTO placement_flag VALUES('INBOX', 'a', 'two words');" 2>&1 | grep -c CHECK)$(sql "INSERT INTO placement_flag VALUES('INBOX', 'a', 'tab' || char(9));" 2>&1 | grep -c CHECK)$(sql "INSERT INTO placement_flag VALUES('INBOX', 'a', '');" 2>&1 | grep -c CHECK)" "111"
+write_flags NULL
+expect "flags: a set becoming unknown loses its rows" \
+    "$(sql "SELECT count(*) FROM placement_flag WHERE link_id = 'a';")|$(run read/get_item ":collection='INBOX'" ":seq=1" | cut -d'|' -f3)" "0|"
+write_flags "'[\"\\\\Flagged\"]'"
+run owner/rename_collection ":collection='INBOX'" ":new_id='Archive'"
+expect "flags: a rename carries them, a purge takes them" \
+    "$(flags Archive a)|$(sql "DELETE FROM items WHERE link_id = 'a'; SELECT count(*) FROM placement_flag;")" "\\Flagged|0"
+
+fresh
+collection INBOX
+item INBOX a 1
+run owner/insert_binding ":collection='INBOX'" ":link_id='a'" ":source='imap'" ":handle='10'" \
+    ":base_flags='[\"\\\\Seen\"]'" ":base_object=NULL" ":base_revision=NULL" ":base_present=1" \
+    ":conflicted=0" ":conflict_revision=NULL" ":conflict_object=NULL" ":shared_object=NULL"
+expect "base flags: a base set is its rows, read joined" \
+    "$(run read/list_item_bindings ":collection='INBOX'" ":link_id='a'" | cut -d'|' -f4)" "\\Seen"
+run owner/update_binding ":collection='INBOX'" ":link_id='a'" ":source='imap'" ":base_flags=NULL" ":base_object=NULL" \
+    ":base_revision=NULL" ":base_present=1" ":conflicted=0" ":conflict_revision=NULL" ":conflict_object=NULL" ":shared_object=NULL"
+expect "base flags: an unknown base holds no row and refuses one" \
+    "$(base_flags INBOX a imap)|$(sql "INSERT INTO binding_base_flag VALUES('INBOX', 'a', 'imap', '\\Seen');" 2>&1 | grep -c 'base flags unknown')" "|1"
+sql "UPDATE bindings SET base_flags_known = 0; UPDATE items SET flags_known = 0;"
+run owner/backfill_flags_known ":collection='INBOX'" ":link_id='a'"
+run owner/add_flags ":collection='INBOX'" ":link_id='a'" ":flags='[\"\\\\Answered\"]'"
+run owner/backfill_base_flags_known ":collection='INBOX'" ":link_id='a'" ":source='imap'"
+run owner/add_base_flags ":collection='INBOX'" ":link_id='a'" ":source='imap'" ":flags='[\"\\\\Answered\"]'"
+expect "reconcile: a set an earlier draft held lands in its tables once marked known" \
+    "$(flags INBOX a)|$(base_flags INBOX a imap)" "\\Answered|\\Answered"
+expect "store_meta: a store records the canonical shape by default" \
+    "$(sql "SELECT shape FROM store_meta;")" "pimdir"
 
 # --- The trash view and the terminal states (§11) ----------------------------
 
@@ -223,14 +337,18 @@ expect "replace: the copy keeps the body the intent pinned" \
 fresh
 collection INBOX
 collection Archive
-run queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='move'" ":payload='{\"v\":1,\"seq\":5,\"to\":\"Archive\"}'" ":object_hash=NULL"
+run queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='move'" ":payload='{\"v\":1,\"seq\":5,\"to\":\"Archive\"}'" ":target_collection='Archive'" ":object_hash=NULL"
 run queue/enqueue_action ":producer='p'" ":collection='Archive'" ":action='set-flags'" ":payload='{\"v\":1,\"seq\":5,\"flags\":[]}'" ":object_hash=NULL"
 expect "queue: the drain is store-wide in append order" \
     "$(run owner/list_pending_actions | cut -d'|' -f5 | tr '\n' ' ')" "move set-flags "
 run owner/rename_queue_targets ":collection='Archive'" ":new_id='Archive-2026'"
 run owner/rename_collection ":collection='Archive'" ":new_id='Archive-2026'"
 expect "queue: a rename follows into a pending move" \
-    "$(sql "SELECT json_extract(payload, '\$.to') FROM queue WHERE action = 'move';")" "Archive-2026"
+    "$(sql "SELECT target_collection FROM queue WHERE action = 'move';")" "Archive-2026"
+sql "UPDATE queue SET target_collection = NULL;"
+run owner/backfill_target_collection ":id=1" ":target_collection='Archive-2026'"
+expect "queue: a reconciled queue takes its target from the payload, row by row" \
+    "$(sql "SELECT id, ifnull(target_collection, '-') FROM queue ORDER BY id;" | tr '\n' ' ')" "1|Archive-2026 2|- "
 
 # --- Removing a collection settles its pins (§14) ----------------------------
 
@@ -452,10 +570,10 @@ collection INBOX
 run queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='add'" ":payload='{\"v\":1,\"link_id\":\"mid:a\"}'" ":object_hash=NULL"
 run queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='remove'" ":payload='{\"v\":1,\"seq\":9}'" ":object_hash=NULL"
 expect "receipt: a pending row reads as itself, unparked" \
-    "$(run read/load_action ":id=1" | cut -d'|' -f1,4,5,8)" "1|INBOX|add|"
+    "$(run read/load_action ":id=1" | cut -d'|' -f1,4,5,9)" "1|INBOX|add|"
 run owner/park_action ":id=2" ":error='unknown seq: 9'"
 expect "receipt: a parked row reads with its error" \
-    "$(run read/load_action ":id=2" | cut -d'|' -f8)" "unknown seq: 9"
+    "$(run read/load_action ":id=2" | cut -d'|' -f9)" "unknown seq: 9"
 run owner/claim_action ":id=1" >/dev/null
 item INBOX mid:a 7
 run owner/record_receipt ":id=1" ":collection='INBOX'" ":seq=$(run read/seq_by_link ":collection='INBOX'" ":link_id='mid:a'")"
@@ -526,7 +644,7 @@ mail INBOX recent 1 30 "'2026-10-06T08:00:00Z'"
 mail INBOX old 2 10 "'2026-08-01T10:00:00Z'"
 mail INBOX nodate 3 20 NULL
 mail INBOX gone 4 25 "'2026-10-01T00:00:00Z'"
-sql "INSERT INTO items(collection, link_id, seq, flags, level) VALUES('INBOX', 'draft', 5, '[]', 2);
+sql "INSERT INTO items(collection, link_id, seq, flags_known, level) VALUES('INBOX', 'draft', 5, 1, 2);
      INSERT INTO bindings(collection, link_id, source, handle) VALUES('INBOX', 'draft', 'imap', char(1) || 'draft');
      INSERT INTO mail_summary(collection, link_id, subject, date) VALUES('INBOX', 'draft', '', '2026-10-06T09:00:00Z');"
 run owner/upsert_checkpoint ":collection='INBOX'" ":source='imap'" ":checkpoint=x'6330'"
@@ -610,7 +728,7 @@ mail INBOX dirty 2 11 "'2026-08-01T10:00:00Z'" '["\\Flagged"]' '[]'
 mail INBOX recent 3 12 "'2026-10-06T08:00:00Z'"
 mail INBOX nodate 4 13 NULL
 mail Archive old 1 10 "'2026-08-01T10:00:00Z'"
-sql "INSERT INTO items(collection, link_id, seq, flags, level) VALUES('INBOX', 'created', 5, '[]', 2);
+sql "INSERT INTO items(collection, link_id, seq, flags_known, level) VALUES('INBOX', 'created', 5, 1, 2);
      INSERT INTO bindings(collection, link_id, source, handle) VALUES('INBOX', 'created', 'imap', char(1) || 'created');
      INSERT INTO mail_summary(collection, link_id, subject, date) VALUES('INBOX', 'created', '', '2026-08-01T10:00:00Z');"
 run owner/recompute_refcounts
@@ -668,16 +786,16 @@ sql "UPDATE items SET sort_key = coalesce((SELECT date FROM mail_summary s WHERE
      UPDATE items SET conflicted = 1, conflict_object = 'hc' WHERE link_id = 'conflicted';
      UPDATE bindings SET conflicted = 1 WHERE link_id = 'diverged';
      UPDATE bindings SET base_object = 'h1' WHERE link_id = 'edited';
-     UPDATE bindings SET base_present = 0, base_flags = NULL WHERE link_id = 'witness';
+     UPDATE bindings SET base_present = 0, base_flags_known = 0 WHERE link_id = 'witness';
      UPDATE items SET deleted = 1 WHERE link_id = 'gone';
-     INSERT INTO items(collection, link_id, seq, flags, object_hash, sort_key, level) VALUES
-         ('INBOX', 'created', 20, '[]', 'h9', '2026-08-01T10:00:00Z', 2),
-         ('INBOX', 'lone', 21, '[]', 'h9', '2026-08-01T10:00:00Z', 2),
-         ('Cards', 'card', 22, NULL, 'h9', '2026-08-01', 2);
+     INSERT INTO items(collection, link_id, seq, flags_known, object_hash, sort_key, level) VALUES
+         ('INBOX', 'created', 20, 1, 'h9', '2026-08-01T10:00:00Z', 2),
+         ('INBOX', 'lone', 21, 1, 'h9', '2026-08-01T10:00:00Z', 2),
+         ('Cards', 'card', 22, 0, 'h9', '2026-08-01', 2);
      INSERT INTO bindings(collection, link_id, source, handle) VALUES('INBOX', 'created', 'imap', char(1) || 'created');
      INSERT INTO bindings(collection, link_id, source, handle, base_present, base_object) VALUES('Cards', 'card', 'dav', 'c', 1, 'h9');
-     INSERT INTO bindings(collection, link_id, source, handle, base_flags, base_object, base_present)
-         VALUES('Both', 'full', 'graph', 'g20', '[]', 'h9', 1);
+     INSERT INTO bindings(collection, link_id, source, handle, base_flags_known, base_object, base_present)
+         VALUES('Both', 'full', 'graph', 'g20', 1, 'h9', 1);
      INSERT INTO sources(collection, source) VALUES('Both', 'imap'), ('Both', 'graph');"
 run owner/recompute_refcounts
 cursor="$(run read/load_change_cursor | cut -d'|' -f1)"
@@ -692,13 +810,13 @@ expect "release: a conflict, a diverged binding, a local edit, a pending create,
 expect "release: a tombstone, a newer item, a conflicted one and another kind keep their bases" \
     "$(sql "SELECT count(*) FROM bindings WHERE link_id IN ('gone', 'recent', 'conflicted', 'card') AND base_object IS NOT NULL;")|$(sql "SELECT object_hash FROM items WHERE link_id = 'gone';")" "4|h9"
 expect "release: back to Meta, flags, summary and addresses kept" \
-    "$(sql "SELECT level, flags FROM items WHERE collection = 'INBOX' AND link_id = 'dirty';")|$(sql "SELECT count(*) FROM mail_summary WHERE collection = 'INBOX' AND link_id IN ('old', 'dirty', 'nodate', 'witness');")" \
-    '1|["\\Flagged"]|4'
+    "$(sql "SELECT level, flags_known FROM items WHERE collection = 'INBOX' AND link_id = 'dirty';")|$(flags INBOX dirty)|$(sql "SELECT count(*) FROM mail_summary WHERE collection = 'INBOX' AND link_id IN ('old', 'dirty', 'nodate', 'witness');")" \
+    '1|1|\Flagged|4'
 expect "release: a shared body naming the released body lets go of it, another stays" \
     "$(sql "SELECT count(*) FROM bindings WHERE link_id IN ('old', 'dirty', 'nodate', 'witness') AND collection = 'INBOX' AND shared_object IS NULL;")|$(sql "SELECT shared_object FROM bindings WHERE link_id = 'edited';")" "4|h7"
 expect "release: the bases let go of the body, every binding still based, its flags kept" \
-    "$(sql "SELECT count(*) FROM bindings WHERE link_id IN ('old', 'dirty', 'nodate', 'witness', 'full') AND collection != 'Archive' AND base_object IS NULL AND base_present = 1;")|$(sql "SELECT base_flags FROM bindings WHERE link_id = 'dirty';")" \
-    "6|[]"
+    "$(sql "SELECT count(*) FROM bindings WHERE link_id IN ('old', 'dirty', 'nodate', 'witness', 'full') AND collection != 'Archive' AND base_object IS NULL AND base_present = 1;")|$(sql "SELECT base_flags_known FROM bindings WHERE link_id = 'dirty';")|$(base_flags INBOX dirty imap)" \
+    "6|1|"
 expect "release: a body held elsewhere stays pinned, the rest fall to the collector" \
     "$(run owner/list_garbage_objects | sort | tr '\n' ' ')|$(sql "SELECT refcount FROM objects WHERE hash = 'h1';")" "h2 h3 h8 |4"
 expect "release: each released item moves in the feed" \
@@ -1071,8 +1189,8 @@ run owner/update_item ":collection='Local'" ":link_id='note'" ":flags='[\"\\\\Fl
     ":level=2" ":deleted=0" ":conflicted=0" ":conflict_object=NULL"
 run owner/retain_item ":collection='Local'" ":link_id='gone'" ":source='owner'"
 expect "unbound: a set-flags applies to the item directly and moves its stamp; a remove retains it, its body still pinned" \
-    "$(sql "SELECT flags, changed > $before FROM items WHERE link_id = 'note';")|$(sql "SELECT deleted, retained_at IS NOT NULL, object_hash FROM items WHERE link_id = 'gone';")|$(run read/count_retained ":collection='Local'")" \
-    "[\"\\\\Flagged\"]|1|1|1|hn|1"
+    "$(flags Local note)|$(sql "SELECT changed > $before FROM items WHERE link_id = 'note';")|$(sql "SELECT deleted, retained_at IS NOT NULL, object_hash FROM items WHERE link_id = 'gone';")|$(run read/count_retained ":collection='Local'")" \
+    "\\Flagged|1|1|1|hn|1"
 
 # --- An add superseding an item holds its delete until it is pushed (§15.3) --
 
@@ -1101,7 +1219,7 @@ expect "supersedes: a pending superseding create holds the tombstone" \
     "$(run owner/list_superseded_pending ":collection='tasks-a'")" "t1"
 expect "supersedes: nothing is held in the superseding collection" \
     "$(run owner/list_superseded_pending ":collection='tasks-b'")" ""
-sql "UPDATE bindings SET handle = 'n1.ics', base_flags = '[]', base_present = 1 WHERE collection = 'tasks-b';"
+sql "UPDATE bindings SET handle = 'n1.ics', base_flags_known = 1, base_present = 1 WHERE collection = 'tasks-b';"
 expect "supersedes: the create accepted releases the hold" \
     "$(run owner/list_superseded_pending ":collection='tasks-a'")" ""
 run owner/delete_item_bindings ":collection='tasks-b'" ":link_id='n1'"
@@ -1157,7 +1275,7 @@ sql "UPDATE items SET deleted = 0 WHERE collection = 'tasks-a' AND link_id = 't1
 expect "supersedes: a revived item is no member to move" \
     "$(run owner/list_superseded_bindings ":collection='tasks-b'" ":source='caldav'")" ""
 sql "UPDATE items SET deleted = 1 WHERE collection = 'tasks-a' AND link_id = 't1';"
-sql "UPDATE bindings SET handle = 'a.ics', base_flags = '[]', base_present = 1 WHERE collection = 'tasks-b' AND link_id = 't1';"
+sql "UPDATE bindings SET handle = 'a.ics', base_flags_known = 1, base_present = 1 WHERE collection = 'tasks-b' AND link_id = 't1';"
 expect "supersedes: the create accepted has nothing left to move" \
     "$(run owner/list_superseded_bindings ":collection='tasks-b'" ":source='caldav'")" ""
 
@@ -1165,27 +1283,35 @@ fresh
 run owner/set_collection_kind ":collection='tasks-a'" ":account=NULL" ":kind='$cal_kind'"
 run owner/set_collection_kind ":collection='tasks-b'" ":account=NULL" ":kind='$cal_kind'"
 run queue/enqueue_action ":producer='p'" ":collection='tasks-b'" ":action='add'" \
-    ":payload='{\"v\":1,\"flags\":[],\"supersedes\":{\"collection\":\"tasks-a\",\"seq\":1}}'" ":object_hash=NULL"
+    ":payload='{\"v\":1,\"flags\":[],\"supersedes\":{\"collection\":\"tasks-a\",\"seq\":1}}'" ":target_collection='tasks-a'" ":object_hash=NULL"
 run queue/enqueue_action ":producer='p'" ":collection='tasks-b'" ":action='add'" ":payload='{\"v\":1,\"flags\":[]}'" ":object_hash=NULL"
 run owner/rename_queue_targets ":collection='tasks-a'" ":new_id='tasks-2026'"
 run owner/rename_collection ":collection='tasks-a'" ":new_id='tasks-2026'"
 expect "supersedes: a rename follows into a pending add's supersedes, and leaves a plain add alone" \
-    "$(sql "SELECT ifnull(json_extract(payload, '\$.supersedes.collection'), '-') FROM queue ORDER BY id;" | tr '\n' ' ')" "tasks-2026 - "
+    "$(sql "SELECT ifnull(target_collection, '-') FROM queue ORDER BY id;" | tr '\n' ' ')" "tasks-2026 - "
 
 # --- A task's source mail answered is a reply another mail names (§14.1) ----
+
+# reply <link_id> <position> <msg_id>: one In-Reply-To id of a mail.
+reply() {
+    run owner/insert_in_reply_to ":collection='$(sql "SELECT collection FROM items WHERE link_id = '$1';")'" \
+        ":link_id='$1'" ":position=$2" ":msg_id='$3'"
+}
 
 fresh
 collection INBOX
 collection Sent
 run owner/set_collection_role ":collection='Sent'" ":role='sent'"
 mail INBOX r1 1 10 NULL
-sql "UPDATE mail_summary SET in_reply_to = '[\"other@x\",\"asked@x\"]' WHERE link_id = 'r1';"
+reply r1 0 other@x
+reply r1 1 asked@x
 mail Sent r2 2 11 NULL
-sql "UPDATE mail_summary SET in_reply_to = '[\"mine@x\"]' WHERE link_id = 'r2';"
+reply r2 0 mine@x
 mail INBOX r3 3 12 NULL
-sql "UPDATE mail_summary SET in_reply_to = '[\"gone@x\"]' WHERE link_id = 'r3'; UPDATE items SET deleted = 1 WHERE link_id = 'r3';"
+reply r3 0 gone@x
+sql "UPDATE items SET deleted = 1 WHERE link_id = 'r3';"
 mail INBOX r4 4 13 NULL
-sql "UPDATE mail_summary SET in_reply_to = '[\"asked@x\"]' WHERE link_id = 'r4';"
+reply r4 0 asked@x
 expect "replied: an id a live mail answers, once; the person's own reply and a deleted one answer nothing" \
     "$(run read/list_replied ":ids='[\"asked@x\",\"mine@x\",\"gone@x\",\"never@x\"]'" | tr '\n' ' ')" "asked@x "
 
@@ -1279,7 +1405,7 @@ printf '.dbconfig defensive off\n%s\n' "PRAGMA writable_schema = ON;
     UPDATE sqlite_schema SET sql = replace(sql, 'shared_object     TEXT REFERENCES objects(hash),', 'shared_object     TEXT,') WHERE name = 'bindings';
     UPDATE sqlite_schema SET sql = replace(sql, 'AUTOINCREMENT,', 'AUTOINCREMENT, -- a comment of an earlier owner') WHERE name = 'queue';" | sqlite3 "$dir/pimdir.db" >/dev/null
 sql "INSERT INTO collections(id, kind, name) VALUES('Lists', 'text/x-vlist', 'Lists');
-     INSERT INTO items(collection, link_id, seq, flags, level) VALUES('INBOX', 'old', 9, '[]', 0);
+     INSERT INTO items(collection, link_id, seq, flags_known, level) VALUES('INBOX', 'old', 9, 1, 0);
      DROP INDEX bindings_by_shared_object;
      INSERT INTO bindings(collection, link_id, source, handle, base_present, shared_object) VALUES('INBOX', 'old', 'imap', '9', 1, 'swept');"
 # What another implementation kept in the store: a table and a column of its
@@ -1332,9 +1458,11 @@ expect "reconcile: list_held_tasks pages the task rows holding a body, no event,
     "$(run owner/list_held_tasks ":after_collection=NULL" ":after_link_id=NULL" ":limit=10" | cut -d'|' -f2,4)|$(run owner/list_held_tasks ":after_collection='Cal'" ":after_link_id='tk'" ":limit=10")" "tk|hb|"
 run owner/backfill_invitation ":collection='INBOX'" ":link_id='held'" ":invitation='ev'"
 run owner/backfill_invitation ":collection='INBOX'" ":link_id='held'" ":invitation=NULL"
-run owner/backfill_task_organisation ":collection='Cal'" ":link_id='tk'" ":priority=1" ":categories='[\"inbox\"]'" ":parent='proj'" ":mid='m1'"
+run owner/backfill_task_organisation ":collection='Cal'" ":link_id='tk'" ":priority=1" ":parent='proj'" ":mid='m1'"
+run owner/replace_categories ":collection='Cal'" ":link_id='tk'"
+run owner/insert_category ":collection='Cal'" ":link_id='tk'" ":position=0" ":value='inbox'"
 expect "reconcile: the backfills write what the body gives, a known invitation never cleared" \
-    "$(sql "SELECT invitation FROM mail_summary WHERE link_id = 'held';")|$(sql "SELECT priority, categories, parent, mid FROM task_summary WHERE link_id = 'tk';")" "ev|1|[\"inbox\"]|proj|m1"
+    "$(sql "SELECT invitation FROM mail_summary WHERE link_id = 'held';")|$(sql "SELECT priority, parent, mid FROM task_summary WHERE link_id = 'tk';")|$(run read/load_categories ":collection='Cal'" ":links='[\"tk\"]'")" "ev|1|proj|m1|tk|0|inbox"
 
 # --- A reader reads an older store as its reconciliation would (§6) ---------
 
@@ -1380,7 +1508,7 @@ mail INBOX c 3 3 "'2026-10-05T08:00:00Z'"
 mail Sent a 1 1 "'2026-10-06T08:00:00Z'" '["\\Seen"]'
 sql "UPDATE items SET sort_key = (SELECT date FROM mail_summary s WHERE s.collection = items.collection AND s.link_id = items.link_id);
      UPDATE mail_summary SET attachment = 1, subject = 'Invoice 100%' WHERE link_id = 'c';
-     UPDATE items SET flags = NULL WHERE link_id = 'b';"
+     UPDATE items SET flags_known = 0 WHERE link_id = 'b';"
 expect "count: over a set of collections" \
     "$(run read/count_mail ":collections='[\"INBOX\",\"Sent\"]'" ":seen=NULL" ":attachment=NULL")" "4"
 expect "count: the read chip, unknown flags unread" \
@@ -1448,7 +1576,7 @@ expect "sum: a body one placement holds holds the message" \
     "$(run read/sum_mail "$inbox" ":seen=NULL" ":attachment=NULL" ":held=0" ":since=NULL" ":until=NULL")|$(run read/sum_mail "$both" ":seen=NULL" ":attachment=NULL" ":held=0" ":since=NULL" ":until=NULL")" \
     "3|100|2|2|0|2"
 expect "row: one mail row by key, in the page's shape" \
-    "$(run read/get_mail_row ":collection='INBOX'" ":link_id='c'" | cut -d'|' -f1,2,3,5,10)" "INBOX|3|c|hc|Invoice 100%"
+    "$(run read/get_mail_row ":collection='INBOX'" ":link_id='c'" | cut -d'|' -f1,2,3,5,9)" "INBOX|3|c|hc|Invoice 100%"
 
 for statement in list_mail_page_filtered search_mail; do
     steps="$(plan "read/$statement" ":collections='[\"INBOX\",\"Sent\"]'" ":pattern='%a%'" ":seen=NULL" \

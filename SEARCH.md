@@ -1,6 +1,6 @@
 # Pimdir search specification
 
-Status: search-draft-06, requiring storage-draft-06
+Status: search-draft-07, requiring storage-draft-07
 
 The search part of the pimdir standard: a full-text index over a store ([STORAGE.md](./STORAGE.md)) and the query language over it, cross-domain.
 
@@ -38,12 +38,13 @@ The index is derived. Every row is recomputed from the store and the bodies, and
 
 ## 2. Requirements
 
-- The index MUST be a SQLite database named index.db in the store directory (STORAGE §3), every table `STRICT`, `PRAGMA foreign_keys = ON`, `PRAGMA journal_mode = WAL` RECOMMENDED so query clients read while a refresh writes.
-- Implementations MUST require **SQLite ≥ 3.43** with FTS5, for `contentless_delete`. This floor is the index's alone.
-- The schema is [migrations/search/0001_init.sql](./migrations/search/0001_init.sql), its version in the index's own `PRAGMA user_version`, mirrored in `index_meta.version`.
-- An index at another version, whose `index_meta.tokenizer` differs from §5's, or whose shape differs from 0001_init.sql's MUST be rebuilt: there are no index migrations.
-- The shape is compared as STORAGE §6 compares a store's: each table, index and trigger 0001_init.sql creates, by name, against the index's own by its `sqlite_schema` text, `--` comments removed and whitespace collapsed. The shadow tables FTS5 creates, and a table of the implementation's own beside them, are not compared.
-- While this part is a draft, a schema change is folded into 0001_init.sql and the version stays 1, so the shape is what tells an index an earlier draft built.
+- The index MUST be a SQLite database named index.db in the store directory (STORAGE §3), `PRAGMA foreign_keys = ON`, `PRAGMA journal_mode = WAL` RECOMMENDED so query clients read while a refresh writes.
+- The **canonical shape** is [migrations/search/0001_init.sql](./migrations/search/0001_init.sql) and the statements under queries/search/, every table `STRICT`, and is the RECOMMENDED one. It needs **SQLite ≥ 3.43** with FTS5, for `contentless_delete`, a floor above the store's.
+- An index of another shape (FTS4, FTS3, or no full-text module) MAY answer the same language, on the terms STORAGE §4.1 sets for a store: every query's hit set is the one vectors/search/ gives, its text folded as §5 says. Its order by relevance is its own (§8.2). Its owner keeps it current by its own rules; a canonical indexer meeting it finds its schema text differs and rebuilds it, the index being derived.
+- The canonical schema's version is the index's own `PRAGMA user_version`, mirrored in `index_meta.version`.
+- A canonical index at another version, whose `index_meta.tokenizer` differs from §5's, or whose schema text differs from 0001_init.sql's MUST be rebuilt: there are no index migrations.
+- The schema text is compared as STORAGE §6 compares a store's: each table, index and trigger 0001_init.sql creates, by name, against the index's own by its `sqlite_master` text, `--` comments removed and whitespace collapsed. The shadow tables FTS5 creates, and a table of the implementation's own beside them, are not compared.
+- While this part is a draft, a schema change is folded into 0001_init.sql and the version stays 1, so the schema text is what tells an index an earlier draft built.
 - The statements are under [queries/search/](./queries/search/), one file per statement named after it, prepared with the store attached read-only as `store`.
 
 ## 3. The index
@@ -104,7 +105,9 @@ A store from before the feed carries stamps of `0` and is indexed whole once. Ex
 
 ## 5. Tokens
 
-The tokenizer is `unicode61 remove_diacritics 2`, no stemming, no trigram substring search, `prefix = '2 3'` for the trailing wildcard (§8), recorded in `index_meta.tokenizer`.
+**Text is folded before any tokenizer reads it**, in the index and in a query alike: every character lowercased by STORAGE Annex A.2's mapping, then decomposed (Unicode canonical decomposition, NFD), every combining mark of U+0300 to U+036F dropped, and composed again (NFC). `Réunion`, `REUNION` and `réunion` are one word, and a mark of another block (a Devanagari vowel sign, a Hebrew point) is kept. The indexer writes folded text and the query compiler folds every text term, so no tokenizer folds a diacritic and no SQL function is registered. What is left to a tokenizer is splitting words: FTS5's and FTS4's `unicode61` split alike, with diacritics kept (`remove_diacritics 0`, FTS4's `remove_diacritics=0`). One splitting otherwise, FTS4's `simple` splitting on ASCII alone, answers other hit sets, and a shape using it answers the vectors all the same.
+
+The canonical tokenizer is `unicode61 remove_diacritics 0`, no stemming, no trigram substring search, `prefix = '2 3'` for the trailing wildcard (§8), recorded in `index_meta.tokenizer`.
 
 An address is indexed whole, as its local part and as its domain in the `people` field, so `alice`, `example.org` and `alice@example.org` all match and `from:@example.org` is a match rather than a scan. A telephone number is indexed as its digits alone beside the value.
 
@@ -192,7 +195,7 @@ A query is whitespace-separated terms, implicitly conjoined, with `or`, `not`, p
 | `kind:` | `mail`, `contact`, `event`, `task`, `journal`, `file` |
 | `status:` | a task's `STATUS` (`task_summary.status`): `needs-action`, `in-process`, `completed`, `cancelled`; a task stating none, and any other kind, matches none |
 | `priority:` | a task's `PRIORITY` (`task_summary.priority`, RFC 5545 §3.8.1.9): `high` 1 to 4, `medium` 5, `low` 6 to 9, `none` absent or 0; any other kind matches none |
-| `category:` | a task's `CATEGORIES` (`task_summary.categories`) or a card's (`object_category`, §6, `categorised`): one value whole, both sides folded as STORAGE Annex A.2 folds `fn`, never a word of it; any other kind never |
+| `category:` | a task's `CATEGORIES` (`task_category`) or a card's (`object_category`, §6, `categorised`): one value whole, both sides folded as STORAGE Annex A.2 folds `fn`, never a word of it; any other kind never |
 | `account:` `collection:` `folder:` | the store's axes, `folder:` an alias |
 | `date:` `when:` | an instant or a range (§8.1) |
 | `thread:` `id:` | a thread id (§9); a link id or a `seq`: a value of ASCII digits alone names the item of that `seq` and every item whose link id it is, a hit set rather than a guess, any other value a link id |
@@ -222,7 +225,7 @@ A range leaves the horizon when it starts before the horizon's start or ends aft
 
 - **A hit is `(account, seq)`**, one per item per account, carrying its placements (STORAGE §9.2). An implementation MAY flatten to one row per placement on request.
 - **Tags** are per placement in the store and per hit in the query: `tag:x` matches when any placement carries `x`, `not tag:x` when none does.
-- **Order** is `sort_key` descending by default, the undated last (contacts and files) in their own `sort_key` ascending; `name` the item's title (a message's subject, a card's `fn`, a calendar component's summary, a file's name) folded as Annex A.2 folds `fn`, ascending, a title-less item first; `relevance` by FTS5 `bm25`, best first. Ties go to `seq`, then the account.
+- **Order** is `sort_key` descending by default, the undated last (contacts and files) in their own `sort_key` ascending; `name` the item's title (a message's subject, a card's `fn`, a calendar component's summary, a file's name) folded as Annex A.2 folds `fn`, ascending, a title-less item first; `relevance` the shape's own, best first, bm25 RECOMMENDED and the canonical shape's (FTS5 `bm25`); a shape without one MAY refuse `relevance` and say so. Ties go to `seq`, then the account.
 - **Deleted items are excluded.** The trash is the store's (STORAGE §11), not the index's.
 - **Coverage is part of the answer**:
   - per kind, how many live items have no body among the kinds whose body search reads, mail, contacts and calendars, never files (§6): `coverage`, which a client narrows to the query's collections;
@@ -324,7 +327,7 @@ A thread is the connected set over those rows. Its id is the link id of the pres
 
 ## 10. Tags
 
-A tag is an `items.flags` entry, so it syncs with the sources that carry keywords.
+A tag is a flag of the placement (`placement_flag`, STORAGE §13), so it syncs with the sources that carry keywords.
 
 Tagging from a query stages one `set-flags` action per placement of each hit through the queue (STORAGE §15), as a producer. The `flag` table is rebuilt from the feed and holds no state of its own.
 
@@ -345,6 +348,8 @@ A case has a `query`, an optional `sort` (`date`, `name`, `relevance`), and one 
 A case whose date range leaves the horizon says `horizon_left`. A case stating `temporal`, `"full"` or its `since`, `until` and `filling`, compares the temporal coverage, which the collections' `sources` rows in store.json (`source`, `covered_since`, `covered_until`, `covered_at`) give. A case not stating it compares nothing there.
 
 An implementation builds the store, indexes it at `now`, and compares.
+
+The cases bind every shape (§2), but a case sorted by `relevance` binds its order only where the shape ranks by bm25: another compares its hits as a set, and one refusing `relevance` skips it.
 
 checks/vectors.py validates that every fixture and placement resolves, re-derives every refusal and every chunk boundary from §8.3, §8.4 and §6, and checks that every other query is one the grammar accepts, and that every occurrence row names a calendar item and overlaps its window in order; only an implementation runs a case against the store.
 

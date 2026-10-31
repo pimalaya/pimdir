@@ -18,5 +18,5 @@ WHERE EXISTS (SELECT 1 FROM items i JOIN collections c ON c.id = i.collection
   AND NOT (:to_link_id GLOB 'alt:*' OR :to_link_id GLOB 'dup:*' OR :to_link_id GLOB 'hash:*'
            OR :to_link_id GLOB 'part:alt:*' OR :to_link_id GLOB 'part:dup:*')
 ON CONFLICT (from_link_id, from_kind, to_link_id, to_kind, role)
-DO UPDATE SET origin = iif(excluded.origin = 'user', 'user', origin)
+DO UPDATE SET origin = CASE WHEN excluded.origin = 'user' THEN 'user' ELSE origin END
 RETURNING from_kind, from_link_id, to_kind, to_link_id, role, origin, created_at;

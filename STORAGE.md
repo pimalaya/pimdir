@@ -1,6 +1,6 @@
 # Pimdir storage specification
 
-Status: storage-draft-06, the base, requiring no other part
+Status: storage-draft-07, the base, requiring no other part
 
 The storage part of the pimdir standard, and its base: a **SQLite database** (the index and the mutable state) plus a **content-addressed blob directory** (the bodies). The two layers over it are [SYNC.md](./SYNC.md), how sources reconcile through the store, and [SEARCH.md](./SEARCH.md), the index and query language over it.
 
@@ -95,7 +95,9 @@ The index is derived and droppable. No other file belongs in the directory; an i
 ### 4.1 Requirements
 
 - The database MUST be a SQLite database named pimdir.db.
-- Implementations MUST require **SQLite ≥ 3.37**, for `STRICT` tables and `DROP COLUMN`. Every table MUST be `STRICT`, so column types are enforced across implementations.
+- **SQLite ≥ 3.37** is RECOMMENDED: the canonical shape below needs it, for `STRICT` tables, `RETURNING`, upserts, `UPDATE … FROM` and `DROP COLUMN`. It calls no JSON function and no extension.
+- The **canonical shape** is the text under migrations/storage/ and queries/storage/, and is the RECOMMENDED one. An implementation MAY run a shape of its own, on any SQLite, provided it keeps the model: every table and column with its meaning, every invariant of §7 and of the canonical constraints, every derivation of Annex A, every statement's effect, and every model vector (§16). The canonical shape enforces column types by `STRICT`; another enforces them by `CHECK (typeof(…))` or by its writer.
+- A store records its shape in `store_meta.shape`: `pimdir` for the canonical one, an implementation's own name otherwise. A program MUST NOT open a store in a shape it does not implement, whatever its profile: it refuses it, naming the shape. §6 reconciles a store of the canonical shape alone; an implementation of its own shape owes its own reconciliation and its own migrations.
 - `PRAGMA foreign_keys = ON` MUST be set per connection.
 - `PRAGMA journal_mode = WAL` is RECOMMENDED for a local store; see §8 for a network filesystem.
 
@@ -111,7 +113,7 @@ Version 1 is [migrations/storage/0001_init.sql](./migrations/storage/0001_init.s
 
 The canonical schema is migrations/storage/0001_init.sql, which is normative. This section is its prose companion.
 
-- **`store_meta`** (one row): `format`, `version`, `hash_algo` (`blake3` RECOMMENDED, or `sha256-128`), `created_at`, `derivation` (the Annex A revision the rows were derived under, §6), and the counters `next_seq` (§9.1), `next_change` and `purges` (§4.5).
+- **`store_meta`** (one row): `format`, `version`, `hash_algo` (`blake3` RECOMMENDED, or `sha256-128`), `created_at`, `derivation` (the Annex A revision the rows were derived under, §6), the counters `next_seq` (§9.1), `next_change` and `purges` (§4.5), and `shape` (§4.1).
 - **`collections`**: `id`, `account` (§9.2), `kind` (the media type every item shares, one of the four of §13 or `''` until declared; `x-` names capabilities, reference roles and queue actions, never a kind), `name`, `parent` (hierarchy by reference), the presentation columns `color`, `description`, `sort_order`, the `role` a source states (§14), the cross-source `conflict` policy, `generation` (§12) and `changed` (§4.5).
 
   Every foreign key onto `id` is `ON UPDATE CASCADE`, so a rename keeps its contents (§14); `ON DELETE` is `CASCADE`, `SET NULL` for `parent`.
@@ -125,26 +127,29 @@ The canonical schema is migrations/storage/0001_init.sql, which is normative. Th
 - **`capabilities`**: what each source can do, one row per `(source, collection, capability)` carrying the `account` the source syncs for, `collection` `NULL` for the source-wide row and naming a collection where the source does otherwise there, with its `support` and a `detail` for a human (§15.6).
 - **`performers`**: the source the user chose to perform an intent capability for an account, one per `(account, capability)` (§15.6).
 - **`objects`**: `hash` (primary key, under `hash_algo`), `size`, `refcount` (§5, §7). The bytes live in the blob file.
-- **`items`**: the shared truth of one item, keyed `(collection, link_id)`: `seq` (§9.1), `flags` (a JSON array), `object_hash`, `sort_key` (§9.3), `level` (1 meta, 2 full), the cross-source state `deleted`, `conflicted`, `conflict_object`, the retention stamps `retained_at`, `retained_by` (§11), and `changed` (§4.5).
-- **`mail_summary`**, **`contact_summary`**, **`event_summary`**, **`task_summary`**, **`journal_summary`**, **`file_summary`**: one table per kind, at most one row per item, keyed `(collection, link_id)`, cascading with the item, referencing no object. Their columns are Annex A's, so a writer that disagrees with the shape fails at the write.
+- **`items`**: the shared truth of one item, keyed `(collection, link_id)`: `seq` (§9.1), `flags_known` (whether its flag set is known, §13), `object_hash`, `sort_key` (§9.3), `level` (1 meta, 2 full), the cross-source state `deleted`, `conflicted`, `conflict_object`, the retention stamps `retained_at`, `retained_by` (§11), and `changed` (§4.5).
+- **`mail_summary`**, **`contact_summary`**, **`event_summary`**, **`task_summary`**, **`journal_summary`**, **`file_summary`**: one table per kind, at most one row per item, keyed `(collection, link_id)`, cascading with the item, referencing no object. Their columns are Annex A's, so a writer that disagrees with the shape fails at the write. A list Annex A derives is a table of its own, one row per value in document order (`position`), cascading with its summary row: **`mail_in_reply_to`** the `In-Reply-To` ids (`mail_in_reply_to_by_id` answering `list_replied`), **`task_category`** a task's categories.
+- **`placement_flag`**: one row per flag of a placement whose set is known, keyed `(collection, link_id, flag)`, cascading with the item; `placement_flag_by_flag` answers a flag predicate by a seek (§13).
 - **`item_address`**: the people an item names, keyed `(collection, link_id, role, position)` (Annex A.6). One table across every kind, so "everything about this address" is one seek on `item_address_by_address`.
 - **`item_reference`**: a reference between two items (§14.2), keyed `(from_link_id, from_kind, to_link_id, to_kind, role)`, each endpoint a kind and a link id held by no foreign key, with its `role`, `origin` and `created_at`; `item_reference_to` serves the other end.
-- **`bindings`**: one source's binding of an item, keyed `(collection, link_id, source)`: the `handle`, the sync base (`base_flags`, `base_object`, `base_revision`, `base_present`), the `shared_object` last agreed with the item, the conflict triple `conflicted`, `conflict_revision`, `conflict_object`, and `round`, the id of the last round that listed the handle (§10).
+- **`bindings`**: one source's binding of an item, keyed `(collection, link_id, source)`: the `handle`, the sync base (`base_flags_known`, `base_object`, `base_revision`, `base_present`, its flags in **`binding_base_flag`** on `placement_flag`'s terms), the `shared_object` last agreed with the item, the conflict triple `conflicted`, `conflict_revision`, `conflict_object`, and `round`, the id of the last round that listed the handle (§10).
 
   A handle is bound once, never repointed, and names one item per source (§10): `bindings_by_handle` is unique.
 - **`supersessions`**: what an `add` carrying `supersedes` replaced (§15.3), keyed `(collection, link_id)` by the item it tombstoned, with `by_collection` and `by_link_id` the item it created; each end cascades with its item.
-- **`queue`**: the action queue (§15): `id`, `created_at`, `producer`, `collection`, `action`, `payload`, `object_hash`, `attempts`, `error`.
+- **`queue`**: the action queue (§15): `id`, `created_at`, `producer`, `collection`, `action`, `payload`, `target_collection` (the collection a payload names, §15.3), `object_hash`, `attempts`, `error`.
 - **`receipts`**: what an applied queue row or a performed intent became, keyed by its `id`: `applied_at`, the `collection` it was queued on and, for an `add`, the `seq` of the item it created (§15.2, §15.4, §15.5).
 
 An item plus one binding per source is the whole model. Single-source is the N=1 case; N≥2 adds only `deleted`, a removal that lingers until every source has dropped it.
-
-Flags stay a JSON array: the set is small and `json_each` answers an ordinary query. A flag predicate index is the search part's (SEARCH.md).
 
 ### 4.4 Queries
 
 The named, parameterised statements servicing §14 live under [queries/storage/](./queries/storage/), one file per statement named after it, sorted by the profile that runs it: read/ is the reader's (§14.1), queue/ the producer's (§15.1), owner/ the rest, an owner running all three. An implementation reads them by listing its directories. A file's leading comment says what the statement alone cannot; the rules are this document's.
 
-A statement's name, its named parameters and the columns it answers, in order, bind. An implementation substituting its own text MUST keep all three, the rules this document states and §7's invariants.
+A statement's name, its named parameters and the columns it answers, in order, bind the canonical shape. An implementation of it substituting its own text MUST keep all three, the rules this document states and §7's invariants; one of its own shape (§4.1) keeps each statement's effect and names its own.
+
+**List parameters.** A statement taking a list reads it from `temp.param(slot, position, value)`, a temporary table per connection (`create_param`), by its slot: `collections`, `links`, `hashes`, `handles`, `ids` or `flags`, as the statement names it. The caller fills it inside the statement's transaction, `clear_param` then one `bind_param` per value in order, so the text stays one for any length and under any variable limit. A value bound twice counts twice where the statement counts (`release_pins`). A statement whose list is optional takes `:scoped`, 0 for every row and 1 for those the slot names, an empty slot then naming none. This is the canonical shape's calling convention; another shape binds its lists as it chooses.
+
+**Lists as rows.** A statement reading a placement's flags or a binding's base flags answers the set as one text, `flags` or `base_flags`: the flags joined with single spaces in no order, `''` known-empty, `NULL` unknown (§13). A list Annex A derives in document order (`mail_in_reply_to`, `task_category`) is read apart, by `load_in_reply_to` and `load_categories`, as `load_addresses_by_link` reads the addresses.
 
 The text is a reference: an implementation SHOULD use it verbatim. A fix to it keeping the three is a patch of this part; a change to any of them is a minor version at least. The search index's statements are under queries/search/ on the same terms.
 
@@ -152,9 +157,9 @@ The text is a reference: an implementation SHOULD use it verbatim. A fix to it k
 
 `items.changed` and `collections.changed` hold the value of `store_meta.next_change` the row took when it last moved. The counter only increases and every stamp is drawn once, so no two rows share one and a page ordered by `changed` is total. `PRAGMA data_version` says that something committed; the feed says what.
 
-Triggers in the canonical DDL draw the stamps, so no writer plumbs one. An insert takes the next stamp; an update takes one only when a column a reader can observe moved.
+Triggers in the canonical DDL draw the stamps, so no writer plumbs one. An insert takes the next stamp; an update takes one only when a column a reader can observe moved. A flag added to a placement or removed from it requests the placement's stamp, so a set written again as it was stamps nothing.
 
-A summary or address row has no stamp: a writer changing one under an unchanged item MUST run `stamp_item` in the same transaction, which requests a stamp the trigger then draws. A renamed collection restamps every item under its new id. A source's coverage moving restamps its collection, which a reader lists with it (§14.1).
+A summary, address, `mail_in_reply_to` or `task_category` row has no stamp: a writer changing one under an unchanged item MUST run `stamp_item` in the same transaction, which requests a stamp the trigger then draws. A renamed collection restamps every item under its new id. A source's coverage moving restamps its collection, which a reader lists with it (§14.1).
 
 A deleted row cannot carry a stamp, so a purged item and a collected object count in `store_meta.purges`. `load_change_cursor` answers the last stamp drawn and that count.
 
@@ -194,8 +199,9 @@ Schema evolution is ordered, forward-only SQL under migrations/storage/, named N
 An owner opening a store runs these steps in order, and nothing else changes the schema:
 
 1. Read `PRAGMA user_version`, `0` for a fresh database. A store above the highest version the implementation knows MUST be refused, naming both versions: it is never reconciled, migrated, rebuilt nor written, whatever the profile opening it.
-2. A store at version 1 whose shape differs from 0001_init.sql is reconciled to it (below), before any migration. This is the one normalisation, and only a version 1 store takes it.
-3. For each migration above the store's version, in order: open a transaction, run the script, set `user_version` and, through `set_store_version`, `store_meta.version` to its number, commit. A failed script rolls back and stops, the store left at the last version committed. A fresh database runs `init_store_meta` in the transaction applying 0001_init.sql, so the row a later migration stamps exists.
+2. A store whose `store_meta.shape` is not `pimdir` is not this section's (§4.1): an owner implementing that shape opens it by its own rules, any other refuses it. A store lacking the column is of the canonical shape.
+3. A store at version 1 whose schema text differs from 0001_init.sql is reconciled to it (below), before any migration. This is the one normalisation, and only a version 1 store takes it.
+4. For each migration above the store's version, in order: open a transaction, run the script, set `user_version` and, through `set_store_version`, `store_meta.version` to its number, commit. A failed script rolls back and stops, the store left at the last version committed. A fresh database runs `init_store_meta` in the transaction applying 0001_init.sql, so the row a later migration stamps exists.
 
 There are no down-migrations, and no implementation rebuilds a store it cannot read: an older one refuses a newer store (step 1), and a corrupt one is repaired (§7) or refused. A migration MUST preserve every row of every table and the meaning of every column it keeps: the queue, the receipts, the references, the capabilities, the performers, the retained rows and the collections no source syncs hold state no source restores.
 
@@ -204,20 +210,20 @@ A **reader** or a **producer** never changes the schema. It refuses a store abov
 Meeting a store below its version, or a version 1 store its owner has not reconciled yet, it reads the store as the reconciliation would leave it before any backfill:
 
 - A column the store lacks reads as `NULL`, or as its canonical `DEFAULT` where 0001_init.sql declares it `NOT NULL` with one. A table the store lacks reads as empty.
-- It runs no statement naming what the store lacks. In place of a canonical statement naming such a column, it runs the same text with each mention of the column replaced by that value, a predicate on it then reading the value. In place of one reading such a table, it answers no row.
+- It runs no statement naming what the store lacks. In place of a canonical statement naming such a column, it runs the same text with each mention of the column replaced by that value, a predicate on it then reading the value. In place of one reading such a table, it answers no row, or, where only a subquery reads it, the same text with that subquery answering none.
 - Either way the statement's name, parameters and result columns are kept (§4.4), so every reader of one older store answers alike.
 
-A value so read means what it means in that column. An older store's collections have no role; its sources' coverage never closed (a reader says it is filling, never complete); its messages' invitations are unknown; its tasks' categories are none, their priority, parent, source mail and capture unknown, and they name no contact; its summaries were derived under revision 1 (below).
+A value so read means what it means in that column. An older store's collections have no role; its sources' coverage never closed (a reader says it is filling, never complete); its messages' invitations are unknown; its placements' flags and its bindings' base flags are unknown; its messages name no `In-Reply-To` id; its tasks' categories are none, their priority, parent, source mail and capture unknown, and they name no contact; its summaries were derived under revision 1 (below).
 
 It enqueues nothing the store's version does not define. A `level` 0 such a store may hold reads as 1 (§13).
 
-**While this part is a draft** a schema change is folded into 0001_init.sql, `user_version` staying `1`. A store from an earlier draft is then not detectably out of date, so an owner MUST reconcile it on open (step 2) or refuse it, naming what it lacks; it never recreates nor deletes it, and failing a later query is not acceptable.
+**While this part is a draft** a schema change is folded into 0001_init.sql, `user_version` staying `1`. A store from an earlier draft is then not detectably out of date, so an owner MUST reconcile it on open (step 3) or refuse it, naming what it lacks; it never recreates nor deletes it, and failing a later query is not acceptable.
 
-**pimdir.db holds the canonical schema alone.** A table, column, index or trigger 0001_init.sql lacks, whoever added it, is dropped by the reconciliation of a version 1 store (steps 2 and 3 below), and nothing else in this part keeps one.
+**A store of the canonical shape holds the canonical schema alone.** A table, column, index or trigger 0001_init.sql lacks, whoever added it, is dropped by the reconciliation of a version 1 store (steps 2 and 3 below), and nothing else in this part keeps one.
 
 An implementation keeps state of its own outside the store directory (§3), never in pimdir.db. A newer owner adds to the schema only through a migration to a later version, which an older owner refuses before it reconciles anything (step 1). After version 1 is released, a version 1 store holds what 0001_init.sql creates and nothing more, so its owner's open reconciles nothing.
 
-**The reconciliation test is the schema itself.** Apply 0001_init.sql alone to an empty database and compare, for every table, index and trigger, its `sqlite_schema` text with the store's, each with its `--` comments removed and its whitespace collapsed to single spaces: equal is current, whatever an earlier draft or an earlier owner did. In one transaction, `PRAGMA foreign_keys` set off before it opens and on after it commits:
+**The reconciliation test is the schema itself.** Apply 0001_init.sql alone to an empty database and compare, for every table, index and trigger, its `sqlite_master` text with the store's, each with its `--` comments removed and its whitespace collapsed to single spaces: equal is current, whatever an earlier draft or an earlier owner did. In one transaction, `PRAGMA foreign_keys` set off before it opens and on after it commits:
 
 1. Repair the data a new constraint would refuse: `repair_shared_objects` for the key on `bindings.shared_object`; `recompute_refcounts` for §7's floor; `repair_levels` for the closed `level`; `repair_kinds` for the closed `kind` (§13). A store from before `bindings.shared_object` existed runs the first two once `bindings` is rebuilt, both naming that column.
 2. Rebuild every table whose text differs: drop its indexes and triggers; rename it aside with `PRAGMA legacy_alter_table` on, so no trigger or foreign key elsewhere is rewritten to the old name; create it from the canonical text; copy the columns both hold (a column the canonical text lacks goes with the old table); carry an `AUTOINCREMENT` counter over (`sqlite_sequence`); drop the old one.
@@ -229,10 +235,13 @@ An implementation keeps state of its own outside the store directory (§3), neve
 A column a rebuild added MUST be backfilled where `NULL` contradicts the existing rows, in the same transaction, the owner noting before the rebuild which columns were absent (`PRAGMA table_info`):
 
 - `bindings.shared_object`, from the item's `object_hash` (`backfill_shared_object`).
+- `queue.target_collection`, from the payload of every `move`, `copy` and superseding `add` row, pending or parked (`backfill_target_collection`).
 - `mail_summary.invitation`, re-derived from every held body (Annex A.1) and written with `backfill_invitation`, then `link_invitations_of` over every mail (§14.2).
-- `task_summary`'s `priority`, `categories`, `parent` and `mid`, re-derived from every held task body (Annex A.4) and written with `backfill_task_organisation`, then `link_parents_of` and `link_sources_of` over every task, `link_parents_to` over every calendar item and `link_sources_to` over every mail (§14.2).
+- `task_summary`'s `priority`, `parent` and `mid` and its categories, re-derived from every held task body (Annex A.4) and written with `backfill_task_organisation`, `replace_categories` and `insert_category`, then `link_parents_of` and `link_sources_of` over every task, `link_parents_to` over every calendar item and `link_sources_to` over every mail (§14.2).
 
 `list_held_mail` and `list_held_tasks` page the rows holding a body for such a backfill.
+
+A store from before the list tables (storage-draft-06 or earlier) holds `items.flags`, `bindings.base_flags`, `mail_summary.in_reply_to` and `task_summary.categories` as JSON arrays, a flag set `NULL` when unknown. Before the rebuild the owner reads every one, by text of its own since the canonical text names none of them, as storage-draft-06 §13 and Annex A spelled them; after it, in the same transaction, it writes them to their tables: a known set by `backfill_flags_known`, `retain_flags` and `add_flags`, a known base by `backfill_base_flags_known`, `retain_base_flags` and `add_base_flags`, the ids by `insert_in_reply_to` and the categories by `insert_category`. Nothing is lost, so nothing is re-derived: a flag set lives in no body. A flag §13 refuses (empty, a space, a control or a non-ASCII character), which no source states, refuses the reconciliation, naming it, and the store is left as it was.
 
 `task_summary.created` and the `contact` addresses are revision 2's (Annex A): a rebuild adding the column leaves it `NULL`, and the re-derivation below fills both from every held task body, `created` with `backfill_task_capture` and the addresses with `replace_addresses`, `insert_address` and `stamp_item`.
 
@@ -476,7 +485,7 @@ Closed: `kind`, `level`, `deleted` and `conflicted`, `conflict`, `support`, `ori
 - **`level`** (INTEGER): `1` meta, `2` full, closed. A version 1 store an earlier draft wrote may hold `0`, a probed or pulled row: reconciliation repairs it to `1` (`repair_levels`, §6), and a reader meeting it before then reads it as `1`.
 - **`deleted`, `conflicted`** (INTEGER): `0` or `1`.
 - **`conflict`** (TEXT, on a collection): `'manual'`, `'prefer-incoming'` or `'prefer-existing'`, closed; a `prefer-` policy keeps the body it does not adopt as a retained item (§11).
-- **`flags`, `base_flags`** (TEXT): a JSON array of raw flag strings sorted by code point, each once, written as SQLite's `json()` writes it, with no whitespace (`["$flagged","\\Seen"]`), so one set has one spelling and a reader finds a flag by its bytes. `NULL` is unknown, `'[]'` is known-empty.
+- **`flag`** (TEXT, on `placement_flag` and `binding_base_flag`): one raw flag, compared by its bytes, non-empty and printable ASCII without a space (`\Seen`, `$label`), as IMAP flags and JMAP keywords are. A set holds each flag once and has no order. **`flags_known`**, **`base_flags_known`** (INTEGER): `1` the rows are the set, none being known-empty; `0` unknown, holding no row by trigger. A statement answering a set (§4.4) joins it with single spaces, `''` known-empty and `NULL` unknown.
 - **`object_hash`, `base_object`, `conflict_object`** (TEXT): a hash under `store_meta.hash_algo`, or `NULL`.
 - **`refcount`** (INTEGER): the pointer count of §5, `>= 0` by constraint; `0` is a meaningful, collectable count.
 - **`link_id`** (TEXT): the hint verbatim, `esc:` and the hint when it begins with a reserved prefix (§9), a kind fallback, or a minted `dup:<hint>#<handle>`; opaque.
@@ -495,11 +504,11 @@ Closed: `kind`, `level`, `deleted` and `conflicted`, `conflict`, `support`, `ori
 - **`covered_at`**, **`round_started_at`** (TEXT): stamped by SQLite as `created_at` is (`close_round`, `open_round`); `NULL` no coverage, no round open.
 - **`round`** (INTEGER): on a source, the last round id drawn, `0` before any; on a binding, the round that last listed its handle, `NULL` before one did.
 - **`round_band`** (INTEGER, on a source): `1` while the open round lists only the band its coverage lacks, else `0`, and `0` with no round open by constraint. A store reconciled from an earlier build of this draft reads an open round as no band round, which a run listing a band restarts rather than resumes (SYNC.md §5).
-- **`base_present`** (INTEGER, on a binding): whether a base exists. A base is present iff `base_present` is 1 or any base column is non-`NULL`; a writer MUST set the column and a reader MUST accept either witness.
+- **`base_present`** (INTEGER, on a binding): whether a base exists. A base is present iff `base_present` is 1, `base_flags_known` is 1 or any other base column is non-`NULL`; a writer MUST set the column and a reader MUST accept either witness.
 - **`action`** (TEXT): `'add'`, `'set-flags'`, `'remove'`, `'move'`, `'copy'`, `'update'`, `'set-performer'` (§15.3), an intent of Annex B.2, or an application's own kind, skipped by an owner that does not know it.
 - **`capability`** (TEXT, on `capabilities` and `performers`): a name of Annex B, or an application's own starting with `x-`. **`collection`** (TEXT, on `capabilities`): `NULL` for the source-wide row, a collection id for an override there. **`account`** (TEXT, on `capabilities` and `performers`): the account of §9.2, `NULL` in a single-account store.
 - **`support`** (TEXT): `'full'`, `'partial'` or `'none'`, closed. **`detail`** (TEXT): what a human reads about it, or `NULL`.
-- **`payload`** (TEXT): versioned JSON with a leading integer `v`, the payload's version for its `action`, a row whose `v` the owner does not know being skipped (§15.2), never read as a version it knows. **`error`** (TEXT): `NULL` while pending; set when parked.
+- **`payload`** (TEXT): versioned JSON with a leading integer `v`, the payload's version for its `action`, a row whose `v` the owner does not know being skipped (§15.2), never read as a version it knows. **`target_collection`** (TEXT): the collection a `move` or a `copy` names as `to`, or the one an `add` names in `supersedes`, `NULL` for any other action; written by the producer with the payload, followed by a rename (§14), and read by the owner in place of the payload's own. **`error`** (TEXT): `NULL` while pending; set when parked.
 - **`seq`** (INTEGER, on `receipts`): the public id (§9.1) of the item an applied `add` created, or of the item a performed intent left in the store when its performer knows it; `NULL` otherwise.
 - **`generation`** (INTEGER): the epoch of §12, starting at 1.
 - **`derivation`** (INTEGER, on `store_meta`): the Annex A revision of §6, `1` for every store written before the annex carried one.
@@ -513,7 +522,7 @@ A store is opened as one source. `load` projects the shared items into that sour
   The scope (SYNC.md §10) is a floor: `All` reads the collection; `Links` reads `load_items_by_link` and `load_bindings_by_link` for the link ids named; `Handles` resolves each handle with `link_for_handle` and reads the same two, a handle nothing binds being a member to name. A store MAY return more than the scope names and MUST NOT return less.
 
   A `Created` placement's origin is `origin_for_link` and a `Tombstone` placement's destination `destination_for_link` (SYNC.md §3). `list_superseded_pending` names the tombstones whose remove is held (§15.3, SYNC.md §5). `list_superseded_bindings` names, for each pending create superseding an item of its own identity, the member it may be moved from: the superseded item's binding of this source in its collection (SYNC.md §4).
-- **`lookup_objects(links)`**: `:links` a JSON array of link ids, `:account` the caller's own (§9.2): across collections a link id is one body downloaded once, across accounts it is not a fact. It answers the body's hash and size, the size being the witness a link is checked against (SYNC.md §6). A writer-derived key never matches (§9).
+- **`lookup_objects(links)`**: the link ids in the `links` slot (§4.4), `:account` the caller's own (§9.2): across collections a link id is one body downloaded once, across accounts it is not a fact. It answers the body's hash and size, the size being the witness a link is checked against (SYNC.md §6). A writer-derived key never matches (§9).
 - **`held_mail_summary(link_id, object)`**: the mark and the invitation a row of the account holding that body under that key states, a row stating its mark first, for a placement linked to it (Annex A.1). A writer-derived key never matches (§9).
 - **`write(ops)`** runs as one transaction:
   1. A `StoreObject` carries the index row and optionally the bytes. With bytes, write the blob first (§5), then `store_object`; without, the body is already at its sharded path, streamed there by the consumer. The blob write MAY precede `BEGIN` and SHOULD for a body of any size; the writer's lock (§8), not the file's age, keeps a collector out of the window.
@@ -522,14 +531,14 @@ A store is opened as one source. `load` projects the shared items into that sour
 
      Placement upserts and drops are merged into the shared items and bindings, `set_conflict` carrying the collection's policy. The reference form is the **diff**:
 
-     - read `load_items_by_link`, `load_bindings_by_link`, the kind's `load_<kind>_summaries` and `load_addresses_by_link`, bound to the batch's link ids;
+     - read `load_items_by_link`, `load_bindings_by_link`, the kind's `load_<kind>_summaries`, `load_addresses_by_link`, and for mail and tasks `load_in_reply_to` and `load_categories`, bound to the batch's link ids;
      - resolve each dropped handle, and each upserted handle likewise, with `link_for_handle`, a handle bound to another link id retiring that binding first (§10);
-     - then `insert_item`, `insert_binding`, `update_item`, `update_binding`, and `delete_binding` for a binding a `Deleted` drop removes;
+     - then `insert_item`, `insert_binding`, `update_item`, `update_binding`, and `delete_binding` for a binding a `Deleted` drop removes, each row write followed by its set's: `retain_flags` and `add_flags` after the item's, `retain_base_flags` and `add_base_flags` after the binding's, the `flags` slot holding the set (empty for an unknown one);
      - and `delete_item_bindings` with `retain_item` for an item the result no longer holds, purged at once when `held_elsewhere` says the identity moved (§11).
 
      `update_binding` carries no handle: a rebind is refused (§10) except through §12's rebuild.
 
-     A named placement carries its summary and addresses, derived by the writer under Annex A and written with the item (`upsert_<kind>_summary`, `replace_addresses`, `insert_address`). A calendar resource whose component changed under its key leaves its old table (`delete_event_summary`, `delete_task_summary`, `delete_journal_summary`).
+     A named placement carries its summary and addresses, derived by the writer under Annex A and written with the item (`upsert_<kind>_summary`, `replace_addresses`, `insert_address`; for mail `replace_in_reply_to` and `insert_in_reply_to`, for a task `replace_categories` and `insert_category`). A calendar resource whose component changed under its key leaves its old table (`delete_event_summary`, `delete_task_summary`, `delete_journal_summary`).
 
      A placement is always named: an upsert for a handle nothing binds and carrying no link id is refused. An item left with no binding is retained (§11).
   2. Settle the refcount of every object the batch touched: `adjust_refcount` by the batch's net change, or `recompute_refcounts` for the whole store, which is also §7's repair. A batch that stored or dropped no object MAY skip this.
@@ -563,7 +572,7 @@ A source's **capabilities** are declared as a set, `delete_capabilities(source)`
 
 **`rename_collection(collection, new_id)`** is the only safe way to change an id. Every foreign key onto `collections(id)`, and `bindings`' key onto `items(collection, link_id)`, cascades, so items, bindings, sources, queue rows and children follow in one statement, and the items are restamped under the new id (§4.5).
 
-A pending `move` or `copy` names its target inside its payload, and a pending `add` the collection of the item it supersedes, which no key cascades: `rename_queue_targets` MUST run beside it in the same transaction. Deleting and recreating the row cascades the delete instead.
+A pending `move` or `copy` names its target, and a pending `add` the collection of the item it supersedes, in `queue.target_collection`, which no key cascades: `rename_queue_targets` MUST run beside it in the same transaction. The payload keeps the id it was enqueued with, and the owner reads the column. Deleting and recreating the row cascades the delete instead.
 
 A bare `UPDATE` is refused under `NO ACTION`, and with `PRAGMA foreign_keys` off the rename cascades nothing. An account rename is one `rename_collection` per collection plus `set_collection_account`, in one transaction, the account's sources declared and its performers recorded again under the new id.
 
@@ -596,10 +605,11 @@ A **reader** (§8) opens read-only and projects the store as a local backend. Re
 - **`list_mail_page_desc`**, **`list_contacts_page_asc`**, **`list_events_page_asc`**, **`list_tasks_page_asc`**, **`list_journals_page_asc`**, **`list_files_page_asc`**: the same page joined with the kind's summary. A mixed calendar merges its three pages on `(sort_key, seq)`; `component_of` says which table holds an item.
 - **`get_mail`**, **`get_contact`**, **`get_event`**, **`get_task`**, **`get_journal`**, **`get_file`**: one item. **`list_attachments(account, link_id)`**: the files a message attaches (§14.3).
 - **`get_item(collection, seq)`**, **`load_addresses(collection, link_id)`** (one item's people by role), **`count_items(collection)`**, **`seq_by_link(collection, link_id)`**.
+- **`load_in_reply_to(collection, scoped)`**, **`load_categories(collection, scoped)`**: a mail's `In-Reply-To` ids and a task's categories, in document order, for a page's link ids (the `links` slot) or a whole collection. A mail or a task row carries neither, as it carries no address (§4.4).
 - **`list_link_placements(link_id)`**, **`list_object_placements(hash)`**: every live placement of one key, or one body, with collection and account. The first pairs by key, so a minted copy is paired with its twin by the body read alone.
 - **`references_from(kind, link_id)`**, **`references_to(kind, link_id)`**: the references an item makes and receives (§14.2), whatever their endpoints' state.
 - **`list_address_placements(address, role)`**: every live placement naming one address, `role` `NULL` for any: the person axis. **`list_domain_placements(domain, role)`**: the same for a domain, by a scan.
-- **`list_replied(ids)`**: which of the message ids `ids` names, a JSON array of bare ids as Annex A.1 and A.4 store them, a live mail's `in_reply_to` names, mail under the `sent` or `drafts` role aside, each once: which of the mails tasks came from were answered. A scan of `mail_summary`.
+- **`list_replied(ids)`**: which of the message ids the `ids` slot names, bare as Annex A.1 and A.4 store them, a live mail's `mail_in_reply_to` names, mail under the `sent` or `drafts` role aside, each once: which of the mails tasks came from were answered. A seek per id on `mail_in_reply_to_by_id`.
 - **`list_items_changed_since`**, **`list_collections_changed_since`**, **`load_change_cursor`**: the feed (§4.5).
 - **`list_retained_page(collection, after, limit)`** (cursor on `seq`, `0` starts), **`count_retained`**, **`retained_bytes()`**: the trash view (§11), every deleted row, `retained_at` `NULL` on one a source still binds.
 - **`load_capabilities(collection)`**, **`load_item_capabilities(collection, seq)`**: what every source syncing a collection, or binding one item, can do there, a row naming the collection winning over the source-wide one, an undeclared source listed once with no capability.
@@ -720,7 +730,7 @@ Existing items are addressed by `seq`. A payload changing shape takes the next `
   A superseding item keeping the superseded item's identity (a task filed elsewhere with its `UID` kept) names the binding it may be moved from (`list_superseded_bindings`). A connector moving members server-side delivers the create by moving that member, so a server keeping one `UID` per account never holds the identity twice, and the delete pushed after it finds the member gone.
 - **`set-flags`**: `{ "v": 1, "seq": n, "flags": […] }`. Replaces the set, absolutely.
 - **`remove`**: `{ "v": 1, "seq": n }`. Tombstones the shared item, every source that binds it pushing the delete (SYNC.md §9); already absent is success, and bound by nobody it is retained at once (below).
-- **`move`**: `{ "v": 1, "seq": n, "to": collection }`. `copy` is the same shape without the removal. A target the store does not declare, or of another kind, parks the action rather than ensuring a collection nothing configured.
+- **`move`**: `{ "v": 1, "seq": n, "to": collection }`. `copy` is the same shape without the removal. The producer writes `to` as `target_collection` too, as it writes an `add`'s `supersedes.collection`, and the owner reads the target from the column, which a rename follows (§14). A row whose column is `NULL`, from a producer predating it, is read from its payload: a rename does not follow it, so it parks on the old id (above) rather than land elsewhere. A target the store does not declare, or of another kind, parks the action rather than ensuring a collection nothing configured.
 - **`update`**: `{ "v": 1, "seq": n, "object": hash, "if_match": hash? }`. Repoints a mutable item's body; the owner re-derives its summary and addresses.
 
   `if_match` is the body the producer read and replaced. When the item's current body is another, the owner MUST park the row, naming both: applying it would drop another write without a merge (SYNC.md §7). A producer editing a body it read SHOULD state it; a row without it applies over whatever the item holds.
@@ -812,13 +822,15 @@ A schema mismatch fails a query; a body named differently, a summary derived dif
 
 An implementation **MUST** pass objects.json: two stores naming bodies differently cannot share a blob directory. It **MUST** pass summaries.json for each kind it writes, the minted, `alt:` and `hash:` keys they give included. A consumer MUST compare parsed structures, never JSON text.
 
-checks/invariants.sh runs the canonical statements through the scenarios this part argues from, and a change to a statement or a rule is checked against it before it lands. The values are authored from the prose, never from an implementation.
+The **model vectors** bind every shape (§4.1): objects.json and summaries.json here, and the sync and search vectors of the other parts. A summary vector states a row as the model holds it, its lists (`in_reply_to`, `categories`) as arrays, whichever tables a shape keeps them in. checks/invariants.sh and checks/schema.sh bind the canonical shape alone.
+
+checks/invariants.sh runs the canonical statements through the scenarios this part argues from, and a change to a statement or a rule is checked against it before it lands. checks/schema.sh prepares every statement against the canonical schema and refuses a JSON function in the canonical text. The values are authored from the prose, never from an implementation.
 
 Every file under vectors/ states the version of its format as a top-level `v` and conforms to the JSON Schema of that format under vectors/schema/, which checks/vectors.py validates; an implementation meeting a `v` it does not know MUST NOT read the file as a version it knows. An implementation that vendors vectors/ MUST record their digests and re-check them against this repository in CI.
 
 ## Annex A. Summaries (normative)
 
-What a writer derives from an item before its row reaches the store: the identity hint §9 keys on, the row of the kind's summary table, the `item_address` rows and the `sort_key` (§9.3). The store parses no body; the tables fix the shape and vectors/summaries.json the values.
+What a writer derives from an item before its row reaches the store: the identity hint §9 keys on, the row of the kind's summary table with its list rows, the `item_address` rows and the `sort_key` (§9.3). The store parses no body; the tables fix the shape and vectors/summaries.json the values.
 
 A summary holds what a list row shows, what it sorts by and what the store's own references read (§14.2). A question about an item's content, its text, its calendar time across a series or whether it holds a property, is the search part's (SEARCH.md), and no column is added to answer one.
 
@@ -839,7 +851,7 @@ A derivation is made from the body, or from a server-side summary (an IMAP `ENVE
 | Column | Derivation |
 | --- | --- |
 | `message_id` | the bare `Message-ID` (RFC 5322 §3.6.4), angle brackets stripped; `NULL` when absent or unparseable |
-| `in_reply_to` | a JSON array of the `In-Reply-To` ids, bare, in document order; `'[]'` when absent |
+| `in_reply_to` | the `In-Reply-To` ids, bare, in document order, one `mail_in_reply_to` row each, `position` from 0; none when absent |
 | `subject` | `Subject`, decoded; `''` when absent |
 | `sender` | the first `From` address, canonical (A.6) |
 | `sender_name` | its display name, decoded |
@@ -871,7 +883,7 @@ The mark misses both ways, each corrected when the body is read: a `multipart/mi
 | `kind` | `KIND` lowercased (`individual`, `group`, `org`, `location`) |
 | `org` | the first component of the first `ORG`, decoded |
 
-**Hint**: `uid`, else `hash:` followed by the sixteen lowercase hexadecimal digits of the FNV-1a 64 digest of the bytes. A card resolves at `Full` only, carries no flags (`'[]'`), and is mutable: its revision moves while its key does not. **Addresses**: every `EMAIL` under `email`, canonical, with no name. **`sort_key`**:
+**Hint**: `uid`, else `hash:` followed by the sixteen lowercase hexadecimal digits of the FNV-1a 64 digest of the bytes. A card resolves at `Full` only, carries no flags (a known-empty set), and is mutable: its revision moves while its key does not. **Addresses**: every `EMAIL` under `email`, canonical, with no name. **`sort_key`**:
 
 `fn` lowercased by the default full lowercase mapping of Unicode 15.0.0 (UnicodeData.txt and the unconditional mappings of SpecialCasing.txt; Rust's `str::to_lowercase`, Java's `toLowerCase(Locale.ROOT)`), locale-independent, then trimmed; read ascending, a nameless card first.
 
@@ -912,7 +924,7 @@ A series keys on its first occurrence, which `until` bounds for a reader that mu
 | `completed` | `COMPLETED` verbatim |
 | `percent` | `PERCENT-COMPLETE` as an integer |
 | `priority` | `PRIORITY` as an integer, 0 to 9 (RFC 5545 §3.8.1.9); `NULL` when absent or out of range |
-| `categories` | a JSON array of every `CATEGORIES` value in document order, each property's list split on unescaped commas and decoded, empty values dropped; `'[]'` when absent |
+| `categories` | every `CATEGORIES` value in document order, each property's list split on unescaped commas and decoded, empty values dropped, one `task_category` row each, `position` from 0; none when absent |
 | `parent` | the value of the first `RELATED-TO` whose `RELTYPE` is `PARENT` or absent (RFC 5545 §3.2.15), verbatim |
 | `mid` | the message the first `ATTACH` or `URL` holding a `mid:` URI (RFC 2392) names: its message-id part, before any `/`, percent-decoded, bare |
 | `created` | when it was captured: `CREATED` as an instant on A.3's rules, else `DTSTAMP` as one (both UTC, RFC 5545 §3.8.7.1, §3.8.7.2); `NULL` when neither reads as one |
@@ -948,7 +960,7 @@ The size read without the body is replaced by the body's own, as for mail (A.1).
 
 An attachment is keyed `part:`, its message's `link_id`, `#` and its `part` (`part:abc@host#2`), so every writer walking one message names its files alike. A file created in the store is keyed `file:` and 32 lowercase hexadecimal digits of 128 random bits. Neither is a protocol identity, nor parsed by a reader.
 
-A file a source lists is keyed by the id its server keeps across a rename and a move, which is also its handle (SYNC.md §4). A file carries no flags (`'[]'`) and no addresses. **`sort_key`**: `name` on A.2's rule for `fn`, read ascending.
+A file a source lists is keyed by the id its server keeps across a rename and a move, which is also its handle (SYNC.md §4). A file carries no flags (a known-empty set) and no addresses. **`sort_key`**: `name` on A.2's rule for `fn`, read ascending.
 
 ## Annex B. Capabilities (normative)
 

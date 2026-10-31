@@ -38,6 +38,8 @@ The search index is a third file beside the two, derived from both, and dropping
 
 A store carries the version of its schema. A newer implementation upgrades an older store in place and keeps everything in it. An older one refuses a newer store rather than guess at it, and no implementation rebuilds a store it cannot read.
 
+The standard ships one way of writing the database, its canonical schema and statements, on a recent SQLite. An implementation bound to an older SQLite, a phone's own, may write the same model its own way; the store names which way it was written, a program refuses one it does not speak, and the shared test vectors hold both to the same outcomes.
+
 Sync and search need the store. A sync needs, per source, what that source last agreed to, else a delete on one side and an add on the other look the same; the bindings hold that base. A search needs one index with one meaning of a match, which only the store's summaries, addresses and bodies give.
 
 What is optional is the bodies: a store can hold bases and summaries alone and still sync flags and list items.
@@ -205,6 +207,8 @@ A summary holds what a list row shows and sorts by; the index answers what the s
 - expands every calendar item's occurrences within a rolling horizon;
 - records whether a card holds a phone, a postal address, a birthday or a photo, and its categories;
 - links messages into threads by their reply headers.
+
+Text is folded (case and accents) before any full-text engine sees it, so engines that tokenise alike find the same words.
 
 Long texts are cut into chunks along their paragraphs as they are extracted; snippets are drawn from the chunks, and an embedding index can reuse them. Occurrences are expanded again when the time zone database they were resolved through changes version, since a zoned time moves with it.
 

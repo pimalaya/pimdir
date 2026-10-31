@@ -19,10 +19,22 @@ WHERE collection = :collection AND deleted = 0 AND conflicted = 0
   AND NOT EXISTS (SELECT 1 FROM bindings b
                   WHERE b.collection = items.collection AND b.link_id = items.link_id
                     AND (b.conflicted = 1
-                         OR NOT (b.base_present = 1 OR b.base_flags IS NOT NULL
+                         OR NOT (b.base_present = 1 OR b.base_flags_known = 1
                                  OR b.base_object IS NOT NULL OR b.base_revision IS NOT NULL)
-                         OR (items.flags IS NOT NULL AND b.base_flags IS NOT NULL
-                             AND items.flags IS NOT b.base_flags)))
+                         OR (items.flags_known = 1 AND b.base_flags_known = 1
+                             AND (EXISTS (SELECT flag FROM placement_flag f
+                                          WHERE f.collection = items.collection AND f.link_id = items.link_id
+                                          EXCEPT
+                                          SELECT flag FROM binding_base_flag g
+                                          WHERE g.collection = b.collection AND g.link_id = b.link_id
+                                            AND g.source = b.source)
+                                  OR EXISTS (SELECT flag FROM binding_base_flag g
+                                             WHERE g.collection = b.collection AND g.link_id = b.link_id
+                                               AND g.source = b.source
+                                             EXCEPT
+                                             SELECT flag FROM placement_flag f
+                                             WHERE f.collection = items.collection
+                                               AND f.link_id = items.link_id)))))
   AND NOT EXISTS (SELECT 1 FROM item_reference r
                   WHERE r.origin = 'user'
                     AND ((r.from_link_id = items.link_id AND r.from_kind = 'message/rfc822')

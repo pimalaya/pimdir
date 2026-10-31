@@ -3,8 +3,8 @@
 -- Applied to index.db, beside pimdir.db, by the same runner shape (§3), the
 -- index's own `PRAGMA user_version` set to 1 on success. Derived state: a
 -- mismatch, of the version or of the shape this text gives (§2), is a rebuild,
--- never a migration. Requires SQLite >= 3.43 for contentless_delete, above
--- the store's floor (§2).
+-- never a migration. The canonical shape (§2): needs SQLite >= 3.43 with FTS5
+-- for contentless_delete, above the store's.
 
 -- Index-level metadata: exactly one row.
 CREATE TABLE index_meta (
@@ -66,12 +66,13 @@ CREATE INDEX object_category_by_value ON object_category(value);
 -- The text of a body, by field (§6): the seven fields, then one column per
 -- address role of Annex A.6 so `from:` and `to:` keep their role where the
 -- value is a name rather than an address. Contentless: the bytes stay in the
--- blob, and a snippet is re-read from it. rowid = object.id.
+-- blob, and a snippet is re-read from it. rowid = object.id. The text arrives
+-- folded (§5), so the tokenizer folds no diacritic of its own.
 CREATE VIRTUAL TABLE object_text USING fts5(
     title, people, body, attachment, place, org, note,
     "from", "to", cc, bcc, email, organizer, attendee,
     content = '', contentless_delete = 1,
-    tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3'
+    tokenize = 'unicode61 remove_diacritics 0', prefix = '2 3'
 );
 
 -- The chunk boundaries of a body's long fields (§6), so a snippet is cut from
@@ -107,7 +108,7 @@ CREATE INDEX placement_by_link ON placement(link_id);
 CREATE VIRTUAL TABLE summary_text USING fts5(
     title, people, "from", "to", cc, bcc, email, organizer, attendee,
     content = '', contentless_delete = 1,
-    tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3'
+    tokenize = 'unicode61 remove_diacritics 0', prefix = '2 3'
 );
 
 -- The flag predicates (§8), one row per flag per placement, so `is:unread`

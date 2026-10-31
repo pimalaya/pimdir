@@ -23,13 +23,14 @@ known="$(
         sqlite3 "$dir/$part.db" "SELECT name FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%';
             SELECT p.name FROM sqlite_schema s, pragma_table_info(s.name) p WHERE s.type IN ('table', 'view');"
     done
-    # Pragmas, SQLite features, vector fields and JSON keys the documents write.
+    # Pragmas, SQLite features, vector fields, result columns and JSON keys the
+    # documents write.
     printf '%s\n' user_version data_version foreign_keys journal_mode locking_mode integrity_check \
         foreign_key_check table_info table_list contentless_delete json_each json_valid legacy_alter_table sqlite_sequence \
-        sqlite_schema core_autocrlf recurrence_id base32 body_hex body_len input_hex input_utf8 digest_hex \
+        sqlite_schema sqlite_master core_autocrlf recurrence_id base32 body_hex body_len input_hex input_utf8 digest_hex \
         name_chars digest_bytes if_match set_flags no_uid_conflict collect_garbage \
         meta_attachment round_open cursor_rejected interrupted_after scope_bound horizon_left \
-        accept_absences
+        accept_absences base_flags in_reply_to
 )"
 
 # A backticked identifier, the name alone: a call's parameters are dropped and

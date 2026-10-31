@@ -13,7 +13,7 @@ LEFT JOIN mail_summary s ON s.collection = b.collection AND s.link_id = b.link_i
 WHERE b.collection = :collection AND b.source = :source
   AND r.round_started_at IS NOT NULL
   AND b.round IS NOT r.round
-  AND (b.base_present = 1 OR b.base_flags IS NOT NULL
+  AND (b.base_present = 1 OR b.base_flags_known = 1
        OR b.base_object IS NOT NULL OR b.base_revision IS NOT NULL)
   AND CASE WHEN s.date IS NULL THEN r.round_band = 0
            ELSE (r.round_since IS NULL OR s.date >= r.round_since)

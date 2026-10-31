@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Applies the canonical migrations to an empty store and an empty index, then
-# prepares every statement under queries/ against them. Needs sqlite3 alone.
+# prepares every statement under queries/ against them, with the list
+# parameters' table (create_param) in place. The canonical text calls no JSON
+# function (STORAGE.md §4.1), so a statement or a migration naming one fails
+# here. Needs sqlite3 alone.
 set -euo pipefail
 
 root="${1:-$PWD}"
@@ -14,6 +17,12 @@ apply() {
         version="$(basename "$migration" | cut -d_ -f1 | sed 's/^0*//')"
         sqlite3 "$target" "BEGIN; $(cat "$migration") PRAGMA user_version = $version; COMMIT;"
     done
+}
+
+json="$(grep -rlE '\bjson[a-z_]*\(' "$root/migrations" "$root/queries" || true)"
+[ -z "$json" ] || {
+    echo "the canonical text calls a JSON function:" $json >&2
+    exit 1
 }
 
 apply "$db" "$root/migrations/storage"
@@ -43,7 +52,7 @@ done
 prepare() {
     local target="$1" file="$2" prelude="$3"
 
-    sqlite3 "$target" "$prelude EXPLAIN $(cat "$file")" > /dev/null || {
+    sqlite3 "$target" " $prelude EXPLAIN $(cat "$file")" > /dev/null || {
         echo "$(basename "$file" .sql) does not prepare against the schema" >&2
         exit 1
     }
@@ -54,11 +63,11 @@ prepare() {
 statements=0
 
 while read -r file; do
-    prepare "$db" "$file" ""
+    prepare "$db" "$file" "$(cat "$root/queries/storage/read/create_param.sql")"
 done < <(find "$root/queries/storage" -name '*.sql' | sort)
 
 while read -r file; do
-    prepare "$index" "$file" "ATTACH '$db' AS store;"
+    prepare "$index" "$file" "ATTACH '$db' AS store; $(cat "$root/queries/storage/read/create_param.sql")"
 done < <(find "$root/queries/search" -name '*.sql' | sort)
 
 echo "store and index schemas apply at version 1, $statements statements prepare against them"

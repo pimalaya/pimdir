@@ -6,7 +6,8 @@
   "note": "hits are (account, seq) pairs compared as a set unless the case says ordered (SEARCH.md §8.2); coverage is the bodiless live items in scope of the kinds whose body search reads, here item 8 whenever mail is in scope; the bodiless files, items 10 and 14, are indexed from their summary and never counted",
   "cases": [
     { "query": "stand-up", "hits": [["home", 1], ["work", 1]], "note": "free text over title; one message in two accounts is two hits" },
-    { "query": "reunion", "hits": [["home", 2]], "note": "remove_diacritics 2: the accented subject matches the bare word" },
+    { "query": "reunion", "hits": [["home", 2]], "note": "the fold (§5): the accented subject matches the bare word" },
+    { "query": "\u03b1\u03b8\u03b7\u03bd\u03b1", "hits": [["home", 8]], "note": "the fold (§5) drops a Greek tonos as it drops a Latin acute, before any tokenizer: unicode61 remove_diacritics 2 alone keeps it" },
     { "query": "from:alice@example.org", "hits": [["home", 1], ["work", 1], ["home", 3], ["home", 9]], "note": "an address seek on the from role" },
     { "query": "with:jane.doe@example.com", "hits": [["home", 5]], "note": "the card's EMAIL, lowercased whole on the way in" },
     { "query": "with:@example.net", "hits": [["home", 2], ["home", 8]], "note": "a domain token: a cc on a full body and a sender on a bodiless summary" },

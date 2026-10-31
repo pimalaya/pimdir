@@ -13,9 +13,10 @@ FROM (
   SELECT i.seq, max(s.size) AS size
   FROM items i
   LEFT JOIN mail_summary s ON s.collection = i.collection AND s.link_id = i.link_id
-  WHERE i.collection IN (SELECT value FROM json_each(:collections)) AND i.deleted = 0
+  WHERE i.collection IN (SELECT value FROM temp.param WHERE slot = 'collections') AND i.deleted = 0
     AND (:seen IS NULL
-         OR :seen = EXISTS (SELECT 1 FROM json_each(i.flags) WHERE value = '\Seen'))
+         OR :seen = EXISTS (SELECT 1 FROM placement_flag f
+                            WHERE f.collection = i.collection AND f.link_id = i.link_id AND f.flag = '\Seen'))
     AND (:attachment IS NULL OR s.attachment = :attachment)
     AND i.sort_key >= coalesce(:since, '') AND i.sort_key < coalesce(:until, x'')
   GROUP BY i.seq

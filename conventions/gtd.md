@@ -14,7 +14,7 @@ This document is a Pimalaya convention, not part of the pimdir standard: no part
 
 ## 1. Tasks by categories
 
-How Pimalaya's task consumers (the Android app, unfog) organise to-dos the GTD way, from the columns the store already carries. It is a reading of `task_summary.categories` and `status`, not a rule of the store: another client sees and sets the same state, and a task created anywhere takes part.
+How Pimalaya's task consumers (the Android app, unfog) organise to-dos the GTD way, from the columns the store already carries. It is a reading of a task's categories (`task_category`) and `status`, not a rule of the store: another client sees and sets the same state, and a task created anywhere takes part.
 
 - **State**: three `CATEGORIES` values are reserved, `inbox` (captured, not yet clarified), `waiting` (someone else owes it) and `someday` (not a commitment). They are written as those English literals in every locale, compared as `category:` compares (folded as STORAGE Annex A.2 folds `fn`, so `Inbox` is `inbox`), and shown under the reader's own labels. Every other value is the person's own: a context, a project, anything.
 - **Capture**: a VTODO with `CATEGORIES:inbox`, `CREATED` and `DTSTAMP` both the instant of capture in UTC (`20261028T090000Z`), in any collection that takes tasks (one no source declares `x-vtodo` `none` for, STORAGE §15.6). It is an `add` through the queue (GUIDE §13), from whose body the owner derives `upsert_task_summary`'s row; into a collection no source syncs, the owner writes it itself, as §2 writes an entry.
