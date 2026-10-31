@@ -1,23 +1,70 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/pimalaya/pimdir/vectors/schema/objects.schema.json",
+  "$comment": "SPDX-License-Identifier: MIT OR Apache-2.0",
   "title": "Object names (STORAGE.md section 16), vectors/objects.json",
   "type": "object",
   "required": ["v", "algorithms", "base32", "objects"],
   "additionalProperties": false,
   "properties": {
-    "v": { "const": 1 },
-    "algorithms": { "type": "object" },
+    "v": { "const": 2 },
+    "algorithms": {
+      "type": "object",
+      "required": ["blake3"],
+      "additionalProperties": false,
+      "properties": {
+        "blake3": {
+          "type": "object",
+          "required": ["digest_bytes", "name_chars", "derivation"],
+          "additionalProperties": false,
+          "properties": { "digest_bytes": { "const": 32 }, "name_chars": { "const": 52 }, "derivation": { "type": "string" } }
+        }
+      }
+    },
     "base32": {
       "type": "object",
-      "required": ["cases"],
+      "required": ["alphabet", "rfc", "padding", "cases"],
+      "additionalProperties": false,
       "properties": {
-        "cases": { "type": "array", "items": { "type": "object", "required": ["input_hex", "input_utf8", "base32"] } }
+        "alphabet": { "const": "abcdefghijklmnopqrstuvwxyz234567" },
+        "rfc": { "type": "string" },
+        "padding": { "const": false },
+        "cases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["input_hex", "input_utf8", "base32"],
+            "additionalProperties": false,
+            "properties": { "input_hex": { "type": "string", "pattern": "^([0-9a-f]{2})*$" }, "input_utf8": { "type": "string" }, "base32": { "type": "string", "pattern": "^[a-z2-7]*$" } }
+          }
+        }
       }
     },
     "objects": {
       "type": "array",
-      "items": { "type": "object", "required": ["label", "body_len", "blake3", "sha256-128"] }
+      "items": {
+        "type": "object",
+        "required": ["label", "body_len", "blake3"],
+        "additionalProperties": false,
+        "properties": {
+          "label": { "type": "string" },
+          "note": { "type": "string" },
+          "body_len": { "type": "integer", "minimum": 0 },
+          "body_hex": { "type": "string", "pattern": "^([0-9a-f]{2})*$" },
+          "body_pattern": { "const": "byte i is (i mod 251)" },
+          "blake3": {
+            "type": "object",
+            "required": ["digest_hex", "name", "path"],
+            "additionalProperties": false,
+            "properties": {
+              "digest_hex": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+              "name": { "type": "string", "pattern": "^[a-z2-7]{52}$" },
+              "path": { "type": "string", "pattern": "^objects/[a-z2-7]{2}/[a-z2-7]{52}$" }
+            }
+          }
+        },
+        "oneOf": [{ "required": ["body_hex"] }, { "required": ["body_pattern"] }]
+      }
     }
   }
 }

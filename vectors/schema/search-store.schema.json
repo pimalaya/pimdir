@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/pimalaya/pimdir/vectors/schema/search-store.schema.json",
+  "$comment": "SPDX-License-Identifier: MIT OR Apache-2.0",
   "title": "The search fixture store (SEARCH.md section 11), vectors/search/store.json",
   "type": "object",
   "required": ["v", "collections", "items", "references"],
@@ -17,9 +18,22 @@
         "properties": {
           "id": { "type": "string" },
           "account": { "type": ["string", "null"] },
-          "kind": { "type": "string" },
+          "kind": { "enum": ["message/rfc822", "text/vcard", "text/calendar", "application/octet-stream"] },
           "role": { "type": "string" },
-          "sources": { "type": "array", "items": { "type": "object" } }
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["source", "covered_since", "covered_until", "covered_at"],
+              "additionalProperties": false,
+              "properties": {
+                "source": { "type": "string" },
+                "covered_since": { "type": ["string", "null"] },
+                "covered_until": { "type": ["string", "null"] },
+                "covered_at": { "type": ["string", "null"] }
+              }
+            }
+          }
         }
       }
     },
@@ -31,18 +45,88 @@
         "additionalProperties": false,
         "properties": {
           "collection": { "type": "string" },
-          "seq": { "type": "integer" },
-          "link_id": { "type": "string" },
-          "flags": { "type": "array", "items": { "type": "string" } },
-          "fixture": { "type": "string" },
-          "summary": { "type": "object" }
+          "seq": { "type": "integer", "minimum": 1 },
+          "link_id": { "type": "string", "minLength": 1 },
+          "flags": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[!-~]+$" } },
+          "fixture": { "type": "string", "pattern": "^fixtures/" },
+          "summary": { "$ref": "#/$defs/summary" }
         },
         "oneOf": [{ "required": ["fixture"] }, { "required": ["summary"] }]
       }
     },
     "references": {
       "type": "array",
-      "items": { "type": "object", "required": ["from_kind", "from_link_id", "to_kind", "to_link_id", "role", "origin"], "additionalProperties": false, "properties": { "from_kind": { "type": "string" }, "from_link_id": { "type": "string" }, "to_kind": { "type": "string" }, "to_link_id": { "type": "string" }, "role": { "type": "string" }, "origin": { "enum": ["auto", "user"] } } }
+      "items": {
+        "type": "object",
+        "required": ["from_kind", "from_link_id", "to_kind", "to_link_id", "role", "origin"],
+        "additionalProperties": false,
+        "properties": {
+          "from_kind": { "type": "string" },
+          "from_link_id": { "type": "string" },
+          "to_kind": { "type": "string" },
+          "to_link_id": { "type": "string" },
+          "role": { "type": "string" },
+          "origin": { "enum": ["auto", "user"] }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "maybe": { "type": ["string", "null"] },
+    "summary": {
+      "type": "object",
+      "required": ["table", "row", "addresses", "sort_key"],
+      "additionalProperties": false,
+      "properties": {
+        "table": { "enum": ["mail_summary", "file_summary"] },
+        "row": { "type": "object" },
+        "addresses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["role", "position", "address", "name"],
+            "additionalProperties": false,
+            "properties": {
+              "role": { "enum": ["from", "to", "cc", "bcc", "email", "organizer", "attendee", "contact"] },
+              "position": { "type": "integer", "minimum": 0 },
+              "address": { "type": "string" },
+              "name": { "$ref": "#/$defs/maybe" }
+            }
+          }
+        },
+        "sort_key": { "type": "string" }
+      },
+      "allOf": [
+        { "if": { "properties": { "table": { "const": "mail_summary" } } }, "then": { "properties": { "row": { "$ref": "#/$defs/mail_summary" } } } },
+        { "if": { "properties": { "table": { "const": "file_summary" } } }, "then": { "properties": { "row": { "$ref": "#/$defs/file_summary" } } } }
+      ]
+    },
+    "mail_summary": {
+      "type": "object",
+      "required": ["message_id", "in_reply_to", "subject", "sender", "sender_name", "date", "size", "attachment", "invitation"],
+      "additionalProperties": false,
+      "properties": {
+        "message_id": { "$ref": "#/$defs/maybe" },
+        "in_reply_to": { "type": "array", "items": { "type": "string" } },
+        "subject": { "type": "string" },
+        "sender": { "$ref": "#/$defs/maybe" },
+        "sender_name": { "$ref": "#/$defs/maybe" },
+        "date": { "$ref": "#/$defs/maybe" },
+        "size": { "type": ["integer", "null"], "minimum": 0 },
+        "attachment": { "enum": [0, 1, null] },
+        "invitation": { "$ref": "#/$defs/maybe" }
+      }
+    },
+    "file_summary": {
+      "type": "object",
+      "required": ["name", "media_type", "size", "part"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "media_type": { "$ref": "#/$defs/maybe" },
+        "size": { "type": ["integer", "null"], "minimum": 0 },
+        "part": { "$ref": "#/$defs/maybe" }
+      }
     }
   }
 }

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pimalaya/pimdir/payloads/submit.v1.schema.json",
+  "$comment": "SPDX-License-Identifier: MIT OR Apache-2.0",
+  "title": "The payload of a submit intent at v 1 (STORAGE.md Annex B.2)",
+  "type": "object",
+  "required": ["v", "source", "from", "rcpts"],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "const": 1 },
+    "source": { "type": "string", "minLength": 1 },
+    "from": { "type": "string", "minLength": 1 },
+    "rcpts": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "subject": { "type": "string" },
+    "copy": { "type": "string", "minLength": 1 }
+  }
+}

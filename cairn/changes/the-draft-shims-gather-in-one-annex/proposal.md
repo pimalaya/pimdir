@@ -1,7 +1,7 @@
 ---
 cairn: change
 id: the-draft-shims-gather-in-one-annex
-status: draft
+status: abandoned
 created: 2026-10-30
 ---
 
@@ -19,3 +19,7 @@ Moved out of should-fix-before-the-freeze (2026-10-30). STORAGE carries sentence
 ## Lands in
 
 The last storage draft before storage-v1.0.0.
+
+## Abandoned
+
+Abandoned on 2026-10-31: drafts are exact (audit-2026-10-31, V1), so no program reads a store another draft wrote, and every shim was deleted rather than gathered (cairn/log/2026-10-31-format-identity-and-versions.md).

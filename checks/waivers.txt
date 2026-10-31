@@ -1,0 +1,5 @@
+# The statements under queries/ no scenario of checks/invariants.sh runs, one
+# a line as `part/profile/name: reason`. checks/invariants.sh fails on a
+# statement run by no scenario and missing here, and on a line here naming a
+# statement a scenario runs or none at all, so the list holds only what the
+# harness cannot run.

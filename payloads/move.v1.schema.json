@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pimalaya/pimdir/payloads/move.v1.schema.json",
+  "$comment": "SPDX-License-Identifier: MIT OR Apache-2.0",
+  "title": "The payload of a move at v 1 (STORAGE.md section 15.3)",
+  "type": "object",
+  "required": ["v", "seq", "to"],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "const": 1 },
+    "seq": { "type": "integer", "minimum": 1 },
+    "to": { "type": "string", "minLength": 1 }
+  }
+}

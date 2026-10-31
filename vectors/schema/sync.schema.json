@@ -1,15 +1,294 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/pimalaya/pimdir/vectors/schema/sync.schema.json",
+  "$comment": "SPDX-License-Identifier: MIT OR Apache-2.0",
   "title": "A sync vector (SYNC.md section 11), one file under vectors/sync/",
   "type": "object",
   "required": ["v", "label", "note", "store", "run", "remote", "expect"],
   "additionalProperties": false,
   "properties": {
-    "v": { "const": 1 },
+    "v": { "const": 2 },
     "label": { "type": "string" },
     "note": { "type": "string" },
     "store": { "$ref": "#/$defs/store" },
+    "run": { "$ref": "#/$defs/run" },
+    "remote": { "$ref": "#/$defs/remote" },
+    "expect": { "$ref": "#/$defs/expect" }
+  },
+  "$defs": {
+    "text": { "type": "string" },
+    "maybe": { "type": ["string", "null"] },
+    "label": { "type": "string", "minLength": 1 },
+    "object": { "type": ["string", "null"], "minLength": 1 },
+    "flags": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[!-~]+$" } },
+    "maybe_flags": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/flags" }] },
+    "bit": { "enum": [0, 1] },
+    "handles": { "type": "array", "items": { "type": "string" } },
+
+    "collection": {
+      "type": "object",
+      "required": ["id", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "account": { "$ref": "#/$defs/maybe" },
+        "kind": { "enum": ["", "message/rfc822", "text/vcard", "text/calendar", "application/octet-stream"] },
+        "conflict": { "enum": ["manual", "prefer-incoming", "prefer-existing"] },
+        "generation": { "type": "integer", "minimum": 1 },
+        "name": { "type": "string" },
+        "role": { "$ref": "#/$defs/maybe" }
+      }
+    },
+    "blob": {
+      "type": "object",
+      "required": ["body"],
+      "additionalProperties": false,
+      "properties": { "body": { "type": "string" }, "blob": { "type": "boolean" }, "corrupt": { "type": "boolean" } }
+    },
+    "item": {
+      "type": "object",
+      "required": ["collection", "link_id", "seq", "flags", "object", "level", "deleted"],
+      "additionalProperties": false,
+      "properties": {
+        "collection": { "type": "string" },
+        "link_id": { "type": "string", "minLength": 1 },
+        "seq": { "type": "integer", "minimum": 1 },
+        "flags": { "$ref": "#/$defs/maybe_flags" },
+        "object": { "$ref": "#/$defs/object" },
+        "sort_key": { "type": "string" },
+        "level": { "enum": [1, 2] },
+        "deleted": { "$ref": "#/$defs/bit" },
+        "retained": { "type": "boolean" },
+        "retained_by": { "$ref": "#/$defs/maybe" },
+        "conflicted": { "$ref": "#/$defs/bit" },
+        "conflict_object": { "$ref": "#/$defs/object" }
+      }
+    },
+    "binding": {
+      "type": "object",
+      "required": ["collection", "link_id", "source", "handle", "base_flags", "base_object", "base_revision", "base_present"],
+      "additionalProperties": false,
+      "properties": {
+        "collection": { "type": "string" },
+        "link_id": { "type": "string", "minLength": 1 },
+        "source": { "type": "string" },
+        "handle": { "type": "string" },
+        "base_flags": { "$ref": "#/$defs/maybe_flags" },
+        "base_object": { "$ref": "#/$defs/object" },
+        "base_revision": { "$ref": "#/$defs/maybe" },
+        "base_present": { "$ref": "#/$defs/bit" },
+        "conflicted": { "$ref": "#/$defs/bit" },
+        "conflict_revision": { "$ref": "#/$defs/maybe" },
+        "conflict_object": { "$ref": "#/$defs/object" },
+        "shared_object": { "$ref": "#/$defs/object" },
+        "round": { "type": ["integer", "null"] }
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": ["collection", "source", "checkpoint"],
+      "additionalProperties": false,
+      "properties": {
+        "collection": { "type": "string" },
+        "source": { "type": "string" },
+        "checkpoint": { "$ref": "#/$defs/maybe" },
+        "round": { "type": "integer" },
+        "round_open": { "type": "boolean" },
+        "round_since": { "$ref": "#/$defs/maybe" },
+        "round_until": { "$ref": "#/$defs/maybe" },
+        "round_cursor": { "$ref": "#/$defs/maybe" },
+        "round_checkpoint": { "$ref": "#/$defs/maybe" },
+        "round_band": { "type": "boolean" },
+        "round_started_at": { "type": "string" },
+        "covered": { "type": "boolean" },
+        "covered_since": { "$ref": "#/$defs/maybe" },
+        "covered_until": { "$ref": "#/$defs/maybe" }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["table", "collection", "link_id", "row"],
+      "additionalProperties": false,
+      "properties": {
+        "table": { "enum": ["mail_summary", "contact_summary", "event_summary", "task_summary", "journal_summary", "file_summary"] },
+        "collection": { "type": "string" },
+        "link_id": { "type": "string", "minLength": 1 },
+        "row": { "type": "object" }
+      },
+      "allOf": [
+        { "if": { "properties": { "table": { "const": "mail_summary" } } }, "then": { "properties": { "row": { "$ref": "#/$defs/mail_summary" } } } },
+        { "if": { "properties": { "table": { "const": "contact_summary" } } }, "then": { "properties": { "row": { "$ref": "#/$defs/contact_summary" } } } },
+        { "if": { "properties": { "table": { "const": "event_summary" } } }, "then": { "properties": { "row": { "$ref": "#/$defs/event_summary" } } } },
+        { "if": { "properties": { "table": { "const": "task_summary" } } }, "then": { "properties": { "row": { "$ref": "#/$defs/task_summary" } } } },
+        { "if": { "properties": { "table": { "const": "journal_summary" } } }, "then": { "properties": { "row": { "$ref": "#/$defs/journal_summary" } } } },
+        { "if": { "properties": { "table": { "const": "file_summary" } } }, "then": { "properties": { "row": { "$ref": "#/$defs/file_summary" } } } }
+      ]
+    },
+    "mail_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "message_id": { "$ref": "#/$defs/maybe" },
+        "in_reply_to": { "type": "array", "items": { "type": "string" } },
+        "subject": { "type": "string" },
+        "sender": { "$ref": "#/$defs/maybe" },
+        "sender_name": { "$ref": "#/$defs/maybe" },
+        "date": { "$ref": "#/$defs/maybe" },
+        "size": { "type": ["integer", "null"], "minimum": 0 },
+        "attachment": { "enum": [0, 1, null] },
+        "invitation": { "$ref": "#/$defs/maybe" }
+      }
+    },
+    "contact_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "uid": { "$ref": "#/$defs/maybe" },
+        "fn": { "type": "string" },
+        "kind": { "$ref": "#/$defs/maybe" },
+        "org": { "$ref": "#/$defs/maybe" }
+      }
+    },
+    "event_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "uid": { "$ref": "#/$defs/maybe" },
+        "summary": { "type": "string" },
+        "location": { "$ref": "#/$defs/maybe" },
+        "dtstart": { "$ref": "#/$defs/maybe" },
+        "dtstart_tzid": { "$ref": "#/$defs/maybe" },
+        "dtstart_value": { "enum": ["date-time", "date", null] },
+        "dtend": { "$ref": "#/$defs/maybe" },
+        "recurring": { "enum": [0, 1, null] },
+        "until": { "$ref": "#/$defs/maybe" }
+      }
+    },
+    "task_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "uid": { "$ref": "#/$defs/maybe" },
+        "summary": { "type": "string" },
+        "dtstart": { "$ref": "#/$defs/maybe" },
+        "dtstart_tzid": { "$ref": "#/$defs/maybe" },
+        "dtstart_value": { "enum": ["date-time", "date", null] },
+        "due": { "$ref": "#/$defs/maybe" },
+        "due_tzid": { "$ref": "#/$defs/maybe" },
+        "due_value": { "enum": ["date-time", "date", null] },
+        "status": { "$ref": "#/$defs/maybe" },
+        "completed": { "$ref": "#/$defs/maybe" },
+        "percent": { "type": ["integer", "null"] },
+        "recurring": { "enum": [0, 1, null] },
+        "until": { "$ref": "#/$defs/maybe" },
+        "priority": { "type": ["integer", "null"], "minimum": 0, "maximum": 9 },
+        "categories": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "parent": { "$ref": "#/$defs/maybe" },
+        "mid": { "$ref": "#/$defs/maybe" },
+        "created": { "$ref": "#/$defs/maybe" }
+      }
+    },
+    "journal_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "uid": { "$ref": "#/$defs/maybe" },
+        "summary": { "type": "string" },
+        "dtstart": { "$ref": "#/$defs/maybe" },
+        "dtstart_tzid": { "$ref": "#/$defs/maybe" },
+        "dtstart_value": { "enum": ["date-time", "date", null] }
+      }
+    },
+    "file_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "media_type": { "$ref": "#/$defs/maybe" },
+        "size": { "type": ["integer", "null"], "minimum": 0 },
+        "part": { "$ref": "#/$defs/maybe" }
+      }
+    },
+    "address": {
+      "type": "object",
+      "required": ["collection", "link_id", "role", "position", "address", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "collection": { "type": "string" },
+        "link_id": { "type": "string", "minLength": 1 },
+        "role": { "enum": ["from", "to", "cc", "bcc", "email", "organizer", "attendee", "contact"] },
+        "position": { "type": "integer", "minimum": 0 },
+        "address": { "type": "string" },
+        "name": { "$ref": "#/$defs/maybe" }
+      }
+    },
+    "supersession": {
+      "type": "object",
+      "required": ["collection", "link_id", "by_collection", "by_link_id"],
+      "additionalProperties": false,
+      "properties": {
+        "collection": { "type": "string" },
+        "link_id": { "type": "string" },
+        "by_collection": { "type": "string" },
+        "by_link_id": { "type": "string" }
+      }
+    },
+    "reference": {
+      "type": "object",
+      "required": ["from_kind", "from_link_id", "to_kind", "to_link_id", "role", "origin"],
+      "additionalProperties": false,
+      "properties": {
+        "from_kind": { "type": "string" },
+        "from_link_id": { "type": "string" },
+        "to_kind": { "type": "string" },
+        "to_link_id": { "type": "string" },
+        "role": { "type": "string" },
+        "origin": { "enum": ["auto", "user"] }
+      }
+    },
+    "rows": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "collections": { "type": "array", "items": { "$ref": "#/$defs/collection" } },
+        "objects": { "type": "object", "additionalProperties": { "$ref": "#/$defs/blob" } },
+        "items": { "type": "array", "items": { "$ref": "#/$defs/item" } },
+        "bindings": { "type": "array", "items": { "$ref": "#/$defs/binding" } },
+        "sources": { "type": "array", "items": { "$ref": "#/$defs/source" } },
+        "summaries": { "type": "array", "items": { "$ref": "#/$defs/summary" } },
+        "addresses": { "type": "array", "items": { "$ref": "#/$defs/address" } },
+        "supersessions": { "type": "array", "items": { "$ref": "#/$defs/supersession" } },
+        "references": { "type": "array", "items": { "$ref": "#/$defs/reference" } }
+      }
+    },
+    "store": {
+      "allOf": [{ "$ref": "#/$defs/rows" }],
+      "required": ["collections", "objects", "items", "bindings", "sources"]
+    },
+
+    "mutation": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": { "kind": { "enum": ["Add", "Edit", "Remove", "SetFlags", "Copy", "Move"] } },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "Add" } } },
+          "then": { "required": ["object", "flags"], "additionalProperties": false,
+                    "properties": { "kind": true, "object": { "$ref": "#/$defs/label" }, "flags": { "$ref": "#/$defs/flags" } } } },
+        { "if": { "properties": { "kind": { "const": "Edit" } } },
+          "then": { "required": ["seq", "object"], "additionalProperties": false,
+                    "properties": { "kind": true, "seq": { "type": "integer", "minimum": 1 }, "object": { "$ref": "#/$defs/label" },
+                                    "if_match": { "$ref": "#/$defs/label" }, "overrule": { "type": "boolean" } } } },
+        { "if": { "properties": { "kind": { "const": "Remove" } } },
+          "then": { "required": ["seq"], "additionalProperties": false,
+                    "properties": { "kind": true, "seq": { "type": "integer", "minimum": 1 } } } },
+        { "if": { "properties": { "kind": { "const": "SetFlags" } } },
+          "then": { "required": ["seq", "flags"], "additionalProperties": false,
+                    "properties": { "kind": true, "seq": { "type": "integer", "minimum": 1 }, "flags": { "$ref": "#/$defs/flags" } } } },
+        { "if": { "properties": { "kind": { "enum": ["Copy", "Move"] } } },
+          "then": { "required": ["seq", "to"], "additionalProperties": false,
+                    "properties": { "kind": true, "seq": { "type": "integer", "minimum": 1 }, "to": { "type": "string" } } } }
+      ]
+    },
     "run": {
       "type": "object",
       "required": ["verb", "collection", "source"],
@@ -33,14 +312,85 @@
               "type": "object",
               "required": ["since", "until"],
               "additionalProperties": false,
-              "properties": { "since": { "type": ["string", "null"] }, "until": { "type": ["string", "null"] } }
+              "properties": { "since": { "$ref": "#/$defs/maybe" }, "until": { "$ref": "#/$defs/maybe" } }
             },
             "accept_absences": { "type": "boolean" }
           }
         },
-        "mutation": { "type": "object", "required": ["kind"] },
+        "mutation": { "$ref": "#/$defs/mutation" },
         "tier": { "enum": ["Meta", "Full"] },
-        "handles": { "type": "array", "items": { "type": "string" } }
+        "handles": { "$ref": "#/$defs/handles" }
+      }
+    },
+
+    "meta": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["body"],
+          "additionalProperties": false,
+          "properties": { "body": { "type": "string" }, "size": { "type": "integer", "minimum": 0 }, "attachment": { "type": "boolean" } }
+        },
+        {
+          "type": "object",
+          "required": ["link_id", "summary"],
+          "additionalProperties": false,
+          "properties": {
+            "link_id": { "type": "string", "minLength": 1 },
+            "summary": { "allOf": [{ "$ref": "#/$defs/file_summary" }], "required": ["name", "media_type", "size", "part"] }
+          }
+        }
+      ]
+    },
+    "member": {
+      "type": "object",
+      "required": ["handle", "flags", "revision", "meta"],
+      "additionalProperties": false,
+      "properties": {
+        "handle": { "type": "string" },
+        "flags": { "$ref": "#/$defs/maybe_flags" },
+        "revision": { "$ref": "#/$defs/maybe" },
+        "meta": { "$ref": "#/$defs/meta" },
+        "carries": { "type": "boolean" }
+      }
+    },
+    "page": {
+      "type": "object",
+      "required": ["items"],
+      "additionalProperties": false,
+      "properties": {
+        "items": { "type": "array", "items": { "$ref": "#/$defs/member" } },
+        "vanished": { "$ref": "#/$defs/handles" },
+        "complete": { "type": "boolean" },
+        "last": { "type": "boolean" },
+        "cursor": { "$ref": "#/$defs/maybe" },
+        "checkpoint": { "$ref": "#/$defs/maybe" },
+        "narrowed": { "type": "boolean" },
+        "enumerated": { "$ref": "#/$defs/handles" }
+      }
+    },
+    "head": {
+      "type": "object",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["delta", "band"] },
+        "from": { "type": "string" },
+        "since": { "type": "string" },
+        "rejected": { "type": "boolean" },
+        "items": { "type": "array", "items": { "$ref": "#/$defs/member" } },
+        "vanished": { "$ref": "#/$defs/handles" },
+        "checkpoint": { "$ref": "#/$defs/maybe" }
+      }
+    },
+    "fetched": {
+      "type": "object",
+      "required": ["body", "revision"],
+      "additionalProperties": false,
+      "properties": {
+        "body": { "type": "string" },
+        "revision": { "$ref": "#/$defs/maybe" },
+        "meta": { "$ref": "#/$defs/meta" }
       }
     },
     "remote": {
@@ -50,12 +400,74 @@
       "properties": {
         "snapshot": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/page" }] },
         "pages": { "type": "array", "items": { "$ref": "#/$defs/page" } },
-        "fetch": { "type": "object" },
-        "head": { "type": "object", "required": ["kind"] },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": false,
+            "properties": { "Meta": { "$ref": "#/$defs/fetched" }, "Full": { "$ref": "#/$defs/fetched" } }
+          }
+        },
+        "head": { "$ref": "#/$defs/head" },
         "heads": { "type": "array", "items": { "enum": ["delta", "band"] } },
         "interrupted_after": { "type": "integer", "minimum": 0 },
         "cursor_rejected": { "type": "boolean" },
         "scope_bound": { "type": "boolean" }
+      }
+    },
+
+    "push": {
+      "type": "object",
+      "required": ["kind", "handle", "key"],
+      "properties": {
+        "kind": { "enum": ["Add", "Remove", "SetFlags", "Update"] },
+        "handle": { "type": "string" },
+        "key": { "type": "string", "pattern": "^[0-9a-f]{16}$" }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "Add" } } },
+          "then": { "additionalProperties": false,
+                    "properties": { "kind": true, "handle": true, "key": true,
+                                    "link_id": { "$ref": "#/$defs/maybe" }, "flags": { "$ref": "#/$defs/maybe_flags" },
+                                    "origin": { "oneOf": [{ "type": "null" }, { "type": "object", "required": ["collection", "handle"], "additionalProperties": false,
+                                                                                  "properties": { "collection": { "type": "string" }, "handle": { "type": "string" } } }] },
+                                    "object": { "$ref": "#/$defs/object" },
+                                    "supersedes": { "type": "object", "required": ["collection", "handle", "if_match"], "additionalProperties": false,
+                                                    "properties": { "collection": { "type": "string" }, "handle": { "type": "string" }, "if_match": { "$ref": "#/$defs/maybe" } } } } } },
+        { "if": { "properties": { "kind": { "const": "Remove" } } },
+          "then": { "additionalProperties": false,
+                    "properties": { "kind": true, "handle": true, "key": true,
+                                    "to": { "$ref": "#/$defs/maybe" }, "link_id": { "$ref": "#/$defs/maybe" }, "if_match": { "$ref": "#/$defs/maybe" } } } },
+        { "if": { "properties": { "kind": { "const": "SetFlags" } } },
+          "then": { "additionalProperties": false,
+                    "properties": { "kind": true, "handle": true, "key": true,
+                                    "add": { "$ref": "#/$defs/maybe_flags" }, "remove": { "$ref": "#/$defs/maybe_flags" } } } },
+        { "if": { "properties": { "kind": { "const": "Update" } } },
+          "then": { "additionalProperties": false,
+                    "properties": { "kind": true, "handle": true, "key": true,
+                                    "object": { "$ref": "#/$defs/label" }, "if_match": { "$ref": "#/$defs/maybe" } } } }
+      ]
+    },
+    "outcome": {
+      "type": "object",
+      "required": ["handle", "outcome"],
+      "additionalProperties": false,
+      "properties": {
+        "handle": { "type": "string" },
+        "outcome": { "enum": ["Accepted", "Rejected"] },
+        "assigned": { "$ref": "#/$defs/maybe" },
+        "revision": { "$ref": "#/$defs/maybe" }
+      }
+    },
+    "event": {
+      "type": "object",
+      "required": ["kind", "handle"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["Added", "FlagsChanged", "ContentChanged", "Vanished", "Conflicted", "Overruled", "Created"] },
+        "handle": { "type": "string" },
+        "link_id": { "type": "string" }
       }
     },
     "expect": {
@@ -63,108 +475,17 @@
       "required": ["pushes", "outcomes", "events", "store"],
       "additionalProperties": false,
       "properties": {
-        "pushes": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["kind", "handle", "key"],
-            "additionalProperties": false,
-            "properties": {
-              "kind": { "enum": ["Add", "Remove", "SetFlags", "Update"] },
-              "handle": { "type": "string" },
-              "key": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
-              "link_id": { "type": ["string", "null"] },
-              "flags": { "type": ["array", "null"], "items": { "type": "string" } },
-              "add": { "type": "array", "items": { "type": "string" } },
-              "remove": { "type": "array", "items": { "type": "string" } },
-              "origin": { "type": ["object", "null"] },
-              "supersedes": { "type": ["object", "null"] },
-              "object": { "type": ["string", "null"] },
-              "to": { "type": ["string", "null"] },
-              "if_match": { "type": ["string", "null"] }
-            }
-          }
-        },
-        "outcomes": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["handle", "outcome"],
-            "additionalProperties": false,
-            "properties": {
-              "handle": { "type": "string" },
-              "outcome": { "enum": ["Accepted", "Rejected"] },
-              "assigned": { "type": ["string", "null"] },
-              "revision": { "type": ["string", "null"] }
-            }
-          }
-        },
-        "events": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["kind", "handle"],
-            "additionalProperties": false,
-            "properties": {
-              "kind": { "enum": ["Added", "FlagsChanged", "ContentChanged", "Vanished", "Conflicted", "Overruled", "Created"] },
-              "handle": { "type": "string" },
-              "link_id": { "type": "string" }
-            }
-          }
-        },
+        "pushes": { "type": "array", "items": { "$ref": "#/$defs/push" } },
+        "outcomes": { "type": "array", "items": { "$ref": "#/$defs/outcome" } },
+        "events": { "type": "array", "items": { "$ref": "#/$defs/event" } },
         "parked": {
           "type": "object",
           "required": ["absent", "bound"],
           "additionalProperties": false,
-          "properties": { "absent": { "type": "integer" }, "bound": { "type": "integer" } }
+          "properties": { "absent": { "type": "integer", "minimum": 0 }, "bound": { "type": "integer", "minimum": 0 } }
         },
         "failed": { "const": true },
         "store": { "$ref": "#/$defs/rows" }
-      }
-    }
-  },
-  "$defs": {
-    "store": {
-      "type": "object",
-      "required": ["collections", "objects", "items", "bindings", "sources"],
-      "allOf": [{ "$ref": "#/$defs/rows" }]
-    },
-    "rows": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "collections": { "type": "array", "items": { "type": "object", "required": ["id", "kind"] } },
-        "objects": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "object",
-            "required": ["body"],
-            "additionalProperties": false,
-            "properties": { "body": { "type": "string" }, "blob": { "type": "boolean" }, "corrupt": { "type": "boolean" } }
-          }
-        },
-        "items": { "type": "array", "items": { "type": "object", "required": ["collection", "link_id"] } },
-        "bindings": { "type": "array", "items": { "type": "object", "required": ["collection", "link_id", "source", "handle"] } },
-        "sources": { "type": "array", "items": { "type": "object", "required": ["collection", "source"] } },
-        "summaries": { "type": "array", "items": { "type": "object", "required": ["table", "collection", "link_id", "row"] } },
-        "addresses": { "type": "array", "items": { "type": "object", "required": ["collection", "link_id", "role", "position", "address"] } },
-        "supersessions": { "type": "array", "items": { "type": "object" } },
-        "references": { "type": "array", "items": { "type": "object" } }
-      }
-    },
-    "page": {
-      "type": "object",
-      "required": ["items"],
-      "properties": {
-        "items": {
-          "type": "array",
-          "items": { "type": "object", "required": ["handle"] }
-        },
-        "vanished": { "type": "array", "items": { "type": "string" } },
-        "complete": { "type": "boolean" },
-        "last": { "type": "boolean" },
-        "cursor": { "type": ["string", "null"] },
-        "checkpoint": { "type": ["string", "null"] }
       }
     }
   }

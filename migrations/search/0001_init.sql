@@ -1,47 +1,62 @@
 -- pimdir search index schema, version 1. Section references are to SEARCH.md.
 --
--- Applied to index.db, beside pimdir.db, by the same runner shape (§3), the
--- index's own `PRAGMA user_version` set to 1 on success. Derived state: a
--- mismatch, of the version or of the shape this text gives (§2), is a rebuild,
--- never a migration. The canonical shape (§2): needs SQLite >= 3.43 with FTS5
--- for contentless_delete, above the store's.
+-- Applied to index.db, beside pimdir.db, in one transaction, the
+-- index's own `PRAGMA user_version` set to 1 on success. Derived state: an
+-- older version of this shape, or a mismatch of the tokenizer, the schema text
+-- or the store (§2), is a rebuild, never a migration. The canonical shape
+-- (§2): needs SQLite >= 3.43 with FTS5 for contentless_delete, above the
+-- store's.
 
 -- Index-level metadata: exactly one row.
 CREATE TABLE index_meta (
     id            INTEGER PRIMARY KEY CHECK (id = 1),
     format        TEXT    NOT NULL DEFAULT 'pimdir-index',
+    -- The version of SEARCH.md this index follows and the shape it is written
+    -- in (§2): the draft's own name while SEARCH.md is a draft, search-vN once
+    -- released; 'canonical' for this schema. Every shape records both, so an
+    -- indexer rebuilds only an older index of its own shape and refuses any
+    -- other, and a query client refuses one it does not implement.
+    format_version TEXT   NOT NULL,
+    shape         TEXT    NOT NULL,
     version       INTEGER NOT NULL,           -- tracks user_version
     tokenizer     TEXT    NOT NULL,           -- the FTS5 tokenize string in force (§5)
+    -- The store this index was built from (§2, §4): its store_meta.store_id and
+    -- incarnation when init_index_meta ran. A store answering another is a
+    -- restored copy or another store, and the index is rebuilt.
+    store_id          TEXT    NOT NULL,
+    store_incarnation INTEGER NOT NULL,
     -- The store's change cursor this index has folded in (§4): every stamp up
     -- to and including store_change, the last one drawn when the pass began,
-    -- at purge count store_purges.
+    -- at purge count store_purges, which a batch never moves, so a rename a
+    -- cut pass folded past is still reconciled.
     store_change  INTEGER NOT NULL DEFAULT 0,
     store_purges  INTEGER NOT NULL DEFAULT 0,
-    -- The store_change of the last completed pass, which a batch never moves:
-    -- a collection stamped above it may have left placements under an old id
-    -- for the key reconciliation (§4), a rename a cut pass folded past.
-    store_reconciled INTEGER NOT NULL DEFAULT 0,
     -- The window occurrences are expanded within (§7), RFC 3339 Z.
     horizon_start TEXT    NOT NULL DEFAULT '',
     horizon_end   TEXT    NOT NULL DEFAULT '',
     -- The time zone database version the occurrences were expanded under (§7),
     -- as the database names its release (IANA's `2026b`), '' with none: another
     -- version re-expands the calendar items.
-    tzdb_version  TEXT    NOT NULL DEFAULT ''
+    tzdb_version  TEXT    NOT NULL DEFAULT '',
+    -- The time zone floating times and dates were read in (§7), an IANA name or
+    -- UTC: an indexer stating another re-expands the calendar items.
+    floating_zone TEXT    NOT NULL DEFAULT 'UTC'
 ) STRICT;
 
--- One row per indexed body, keyed on the store's object hash. The input is
--- immutable, so a row is never re-indexed; it goes when the object goes.
+-- One row per indexed body, keyed on the store's object hash, a name of
+-- STORAGE.md §5 by the same CHECK as the store's. The input is immutable, so
+-- a row is never re-indexed; it goes when the object goes.
 --
 -- `id` is an explicit INTEGER PRIMARY KEY, so it is the rowid and stable: a
 -- table keyed on anything else has an implicit rowid VACUUM may renumber, and
 -- the FTS rows below are joined on it.
 CREATE TABLE object (
     id     INTEGER PRIMARY KEY,
-    hash   TEXT    NOT NULL UNIQUE,
+    hash   TEXT    NOT NULL UNIQUE CHECK (length(hash) = 52 AND hash NOT GLOB '*[^a-z2-7]*'),
     status TEXT    NOT NULL,                 -- 'ok' | 'encrypted' | 'unparseable' (§6)
-    -- 1 when the extraction wrote any text into the attachment field (§6), so
-    -- has:attachment reads a calendar item by a seek, the FTS rows keeping none.
+    -- 1 when the extraction wrote any text into the attachment field (§6),
+    -- so has:attachment reads a calendar item by a seek, the FTS rows keeping
+    -- none.
     attachment INTEGER NOT NULL CHECK (attachment IN (0, 1)),
     -- 1 when a card holds a TEL, an ADR, a BDAY, a PHOTO (§6), so has:phone,
     -- has:address, has:birthday and has:photo read it by a seek; 0 for any
@@ -96,12 +111,32 @@ CREATE TABLE placement (
     collection TEXT    NOT NULL,
     seq        INTEGER NOT NULL,
     link_id    TEXT    NOT NULL,
-    hash       TEXT,                         -- the body indexed for it, or NULL while bodiless
+    -- The body indexed for it, or NULL while bodiless or while its body is
+    -- missing (§4).
+    hash       TEXT    CHECK (length(hash) = 52 AND hash NOT GLOB '*[^a-z2-7]*'),
+    -- The instant from which a calendar item's occurrences are not all
+    -- written, RFC 3339 Z, when §7's bounds stopped its expansion; NULL
+    -- otherwise.
+    cut        TEXT,
     UNIQUE (collection, seq)
 ) STRICT;
 
 CREATE INDEX placement_by_hash ON placement(hash);
 CREATE INDEX placement_by_link ON placement(link_id);
+-- The items a query's coverage reports cut (cut_before, §8.2), by
+-- collection. Partial, so it holds the few cut items alone.
+CREATE INDEX placement_cut ON placement(collection, cut) WHERE cut IS NOT NULL;
+
+-- The placements whose body the indexer could not read (§4): gone from the
+-- blob directory or failing its name. Each pass reads them again, whether or
+-- not the store stamps them again; a row goes once its body is indexed, and
+-- with its placement.
+CREATE TABLE missing (
+    collection TEXT    NOT NULL,
+    seq        INTEGER NOT NULL,
+    PRIMARY KEY (collection, seq),
+    FOREIGN KEY (collection, seq) REFERENCES placement(collection, seq) ON DELETE CASCADE
+) STRICT;
 
 -- The summary of a bodiless placement (§6), so a headers-only replica still
 -- searches; dropped when the body arrives. rowid = placement.id.
@@ -139,9 +174,10 @@ CREATE INDEX occurrence_by_start ON occurrence(start, end);
 CREATE INDEX occurrence_by_item ON occurrence(collection, seq);
 
 -- Mail threads (§9), keyed on message ids so a message in three mailboxes is
--- one node. A message row exists for every id a member names, present in the
--- store or not, so two replies to a parent the store never held still join;
--- thread_members reaches the present ones through placement.
+-- one node. A message row exists for every id a held message bears or names,
+-- and for no other, so two replies to a parent the store never held still
+-- join and a purged message leaves nothing it named; thread_members reaches
+-- the present ones through placement.
 CREATE TABLE thread (
     id    TEXT    PRIMARY KEY,
     first TEXT    NOT NULL,                  -- earliest sort key in the thread

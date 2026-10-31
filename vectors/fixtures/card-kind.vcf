@@ -1,0 +1,9 @@
+BEGIN:VCARD
+VERSION:4.0
+UID:urn:uuid:5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e
+KIND:GROUP
+FN:Book Club
+ORG:Readers\; Writers;North Chapter
+EMAIL;TYPE=work:Club@Example.ORG
+MEMBER:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40
+END:VCARD

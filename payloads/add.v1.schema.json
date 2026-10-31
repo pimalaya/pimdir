@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pimalaya/pimdir/payloads/add.v1.schema.json",
+  "$comment": "SPDX-License-Identifier: MIT OR Apache-2.0",
+  "title": "The payload of an add at v 1 (STORAGE.md section 15.3)",
+  "type": "object",
+  "required": ["v", "flags", "object"],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "const": 1 },
+    "link_id": { "type": "string", "minLength": 1 },
+    "flags": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[!-~]+$" } },
+    "object": { "type": "string", "pattern": "^[a-z2-7]{52}$" },
+    "supersedes": {
+      "type": "object",
+      "required": ["collection", "seq"],
+      "additionalProperties": false,
+      "properties": { "collection": { "type": "string", "minLength": 1 }, "seq": { "type": "integer", "minimum": 1 } }
+    }
+  }
+}

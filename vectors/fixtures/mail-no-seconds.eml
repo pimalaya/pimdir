@@ -1,0 +1,7 @@
+Message-ID: <noseconds-1@example.org>
+Subject: No seconds
+From: Alice Example <alice@example.org>
+To: bob@example.org
+Date: Sat, 1 Aug 2026 12:00 +0200
+
+The seconds are optional.

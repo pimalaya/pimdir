@@ -1,49 +1,159 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/pimalaya/pimdir/vectors/schema/summaries.schema.json",
+  "$comment": "SPDX-License-Identifier: MIT OR Apache-2.0",
   "title": "Summaries (STORAGE.md section 16, Annex A), vectors/summaries.json",
   "type": "object",
   "required": ["v", "conventions", "fixtures_are_crlf", "cases"],
   "additionalProperties": false,
   "properties": {
-    "v": { "const": 2 },
+    "v": { "const": 3 },
     "conventions": { "type": "string" },
     "fixtures_are_crlf": { "const": true },
-    "cases": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["label", "kind", "fixture", "body", "link_id", "table", "summary", "addresses", "sort_key"],
-        "additionalProperties": false,
-        "properties": {
-          "label": { "type": "string" },
-          "kind": { "enum": ["message/rfc822", "text/vcard", "text/calendar", "application/octet-stream"] },
-          "fixture": { "type": "string" },
-          "note": { "type": "string" },
-          "body": {
-            "type": "object",
-            "required": ["len", "blake3", "sha256-128"],
-            "additionalProperties": false,
-            "properties": { "len": { "type": "integer" }, "blake3": { "type": "string" }, "sha256-128": { "type": "string" } }
-          },
-          "hint": { "type": "string" },
-          "handle": { "type": "string" },
-          "link_id": { "type": "string" },
-          "table": { "enum": ["mail_summary", "contact_summary", "event_summary", "task_summary", "journal_summary"] },
-          "summary": { "type": "object" },
-          "meta_attachment": { "enum": [0, 1] },
-          "attachments": { "type": "array" },
-          "addresses": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": ["role", "position", "address", "name"],
-              "additionalProperties": false,
-              "properties": { "role": { "type": "string" }, "position": { "type": "integer" }, "address": { "type": "string" }, "name": { "type": ["string", "null"] } }
-            }
-          },
-          "sort_key": { "type": "string" }
-        }
+    "cases": { "type": "array", "items": { "$ref": "#/$defs/case" } }
+  },
+  "$defs": {
+    "maybe": { "type": ["string", "null"] },
+    "date_value": { "enum": ["date-time", "date", null] },
+    "case": {
+      "type": "object",
+      "required": ["label", "kind", "fixture", "body", "link_id", "table", "summary", "addresses", "sort_key"],
+      "additionalProperties": false,
+      "properties": {
+        "label": { "type": "string" },
+        "kind": { "enum": ["message/rfc822", "text/vcard", "text/calendar", "application/octet-stream"] },
+        "fixture": { "type": "string", "pattern": "^fixtures/" },
+        "note": { "type": "string" },
+        "body": {
+          "type": "object",
+          "required": ["len", "blake3"],
+          "additionalProperties": false,
+          "properties": { "len": { "type": "integer", "minimum": 0 }, "blake3": { "type": "string", "pattern": "^[a-z2-7]{52}$" } }
+        },
+        "hint": { "type": "string" },
+        "handle": { "type": "string" },
+        "link_id": { "type": "string", "minLength": 1 },
+        "table": { "enum": ["mail_summary", "contact_summary", "event_summary", "task_summary", "journal_summary"] },
+        "summary": { "type": "object" },
+        "meta_attachment": { "enum": [0, 1] },
+        "attachments": { "type": "array", "items": { "$ref": "#/$defs/attachment" } },
+        "addresses": { "type": "array", "items": { "$ref": "#/$defs/address" } },
+        "sort_key": { "type": "string" }
+      },
+      "dependentRequired": { "hint": ["handle"], "handle": ["hint"] },
+      "allOf": [
+        { "if": { "properties": { "table": { "const": "mail_summary" } } },
+          "then": { "properties": { "kind": { "const": "message/rfc822" }, "summary": { "$ref": "#/$defs/mail_summary" } }, "required": ["meta_attachment", "attachments"] } },
+        { "if": { "properties": { "table": { "const": "contact_summary" } } },
+          "then": { "properties": { "kind": { "const": "text/vcard" }, "summary": { "$ref": "#/$defs/contact_summary" } } } },
+        { "if": { "properties": { "table": { "const": "event_summary" } } },
+          "then": { "properties": { "kind": { "const": "text/calendar" }, "summary": { "$ref": "#/$defs/event_summary" } } } },
+        { "if": { "properties": { "table": { "const": "task_summary" } } },
+          "then": { "properties": { "kind": { "const": "text/calendar" }, "summary": { "$ref": "#/$defs/task_summary" } } } },
+        { "if": { "properties": { "table": { "const": "journal_summary" } } },
+          "then": { "properties": { "kind": { "const": "text/calendar" }, "summary": { "$ref": "#/$defs/journal_summary" } } } }
+      ]
+    },
+    "attachment": {
+      "type": "object",
+      "required": ["part", "name", "media_type", "size"],
+      "additionalProperties": false,
+      "properties": {
+        "part": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)*$" },
+        "name": { "type": "string" },
+        "media_type": { "$ref": "#/$defs/maybe" },
+        "size": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "address": {
+      "type": "object",
+      "required": ["role", "position", "address", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "role": { "enum": ["from", "to", "cc", "bcc", "email", "organizer", "attendee", "contact"] },
+        "position": { "type": "integer", "minimum": 0 },
+        "address": { "type": "string" },
+        "name": { "$ref": "#/$defs/maybe" }
+      }
+    },
+    "mail_summary": {
+      "type": "object",
+      "required": ["message_id", "in_reply_to", "subject", "sender", "sender_name", "date", "size", "attachment", "invitation"],
+      "additionalProperties": false,
+      "properties": {
+        "message_id": { "$ref": "#/$defs/maybe" },
+        "in_reply_to": { "type": "array", "items": { "type": "string" } },
+        "subject": { "type": "string" },
+        "sender": { "$ref": "#/$defs/maybe" },
+        "sender_name": { "$ref": "#/$defs/maybe" },
+        "date": { "$ref": "#/$defs/maybe" },
+        "size": { "type": ["integer", "null"], "minimum": 0 },
+        "attachment": { "enum": [0, 1, null] },
+        "invitation": { "$ref": "#/$defs/maybe" }
+      }
+    },
+    "contact_summary": {
+      "type": "object",
+      "required": ["uid", "fn", "kind", "org"],
+      "additionalProperties": false,
+      "properties": {
+        "uid": { "$ref": "#/$defs/maybe" },
+        "fn": { "type": "string" },
+        "kind": { "$ref": "#/$defs/maybe" },
+        "org": { "$ref": "#/$defs/maybe" }
+      }
+    },
+    "event_summary": {
+      "type": "object",
+      "required": ["uid", "summary", "location", "dtstart", "dtstart_tzid", "dtstart_value", "dtend", "recurring", "until"],
+      "additionalProperties": false,
+      "properties": {
+        "uid": { "$ref": "#/$defs/maybe" },
+        "summary": { "type": "string" },
+        "location": { "$ref": "#/$defs/maybe" },
+        "dtstart": { "$ref": "#/$defs/maybe" },
+        "dtstart_tzid": { "$ref": "#/$defs/maybe" },
+        "dtstart_value": { "$ref": "#/$defs/date_value" },
+        "dtend": { "$ref": "#/$defs/maybe" },
+        "recurring": { "enum": [0, 1, null] },
+        "until": { "$ref": "#/$defs/maybe" }
+      }
+    },
+    "task_summary": {
+      "type": "object",
+      "required": ["uid", "summary", "dtstart", "dtstart_tzid", "dtstart_value", "due", "due_tzid", "due_value", "status", "completed", "percent", "recurring", "until", "priority", "categories", "parent", "mid", "created"],
+      "additionalProperties": false,
+      "properties": {
+        "uid": { "$ref": "#/$defs/maybe" },
+        "summary": { "type": "string" },
+        "dtstart": { "$ref": "#/$defs/maybe" },
+        "dtstart_tzid": { "$ref": "#/$defs/maybe" },
+        "dtstart_value": { "$ref": "#/$defs/date_value" },
+        "due": { "$ref": "#/$defs/maybe" },
+        "due_tzid": { "$ref": "#/$defs/maybe" },
+        "due_value": { "$ref": "#/$defs/date_value" },
+        "status": { "$ref": "#/$defs/maybe" },
+        "completed": { "$ref": "#/$defs/maybe" },
+        "percent": { "type": ["integer", "null"] },
+        "recurring": { "enum": [0, 1, null] },
+        "until": { "$ref": "#/$defs/maybe" },
+        "priority": { "type": ["integer", "null"], "minimum": 0, "maximum": 9 },
+        "categories": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "parent": { "$ref": "#/$defs/maybe" },
+        "mid": { "$ref": "#/$defs/maybe" },
+        "created": { "$ref": "#/$defs/maybe" }
+      }
+    },
+    "journal_summary": {
+      "type": "object",
+      "required": ["uid", "summary", "dtstart", "dtstart_tzid", "dtstart_value"],
+      "additionalProperties": false,
+      "properties": {
+        "uid": { "$ref": "#/$defs/maybe" },
+        "summary": { "type": "string" },
+        "dtstart": { "$ref": "#/$defs/maybe" },
+        "dtstart_tzid": { "$ref": "#/$defs/maybe" },
+        "dtstart_value": { "$ref": "#/$defs/date_value" }
       }
     }
   }

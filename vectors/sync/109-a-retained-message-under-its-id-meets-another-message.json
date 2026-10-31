@@ -1,0 +1,32 @@
+{
+  "v": 2,
+  "label": "a member stating a retained message's Message-ID with another subject and date is minted, never reviving it",
+  "note": "basic-1@example.org, the stand-up notes, was deleted on its server and retained with its body. The next round lists a member stating the same Message-ID whose summary names another message: another subject, sender and date. Reviving the row would make the retained body stand for that message, unread, with no source left holding the first; so it is named under the key minted over its handle, an item of its own with a seq of its own, and the retained row stays in the trash as it was (STORAGE §9, §11.1; SYNC.md §6)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },
+    "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 1, "retained": true, "retained_by": "imap" }],
+    "bindings": [],
+    "summaries": [{ "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } }],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+  },
+  "run": { "verb": "sync", "collection": "INBOX", "source": "imap", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual" } },
+  "remote": { "snapshot": { "items": [{ "handle": "77", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-reused-message-id.eml" } }], "vanished": [], "complete": true, "checkpoint": "c2" }, "fetch": {} },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [{ "kind": "Added", "handle": "77" }],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 1, "retained": true, "retained_by": "imap" },
+        { "collection": "INBOX", "link_id": "dup:basic-1@example.org#77", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-03T09:00:00Z", "retained": false, "retained_by": null }
+      ],
+      "bindings": [{ "collection": "INBOX", "link_id": "dup:basic-1@example.org#77", "source": "imap", "handle": "77", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1 }],
+      "summaries": [
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } },
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "dup:basic-1@example.org#77", "row": { "message_id": "basic-1@example.org", "in_reply_to": [], "subject": "Budget review", "sender": "dan@example.net", "sender_name": "Dan Example", "date": "2026-08-03T09:00:00Z", "size": 266, "attachment": 0, "invitation": null } }
+      ],
+      "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c2" }]
+    }
+  }
+}

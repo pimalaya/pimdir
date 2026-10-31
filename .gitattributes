@@ -1,6 +1,10 @@
 # The fixtures are byte-exact: an object name is taken over the raw bytes
-# (STORAGE.md §5), and they are CRLF throughout as RFC 5322 and RFC 5545 require.
-# Without this git normalises them away under core.autocrlf and every recorded
-# digest stops matching what a clone holds.
+# (STORAGE.md §5), and they are CRLF throughout as RFC 5322 and RFC 5545
+# require. Without this git normalises them away under core.autocrlf and every
+# recorded digest stops matching what a clone holds.
 vectors/fixtures/** -text
 conventions/gtd/fixtures/** -text
+# The rest of vectors/ and payloads/ is LF, and vectors/manifest.json records
+# the SHA-256 of every file, so no checkout converts their line ends either.
+vectors/** -text
+payloads/** -text

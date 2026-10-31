@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pimalaya/pimdir/vectors/schema/payloads.schema.json",
+  "$comment": "SPDX-License-Identifier: MIT OR Apache-2.0",
+  "title": "Queue payloads (STORAGE.md section 15.3), vectors/payloads.json",
+  "type": "object",
+  "required": ["v", "cases"],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "const": 1 },
+    "note": { "type": "string" },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["action", "valid", "payload"],
+        "additionalProperties": false,
+        "properties": {
+          "action": { "enum": ["add", "set-flags", "remove", "move", "copy", "update", "set-performer", "submit", "calendar-reply", "calendar-cancel", "collection-create"] },
+          "valid": { "type": "boolean" },
+          "payload": { "type": "object" },
+          "note": { "type": "string" }
+        }
+      }
+    }
+  }
+}

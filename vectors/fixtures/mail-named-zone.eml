@@ -1,0 +1,7 @@
+Subject: Named zone
+From: Alice Example <alice@example.org>
+To: bob@example.org
+Date: Sat, 1 Aug 26 06:00:00
+ EDT (Eastern Daylight Time)
+
+An obsolete zone name, a folded Date, a comment and a two-digit year below 50.

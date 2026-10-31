@@ -1,0 +1,46 @@
+{
+  "v": 2,
+  "label": "an overruling edit settling a binding's conflict and the item's in one write keeps both bodies, the second minted again over the first",
+  "note": "vectors 100 and 102 at once: the item holds a's c3 with c2, b's earlier body, as its conflict_object under manual, and b's own remote has since moved to s3, whose body c4 the upgrade fetched into b's conflict_object (SYNC.md §5, §6). A one-way engine whose source is a settles b for the store by restating c3 with overrule. Both diverging bodies are kept as retained items keyed over b's handle, the binding's c4 first under dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#b.vcf, then the item's c2 under the key minted again over it, held by the row the same write inserted (STORAGE.md §9), each reported Overruled in that order (SYNC.md §7, §9). b's base adopts s3 and c4, so b owes c3; the item's conflict clears and b's shared_object moves to c3",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
+    "objects": { "c1": { "body": "fixtures/card-basic.vcf" }, "c2": { "body": "fixtures/card-basic-edited.vcf" }, "c3": { "body": "fixtures/card-basic-renamed.vcf" }, "c4": { "body": "fixtures/card-basic-retitled.vcf" } },
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c3", "level": 2, "deleted": 0, "conflicted": 1, "conflict_object": "c2" }],
+    "bindings": [
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": "c3", "base_revision": "r2", "base_present": 1, "shared_object": "c3" },
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "b", "handle": "b.vcf", "base_flags": [], "base_object": "c2", "base_revision": "s2", "base_present": 1, "conflicted": 1, "conflict_revision": "s3", "conflict_object": "c4", "shared_object": "c1" }
+    ],
+    "sources": [
+      { "collection": "Contacts", "source": "a", "checkpoint": "a1" },
+      { "collection": "Contacts", "source": "b", "checkpoint": "b1" }
+    ]
+  },
+  "run": { "verb": "mutate", "collection": "Contacts", "source": "b", "mutation": { "kind": "Edit", "seq": 1, "object": "c3", "if_match": "c3", "overrule": true } },
+  "remote": {
+    "snapshot": null,
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [
+      { "kind": "Overruled", "handle": "b.vcf", "link_id": "dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#b.vcf" },
+      { "kind": "Overruled", "handle": "b.vcf", "link_id": "dup:dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#b.vcf#b.vcf" }
+    ],
+    "store": {
+      "items": [
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c3", "level": 2, "deleted": 0, "conflicted": 0, "conflict_object": null },
+        { "collection": "Contacts", "link_id": "dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#b.vcf", "seq": 2, "flags": [], "object": "c4", "level": 2, "deleted": 1, "retained": true, "retained_by": "b" },
+        { "collection": "Contacts", "link_id": "dup:dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#b.vcf#b.vcf", "seq": 3, "flags": [], "object": "c2", "level": 2, "deleted": 1, "retained": true, "retained_by": "b" }
+      ],
+      "bindings": [
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": "c3", "base_revision": "r2", "base_present": 1, "shared_object": "c3" },
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "b", "handle": "b.vcf", "base_flags": [], "base_object": "c4", "base_revision": "s3", "base_present": 1, "conflicted": 0, "conflict_revision": null, "conflict_object": null, "shared_object": "c3" }
+      ],
+      "sources": [
+        { "collection": "Contacts", "source": "a", "checkpoint": "a1" },
+        { "collection": "Contacts", "source": "b", "checkpoint": "b1" }
+      ]
+    }
+  }
+}

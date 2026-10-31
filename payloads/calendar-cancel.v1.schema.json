@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pimalaya/pimdir/payloads/calendar-cancel.v1.schema.json",
+  "$comment": "SPDX-License-Identifier: MIT OR Apache-2.0",
+  "title": "The payload of a calendar-cancel intent at v 1 (STORAGE.md Annex B.2)",
+  "type": "object",
+  "required": ["v", "source"],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "const": 1 },
+    "source": { "type": "string", "minLength": 1 },
+    "seq": { "type": "integer", "minimum": 1 },
+    "link_id": { "type": "string", "minLength": 1 },
+    "comment": { "type": "string" },
+    "recurrence_id": { "type": "string" }
+  },
+  "oneOf": [{ "required": ["seq"] }, { "required": ["link_id"] }]
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pimalaya/pimdir/vectors/schema/manifest.schema.json",
+  "$comment": "SPDX-License-Identifier: MIT OR Apache-2.0",
+  "title": "The manifest of the files a vendor copies (vectors/README.md), vectors/manifest.json",
+  "type": "object",
+  "required": ["v", "files", "cases", "sync"],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "const": 1 },
+    "files": {
+      "type": "object",
+      "propertyNames": { "pattern": "^(vectors|payloads)/" },
+      "additionalProperties": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+    },
+    "cases": {
+      "type": "object",
+      "additionalProperties": { "type": "object", "propertyNames": { "pattern": "^(/[a-z0-9_]+)+$" }, "additionalProperties": { "type": "integer", "minimum": 0 } }
+    },
+    "sync": { "type": "integer", "minimum": 0 }
+  }
+}
