@@ -8,7 +8,7 @@ The canonical part is the schema, the reference statements and the test vectors,
 
 - [Features](#features)
 - [Specification](#specification)
-- [Using the standard](#using-the-standard)
+- [Usage](#usage)
 - [Layout](#layout)
 - [Status](#status)
 - [AI policy](https://github.com/pimalaya/.github/blob/master/AI_POLICY.md)
@@ -48,13 +48,27 @@ Sync and search are optional, but neither stands without the store. Where the ov
 
 Two things to know first: removal is a **soft delete** (only an explicit purge erases), and the **action queue** is how any process other than the store's owner writes to it.
 
-## Using the standard
+## Usage
 
-1. **Implement the documents** in any language with a SQLite binding: the vectors say when you are done.
-2. **Use io-pimdir's I/O-free core**: the derivations and verbs as coroutines, over your own SQLite and transport.
-3. **Use io-pimdir's std client**: store, engine and connector seam behind one handle per profile.
+There are three ways to use the standard, from the most work to the least. They mix: an app can write its reader from the documents and take the sync engine from io-pimdir.
 
-Readers, producers and query clients are small and meant to be written from the documents. Owning, syncing and indexing a store are large: io-pimdir exists so nobody writes them twice.
+###   Implement the documents
+
+Write the store yourself, in any language with a SQLite binding, from the three parts and the guide. Run the canonical schema and statements verbatim (the recommended shape, on SQLite 3.37 or newer), or a shape of your own on an older SQLite, named in `store_meta.shape` (STORAGE §4.1). The test vectors say when you are done: the model vectors bind every shape, checks/ the canonical one.
+
+This suits the small profiles: readers, producers and query clients.
+
+### Use io-pimdir's I/O-free core
+
+Take the hard parts from [io-pimdir](https://github.com/pimalaya/io-pimdir) without its SQLite or its I/O: the summaries are pure functions, and the sync engine and the index refresh are coroutines that yield what they need to read and what they write, and your program answers them over its own database and transport. Build it without default features, with `search` for the query language, the extraction and the refresh.
+
+This suits an owner bound to a database of its own, such as an Android app on the platform's SQLite.
+
+### Use io-pimdir's std client
+
+Take the whole store from io-pimdir: with its `client` feature (the default) it opens pimdir.db through rusqlite and drives the coroutines itself, one handle per profile, with the connector seam for your sources and, with `search`, the index.
+
+This suits a desktop program or a CLI. Owning, syncing and indexing a store are large: io-pimdir exists so nobody writes them twice.
 
 ## Layout
 

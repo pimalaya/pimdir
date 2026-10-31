@@ -43,8 +43,7 @@ The index is derived. Every row is recomputed from the store and the bodies, and
 - An index of another shape (FTS4, FTS3, or no full-text module) MAY answer the same language, on the terms STORAGE §4.1 sets for a store: every query's hit set is the one vectors/search/ gives, its text folded as §5 says. Its order by relevance is its own (§8.2). Its owner keeps it current by its own rules; a canonical indexer meeting it finds its schema text differs and rebuilds it, the index being derived.
 - The canonical schema's version is the index's own `PRAGMA user_version`, mirrored in `index_meta.version`.
 - A canonical index at another version, whose `index_meta.tokenizer` differs from §5's, or whose schema text differs from 0001_init.sql's MUST be rebuilt: there are no index migrations.
-- The schema text is compared as STORAGE §6 compares a store's: each table, index and trigger 0001_init.sql creates, by name, against the index's own by its `sqlite_master` text, `--` comments removed and whitespace collapsed. The shadow tables FTS5 creates, and a table of the implementation's own beside them, are not compared.
-- While this part is a draft, a schema change is folded into 0001_init.sql and the version stays 1, so the schema text is what tells an index an earlier draft built.
+- The schema text is compared as STORAGE §6 compares a store's: each table, index and trigger 0001_init.sql creates, by name, against the index's own by its `sqlite_master` text, `--` comments removed and whitespace collapsed, the shadow tables FTS5 creates and a table of the implementation's own beside them left out. While this part is a draft a schema change is folded into 0001_init.sql, the version staying 1, so the schema text is what tells an index an earlier draft built.
 - The statements are under [queries/search/](./queries/search/), one file per statement named after it, prepared with the store attached read-only as `store`.
 
 ## 3. The index
@@ -125,7 +124,7 @@ Beside `people`, one field per address role of STORAGE Annex A.6 (`from`, `to`, 
 
 The body's `object` row records whether the extraction wrote any text into the `attachment` field (`object.attachment`, 1 or 0, written by `insert_object`). `has:attachment` thus reads a calendar item by a seek (`attached`): `object_text` is contentless and keeps no text to test, and no statement here reads its shadow tables, FTS5's own format.
 
-A card's row also records whether it holds a `TEL`, an `ADR`, a `BDAY` and a `PHOTO` (`object.tel`, `object.adr`, `object.bday`, `object.photo`, 1 or 0, every other kind's 0), so `has:phone`, `has:address`, `has:birthday` and `has:photo` read a card by a seek (`holding`). Its `CATEGORIES` values are recorded beside it, each property's list split on unescaped commas and decoded as STORAGE Annex A.4 splits a task's, empty values dropped, folded as Annex A.2 folds `fn`, each once (`object_category`, `insert_object_category`), so `category:` reads a card by a seek (`categorised`) as it reads a task on `task_summary`.
+A card's row also records whether it holds a `TEL`, an `ADR`, a `BDAY` and a `PHOTO` (`object.tel`, `object.adr`, `object.bday`, `object.photo`, 1 or 0, every other kind's 0), so `has:phone`, `has:address`, `has:birthday` and `has:photo` read a card by a seek (`holding`). Its `CATEGORIES` values are recorded beside it, each property's list split on unescaped commas and decoded as STORAGE Annex A.4 splits a task's, empty values dropped, folded as Annex A.2 folds `fn`, each once (`object_category`, `insert_object_category`), so `category:` reads a card by a seek (`categorised`) as it reads a task on `task_category`.
 
 Mail extraction MUST walk the MIME tree, decode transfer encodings, transcode charsets, decode RFC 2047 and RFC 2231, prefer `text/plain` and reduce `text/html` to text. Attachment content is out of scope.
 
@@ -143,7 +142,7 @@ The chunks thus cover the text but its blank-line runs, a field of blank lines a
 
 A snippet is cut from a hit's chunks (`chunks_of`), and an embedding index embeds the same ones without extracting again.
 
-The offsets index the text as the indexer extracted it, which is stored nowhere, and §6 does not pin `text/html` reduction or charset handling byte for byte. A query client re-extracts the field from the blob to cut a snippet. One whose extraction is not the indexer's implementation MUST re-chunk its own text by the rule above rather than apply the stored offsets to it.
+The offsets index the text as the indexer extracted it, before §5's fold, which is stored nowhere, and §6 does not pin `text/html` reduction or charset handling byte for byte. A query client re-extracts the field from the blob to cut a snippet. One whose extraction is not the indexer's implementation MUST re-chunk its own text by the rule above rather than apply the stored offsets to it.
 
 A placement with no body indexes its summary row and address rows into `summary_text`: `title` from the subject, `fn`, `summary` or a file's `name`, `people` and the role fields from the addresses. The `summary_text` row is dropped once the body is indexed (§4).
 
@@ -179,7 +178,7 @@ An indexer whose database names another version MUST re-expand every live calend
 
 A query is whitespace-separated terms, implicitly conjoined, with `or`, `not`, parentheses and quoted phrases; a term is free text or `field:value`; a trailing `*` is a prefix wildcard. Free text matches every field of §6.
 
-§8.3 is the grammar and §8.4 the answer to a query it refuses. FTS5's own syntax is never accepted raw.
+§8.3 is the grammar and §8.4 the answer to a query it refuses. A full-text engine's own syntax (FTS5's, FTS4's) is never accepted raw.
 
 | Field | Meaning |
 | --- | --- |
@@ -317,7 +316,7 @@ A term is checked for its field, then an empty value, then the wildcard, then it
 
 ## 9. Threads
 
-Mail only. A message's `parent` is its first `In-Reply-To` id, else the last `References` id (RFC 5322 §3.6.4), from the headers at `Full` and from `mail_summary.in_reply_to` for a bodiless item.
+Mail only. A message's `parent` is its first `In-Reply-To` id, else the last `References` id (RFC 5322 §3.6.4), from the headers at `Full` and from its first `mail_in_reply_to` id (`position` 0) for a bodiless item.
 
 Every id a member names has a `message` row, present in the store or not. Two replies to a parent nobody holds are thus one thread, and a parent arriving later joins what already waited for it. A cycle is broken by ignoring the edge that would close it.
 
@@ -349,8 +348,6 @@ A case whose date range leaves the horizon says `horizon_left`. A case stating `
 
 An implementation builds the store, indexes it at `now`, and compares.
 
-The cases bind every shape (§2), but a case sorted by `relevance` binds its order only where the shape ranks by bm25: another compares its hits as a set, and one refusing `relevance` skips it.
+The cases bind every shape (§2), but a case sorted by `relevance` binds its order only where the shape ranks by bm25: another compares its hits as a set, and one refusing `relevance` skips it. The fold and the tokenisation are pinned by cases whose hits depend on diacritics (a Latin accent, a Greek tonos), a domain token or a digits-only telephone number.
 
 checks/vectors.py validates that every fixture and placement resolves, re-derives every refusal and every chunk boundary from §8.3, §8.4 and §6, and checks that every other query is one the grammar accepts, and that every occurrence row names a calendar item and overlaps its window in order; only an implementation runs a case against the store.
-
-Tokenisation is pinned by cases whose hits depend on diacritics, a domain token or a digits-only telephone number.

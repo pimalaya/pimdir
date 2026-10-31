@@ -3,10 +3,10 @@
 -- Applied by a migration runner (§6) against an empty database, inside a
 -- transaction; the runner sets `PRAGMA user_version = 1` on success. Pure DDL,
 -- so every implementation of the canonical shape (§4.1) applies the identical
--- bytes. Needs SQLite >= 3.37 for STRICT tables and DROP COLUMN, and no JSON
--- function. While STORAGE.md is a draft this file is edited in place; once
--- version 1 is released it never changes, and a change to the schema is a
--- migration to the next version (§6).
+-- bytes. Needs SQLite >= 3.37 for STRICT tables, and no JSON function. While
+-- STORAGE.md is a draft this file is edited in place; once version 1 is
+-- released it never changes, and a change to the schema is a migration to the
+-- next version (§6).
 
 -- Store-level metadata: exactly one row.
 CREATE TABLE store_meta (

@@ -36,15 +36,13 @@ That makes a body a fact: what each source holds can be fetched again from the r
 
 The search index is a third file beside the two, derived from both, and dropping it loses nothing.
 
-A store carries the version of its schema. A newer implementation upgrades an older store in place and keeps everything in it. An older one refuses a newer store rather than guess at it, and no implementation rebuilds a store it cannot read.
+A store carries the version of its schema. A newer implementation upgrades an older store in place and keeps everything in it; an older one refuses a newer store rather than guess at it, and no implementation rebuilds a store it cannot read.
 
-The standard ships one way of writing the database, its canonical schema and statements, on a recent SQLite. An implementation bound to an older SQLite, a phone's own, may write the same model its own way; the store names which way it was written, a program refuses one it does not speak, and the shared test vectors hold both to the same outcomes.
+The standard ships one way of writing the database, its canonical schema and statements, for a recent SQLite. An implementation bound to an older SQLite, a phone's own, may write the same model its own way. The store names which way it was written, a program refuses one it does not speak, and the shared test vectors hold both to the same outcomes.
 
-Sync and search need the store. A sync needs, per source, what that source last agreed to, else a delete on one side and an add on the other look the same; the bindings hold that base. A search needs one index with one meaning of a match, which only the store's summaries, addresses and bodies give.
+Sync and search need the store: a sync needs, per source, what that source last agreed to, else a delete on one side and an add on the other look the same, and a search needs one meaning of a match, which only the store's summaries, addresses and bodies give. The bodies are what is optional: a store holding bases and summaries alone still syncs flags and lists items.
 
-What is optional is the bodies: a store can hold bases and summaries alone and still sync flags and list items.
-
-Normative: STORAGE §1, §3, §4.2, §5, §6.
+Normative: STORAGE §1, §3, §4.1, §4.2, §5, §6.
 
 ## 2. The model
 
@@ -64,13 +62,13 @@ A **binding** is one source's view of one item: the handle the source knows it b
 
 A **reference** links one item to another of any kind: a message to the contact who sent it, an invitation to its event, anything a person links by hand. It names each end by its identity rather than by a collection, so it survives a move and holds while any copy of either end remains, tombstoned or retained included.
 
-A reference is recorded once and never recomputed, by a person or by an owner's rule: a message to the card of its sender, to the event it invites to, to its attachments; a task to its project and to the message it was made from. Nothing requires one. An item with no identity of its own (a message without a Message-ID, a card without a UID) takes none, since another may share its key.
+A reference is recorded once, by a person or by an owner's rule (a message to its sender's card, its event, its attachments; a task to its project and the message it was made from), never recomputed and never required. An item with no identity of its own (a message without a Message-ID, a card without a UID) takes none, since another may share its key.
 
 An attachment is a file standing for a part of its message. It is recorded when the message's body enters the store, holds no bytes of its own until it is saved to a folder, and goes once no reference names it.
 
 Nothing enters the store unnamed: a source lists each member with its identity and summary, so a listed message is an item from the moment its page lands, its body fetched later or never.
 
-A **task** carries its organisation in standard properties every client reads, nothing of the store's own. Its status, priority, categories, parent, the mail it came from and when it was captured are summary columns, and the person it waits on is one of the people it names, so a to-do created by any client takes part in every view a search can ask for.
+A **task** carries its organisation in standard properties every client reads, nothing of the store's own. Its status, priority, categories, parent, the mail it came from and when it was captured are part of its summary, and the person it waits on is one of the people it names, so a to-do created by any client takes part in every view a search can ask for.
 
 Normative: STORAGE §2, §4.3, §14.2, Annex A.
 
@@ -179,7 +177,7 @@ A process that does not own the store still originates changes: a client filing 
 
 The owner applies actions in append order, each in one transaction with the deletion of its row, so application is exactly once.
 
-Six kinds are defined: add, set flags, remove, move, copy, update. The kind is an open string, so an application carries intents of its own, a mail submission being the worked example. An owner that does not recognise a kind, or lacks the means to perform it, skips the row and leaves it for the process that can.
+Seven kinds are defined: add, set flags, remove, move, copy, update, and choosing a verb's performer (below). The kind is an open string, so an application carries intents of its own, a mail submission being the worked example. An owner that does not recognise a kind, or lacks the means to perform it, skips the row and leaves it for the process that can.
 
 A reader may overlay pending actions on what it shows, so a queued change appears before it is applied. A producer keeps the number of the row it appended and asks later whether it still waits, failed, or was applied, and for an addition which item it became, without matching the body against the store.
 
@@ -212,22 +210,25 @@ Text is folded (case and accents) before any full-text engine sees it, so engine
 
 Long texts are cut into chunks along their paragraphs as they are extracted; snippets are drawn from the chunks, and an embedding index can reuse them. Occurrences are expanded again when the time zone database they were resolved through changes version, since a zoned time moves with it.
 
-An owner keeping an index is expected to refresh it after each write it commits, so a list reading its rows from the store and its filters from the index sees them one write apart at most, and an agenda lists a window's occurrences in time order straight from the index. A refresh may stop between batches and resume where it stopped. The index remembers apart how far its last complete refresh reached, so a collection renamed while a refresh was cut short is still reconciled by the next one. An index an earlier draft built is told by its shape and rebuilt, which loses nothing.
+An owner keeping an index is expected to refresh it after each write it commits, so a list reading its rows from the store and its filters from the index sees them one write apart at most, and an agenda lists a window's occurrences in time order straight from the index. A refresh may stop between batches and resume where it stopped. The index remembers apart how far its last complete refresh reached, so a collection renamed while a refresh was cut short is still reconciled by the next one. An index an earlier draft built is told by its schema and rebuilt, which loses nothing.
 
 A query is a list of terms, free text or field and value, joined by and, or and not, under a formal grammar. A query the grammar does not accept, an unknown field included, is refused whole rather than guessed at. The refusal gives the position at fault, what was expected there and the fields that exist, so a person or an agent can correct it.
 
 Structured terms compile to seeks on the store, text terms to matches on the index, and the answer is their intersection in the store's own order. A hit is one item per account with every placement it has. The answer states its coverage:
 
 - how many items in scope have no body to search;
+- whether the store holds every item of the date range, from the sources' coverage (§5);
 - whether the date range left the horizon;
 - how far the index lags the store.
+
+An index may be written another way too, on an older full-text engine or none, as long as every query finds the same items; only the order by relevance is its own.
 
 Normative: SEARCH.
 
 ## 11. What binds an implementation
 
-The three parts bind, with the canonical schema under migrations/, the statements under queries/ and the vectors under vectors/: STORAGE by the profile an implementation meets (reader, producer or owner), SYNC and SEARCH in full when offered.
+The three parts bind: STORAGE by the profile an implementation meets (reader, producer or owner), SYNC and SEARCH in full when offered. The vectors under vectors/ bind every implementation; the canonical schema under migrations/ and the statements under queries/ bind one written the canonical way, and one written its own way keeps their meaning and their effects.
 
 Most implementations are readers or producers; the owner, the engine and the index are what io-pimdir, the reference implementation, is for. The vectors exist because the values that matter most fail silently: two implementations naming a body differently never error, they only stop sharing bodies. [GUIDE.md](./GUIDE.md) §1 lists what each profile owes and in what order to build.
 
-A statement under queries/ binds by its name, its parameters and the columns it answers; its text is the reference an implementation may replace with its own. Each part has a version of its own, and an implementation states which version of each it conforms to. The store's major version is its schema version, so a store written under one major is read by every implementation of that major.
+A canonical statement binds by its name, its parameters and the columns it answers; its text is a reference an implementation may replace with its own. Each part has a version of its own, and an implementation states which version of each it conforms to. The store's major version is its schema version, so a store written under one major is read by every implementation of that major speaking its way of writing it.

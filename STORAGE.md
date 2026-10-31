@@ -95,7 +95,7 @@ The index is derived and droppable. No other file belongs in the directory; an i
 ### 4.1 Requirements
 
 - The database MUST be a SQLite database named pimdir.db.
-- **SQLite ≥ 3.37** is RECOMMENDED: the canonical shape below needs it, for `STRICT` tables, `RETURNING`, upserts, `UPDATE … FROM` and `DROP COLUMN`. It calls no JSON function and no extension.
+- **SQLite ≥ 3.37** is RECOMMENDED: the canonical shape below needs it, for `STRICT` tables, `RETURNING`, upserts and `UPDATE … FROM`, and calls no JSON function and no extension.
 - The **canonical shape** is the text under migrations/storage/ and queries/storage/, and is the RECOMMENDED one. An implementation MAY run a shape of its own, on any SQLite, provided it keeps the model: every table and column with its meaning, every invariant of §7 and of the canonical constraints, every derivation of Annex A, every statement's effect, and every model vector (§16). The canonical shape enforces column types by `STRICT`; another enforces them by `CHECK (typeof(…))` or by its writer.
 - A store records its shape in `store_meta.shape`: `pimdir` for the canonical one, an implementation's own name otherwise. A program MUST NOT open a store in a shape it does not implement, whatever its profile: it refuses it, naming the shape. §6 reconciles a store of the canonical shape alone; an implementation of its own shape owes its own reconciliation and its own migrations.
 - `PRAGMA foreign_keys = ON` MUST be set per connection.
@@ -128,7 +128,7 @@ The canonical schema is migrations/storage/0001_init.sql, which is normative. Th
 - **`performers`**: the source the user chose to perform an intent capability for an account, one per `(account, capability)` (§15.6).
 - **`objects`**: `hash` (primary key, under `hash_algo`), `size`, `refcount` (§5, §7). The bytes live in the blob file.
 - **`items`**: the shared truth of one item, keyed `(collection, link_id)`: `seq` (§9.1), `flags_known` (whether its flag set is known, §13), `object_hash`, `sort_key` (§9.3), `level` (1 meta, 2 full), the cross-source state `deleted`, `conflicted`, `conflict_object`, the retention stamps `retained_at`, `retained_by` (§11), and `changed` (§4.5).
-- **`mail_summary`**, **`contact_summary`**, **`event_summary`**, **`task_summary`**, **`journal_summary`**, **`file_summary`**: one table per kind, at most one row per item, keyed `(collection, link_id)`, cascading with the item, referencing no object. Their columns are Annex A's, so a writer that disagrees with the shape fails at the write. A list Annex A derives is a table of its own, one row per value in document order (`position`), cascading with its summary row: **`mail_in_reply_to`** the `In-Reply-To` ids (`mail_in_reply_to_by_id` answering `list_replied`), **`task_category`** a task's categories.
+- **`mail_summary`**, **`contact_summary`**, **`event_summary`**, **`task_summary`**, **`journal_summary`**, **`file_summary`**: one table per kind, at most one row per item, keyed `(collection, link_id)`, cascading with the item, referencing no object. Their columns are Annex A's, so a writer that disagrees with the schema fails at the write. A list Annex A derives is a table of its own, one row per value in document order (`position`), cascading with its summary row: **`mail_in_reply_to`** the `In-Reply-To` ids (`mail_in_reply_to_by_id` answering `list_replied`), **`task_category`** a task's categories.
 - **`placement_flag`**: one row per flag of a placement whose set is known, keyed `(collection, link_id, flag)`, cascading with the item; `placement_flag_by_flag` answers a flag predicate by a seek (§13).
 - **`item_address`**: the people an item names, keyed `(collection, link_id, role, position)` (Annex A.6). One table across every kind, so "everything about this address" is one seek on `item_address_by_address`.
 - **`item_reference`**: a reference between two items (§14.2), keyed `(from_link_id, from_kind, to_link_id, to_kind, role)`, each endpoint a kind and a link id held by no foreign key, with its `role`, `origin` and `created_at`; `item_reference_to` serves the other end.
@@ -145,13 +145,11 @@ An item plus one binding per source is the whole model. Single-source is the N=1
 
 The named, parameterised statements servicing §14 live under [queries/storage/](./queries/storage/), one file per statement named after it, sorted by the profile that runs it: read/ is the reader's (§14.1), queue/ the producer's (§15.1), owner/ the rest, an owner running all three. An implementation reads them by listing its directories. A file's leading comment says what the statement alone cannot; the rules are this document's.
 
-A statement's name, its named parameters and the columns it answers, in order, bind the canonical shape. An implementation of it substituting its own text MUST keep all three, the rules this document states and §7's invariants; one of its own shape (§4.1) keeps each statement's effect and names its own.
+A statement's name, its named parameters and the columns it answers, in order, bind the canonical shape; its text is a reference, which an implementation SHOULD use verbatim. One substituting its own text MUST keep all three, the rules this document states and §7's invariants; one of its own shape (§4.1) keeps each statement's effect and names its own. A fix to the text keeping the three is a patch of this part; a change to any of them is a minor version at least. The search index's statements are under queries/search/ on the same terms.
 
 **List parameters.** A statement taking a list reads it from `temp.param(slot, position, value)`, a temporary table per connection (`create_param`), by its slot: `collections`, `links`, `hashes`, `handles`, `ids` or `flags`, as the statement names it. The caller fills it inside the statement's transaction, `clear_param` then one `bind_param` per value in order, so the text stays one for any length and under any variable limit. A value bound twice counts twice where the statement counts (`release_pins`). A statement whose list is optional takes `:scoped`, 0 for every row and 1 for those the slot names, an empty slot then naming none. This is the canonical shape's calling convention; another shape binds its lists as it chooses.
 
 **Lists as rows.** A statement reading a placement's flags or a binding's base flags answers the set as one text, `flags` or `base_flags`: the flags joined with single spaces in no order, `''` known-empty, `NULL` unknown (§13). A list Annex A derives in document order (`mail_in_reply_to`, `task_category`) is read apart, by `load_in_reply_to` and `load_categories`, as `load_addresses_by_link` reads the addresses.
-
-The text is a reference: an implementation SHOULD use it verbatim. A fix to it keeping the three is a patch of this part; a change to any of them is a minor version at least. The search index's statements are under queries/search/ on the same terms.
 
 ### 4.5 The change feed
 
@@ -205,7 +203,7 @@ An owner opening a store runs these steps in order, and nothing else changes the
 
 There are no down-migrations, and no implementation rebuilds a store it cannot read: an older one refuses a newer store (step 1), and a corrupt one is repaired (§7) or refused. A migration MUST preserve every row of every table and the meaning of every column it keeps: the queue, the receipts, the references, the capabilities, the performers, the retained rows and the collections no source syncs hold state no source restores.
 
-A **reader** or a **producer** never changes the schema. It refuses a store above its version as step 1 says.
+A **reader** or a **producer** never changes the schema. It refuses a store above its version as step 1 says, and one of a shape it does not implement as step 2 does.
 
 Meeting a store below its version, or a version 1 store its owner has not reconciled yet, it reads the store as the reconciliation would leave it before any backfill:
 
@@ -219,7 +217,7 @@ It enqueues nothing the store's version does not define. A `level` 0 such a stor
 
 **While this part is a draft** a schema change is folded into 0001_init.sql, `user_version` staying `1`. A store from an earlier draft is then not detectably out of date, so an owner MUST reconcile it on open (step 3) or refuse it, naming what it lacks; it never recreates nor deletes it, and failing a later query is not acceptable.
 
-**A store of the canonical shape holds the canonical schema alone.** A table, column, index or trigger 0001_init.sql lacks, whoever added it, is dropped by the reconciliation of a version 1 store (steps 2 and 3 below), and nothing else in this part keeps one.
+**A store of the canonical shape holds the canonical schema alone.** A table, column, index or trigger 0001_init.sql lacks, whoever added it, is dropped by the reconciliation of a version 1 store (its steps 2 and 3 below), and nothing else in this part keeps one.
 
 An implementation keeps state of its own outside the store directory (§3), never in pimdir.db. A newer owner adds to the schema only through a migration to a later version, which an older owner refuses before it reconciles anything (step 1). After version 1 is released, a version 1 store holds what 0001_init.sql creates and nothing more, so its owner's open reconciles nothing.
 
@@ -485,7 +483,7 @@ Closed: `kind`, `level`, `deleted` and `conflicted`, `conflict`, `support`, `ori
 - **`level`** (INTEGER): `1` meta, `2` full, closed. A version 1 store an earlier draft wrote may hold `0`, a probed or pulled row: reconciliation repairs it to `1` (`repair_levels`, §6), and a reader meeting it before then reads it as `1`.
 - **`deleted`, `conflicted`** (INTEGER): `0` or `1`.
 - **`conflict`** (TEXT, on a collection): `'manual'`, `'prefer-incoming'` or `'prefer-existing'`, closed; a `prefer-` policy keeps the body it does not adopt as a retained item (§11).
-- **`flag`** (TEXT, on `placement_flag` and `binding_base_flag`): one raw flag, compared by its bytes, non-empty and printable ASCII without a space (`\Seen`, `$label`), as IMAP flags and JMAP keywords are. A set holds each flag once and has no order. **`flags_known`**, **`base_flags_known`** (INTEGER): `1` the rows are the set, none being known-empty; `0` unknown, holding no row by trigger. A statement answering a set (§4.4) joins it with single spaces, `''` known-empty and `NULL` unknown.
+- **`flag`** (TEXT, on `placement_flag` and `binding_base_flag`): one raw flag, compared by its bytes, non-empty and printable ASCII without a space (`\Seen`, `$label`), as IMAP flags and JMAP keywords are. A set holds each flag once and has no order, and is read as §4.4 joins it. **`flags_known`**, **`base_flags_known`** (INTEGER): `1` the rows are the set, none being known-empty; `0` unknown, holding no row by trigger.
 - **`object_hash`, `base_object`, `conflict_object`** (TEXT): a hash under `store_meta.hash_algo`, or `NULL`.
 - **`refcount`** (INTEGER): the pointer count of §5, `>= 0` by constraint; `0` is a meaningful, collectable count.
 - **`link_id`** (TEXT): the hint verbatim, `esc:` and the hint when it begins with a reserved prefix (§9), a kind fallback, or a minted `dup:<hint>#<handle>`; opaque.
@@ -599,7 +597,7 @@ A **reader** (§8) opens read-only and projects the store as a local backend. Re
 - **`sum_mail(collections, seen, attachment, held, since, until)`**: what `count_mail` counts with a sort key in `[since, until)`, either bound `NULL` for open, as the messages, the summed `size` of those that know it and the count of those that do not, so a reader says what a range of dates weighs before downloading it.
 
   A message counts once however many collections of the set file it (its `seq`), its size the largest a placement states. `held` 1 keeps the messages a placement holds the body of, 0 those none does (what a download would fetch), `NULL` either. An undated row lies below every date, held only by a range open below.
-- **`get_mail_row(collection, link_id)`**: one live mail row in `list_mail_page_filtered`'s shape.
+- **`get_mail_row(collection, link_id)`**: one live mail row in `list_mail_page_filtered`'s columns.
 - **`search_contacts`**, **`search_calendar`**, **`search_files`** `(collections, pattern, after_key, after_seq, after_collection, limit)`: `search_mail`'s `LIKE` over a contact's name and addresses, a calendar item's summary (and an event's location), a file's name, A to Z across the set, until the search part's index answers them.
 - **`describe_endpoint(kind, link_id)`**: a reference's end as a link shows it, its first live placement and a title from whichever summary it has (§14.2).
 - **`list_mail_page_desc`**, **`list_contacts_page_asc`**, **`list_events_page_asc`**, **`list_tasks_page_asc`**, **`list_journals_page_asc`**, **`list_files_page_asc`**: the same page joined with the kind's summary. A mixed calendar merges its three pages on `(sort_key, seq)`; `component_of` says which table holds an item.
@@ -622,7 +620,6 @@ Three rules bind every read:
 - **Live only.** A tombstone (`deleted = 1`) is never presented as live; the trash reads are the exception and present their rows as deleted.
 - **Level-aware.** `level` says the tier reached, `object_hash` whether a body is there. A reader renders a list from the summary and treats an absent body, or a blob file gone under a purge, as not yet hydrated, never as an error.
 - **Snapshot-consistent.** A reader sees a WAL snapshot and may run beside the owner. It detects change by `PRAGMA data_version` or the feed, and MAY overlay pending actions (§15.4).
-
 
 ### 14.2 References
 
@@ -683,7 +680,7 @@ A file's name is its summary in that folder (Annex A.7), so a rename is a summar
 
 Only the owner mutates (§8), yet other processes originate mutations. The `queue` table is their write door: a **producer** appends an action, the **owner** applies it.
 
-Actions address collections and public ids, so the six kinds serve every domain; intents (Annex B.2) carry what is not a store mutation, and the kind is an open string beside a versioned payload. What a source supports is declared beside the queue (§15.6), so a producer asks before it appends.
+Actions address collections and public ids, so the same mutations serve every domain; intents (Annex B.2) carry what is not a store mutation, and the kind is an open string beside a versioned payload. What a source supports is declared beside the queue (§15.6), so a producer asks before it appends.
 
 ### 15.1 Producing
 
@@ -820,17 +817,15 @@ A schema mismatch fails a query; a body named differently, a summary derived dif
 - **vectors/summaries.json** and **vectors/fixtures/**: bodies to the `link_id`, summary row, address rows and `sort_key` Annex A produces, the attachment mark read without the body, a message's attachments as its stand-ins name them (Annex A.7), the hedged cases, the encodings that split earlier writers, and the `alt:`, `hash:`, escaped and minted keys of §9.
 - vectors/sync/ and vectors/search/ belong to the other parts.
 
-An implementation **MUST** pass objects.json: two stores naming bodies differently cannot share a blob directory. It **MUST** pass summaries.json for each kind it writes, the minted, `alt:` and `hash:` keys they give included. A consumer MUST compare parsed structures, never JSON text.
+These are the **model vectors**, binding every shape (§4.1). An implementation **MUST** pass objects.json: two stores naming bodies differently cannot share a blob directory. It **MUST** pass summaries.json for each kind it writes, the minted, `alt:` and `hash:` keys they give included. A summary vector states a row as the model holds it, its lists (`in_reply_to`, `categories`) as arrays whichever tables keep them, and a consumer MUST compare parsed structures, never JSON text. The values are authored from the prose, never from an implementation.
 
-The **model vectors** bind every shape (§4.1): objects.json and summaries.json here, and the sync and search vectors of the other parts. A summary vector states a row as the model holds it, its lists (`in_reply_to`, `categories`) as arrays, whichever tables a shape keeps them in. checks/invariants.sh and checks/schema.sh bind the canonical shape alone.
-
-checks/invariants.sh runs the canonical statements through the scenarios this part argues from, and a change to a statement or a rule is checked against it before it lands. checks/schema.sh prepares every statement against the canonical schema and refuses a JSON function in the canonical text. The values are authored from the prose, never from an implementation.
+The canonical shape alone is bound by checks/: invariants.sh runs the canonical statements through the scenarios this part argues from, and a change to a statement or a rule is checked against it before it lands; schema.sh prepares every statement against the canonical schema and refuses a JSON function in the canonical text.
 
 Every file under vectors/ states the version of its format as a top-level `v` and conforms to the JSON Schema of that format under vectors/schema/, which checks/vectors.py validates; an implementation meeting a `v` it does not know MUST NOT read the file as a version it knows. An implementation that vendors vectors/ MUST record their digests and re-check them against this repository in CI.
 
 ## Annex A. Summaries (normative)
 
-What a writer derives from an item before its row reaches the store: the identity hint §9 keys on, the row of the kind's summary table with its list rows, the `item_address` rows and the `sort_key` (§9.3). The store parses no body; the tables fix the shape and vectors/summaries.json the values.
+What a writer derives from an item before its row reaches the store: the identity hint §9 keys on, the row of the kind's summary table with its list rows, the `item_address` rows and the `sort_key` (§9.3). The store parses no body; the schema fixes the columns and vectors/summaries.json the values.
 
 A summary holds what a list row shows, what it sorts by and what the store's own references read (§14.2). A question about an item's content, its text, its calendar time across a series or whether it holds a property, is the search part's (SEARCH.md), and no column is added to answer one.
 

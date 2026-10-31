@@ -40,7 +40,7 @@ Every verb MUST be a pure function of the rows it loads and the answers it is gi
 
 The store is the base of every merge: the bindings hold what each source last agreed to (STORAGE §4.3). This part defines no reconciliation of two sources against each other.
 
-Nothing here requires a language or a coroutine shape. A collection of a media type outside STORAGE §13's kinds is recorded with no kind and never synced (STORAGE §14): an engine names none of its members.
+Nothing here requires a language or a coroutine form. A collection of a media type outside STORAGE §13's kinds is recorded with no kind and never synced (STORAGE §14): an engine names none of its members.
 
 ## 2. Terminology
 
@@ -72,8 +72,8 @@ Placements are read from the store, never stored. For a collection and a source,
 
 1. `Conflict` when `bindings.conflicted` is 1, carrying `conflict_revision` and `conflict_object`; or when `items.conflicted` is 1, two sources disagreeing on the body (§9), which every binding of the item projects until an `Edit` or a `Remove` settles it (§7). Neither is downgraded.
 2. `Tombstone` when `items.deleted` is 1 and the source binds the item; the content is kept so an edit still beats the delete (§5). A tombstone whose binding has no base is a create the consumer withdrew: it derives no `Remove`, the write drops the binding and the item is retained (STORAGE §11).
-3. `Created` when the binding has no base (`base_present` 0, every base column `NULL`), or when the source does not bind the item, `items.deleted` is 0 and `object_hash` is present.
-4. `Dirty` when the flags differ from the base flags as sets (`placement_flag` against `binding_base_flag`, STORAGE §13), both known; or, for a mutable kind, when `object_hash` is present and differs from `base_object` (a base naming no body differs from every body). A placement holding no body owes no body, whatever its base names.
+3. `Created` when the binding has no base (STORAGE §13: `base_present` and `base_flags_known` 0, every other base column `NULL`), or when the source does not bind the item, `items.deleted` is 0 and `object_hash` is present.
+4. `Dirty` when the flags differ from the base flags as sets, both known (STORAGE §13); or, for a mutable kind, when `object_hash` is present and differs from `base_object` (a base naming no body differs from every body). A placement holding no body owes no body, whatever its base names.
 5. `Clean` otherwise.
 
 An unknown flag set (`flags_known` or `base_flags_known` 0) holds no opinion: neither an addition nor a removal. An unknown base is no base on the flag axis.
@@ -388,7 +388,7 @@ An item conflict holding no `conflict_object`, recorded before its incoming body
 - under `manual` it MUST land in `items.conflict_object`, never in the item's own object;
 - under `prefer-incoming` the item adopts it, and under `prefer-existing` keeps its own, the conflict cleared either way and the body not adopted kept and reported (§9).
 
-**Rows.** Every fetch and every page writes the summary row and address rows Annex A derives, in the batch recording it.
+**Rows.** Every fetch and every page writes the summary row, its list rows and the address rows Annex A derives, in the batch recording it.
 
 ## 7. Mutate
 
@@ -538,7 +538,7 @@ The write MUST apply it, whichever step named the member. An upsert naming by it
 
 An upsert resolving a binding to a different handle is refused, except through a `Superseded` or `Rekeyed` drop of the bound handle in the same batch. An upsert resolving a bound handle to a different link id retires the old binding first (STORAGE §10). A `Deleted` drop of a source's last binding retains the item.
 
-A `StoreObject` carries bytes or references a body already streamed to its blob path; a `Full` fetch MAY stream it there itself. The checkpoint is per source and lands last (§5). Summary and address rows are written with the placement they describe; stamps follow from the rows (STORAGE §4.5).
+A `StoreObject` carries bytes or references a body already streamed to its blob path; a `Full` fetch MAY stream it there itself. The checkpoint is per source and lands last (§5). Summary, list and address rows are written with the placement they describe; stamps follow from the rows (STORAGE §4.5).
 
 ## 11. Test vectors
 
@@ -559,6 +559,6 @@ A `store` may state `supersessions`, rows of the table (STORAGE §4.3), for a he
 
 A push is compared on its kind, handle and `key` (§4) and on what the kind carries: `flags` for an `Add`, `add` and `remove` for a `SetFlags`, `to` and `link_id`, `if_match`, `origin` as collection and handle, `supersedes` as collection, handle and `if_match` when the add carries it, and `object` by label. An outcome names its handle, `Accepted` or `Rejected`, and for an add the `assigned` handle and the `revision` reported. An add accepted with no handle (§4) states `assigned` as `null`.
 
-Rows are compared as parsed structures on the columns a case names, excluding `changed` stamps and the instants SQLite stamps (`retained_at`, `covered_at`, `round_started_at`), which a case states as present or absent. Chunked pushes or writes are compared concatenated.
+Rows are compared as parsed structures on the columns a case names, a flag set and a summary's lists as arrays whichever tables a shape keeps them in (STORAGE §16), excluding `changed` stamps and the instants SQLite stamps (`retained_at`, `covered_at`, `round_started_at`), which a case states as present or absent. Chunked pushes or writes are compared concatenated.
 
-Every case pins two rules: no `Remove` is pushed but for a tombstone the store held or the run staged; and no based binding of the run's source is dropped but for a removal its remote stated, an absence from a round the run closed (in that round's scope and not parked), a tombstone, or a rekey not parked. checks/vectors.py validates shape, references, every push's key, those two rules and the mass-absence guard of §5 and §8; only an implementation runs one.
+Every case pins two rules: no `Remove` is pushed but for a tombstone the store held or the run staged; and no based binding of the run's source is dropped but for a removal its remote stated, an absence from a round the run closed (in that round's scope and not parked), a tombstone, or a rekey not parked. checks/vectors.py validates each case's structure, references, every push's key, those two rules and the mass-absence guard of §5 and §8; only an implementation runs one.

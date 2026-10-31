@@ -62,23 +62,23 @@ An **owner** is the one process that mutates the store:
 
 An **engine** (SYNC) is an owner that reproduces every case under vectors/sync/. An **index** (SEARCH) adds, for the canonical shape, SQLite 3.43 with FTS5, migrations/search/ and queries/search/, or a shape of its own answering the same hit sets, and every **query client** on it answers the cases under vectors/search/ alike.
 
-Use the statements verbatim. Each prepares against the canonical schema (checks/schema.sh proves it on every push), and checks/invariants.sh runs them through the scenarios the parts argue from. A substitute is yours to keep equivalent under STORAGE §7's invariants.
+On the canonical shape, use the statements verbatim. Each prepares against the canonical schema (checks/schema.sh proves it on every push), and checks/invariants.sh runs them through the scenarios the parts argue from. A substitute, or a shape of your own, is yours to keep equivalent under STORAGE §7's invariants and the model vectors.
 
 ## 2. Opening a store
 
 **As the owner:**
 
 1. Open owner.lock beside pimdir.db and take an exclusive whole-file lock on the open file without waiting: `flock(fd, LOCK_EX | LOCK_NB)` on Unix, `LockFileEx` with `LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY` over the whole range on Windows, never an `fcntl` or `lockf` record lock. If it is held, fail now, naming the store. Every other lock below (objects.lock, index.lock) is taken with the same call, `LOCK_SH` where it is shared.
-2. Open pimdir.db. Set `PRAGMA foreign_keys = ON` and, on a local filesystem, `PRAGMA journal_mode = WAL`. On a network filesystem use rollback journal or `PRAGMA locking_mode = EXCLUSIVE`, never WAL or `mmap`.
+2. Open pimdir.db. Set `PRAGMA foreign_keys = ON`, run `create_param` (every list parameter's table, STORAGE §4.4) and, on a local filesystem, `PRAGMA journal_mode = WAL`. On a network filesystem use rollback journal or `PRAGMA locking_mode = EXCLUSIVE`, never WAL or `mmap`.
 3. Run the migration runner (§3). On a fresh database this also runs `init_store_meta` with the chosen `hash_algo`.
 4. Read `load_store_meta`. Refuse the store when `format` is not `pimdir` or `version` disagrees with `PRAGMA user_version`.
 5. Keep the lock open until the process gives up the store. Several connections in one process share the one lock; release and retake it as one operation, never in between.
 
-**As a reader:** open pimdir.db read-only (`?mode=ro` in a URI), set `PRAGMA foreign_keys = ON`, take no lock.
+**As a reader:** open pimdir.db read-only (`?mode=ro` in a URI), set `PRAGMA foreign_keys = ON`, run `create_param` (a temporary table, so a read-only open takes it), take no lock.
 
-- Refuse a store whose `PRAGMA user_version` is above the version you know.
+- Refuse a store whose `PRAGMA user_version` is above the version you know, or whose `store_meta.shape` (`pimdir` when the column is absent) you do not implement.
 - Below it, or at version 1 before its owner reconciled it, read it as its reconciliation would leave it before any backfill: a missing column as `NULL` (or as its `DEFAULT` where 0001_init.sql declares it `NOT NULL` with one), a missing table as empty, a `level` 0 as 1.
-- Check `PRAGMA table_info` once per table. For a statement naming a missing column, run its text with each mention of the column replaced by that value, keeping its name, parameters and result columns. For one reading a missing table, answer no row.
+- Check `PRAGMA table_info` once per table. For a statement naming a missing column, run its text with each mention of the column replaced by that value, keeping its name, parameters and result columns. For one reading a missing table, answer no row, or, where only a subquery reads it, run it with that subquery answering none.
 - A source whose coverage columns are missing has a coverage never closed: say it is filling, never complete.
 - Detect change with `PRAGMA data_version` or the feed (§14).
 
@@ -86,9 +86,8 @@ Use the statements verbatim. Each prepares against the canonical schema (checks/
 
 ## 3. The migration runner
 
-1. Read `PRAGMA user_version`; `0` is a fresh database. Above the highest NNNN you ship, refuse the store, naming both versions, and write nothing: never reconcile, migrate or rebuild it. A reader and a producer refuse the same way and stop here.
-   Read `store_meta.shape` (`pimdir` when the column is absent): a shape you do not implement is refused the same way, naming it; one of your own is reconciled by your own rules, never by these steps.
-2. At version 1, reconcile on open: while the store part is a draft, version 1 is edited in place, so a store stamped `1` may hold an earlier draft's shape.
+1. Read `PRAGMA user_version`; `0` is a fresh database. Above the highest NNNN you ship, refuse the store, naming both versions, and write nothing: never reconcile, migrate or rebuild it. A reader and a producer refuse the same way and stop here. Read `store_meta.shape` (`pimdir` when the column is absent): a shape you do not implement is refused the same way, naming it; one of your own is reconciled by your own rules, never by these steps.
+2. At version 1, reconcile on open: while the store part is a draft, version 1 is edited in place, so a store stamped `1` may hold an earlier draft's schema.
    - Build 0001_init.sql alone in an in-memory database. Compare each table, index and trigger with the store's by its `sqlite_master` text, `--` comments dropped and whitespace collapsed. Note which canonical columns `PRAGMA table_info` lacks. On a store still holding `items.flags`, `bindings.base_flags`, `mail_summary.in_reply_to` or `task_summary.categories` (storage-draft-06 or earlier), read every such JSON array now with a `SELECT` of your own, before a rebuild drops the column.
    - Set `PRAGMA foreign_keys = OFF` and `PRAGMA legacy_alter_table = ON`, then `BEGIN`.
    - Run `repair_shared_objects`, `recompute_refcounts`, `repair_levels`, `repair_kinds`; the first two after `bindings` is rebuilt on a store lacking `shared_object`.
@@ -227,11 +226,11 @@ The status is the first row that matches:
 | --- | --- |
 | `Conflict` | the binding is conflicted, or the item is (two sources disagree); carries the revision and diverging body; never downgraded |
 | `Tombstone` | the item is deleted and the source binds it; content kept; a tombstone with no base derives no remove, its binding is dropped |
-| `Created` | the binding has no base (`base_present` 0 and every base column `NULL`), or the source lacks the item, the item is live and a body is present |
+| `Created` | the binding has no base (`base_present` and `base_flags_known` 0, every other base column `NULL`), or the source lacks the item, the item is live and a body is present |
 | `Dirty` | flags differ from the base flags, both known, or, for a mutable kind, a body is present and differs from the base body |
 | `Clean` | otherwise |
 
-The level is `Full` only when a body is present, whatever the row claims. A `NULL` flag set holds no opinion in the merge. A placement with no body owes no body.
+The level is `Full` only when a body is present, whatever the row claims. An unknown flag set holds no opinion in the merge. A placement with no body owes no body.
 
 ## 10. A sync run
 
@@ -454,7 +453,7 @@ A source no longer run gets `delete_capabilities` alone.
    - Apply the action as the corresponding mutation of §11:
      - `add` derives the summary and addresses from the body; a live duplicate link id (`live_item_for_link`) parks, a retained or tombstoned holder revives;
      - an `add` carrying `supersedes`, once that check passed, also tombstones the item it names as a `remove` would, or `retain_item` when no source binds it, nothing when it is gone, and records the pair with `supersede_item`;
-     - a `move` or `copy` into a collection with no declared kind parks;
+     - a `move` or `copy` reads its target from `target_collection`, the payload's `to` when it is `NULL` (a producer predating the column), and parks when that collection has no declared kind;
      - `remove` tombstones the shared item;
      - an item no source binds is the store's to settle, never skipped: `remove` retains it (`retain_item`); where `collection_sources` answers none, a `set-flags` or an `update` applies to it directly (`update_item`, the summary derived again, `if_match` checked, a body naming another key parked) while a `move` or `copy` parks; in a collection a source syncs, every kind but `remove` parks until a push has bound it;
      - an `update` stating `if_match` parks, naming both bodies, when the item holds another.
@@ -529,11 +528,10 @@ Never present a deleted row as live outside the trash view.
 **Refresh**, as the indexer, holding an exclusive lock on index.lock, taken as §2 takes the owner lock, and no store lock:
 
 1. Open index.db read-write and attach pimdir.db read-only as `store`. `load_index_meta`.
-   - On a version or tokenizer mismatch, or a shape differing from migrations/search/0001_init.sql's: delete index.db, apply migrations/search/0001_init.sql, `init_index_meta` and `set_tzdb_version` with the version of the time zone database in use.
-   - The shape is each table, index and trigger that script creates, by name, compared by its `sqlite_master` text as §3 compares a store's, FTS5's shadow tables and your own tables left out.
+   - On a version or tokenizer mismatch, or a schema text differing from migrations/search/0001_init.sql's (each table, index and trigger it creates, by name, compared by its `sqlite_master` text as §3 compares a store's, FTS5's shadow tables and your own tables left out): delete index.db, apply migrations/search/0001_init.sql, `init_index_meta` and `set_tzdb_version` with the version of the time zone database in use.
 2. `load_change_cursor` from the store before the pass: the last stamp drawn and the purge count.
 3. `load_changed_items` above the `store_change` recorded by the previous pass, in stamp order, in bounded batches, one index transaction each. A batch may record the `changed` of its last row through `set_index_cursor`, with the purge count and the `store_reconciled` the last completed pass recorded. Per row:
-   - Fold every text you write under SEARCH §5 (lowercase, NFD, the marks of U+0300 to U+036F dropped, NFC), the tokenizer folding none.
+   - Fold every text you write into `object_text` and `summary_text` under SEARCH §5 (lowercase, NFD, the marks of U+0300 to U+036F dropped, NFC), the tokenizer folding none; cut the chunks from the text before the fold.
    - `object_indexed`, else extract the body under SEARCH §6, the role fields beside `people`, and `insert_object`, with whether the `attachment` field holds any text and, for a card, whether it holds a `TEL`, an `ADR`, a `BDAY` and a `PHOTO`, plus `insert_object_text` and, for a card, `insert_object_category` for each of its folded `CATEGORIES` values, then `insert_chunk` for each chunk SEARCH §6 cuts the `body` and `note` fields into; no `object` row for a blob that is not there;
    - `upsert_placement`;
    - `delete_summary_text` then `insert_summary_text` for a bodiless row, and `delete_summary_text` once it has a body;
@@ -573,9 +571,9 @@ Tagging goes through the queue as a producer (§13), never through the index.
   - compare the pushes in order with their keys, feed back the `outcomes`, compare the `events` and the rows after, `changed` stamps and `retained_at` instants excluded, chunks concatenated.
 - **vectors/search/**, every index:
   - build the fixture store from store.json, index it at the file's `now`, run each query with its sort;
-  - compare hits as `(account, seq)`, ordered where the case says `ordered`, the threads of a threaded case, and the coverage, `horizon_left` included, and the temporal coverage where a case states `temporal`, after writing each collection's `sources` coverage rows;
+  - compare hits as `(account, seq)`, ordered where the case says `ordered` (a `relevance` case as a set on a shape ranking by no bm25), the threads of a threaded case, and the coverage, `horizon_left` included, and the temporal coverage where a case states `temporal`, after writing each collection's `sources` coverage rows;
   - a refusal compares its `code`, `start` and `end`;
   - list each window of `occurrences` with `occurrences_between` and compare its rows in order;
   - cut each text of chunks.json into chunks and compare the boundaries.
 
-checks/vectors.py validates the files' shape and references without an implementation; only an implementation runs a case. Vendor the files if the build cannot read them in place, record their digests, and re-check them against this repository in CI.
+checks/vectors.py validates the files' structure and references without an implementation; only an implementation runs a case. Vendor the files if the build cannot read them in place, record their digests, and re-check them against this repository in CI.
