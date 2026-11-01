@@ -1,5 +1,5 @@
 {
-  "v": 2,
+  "v": 3,
   "label": "a member stating a pending create's Message-ID with another subject and date is minted, the create left to push",
   "note": "the stand-up notes were filed here and their add waits under the provisional handle. The round lists a member stating the same Message-ID whose summary names another message: another subject, sender and date. It is no arrival of that create, which would agree, but another message reusing the id, so it is named under the key minted over its handle, never landing the create: landing would bind 77 to the stand-up notes and drop the add, losing them on the server. The round's last page having landed, the create's Add is pushed, unreported here, so it stays pending (STORAGE §9; SYNC.md §6)",
   "store": {

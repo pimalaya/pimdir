@@ -1,5 +1,5 @@
 {
-  "v": 2,
+  "v": 3,
   "label": "under prefer-incoming, a body meeting an item whose own body nobody read is recorded as manual records it, never adopted",
   "note": "vector 81 under incoming: the store 80 left, a having pulled an edit it has not read, the item holding no body, and b's upgrade fetching c3 at s2. The item's own body is unread, so no policy may choose against it: the divergence is recorded as manual records one, whatever the policy, the item flagged with c3 as its conflict_object and still no body, nothing kept, nothing reported. Adopting c3 would leave a's base, r2 naming no body, facing a body: a would project Dirty and push c3 over its server's edit, which nobody has read. The fill that reads a's body settles it by the policy (vectors 114 and 115) (SYNC.md §9)",
   "store": {

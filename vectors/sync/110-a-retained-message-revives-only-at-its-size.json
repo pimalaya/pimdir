@@ -1,5 +1,5 @@
 {
-  "v": 2,
+  "v": 3,
   "label": "a member agreeing with a retained message on subject, date and sender but stating another size is minted, never reviving it",
   "note": "basic-1@example.org is retained with its body, 299 octets. The next round lists the same Message-ID, subject, date and sender, the source stating 4096 octets. Reviving at Meta would make the retained body the member's own, its base, unread, as a link does, and a link holds only where the sizes agree (SYNC.md §6): the two may be one message resent with another body. So the member is minted, an item of its own fetched by the next Full upgrade, and the retained row stays in the trash; a missed dedup costs a fetch, a wrong revive a message (STORAGE §9, §11.1)",
   "store": {

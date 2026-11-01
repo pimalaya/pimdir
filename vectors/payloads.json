@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "note": "Queue payloads (STORAGE.md section 15.3, Annex B.2): each case an action's payload, valid exactly when payloads/<action>.v<v>.schema.json accepts it. A producer enqueues no invalid one and an owner, or an intent's performer, parks it. Bodies are named by the empty body's object name and by len-1's (objects.json).",
+  "note": "Queue payloads (STORAGE.md section 15.3, Annex B.2): each case an action's payload, valid exactly when payloads/<action>.v<v>.schema.json accepts it. A producer enqueues no invalid one and an owner, or an intent's performer, parks it. Bodies are named by the empty body's object name and by len-1's and len-2's (objects.json).",
   "cases": [
     { "action": "add", "valid": true, "payload": { "v": 1, "flags": [], "object": "v4jutopv7gq2nicajxvdnxgjjgn4wjojvxarfn6mtkj4vza7gjra" } },
     { "action": "add", "valid": true, "payload": { "v": 1, "link_id": "file:0123456789abcdef0123456789abcdef", "flags": ["\\Seen", "$label"], "object": "v4jutopv7gq2nicajxvdnxgjjgn4wjojvxarfn6mtkj4vza7gjra", "supersedes": { "collection": "tasks-a", "seq": 7 } } },
@@ -22,6 +22,13 @@
     { "action": "copy", "valid": false, "payload": { "v": 1, "seq": 5, "to": "" }, "note": "an empty collection id" },
     { "action": "update", "valid": true, "payload": { "v": 1, "seq": 5, "object": "fu5n5x7rdnq7cteiny227ibwonw43b5hjut3lqkrais5b5ms4ijq", "if_match": "v4jutopv7gq2nicajxvdnxgjjgn4wjojvxarfn6mtkj4vza7gjra" } },
     { "action": "update", "valid": false, "payload": { "v": 1, "seq": 5, "object": "fu5n5x7rdnq7cteiny227ibwonw43b5hjut3lqkrais5b5ms4ijq", "if_match": "V4JUTOPV7GQ2NICAJXVDNXGJJGN4WJOJVXARFN6MTKJ4VZA7GJRA" }, "note": "a name is lowercase" },
+    { "action": "update", "valid": true, "payload": { "v": 1, "seq": 5, "object": "fu5n5x7rdnq7cteiny227ibwonw43b5hjut3lqkrais5b5ms4ijq", "if_match": "v4jutopv7gq2nicajxvdnxgjjgn4wjojvxarfn6mtkj4vza7gjra", "resolves": ["pnyblo4sz4ftdabxoavgzxmb33sbejhxgrueylasftldlhfr5zrq"] }, "note": "a person's resolution of the conflict whose diverging body is len-2's" },
+    { "action": "update", "valid": true, "payload": { "v": 1, "seq": 5, "object": "fu5n5x7rdnq7cteiny227ibwonw43b5hjut3lqkrais5b5ms4ijq", "resolves": ["pnyblo4sz4ftdabxoavgzxmb33sbejhxgrueylasftldlhfr5zrq", "v4jutopv7gq2nicajxvdnxgjjgn4wjojvxarfn6mtkj4vza7gjra"] }, "note": "a resolution naming two conflicts, the item's and a binding's" },
+    { "action": "update", "valid": false, "payload": { "v": 1, "seq": 5, "object": "fu5n5x7rdnq7cteiny227ibwonw43b5hjut3lqkrais5b5ms4ijq", "resolves": [] }, "note": "a resolution names at least one diverging body" },
+    { "action": "update", "valid": false, "payload": { "v": 1, "seq": 5, "object": "fu5n5x7rdnq7cteiny227ibwonw43b5hjut3lqkrais5b5ms4ijq", "resolves": "pnyblo4sz4ftdabxoavgzxmb33sbejhxgrueylasftldlhfr5zrq" }, "note": "resolves is an array, never one name" },
+    { "action": "update", "valid": false, "payload": { "v": 1, "seq": 5, "object": "fu5n5x7rdnq7cteiny227ibwonw43b5hjut3lqkrais5b5ms4ijq", "resolves": ["pnyblo4sz4ftdabxoavgzxmb33sbejhxgrueylasftldlhfr5zrq", "pnyblo4sz4ftdabxoavgzxmb33sbejhxgrueylasftldlhfr5zrq"] }, "note": "a diverging body named twice" },
+    { "action": "update", "valid": false, "payload": { "v": 1, "seq": 5, "object": "fu5n5x7rdnq7cteiny227ibwonw43b5hjut3lqkrais5b5ms4ijq", "resolves": ["objects/pn/pnyblo4sz4ftdabxoavgzxmb33sbejhxgrueylasftldlhfr5zrq"] }, "note": "a path for a body" },
+    { "action": "update", "valid": false, "payload": { "v": 1, "seq": 5, "object": "fu5n5x7rdnq7cteiny227ibwonw43b5hjut3lqkrais5b5ms4ijq", "resolves": true }, "note": "resolves names what it resolves, never a bare yes" },
     { "action": "set-performer", "valid": true, "payload": { "v": 1, "capability": "mail.submit", "source": "smtp" } },
     { "action": "set-performer", "valid": true, "payload": { "v": 1, "capability": "x-fax.send" }, "note": "withdrawn, an application's own capability" },
     { "action": "set-performer", "valid": false, "payload": { "v": 1, "capability": "Mail.Submit" }, "note": "a capability is lowercase" },

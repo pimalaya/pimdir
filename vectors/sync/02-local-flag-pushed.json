@@ -1,5 +1,5 @@
 {
-  "v": 2,
+  "v": 3,
   "label": "a local flag change is pushed and rebased on acceptance",
   "note": "local differs from base, remote equals base, so the flag local added is pushed as an addition, leaving whatever else the server holds; the base moves only once the source accepted (SYNC.md §4, §5)",
   "store": {

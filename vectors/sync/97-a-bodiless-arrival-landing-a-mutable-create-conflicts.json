@@ -1,5 +1,5 @@
 {
-  "v": 2,
+  "v": 3,
   "label": "a listed revision carrying no body lands a mutable pending create as a divergence, pushing nothing",
   "note": "the card was created here and its add's record was lost, or another client added it: the listing names the same UID under a.vcf at r1 and carries no body. The page lands the create, its provisional handle superseded and the binding moved to a.vcf, but nothing has read what the server holds at r1, which another client may have edited after the add, and an Update gated on r1 would overwrite that edit, the precondition guarding only what changes after the listing. So the binding is recorded as Manual records a divergence, whatever the policy (here prefer-local): conflicted at r1 with no conflict_object, the base at r1 naming no body, reported Conflicted beside the landing's Created, and nothing pushed; the upgrade fetches the body (vector 98) (SYNC.md §5, §6)",
   "store": {

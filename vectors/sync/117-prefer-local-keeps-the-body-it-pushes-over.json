@@ -1,5 +1,5 @@
 {
-  "v": 2,
+  "v": 3,
   "label": "both sides edited under prefer-local, the member carrying its body, keeps that body and pushes the local one over it",
   "note": "the server moved to r2 and its listing carries the body, c3, as a DAV multiget does. prefer-local settles for c2, but c3 is a body someone wrote: in a write committed before the push, the base adopts c3 at r2 and c3 is kept as a retained item under the key minted over the handle, reported Overruled; the push of c2 is then gated on r2, accepted at r3, and the base moves to c2. A push rejected or replayed finds c3 kept and the base on it, keeping nothing twice (SYNC.md §5, §9; STORAGE §11)",
   "store": {

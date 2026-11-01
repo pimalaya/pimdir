@@ -1,5 +1,5 @@
 {
-  "v": 2,
+  "v": 3,
   "label": "an edit stating the body it replaced is refused once another write replaced that body",
   "note": "two producers read the card at c1 and each queued an update stating if_match c1; the first applied and the item holds c2. The second, c3 over c1, is refused and stages nothing, which the drain parks naming both bodies, rather than applied over c2 without a merge (SYNC.md §7; STORAGE §15.3)",
   "store": {

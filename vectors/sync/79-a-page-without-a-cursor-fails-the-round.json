@@ -1,5 +1,5 @@
 {
-  "v": 2,
+  "v": 3,
   "label": "a page that is not the last and carries no cursor fails the run, closing nothing",
   "note": "the first page lands as any page does, stamping 12 and recording p1 and c1. The second says it is not the last and hands no cursor, so the round can neither resume from it nor close on it: the engine refuses it before its write and the run fails, the round open at p1. Closing on it would have dropped 10, which no page reached (SYNC.md §4, §5)",
   "store": {

@@ -1,5 +1,5 @@
 {
-  "v": 2,
+  "v": 3,
   "label": "prefer-existing keeps the shared body and the diverging one it refused as a retained item",
   "note": "the case of 85 under prefer-existing: the item keeps c3, and c2, the body b brought and the policy refused, is kept as a retained item under the key minted over b's handle and reported Overruled. b's base is c2 at r2, so it owes c3 and pushes it on its next sync (SYNC.md §9; STORAGE §11)",
   "store": {
@@ -15,7 +15,7 @@
       { "collection": "Contacts", "source": "b", "checkpoint": "b1" }
     ]
   },
-  "run": { "verb": "mutate", "collection": "Contacts", "source": "b", "mutation": { "kind": "Edit", "seq": 1, "object": "c2" } },
+  "run": { "verb": "mutate", "collection": "Contacts", "source": "b", "mutation": { "kind": "Edit", "seq": 1, "object": "c2", "resolves": ["c2"] } },
   "remote": {
     "snapshot": null,
     "fetch": {}

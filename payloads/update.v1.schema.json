@@ -10,6 +10,7 @@
     "v": { "const": 1 },
     "seq": { "type": "integer", "minimum": 1 },
     "object": { "type": "string", "pattern": "^[a-z2-7]{52}$" },
-    "if_match": { "type": "string", "pattern": "^[a-z2-7]{52}$" }
+    "if_match": { "type": "string", "pattern": "^[a-z2-7]{52}$" },
+    "resolves": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z2-7]{52}$" } }
   }
 }

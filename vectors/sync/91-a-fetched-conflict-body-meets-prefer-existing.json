@@ -1,5 +1,5 @@
 {
-  "v": 2,
+  "v": 3,
   "label": "under prefer-existing an item conflict fetched late keeps the shared body and retains the fetched one",
   "note": "the case of 90 under prefer-existing: once a's upgrade fetches c2, the policy keeps c3 and the item's conflict clears, c2, the body it refused, kept as a retained item under the key minted over a's handle and reported Overruled. a's base takes c2 at r2, what its server holds, and its shared_object moves to c3, the body the item settled on, so a owes c3 and pushes it on its next sync (SYNC.md §6, §9; STORAGE §11)",
   "store": {

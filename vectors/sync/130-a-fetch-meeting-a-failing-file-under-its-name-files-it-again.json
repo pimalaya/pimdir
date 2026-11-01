@@ -1,0 +1,27 @@
+{
+  "v": 3,
+  "label": "a fetched body whose name a file failing it holds sets that file aside and lands",
+  "note": "the store of 30, but the file under c2's name holds bytes that do not hash to it (corrupt), as a crash in the middle of an exclusive create and copy leaves part of a body under its name; nothing has read it since. The Full fetch brings c2, and the owner's write finds the name held: it verifies the file there, which fails, moves it into quarantine/ and files the fetched bytes, so the item and the base name a body that reads. Keeping the file there would leave the item pointing at bytes the next read sets aside, the fetched copy, perhaps the only good one, gone (STORAGE §5, §7; SYNC.md §6). The format states no file under quarantine/",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
+    "objects": { "c2": { "body": "fixtures/card-basic-edited.vcf", "corrupt": true } },
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0 }],
+    "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": null, "base_revision": "r2", "base_present": 1 }],
+    "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d1" }]
+  },
+  "run": { "verb": "upgrade", "collection": "Contacts", "source": "dav", "tier": "Full", "handles": ["a.vcf"] },
+  "remote": { "snapshot": null, "fetch": { "a.vcf": { "Full": { "body": "fixtures/card-basic-edited.vcf", "revision": "r2" } } } },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "objects": { "c2": { "body": "fixtures/card-basic-edited.vcf" } },
+      "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c2", "level": 2, "deleted": 0, "sort_key": "jane a. doe" }],
+      "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": "c2", "base_revision": "r2", "base_present": 1 }],
+      "summaries": [{ "table": "contact_summary", "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "row": { "uid": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "fn": "Jane A. Doe", "kind": null, "org": null } }],
+      "addresses": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "role": "email", "position": 0, "address": "jane@example.org", "name": null }],
+      "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d1" }]
+    }
+  }
+}

@@ -1193,6 +1193,7 @@ PLACEHOLDERS = {
     "capability": {"type": "string", "pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9-]+)*$"},
     "[…]": {"type": "array", "uniqueItems": True, "items": {"type": "string", "pattern": "^[!-~]+$"}},
     "[addr…]": {"type": "array", "minItems": 1, "items": NONEMPTY},
+    "[hash…]": {"type": "array", "minItems": 1, "uniqueItems": True, "items": {"type": "string", "pattern": "^[a-z2-7]{52}$"}},
 }
 
 
@@ -1871,6 +1872,22 @@ for path in sync_cases:
     unread = {object_label for object_label, spec in store.get("objects", {}).items() if spec.get("corrupt") or spec.get("blob") is False}
     for push in case["expect"].get("pushes", []):
         require(f"{label}: push {push.get('handle')} carries no body it could not verify", push.get("object") not in unread)
+    # A conflict is settled by an overrule or by a person's resolution naming
+    # it (SYNC.md section 7, STORAGE.md section 15.3): an Edit stating no
+    # overrule that meets the item's conflict or its binding's, unless its
+    # resolves names each one's diverging body, or that states resolves and
+    # meets none, is refused, the rows as they were.
+    mutation = run.get("mutation", {}) if run.get("verb") == "mutate" else {}
+    if mutation.get("kind") == "Edit" and not mutation.get("overrule"):
+        item = next((i for i in store.get("items", []) if i["collection"] == run["collection"] and i["seq"] == mutation["seq"]), {})
+        binding = next((b for b in store.get("bindings", []) if b["collection"] == run["collection"]
+                        and b["link_id"] == item.get("link_id") and b["source"] == run["source"]), {})
+        met = [row.get("conflict_object") for row in (item, binding) if row.get("conflicted") == 1]
+        resolves = mutation.get("resolves")
+        if (met and any(body is None or body not in (resolves or []) for body in met)) or (resolves is not None and not met):
+            require(f"{label}: an Edit settling a conflict nobody resolved, or resolving one that does not stand, fails", case["expect"].get("failed") is True)
+            for table in ("items", "bindings"):
+                check(f"{label}: a refused resolution leaves the {table} as they were", after.get(table, store.get(table)), store.get(table))
     for push in case["expect"].get("pushes", []):
         require(f"{label}: push {push.get('handle')} names a kind", push.get("kind") in {"Add", "Remove", "SetFlags", "Update"})
         require(f"{label}: push {push.get('handle')} carries a key", "key" in push)

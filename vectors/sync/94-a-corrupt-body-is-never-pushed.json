@@ -1,5 +1,5 @@
 {
-  "v": 2,
+  "v": 3,
   "label": "a pending create whose body fails its name pushes nothing",
   "note": "the store holds c1 under its name, but the file's bytes no longer hash to it (corrupt), as after a bad sector or a truncated copy of the directory. The body is read whole to push the Add and fails verification, so it reads as no body at all: nothing is pushed, the create stays pending under its provisional handle, and the engine reports it. The checkpoint lands as usual (STORAGE §7, SYNC.md §5)",
   "store": {

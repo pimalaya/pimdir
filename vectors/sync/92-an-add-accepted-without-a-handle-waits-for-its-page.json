@@ -1,5 +1,5 @@
 {
-  "v": 2,
+  "v": 3,
   "label": "an add accepted without a handle stays a pending create until a page lands it",
   "note": "an IMAP server without UIDPLUS (RFC 4315) answers an APPEND with no UID, so the connector reports the add Accepted and assigns no handle. Nothing names the member yet: the binding keeps its provisional handle and no base, no Superseded drop is written and no Created is reported, and the run pushes it no second time. The next listing names the member, and the page naming it lands the create as vector 21 does (SYNC.md §4, §5, §6)",
   "store": {

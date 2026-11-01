@@ -1,5 +1,5 @@
 {
-  "v": 2,
+  "v": 3,
   "label": "an edit settling an item's conflict by a rule of the engine's keeps the incoming body it does not adopt",
   "note": "a pulled c3 into the item, then b pulled its own edit c2, which diverged under manual: the item holds c3 with c2 as its conflict_object, and b's base is c2 at s2. A one-way engine whose source is a settles b for the store by restating c3 with overrule: the item's conflict clears and c2, which b's push of c3 will overwrite and whose last pin, b's base, that push then releases, is kept as a retained item under the key minted over b's handle and reported Overruled (SYNC.md §7, §9; STORAGE §11). b's base stays c2 at s2, so b owes c3, and its shared_object moves to c3, the body the item settled on",
   "store": {

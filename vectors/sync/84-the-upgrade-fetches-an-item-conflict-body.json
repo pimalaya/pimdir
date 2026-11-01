@@ -1,5 +1,5 @@
 {
-  "v": 2,
+  "v": 3,
   "label": "an item conflict holding no body is revisited by the binding whose pull it waits for",
   "note": "the store 83 left. a's base names r2 and no body, so its upgrade fetches c2 and it lands in the item's conflict_object, never in its object: the item keeps c3, a's base takes c2 at r2, and a's shared_object stays c1 while the conflict stands (SYNC.md §6, §9)",
   "store": {

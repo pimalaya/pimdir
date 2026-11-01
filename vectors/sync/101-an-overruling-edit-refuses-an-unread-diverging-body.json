@@ -1,5 +1,5 @@
 {
-  "v": 2,
+  "v": 3,
   "label": "an edit settling a conflict by a rule of the engine's is refused while the diverging body is unread",
   "note": "the case of 100 with b's diverging body not fetched yet: b's conflict at w2 holds no conflict_object. An overruling Edit would adopt an unknown body into the base and push c2 over a body nobody read, which no rule may choose against (SYNC.md §9), and there is nothing to keep. It is refused and stages nothing; the upgrade fetches the body first (SYNC.md §6) and the settle is then 100 (SYNC.md §7)",
   "store": {

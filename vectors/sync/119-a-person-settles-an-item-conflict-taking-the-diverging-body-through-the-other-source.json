@@ -1,5 +1,5 @@
 {
-  "v": 2,
+  "v": 3,
   "label": "a person's edit through the source the item moved away from settles an item conflict taking the diverging body",
   "note": "the store of 102 with no overrule. A person takes c2, the diverging body, through b, whose base already holds it: the edit stages no push for b and still settles the item, which takes c2, its conflict cleared and c3 kept by nothing but a's base (SYNC.md §7). b's shared_object moves to c2; a's base and shared_object stay c3, so a owes c2",
   "store": {
@@ -15,7 +15,7 @@
       { "collection": "Contacts", "source": "b", "checkpoint": "b1" }
     ]
   },
-  "run": { "verb": "mutate", "collection": "Contacts", "source": "b", "mutation": { "kind": "Edit", "seq": 1, "object": "c2", "if_match": "c3" } },
+  "run": { "verb": "mutate", "collection": "Contacts", "source": "b", "mutation": { "kind": "Edit", "seq": 1, "object": "c2", "if_match": "c3", "resolves": ["c2"] } },
   "remote": {
     "snapshot": null,
     "fetch": {}

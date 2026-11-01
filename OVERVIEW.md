@@ -32,7 +32,7 @@ A store is a directory holding one SQLite database and one directory of bodies. 
 
 A body is never edited. An edit writes a new body and the item points at it; the old body stays until nothing points at it and a collector removes it.
 
-One algorithm names every body, and a name is checked before a path is built from it, so a name never reaches outside the directory of bodies. A file once written is never replaced, and its bytes are checked against its name whenever they are read whole. A body that fails is treated as missing: the store's owner sets the file aside rather than delete it, since it may be the only copy left, and fetches the body again from a source that holds it.
+One algorithm names every body, and a name is checked before a path is built from it, so a name never reaches outside the directory of bodies. A file once written is never replaced, and its bytes are checked against its name whenever they are read whole, and by a write finding its name taken, which sets aside a file that fails rather than keep it in place of the bytes in hand. A body that fails is treated as missing: the store's owner sets the file aside rather than delete it, since it may be the only copy left, and fetches the body again from a source that holds it.
 
 That makes a body a fact: what each source holds can be fetched again from the remotes and the bodies rebuilt from them. The database also holds what no remote does: local edits not yet pushed, the queued actions, the links a person made between items, and the collections no source syncs. So it is never thrown away to be rebuilt without the user agreeing to lose them.
 
@@ -162,7 +162,7 @@ For that to be honest, a binding keeps two agreement points:
 
 Measuring both from one point would make a source's own unpushed edit look like another source's disagreement. The second point is also the common ancestor a merge reads, so the store keeps that body for as long as a binding names it. A pull that brings no body agrees to nothing and leaves it in place.
 
-A divergence between sources is settled by the collection's policy: keep the incoming body, keep the existing one, or flag the item with the diverging body kept and every source's push held until a person decides. A policy that picks one body keeps the other in the trash rather than losing it, as often as one source loses. A divergence with a body nobody has read yet, the incoming one or the item's own, is held as a person's conflict until that body is fetched, and only then settled by the policy.
+A divergence between sources is settled by the collection's policy: keep the incoming body, keep the existing one, or flag the item with the diverging body kept and every source's push held until a person decides. A policy that picks one body keeps the other in the trash rather than losing it, as often as one source loses. A divergence with a body nobody has read yet, the incoming one or the item's own, is held as a person's conflict until that body is fetched, and only then settled by the policy. A person's decision names the diverging bodies it was made over, so an edit made without the conflict in view, or decided over an earlier one, waits for a person rather than settle it.
 
 A divergence between a source and its own remote belongs to that binding alone. The two are recorded separately and neither implies the other.
 

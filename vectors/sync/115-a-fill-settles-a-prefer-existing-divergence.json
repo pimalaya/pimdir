@@ -1,5 +1,5 @@
 {
-  "v": 2,
+  "v": 3,
   "label": "the fill reading the item's own body settles a prefer-existing divergence recorded without it",
   "note": "the store 113 left: the item holds no body and is flagged, b's c3 its conflict_object, a's server edit unread. a's upgrade fetches that edit, c2 at r2, and fills the item. Both bodies now read, prefer-existing applies: the item keeps c2, its own body, and c3, the incoming one it refuses, is kept as a retained item under the key minted over a's handle, the fill's, and reported Overruled. The conflict clears; a's base takes c2 at r2 and its shared_object c2, and b, its base c3, projects Dirty, so its next sync pushes c2 over c3, which the trash keeps (SYNC.md §9; STORAGE §10, §11)",
   "store": {

@@ -1,5 +1,5 @@
 {
-  "v": 2,
+  "v": 3,
   "label": "an edit settling a conflict without overrule is a person's choice and keeps nothing it discards",
   "note": "the case of 100 with no overrule: a person resolving b's conflict for the store's c2 chose to lose c3, so the settle keeps no retained item and reports nothing. The base adopts w2 and c3, b owes c2, and c3 goes once that push lands (SYNC.md §7)",
   "store": {
@@ -15,7 +15,7 @@
       { "collection": "Contacts", "source": "b", "checkpoint": "b1" }
     ]
   },
-  "run": { "verb": "mutate", "collection": "Contacts", "source": "b", "mutation": { "kind": "Edit", "seq": 1, "object": "c2", "if_match": "c2" } },
+  "run": { "verb": "mutate", "collection": "Contacts", "source": "b", "mutation": { "kind": "Edit", "seq": 1, "object": "c2", "if_match": "c2", "resolves": ["c3"] } },
   "remote": {
     "snapshot": null,
     "fetch": {}

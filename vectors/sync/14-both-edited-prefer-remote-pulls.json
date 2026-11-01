@@ -1,5 +1,5 @@
 {
-  "v": 2,
+  "v": 3,
   "label": "both sides edited under prefer-remote drops the local edit and pulls",
   "note": "the divergence is settled by the source's policy: the local body leaves the item as a pull would take it, the level lowers to Meta and the base revision moves, no conflict is recorded. The local edit c2, a body the base never held, is not lost: it is kept as a retained item under the key minted over the handle, its own seq, and reported Overruled. The pull carried no body, so the shared_object stays c2 (SYNC.md §5, §9; STORAGE §11)",
   "store": {
