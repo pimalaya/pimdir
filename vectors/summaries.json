@@ -1480,6 +1480,59 @@
       "attachments": []
     },
     {
+      "label": "mail, a closing delimiter cut before its line feed",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-cut-delimiter.eml",
+      "note": "the message ends in the \\r of its closing delimiter's line break, no \\n after it. One \\r just before the end of the message is the line break's (Annex A.1), so --b3--\\r closes the multipart: the attachment is a part, the mark is 1 and its stand-in measures the 6 octets of Notes., the CRLF before the delimiter being the delimiter's. Read as the line's content, the \\r leaves the multipart unclosed, its last part then either no part (no mark, no stand-in) or holding the delimiter (15 octets)",
+      "body": { "len": 422, "blake3": "cdqjk6mv63bsz6r7e6rqwwpkbqql6hgdmyomug3v6rr2u467spaa" },
+      "link_id": "cut-delimiter@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": "cut-delimiter@example.org", "in_reply_to": [], "subject": "Cut before the line feed", "sender": "billing@example.org", "sender_name": "Billing", "date": "2026-10-05T09:00:00Z", "size": 422, "attachment": 1, "invitation": null },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "billing@example.org", "name": "Billing" },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sort_key": "2026-10-05T09:00:00Z",
+      "meta_attachment": 1,
+      "attachments": [
+        { "part": "2", "name": "notes.txt", "media_type": "text/plain", "size": 6 }
+      ]
+    },
+    {
+      "label": "mail, a header line holding a lone CR",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-stray-cr.eml",
+      "note": "the header's fourth line holds a \\r before its CRLF (raw \\r\\r\\n). A \\r not ending the message is the line's content, so that line is no empty line (Annex A.1): the header block goes on, and the Subject and the Message-ID after it are read. Read as an empty line, the block would end there, the subject '' and the key alt:",
+      "body": { "len": 217, "blake3": "rx25xxz2ysvxqna5bsmb3ot7g5howajtybazazf6gqyfognqfeaq" },
+      "link_id": "stray-cr@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": "stray-cr@example.org", "in_reply_to": [], "subject": "After a stray CR", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 217, "attachment": 0, "invitation": null },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "alice@example.org", "name": "Alice Example" },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sort_key": "2026-08-01T10:00:00Z",
+      "meta_attachment": 0,
+      "attachments": []
+    },
+    {
+      "label": "mail, a header cut after its CR",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-header-cut.eml",
+      "note": "the message is a header block alone, cut between the \\r and the \\n of its last line. That \\r is the line break's (Annex A.1), so the Subject reads Cut short, never with a \\r",
+      "body": { "len": 158, "blake3": "sr2ewlzaesbihxkr4d5wwpr52jbzzjeceihvleydy5yrnzaf3jmq" },
+      "link_id": "header-cut@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": "header-cut@example.org", "in_reply_to": [], "subject": "Cut short", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 158, "attachment": 0, "invitation": null },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "alice@example.org", "name": "Alice Example" },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sort_key": "2026-08-01T10:00:00Z",
+      "meta_attachment": 0,
+      "attachments": []
+    },
+    {
       "label": "card, every field present",
       "kind": "text/vcard",
       "fixture": "fixtures/card-basic.vcf",

@@ -7,9 +7,11 @@
 # trigger and constraint they fire compiles too, runs the CHECK on a body's
 # name, whose GLOB class must mean there what it means now, and reads the
 # program of an object's delete, whose foreign key checks must seek the partial
-# pointer indexes there as they do now. The objects it creates are compared
-# with those the sqlite3 on PATH creates from the same text. Needs that sqlite3
-# and the floor's shell, named by the second argument.
+# pointer indexes there as they do now. The objects it creates, and the text
+# of its triggers and views, are compared with those the sqlite3 on PATH
+# creates from the same text, and the floor is checked to know no
+# trusted_schema (§18). Needs that sqlite3 and the floor's shell, named by the
+# second argument.
 set -euo pipefail
 
 root="${1:-$PWD}"
@@ -37,6 +39,20 @@ apply sqlite3 "$dir/reference.db"
 
 diff <("$floor" "$dir/floor.db" "$objects") <(sqlite3 "$dir/reference.db" "$objects") >&2 || {
     echo "SQLite $version creates other tables, indexes or triggers than $(sqlite3 :memory: 'SELECT sqlite_version();')" >&2
+    exit 1
+}
+
+# A store from elsewhere (STORAGE.md §18): the floor knows no trusted_schema,
+# so a program there compares the triggers and views a store holds with those
+# the canonical text creates, which must read alike whichever SQLite created
+# the store.
+[ -z "$("$floor" :memory: 'PRAGMA trusted_schema;')" ] || {
+    echo "SQLite $version knows trusted_schema, which STORAGE.md §18 says the floor lacks" >&2
+    exit 1
+}
+schema="SELECT type, name, sql FROM sqlite_master WHERE type IN ('trigger', 'view') ORDER BY type, name;"
+diff <("$floor" "$dir/floor.db" "$schema") <(sqlite3 "$dir/reference.db" "$schema") >&2 || {
+    echo "SQLite $version stores another text for a trigger or a view than $(sqlite3 :memory: 'SELECT sqlite_version();')" >&2
     exit 1
 }
 
@@ -87,4 +103,4 @@ for shell in "$floor" sqlite3; do
     }
 done
 
-echo "the store schema loads on SQLite $version, $(wc -l < <("$floor" "$dir/floor.db" "$objects")) objects, every write to its $tables tables compiling, a body's name checked, an object's delete seeking its pointers"
+echo "the store schema loads on SQLite $version, $(wc -l < <("$floor" "$dir/floor.db" "$objects")) objects, every write to its $tables tables compiling, a body's name checked, an object's delete seeking its pointers, its triggers stored as the canonical text writes them and no trusted_schema there"

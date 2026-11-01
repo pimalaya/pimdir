@@ -45,11 +45,13 @@
     "vectors/fixtures/mail-attachments.eml": "d0842b73267213b4c0b9f36ba5351e895ddb55267c17ed6fed41aba231b8cdd2",
     "vectors/fixtures/mail-basic.eml": "19f9499d0a7cbd18b833c168a0d1de9639b2b7edc1f62e5b718548c2e79ceefc",
     "vectors/fixtures/mail-bracketless-id.eml": "50a19945dc3549c0581ab7f00f26d60b01d85d08d0dcdc7b8364914349b404ad",
+    "vectors/fixtures/mail-cut-delimiter.eml": "953fa89f055fd256daa114af72b2bbe9a279e0ce96a6c0a806b9d72f8c8a7ed9",
     "vectors/fixtures/mail-deep-parts.eml": "5231f45929042567dbeda1c50da096cfdd46977b8737a0c8c32e7b4fe5dfd696",
     "vectors/fixtures/mail-encoded.eml": "3f9098cd257c4b2140d7141d5d0627899ee6b96f7941daf45bfd9b4a8f9d3a6f",
     "vectors/fixtures/mail-encrypted.eml": "dc991974c2e09dde94ad1f0a2fb07dbec9f39ebb1d0f5e30c566ee03ee455db8",
     "vectors/fixtures/mail-folded-subject.eml": "3dda0d2391cf1199b82065b6c3f9d830c9ff5ff2fce84285ba046933b0014f74",
     "vectors/fixtures/mail-future-date.eml": "327ce6f180b316e9fd8b30b583071d689b8dc62b46fe9bbd232392d5c3364803",
+    "vectors/fixtures/mail-header-cut.eml": "79fc1716a64534009fb1c0f83f64646da061a1510db7405e832b641ce4a2cbf6",
     "vectors/fixtures/mail-id-comment.eml": "aafe93cd18d2913a09da1582cdfe5259bf1a31057e647622e10acaa2ebf382a3",
     "vectors/fixtures/mail-invitation.eml": "c49c098f2204d9c92c8626f7d3580784e9a254a4809d778a17f2e1e208a8cbb2",
     "vectors/fixtures/mail-malformed-word.eml": "1ce8f806d47992b4ba52488c9b956485657510ca19b4a1f805227c27cc7c1f32",
@@ -68,6 +70,7 @@
     "vectors/fixtures/mail-recent.eml": "2365b456ace61c2a23ff78fe2e314a5a812b0a4512897de8601456d11e2874f7",
     "vectors/fixtures/mail-reply.eml": "23bafeb80859b3767ea125835374c26aa162846d9d72e84da0fcd9cb323cd601",
     "vectors/fixtures/mail-reused-message-id.eml": "b475c6ded5b0825b690d52b1e39882952b6b4dc26a92b4d037e92007655c6d6e",
+    "vectors/fixtures/mail-stray-cr.eml": "3e7ecd0336ebc80195ccb1fe616fdfeac4c310e9f071dd893526632953c94fac",
     "vectors/fixtures/mail-unparseable-date.eml": "8d50e9ab0d3c088e2bc8fe10e2bdc7933778c40741cdd99a83500561f4efb38a",
     "vectors/fixtures/mail-unparseable-id.eml": "0af88b55f4ffc8ebc372c34e8992421b54f752b3b618b7394a814394ddf7b05f",
     "vectors/fixtures/todo-captured.ics": "32ec351eaf756d8d48ce80beec0ab3bc459e9aee737fdfbfd0c28a4c0d6a4399",
@@ -95,7 +98,7 @@
     "vectors/search/chunks.json": "6fc4e98bdf1306f7d5a2635fa2db4c3d96dc8856fbd61df49bc2f67d4d44de3a",
     "vectors/search/queries.json": "972cf01d0e2156ce83142c16a01a199b2384eefd24f96b808513bf185ad1b50b",
     "vectors/search/store.json": "96c8f875c1c550e2ce6e7f8ed18287b1ba9dbb1136be595d530494aa14f47fad",
-    "vectors/summaries.json": "62d542a634df4f68b5de74d5a6018c8f8e7245ab9c7073baba5a04b05b629671",
+    "vectors/summaries.json": "f9e208fa13669b30bb4b3e2dd67f7837a7af0cf2dba3e5a1f6b6828083ad96b4",
     "vectors/sync/01-remote-flag-pulled.json": "5ec9db1c17251c6cb4ad3e47d3c138c23ba182f8b039f6e8429d9d2238ff7976",
     "vectors/sync/02-local-flag-pushed.json": "6e8fc1ba34c6145437fa2cd5011d5c7307f5e37c6e09783e908c29abf5e4ae05",
     "vectors/sync/03-flags-merge-both-sides.json": "e03bbc210be448514e7ba7565803c7061cdeb3ca6591514887532f885a1c77bd",
@@ -125,7 +128,13 @@
     "vectors/sync/115-a-fill-settles-a-prefer-existing-divergence.json": "8ea6fbdb45106506ba00822d51532cd0af52d62d80b5e7bd6ba2a9f66e185285",
     "vectors/sync/116-an-upgrade-settles-a-prefer-local-conflict-keeping-the-server-body.json": "4a8dfebae3078776bfa8643fe643977711f68a14dbff699e43ee9d361c8a15d4",
     "vectors/sync/117-prefer-local-keeps-the-body-it-pushes-over.json": "7d63b316784e64a85aec85529a3fa81f55042a44fa79f0c55380ef1f691c7478",
+    "vectors/sync/118-a-person-settles-an-item-conflict-keeping-its-body-through-the-other-source.json": "4b01e16cb58f5a178b98f3b2cbff3a0b00f932064467b7f33c2e9963acfce018",
+    "vectors/sync/119-a-person-settles-an-item-conflict-taking-the-diverging-body-through-the-other-source.json": "11db198a229f431268cb2fa14c976e77856268e84923fd0c09b91ab2700e188e",
     "vectors/sync/12-local-content-pushed.json": "27cfb2433cafc2a56d38e76707fc8a86f6f47192a069249a35807183b7d76b51",
+    "vectors/sync/120-a-person-settles-an-item-conflict-with-a-merged-body-through-the-other-source.json": "bcb03076786774609c5f359ff78c38718397b28604f7ac67e93a58c53016fc2f",
+    "vectors/sync/121-a-person-settles-an-item-conflict-keeping-its-body-through-the-agreeing-source.json": "9a71cb0dd250445bd7f86f3cf4f9f675e6fd51df99ac85efb75caf246e131e8f",
+    "vectors/sync/122-a-person-settles-an-item-conflict-taking-the-diverging-body-through-the-agreeing-source.json": "cf57d24ef7cb89ec6e8e749fdbae0d33bbc948333d6712b6c218d30b27f0d66a",
+    "vectors/sync/123-a-person-settles-an-item-conflict-with-a-merged-body-through-the-agreeing-source.json": "b8a0121c8052beb1f93a8d12bad7bcf2d33b39c0c3ff6948ede46ad4cb3fc90b",
     "vectors/sync/13-both-edited-manual-conflicts.json": "10ffe0a62dbc2c896d759b0eebfe3fc5fc045ae71cfa76335cda4ef725a2f73b",
     "vectors/sync/14-both-edited-prefer-remote-pulls.json": "4c6d0961b3767c4554259a53e64862a5c73ebbb3ae46025dfcbb574e5a53e924",
     "vectors/sync/15-both-edited-prefer-local-over-an-unread-body-conflicts.json": "27e851a3af1b07598f574df9e85843d353ee9f1d1f7b6e9c3146ebac8e65abd4",
@@ -235,8 +244,8 @@
       "/references": 4
     },
     "vectors/summaries.json": {
-      "/cases": 53
+      "/cases": 56
     }
   },
-  "sync": 117
+  "sync": 123
 }

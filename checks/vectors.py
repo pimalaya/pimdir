@@ -527,8 +527,12 @@ WSP = " \t"
 
 def header_fields(bytes_):
     """The header block's fields as (lowercased name, value bytes), in order:
-    the block ends at the first empty line, a line at CRLF or a bare LF, and a
-    line break before a space or a tab is removed, the whitespace kept."""
+    the block ends at the first empty line, a line ending at CRLF, a bare LF
+    or the end of the message, one CR just before the end being the line
+    break's and any other CR the line's content, and a line break before a
+    space or a tab is removed, the whitespace kept."""
+    if bytes_.endswith(b"\r"):
+        bytes_ += b"\n"
     block = re.split(rb"\r?\n\r?\n", bytes_, maxsplit=1)[0]
     unfolded = re.sub(rb"\r?\n(?=[ \t])", b"", block)
     fields = []
@@ -1029,6 +1033,12 @@ def text_of(parts):
 # order, a multipart before its children, the message's own at depth 0, none
 # deeper than 64 nor after the 10,000th read; and the stand-ins, at most the
 # first 1,000 parts carrying the disposition (STORAGE section 14.3).
+#
+# NOTE: the stdlib parser ends a line at every lone CR, where the annex ends
+# one only at a CR just before the end of the message, a lone CR elsewhere
+# being content. The two agree on every fixture: none holds a lone CR the
+# walk reads but mail-cut-delimiter.eml's last, and mail-stray-cr.eml's sits
+# before header fields the walk does not read, its columns read above.
 WALK_DEPTH, WALK_ENTITIES, STAND_INS = 64, 10_000, 1_000
 
 

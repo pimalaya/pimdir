@@ -422,7 +422,7 @@ A mutation stages a local edit to one collection with no network, through the sa
   - A diverging body not fetched yet leaves `base_object` unknown, never the old body, so an item another source's edit revives reads `Dirty` (§3) rather than in sync.
   - On a conflicted item (§9) it clears the item's conflict the same way.
   - On a pending create it withdraws the create: the binding goes and the item is retained (STORAGE §11).
-- `Edit` stores a new body and repoints the placement, keeping the base. An edit whose object the base holds stages nothing. It MAY restate the sort key.
+- `Edit` stores a new body and repoints the placement, keeping the base. An edit whose object the base holds stages nothing for its source, though on a conflicted item it still settles the item's conflict (below). It MAY restate the sort key.
   - An edit carrying `if_match` (a queued `update` stating the body it replaced, STORAGE §15.3) MUST be refused, staging nothing, when the item holds another body.
   - On a conflicted placement it resolves, the base adopting `conflict_revision` and `conflict_object` together.
   - On a conflicted item it resolves too: `items.conflicted` cleared and its `conflict_object` released.
@@ -430,7 +430,7 @@ A mutation stages a local edit to one collection with no network, through the sa
   - An `Edit` settling a conflict by a rule of the engine's or a connector's (a one-way mode restating the body its authority holds) MUST state `overrule`; a person's resolution and a queued `update` do not.
   - An overruling `Edit` keeps each diverging body it does not adopt, the binding's `conflict_object` then the item's, as a policy's loser is kept (§9): a retained item keyed over the edited placement's handle, reported `Overruled`, before any body the collection's policy keeps in the same write.
   - An overruling `Edit` MUST be refused, staging nothing, when the conflict it settles holds no diverging body, one nobody has read (§9): the upgrade fetches it first (§6). On a placement and an item in no conflict it keeps nothing.
-  - Without `overrule` the settle is a person's choice, and what it discards it loses.
+  - Without `overrule` the settle is a person's choice, and what it discards it loses. On a conflicted item, through any binding of it (the source agreeing with the item or one the item moved away from), the item takes the edit's body whatever it is: its own, the diverging one, or another, a merge of the two among them. No divergence is measured (§9) and nothing is retained or reported. The editing binding's `shared_object` moves to that body, every other binding's stays, and each source whose base holds another body owes it. The write tells this settle from a sync's upsert, which leaves an item's conflict standing (§9), by the engine stating it, as it states an overrule.
 - `Copy` stages a `Created` placement in a target under a provisional handle with the source's origin; `Move` also tombstones the source, whose destination the target's pending create then derives (§3).
   - Both read the target. When a live placement there already holds the identity, they key the create by the identity minted over the provisional handle it derives, minted again over a held key; a tombstoned or retained holder blocks nothing, the create taking the key and reviving it, or, a message that does not agree with it, minted beside it (STORAGE §9's table).
   - Both MUST be refused for a placement holding neither a body nor a based binding.

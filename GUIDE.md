@@ -37,7 +37,7 @@ A **reader** opens the store and lists it:
 
 | Step | What | Where |
 | --- | --- | --- |
-| 1 | SQLite 3.37 or later for the canonical statements, 3.18 for text of your own; `PRAGMA foreign_keys = ON`, `PRAGMA synchronous = FULL` and a busy timeout, a read-only open, no lock; refuse a store another draft wrote; a store you did not create opened with `PRAGMA trusted_schema = OFF` and the defensive flag | STORAGE §4.1, §4.2, §8, §18 |
+| 1 | SQLite 3.37 or later for the canonical statements, 3.18 for text of your own; `PRAGMA foreign_keys = ON`, `PRAGMA synchronous = FULL` and a busy timeout, a read-only open, no lock; refuse a store another draft wrote; a store you did not create opened with `PRAGMA trusted_schema = OFF` and the defensive flag where your SQLite has them, its triggers and views checked against the canonical text where it lacks the pragma | STORAGE §4.1, §4.2, §8, §18 |
 | 2 | Decode the columns as §13 says | STORAGE §13 |
 | 3 | Serve the reads from queries/storage/read/, live rows only, level-aware, snapshot-consistent; a body once its bytes hash to its name, a range once the whole file has, as §4 reads one | STORAGE §7, §14.1 |
 | 4 | Follow the change feed for anything derived from the store | STORAGE §4.5 |
@@ -63,7 +63,7 @@ An **owner** is the one process that mutates the store:
 
 An **engine** (SYNC §12) is an owner that reproduces every case under vectors/sync/, over **connectors** answering SYNC §4's requests. An **indexer** (SEARCH §12) adds, for the canonical shape, SQLite 3.43 with FTS5, migrations/search/ and the indexer's statements of SEARCH §3, or a shape of its own, named in its `index_meta`, answering the same hit sets, and every **query client** on it, refusing an index it does not implement, answers the cases under vectors/search/ alike.
 
-Use the statements verbatim. Each prepares against the canonical schema (checks/schema.sh proves it on every push), and checks/invariants.sh runs them through the scenarios the parts argue from. Text of your own, which an SQLite older than 3.37 needs, is yours to keep equivalent: every name, parameter, result column and effect, STORAGE §7's invariants and the model vectors.
+Use the statements verbatim. Each prepares against the canonical schema (checks/schema.sh proves it on every push), and checks/invariants.sh runs them through the scenarios the parts argue from. Text of your own, which an SQLite older than 3.37 needs, is yours to keep equivalent: every name, parameter, result column and effect, STORAGE §7's invariants and the model vectors. One name may run several statements of yours, in order in one transaction, nothing else writing between them; say you run text of your own when you state your conformance, `storage-draft-08 owner (own statement text)` (STORAGE §4.4, §17).
 
 ## 2. Opening a store
 
@@ -77,9 +77,9 @@ Use the statements verbatim. Each prepares against the canonical schema (checks/
 
 **As a reader:** open pimdir.db read-only (`?mode=ro` in a URI), set `PRAGMA foreign_keys = ON`, `PRAGMA synchronous = FULL` and a busy timeout, run `create_param` (a temporary table, so a read-only open takes it), take no lock.
 
-- Run `load_store_meta` first. When it fails, the store lacks `format_version`: a draft before storage-draft-08 wrote it, so refuse it. When its `format_version` is not your draft's name, refuse it, naming both, and likewise when its `hash_algo` is not `blake3`. Once STORAGE is released, refuse instead a store whose `read_version` is above your version, and read one below your version as that version defines it.
+- Run `load_store_meta` first. When it fails, the store lacks `format_version`: a draft before storage-draft-08 wrote it, so refuse it. Text of your own judging the store may read `store_meta` with `*` and take the columns it knows by name, the one read of `*` STORAGE §4.4 allows. When its `format_version` is not your draft's name, refuse it, naming both, and likewise when its `hash_algo` is not `blake3`. Once STORAGE is released, refuse instead a store whose `read_version` is above your version, and read one below your version as that version defines it.
 - Never write, convert or delete a store you refuse.
-- Open a store you did not create (a copy received, someone else's backup) with `PRAGMA trusted_schema = OFF` and `SQLITE_DBCONFIG_DEFENSIVE` set, and refuse or confirm with the user one whose directory or pimdir.db another user can read or write (STORAGE §18).
+- Open a store you did not create (a copy received, someone else's backup) with `PRAGMA trusted_schema = OFF` and `SQLITE_DBCONFIG_DEFENSIVE` set, each where your SQLite has it (3.31 and 3.26); below 3.31, read `sqlite_master` first and refuse a store holding a trigger or a view whose text 0001_init.sql does not create, and register no function with a side effect on that connection; and refuse or confirm with the user one whose directory or pimdir.db another user can read or write (STORAGE §18).
 - Detect change with `PRAGMA data_version` or the feed (§14), recording the store's `store_id` and `incarnation` with your cursor.
 
 **As a producer:** open read-write, take no owner lock, refuse a store as a reader does (once released, also one whose `produce_version` is above your version), set a busy timeout and `PRAGMA secure_delete = ON`, and perform nothing but the enqueue of §13 under a shared lock on objects.lock. Record the store's `store_id` and `incarnation` with every queue id you follow.
@@ -111,7 +111,7 @@ A name you did not just compute (from a row, a payload, a directory listing, a r
 
 1. Create the shard directory if needed.
 2. Write to a period-prefixed temporary file in that directory, named uniquely to this writer (a process id and a counter), `fsync` it (`fcntl` with `F_FULLFSYNC` on macOS).
-3. Move it onto the final name without replacing a file there: `link` then `unlink` of the temporary, `renameat2` with `RENAME_NOREPLACE` on Linux, `renamex_np` with `RENAME_EXCL` on macOS, `MoveFileExW` without `MOVEFILE_REPLACE_EXISTING` on Windows. Never a plain `rename`, which replaces.
+3. Move it onto the final name without replacing a file there: `link` then `unlink` of the temporary, `renameat2` with `RENAME_NOREPLACE` on Linux, `renamex_np` with `RENAME_EXCL` on macOS, `MoveFileExW` without `MOVEFILE_REPLACE_EXISTING` on Windows. On Android, whose SELinux policy denies an app `link` on its own files, `renameat2` with `RENAME_NOREPLACE`, a raw system call below API 30. Never a plain `rename`, which replaces.
 4. When the move fails because the name exists, delete the temporary and keep the file already there: its bytes are checked whenever it is read. Any other failure (on Windows, a name a deleted file still holds open) fails the write; try again later.
 5. `fsync` the shard directory; Windows has no such flush.
 
@@ -377,7 +377,7 @@ These sizes are safe on a slow network and under every provider's limits; raise 
 | --- | --- |
 | `SetFlags` | replace the flags; status `Dirty` unless `Created`, `Conflict` or `Tombstone` |
 | `Remove` | status `Tombstone`; binding and base kept; on a conflicted binding the base adopts the conflict's revision and body (unknown when not fetched yet) and the conflict clears, on a conflicted item the item's clears, so the remove pushes against what the remote holds; on a pending create the binding is dropped and the item retained |
-| `Edit` | new body stored and pointed at, base kept; nothing when the base holds it; refused, staging nothing, when it carries `if_match` and the item holds another body; resolves a binding's or an item's conflict by adopting its revision and body into the base; with `overrule` (stated by an engine settling by a rule of its own, never by a person), keeps the binding's then the item's diverging body it does not adopt as §12 step 3 keeps a policy's loser, keyed over the edited handle and reported `Overruled`, and is refused, staging nothing, while that body is not fetched; revives a tombstone |
+| `Edit` | new body stored and pointed at, base kept; no push staged when the base holds it; refused, staging nothing, when it carries `if_match` and the item holds another body; resolves a binding's conflict by adopting its revision and body into the base; without `overrule`, settles an item's conflict through any binding, the item taking the edit's body whatever it is, `conflicted` cleared and `conflict_object` released, the editing binding's `shared_object` moved to the body, even when that binding's base already holds it; with `overrule` (stated by an engine settling by a rule of its own, never by a person), keeps the binding's then the item's diverging body it does not adopt as §12 step 3 keeps a policy's loser, keyed over the edited handle and reported `Overruled`, and is refused, staging nothing, while that body is not fetched; revives a tombstone |
 | `Copy`, `Move` | a `Created` placement in the target under a provisional handle with the source's origin; `Move` tombstones the source; a live holder of the identity in the target gives the create the identity minted over the provisional handle it derives, minted again over a held key, and a tombstoned or retained one is revived under the identity, or minted beside when it holds a message that does not agree (STORAGE §9's table); refused for a placement with neither a body nor a based binding |
 | `Add` | a new item at `Full` under a provisional handle, no base; fails, staging nothing, when its body cannot be read; fails on a live holder, revives a retained one or a tombstone still propagating, minting beside one holding a message that does not agree (STORAGE §9's table) |
 
@@ -587,7 +587,7 @@ Tagging goes through the queue as a producer (§13), never through the index.
 - **vectors/objects.json**: for each case, name the body under BLAKE3 and compare digest, name and path, one shard directory deep. Every store implementation, before anything else.
 - **vectors/payloads.json**: validate each payload against payloads/<action>.v<v>.schema.json and compare with `valid`; a producer writes none it refuses, an owner parks every one it refuses.
 - **vectors/summaries.json** with vectors/fixtures/, per kind written:
-  - read each fixture as bytes (they are CRLF, and a text-mode read changes the object name) and check its stated hashes first;
+  - read each fixture as bytes (they are CRLF, but for the lone `\r` three line-end cases hold, and a text-mode read changes the object name) and check its stated hashes first;
   - derive the link id, summary row, address rows and sort key, a message's header read by Annex A.1's parses and a zoned time through the resource's `VTIMEZONE`, else the IANA database, else as floating, and for mail the attachment mark without the body (`meta_attachment`) and the parts its stand-ins name (`attachments`); compare as parsed structures;
   - a case with a `hint` and a `handle` checks the minted key; one with no `uid` checks the `hash:` key, one with no `message_id` the `alt:` key.
 - **vectors/sync/**, every engine:
