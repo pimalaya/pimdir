@@ -11,6 +11,7 @@ vectors/README.md asks for.
 import base64
 import codecs
 import hashlib
+import io
 import json
 import re
 import sqlite3
@@ -19,6 +20,7 @@ import unicodedata
 from calendar import monthrange
 from datetime import date, datetime, timedelta, timezone
 from email import message_from_bytes
+from email.generator import BytesGenerator
 from email.header import decode_header, make_header
 from pathlib import Path
 from urllib.parse import unquote
@@ -1042,26 +1044,56 @@ def text_of(parts):
 WALK_DEPTH, WALK_ENTITIES, STAND_INS = 64, 10_000, 1_000
 
 
+def media_type(part):
+    """The media type the mark reads (Annex A.1): the Content-Type value up
+    to its first ;, trimmed and lowercased, text/plain when the field is
+    absent, under a multipart/digest too, or when the value holds not
+    exactly one /. The stdlib's own reading defaults a digest's children to
+    message/rfc822, so it is not used."""
+    value = part.get("Content-Type")
+    stated = str(value).split(";")[0].strip().lower() if value is not None else ""
+    return stated if stated.count("/") == 1 else "text/plain"
+
+
+def makes_the_mark(part, protocol):
+    """Whether one entity makes the attachment mark (Annex A.1): disposed as
+    an attachment, any type but inline, or stating no disposition, neither
+    multipart nor text and named by no Content-ID; never an RFC 1847
+    protocol part."""
+    if protocol:
+        return False
+    value = part.get("Content-Disposition")
+    disposition = str(value).split(";")[0].strip().lower() if value is not None else ""
+    if disposition:
+        return disposition != "inline"
+    kind = media_type(part).split("/")[0]
+    return kind not in ("multipart", "text") and part.get("Content-ID") is None
+
+
 def marked(message):
-    """The parts the walk reads that carry Content-Disposition: attachment,
-    by IMAP section (RFC 3501 section 6.4.5): the message itself 1 when it is
-    no multipart, a multipart's children numbered under it, a message/rfc822
-    part one entity, never opened."""
+    """The parts the walk reads that make the attachment mark, by IMAP
+    section (RFC 3501 section 6.4.5): the message itself 1 when it is no
+    multipart, a multipart's children numbered under it, a message/rfc822
+    part one entity, never opened. A multipart message's own entity, every
+    child of a multipart/encrypted and every child but the first of a
+    multipart/signed never make it."""
     read, found = 0, []
 
-    def visit(part, section, depth):
+    def visit(part, section, depth, protocol):
         nonlocal read
         if depth > WALK_DEPTH or read >= WALK_ENTITIES:
             return
         read += 1
         multipart = part.get_content_maintype() == "multipart"
-        if part.get_content_disposition() == "attachment" and not (multipart and depth == 0):
+        if makes_the_mark(part, protocol) and not (multipart and depth == 0):
             found.append((part, section or "1"))
         if multipart:
+            subtype = media_type(part)
             for at, child in enumerate(part.get_payload(), 1):
-                visit(child, f"{section}.{at}" if section else str(at), depth + 1)
+                child_protocol = subtype == "multipart/encrypted" or (subtype == "multipart/signed" and at > 1)
+                visit(child, f"{section}.{at}" if section else str(at), depth + 1, child_protocol)
 
-    visit(message, "", 0)
+    visit(message, "", 0, False)
     return found
 
 
@@ -1076,7 +1108,19 @@ def attachments(message):
         if "=?" in name:
             name = str(make_header(decode_header(name)))
         media_type = part.get_content_type() if part.get("Content-Type") is not None else None
-        size = None if part.get_content_maintype() == "multipart" else len(part.get_payload(decode=True))
+        if part.get_content_maintype() == "multipart":
+            size = None
+        elif part.get_content_type() == "message/rfc822":
+            # NOTE: the stdlib parses a message/rfc822 part into a message of
+            # its own and keeps no octets. Such a body takes no transfer
+            # encoding (RFC 2046 section 5.2.1), and serializing the parsed
+            # message unfolded with CRLF gives back the octets of every
+            # fixture holding one.
+            out = io.BytesIO()
+            BytesGenerator(out, mangle_from_=False, maxheaderlen=0).flatten(part.get_payload()[0], linesep="\r\n")
+            size = len(out.getvalue())
+        else:
+            size = len(part.get_payload(decode=True))
         return {"part": section, "name": name, "media_type": media_type, "size": size}
 
     return [stated(part, section) for part, section in marked(message)[:STAND_INS]]

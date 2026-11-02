@@ -1276,6 +1276,63 @@
       ]
     },
     {
+      "label": "mail, parts sent bare",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-bare-parts.eml",
+      "note": "the attachment mark of a part stating no Content-Disposition (Annex A.1): the application/pdf 2 and the message/rfc822 3 are sent bare as files and stood for, the message 45 octets as written, never opened; the text/csv 4 is text and the image/png 1.1.2 is named by a Content-ID, so neither is. The application/pgp-signature 1.2 is the second child of a multipart/signed, an RFC 1847 protocol part, and stands for nothing though disposed as an attachment; the text/plain 5 is disposed X-Unknown, a type RFC 2183 section 2.8 has a reader take as attachment",
+      "body": { "len": 1135, "blake3": "qtm7d2acz7gjni7fmynozf2gjoxpuauvi3lcgcmg6pvtycbmdjla" },
+      "link_id": "bare-parts-1@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": "bare-parts-1@example.org", "in_reply_to": [], "subject": "Your order", "sender": "orders@shop.example.org", "sender_name": "Shop", "date": "2026-10-07T08:15:00Z", "size": 1135, "attachment": 1, "invitation": null },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "orders@shop.example.org", "name": "Shop" },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sort_key": "2026-10-07T08:15:00Z",
+      "meta_attachment": 1,
+      "attachments": [
+        { "part": "2", "name": "order.pdf", "media_type": "application/pdf", "size": 9 },
+        { "part": "3", "name": "", "media_type": "message/rfc822", "size": 45 },
+        { "part": "5", "name": "", "media_type": "text/plain", "size": 4 }
+      ]
+    },
+    {
+      "label": "mail, a message that is a file",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-bare-file.eml",
+      "note": "the message's own entity is an application/pdf stating no Content-Disposition: sent bare as a file, it makes the mark and is stood for as section 1 (RFC 3501 section 6.4.5), while the mark read without the body, from a top-level Content-Type that is no multipart/mixed, is 0 (Annex A.1)",
+      "body": { "len": 259, "blake3": "ljgtl4gotgxbnr3l4526lcbd24kdjffjodztbuvopbdfaz75io5q" },
+      "link_id": "bare-file-1@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": "bare-file-1@example.org", "in_reply_to": [], "subject": "Scan", "sender": "scanner@example.org", "sender_name": null, "date": "2026-10-08T16:00:00Z", "size": 259, "attachment": 1, "invitation": null },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "scanner@example.org", "name": null },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sort_key": "2026-10-08T16:00:00Z",
+      "meta_attachment": 0,
+      "attachments": [
+        { "part": "1", "name": "scan.pdf", "media_type": "application/pdf", "size": 9 }
+      ]
+    },
+    {
+      "label": "mail, an encrypted message",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-encrypted.eml",
+      "note": "both children of a multipart/encrypted are RFC 1847 protocol parts and never make the attachment mark: the application/pgp-encrypted control part, stating no Content-Disposition and no Content-ID, would otherwise be sent bare, and the encrypted payload is disposed inline anyway (Annex A.1)",
+      "body": { "len": 547, "blake3": "p6xsafv7ql5m7y7onocsebful36db6eag5btkvrthm6ijylwdasq" },
+      "link_id": "sealed-1@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": "sealed-1@example.org", "in_reply_to": [], "subject": "Roadmap draft", "sender": "carol@example.org", "sender_name": "Carol", "date": "2026-08-03T09:00:00Z", "size": 547, "attachment": 0, "invitation": null },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "carol@example.org", "name": "Carol" },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sort_key": "2026-08-03T09:00:00Z",
+      "meta_attachment": 0,
+      "attachments": []
+    },
+    {
       "label": "mail, an invitation",
       "kind": "message/rfc822",
       "fixture": "fixtures/mail-invitation.eml",

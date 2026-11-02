@@ -43,6 +43,8 @@
     "vectors/fixtures/journal-basic.ics": "595c7cca7c0947662bc1bf2b112614761e60a7beb2fa8f6658046fcab8f91ef8",
     "vectors/fixtures/mail-attachment.eml": "55fba7adfba28fa6a9c2d0dfe301c93d0b547ee8287c6e35263211fc9254da36",
     "vectors/fixtures/mail-attachments.eml": "d0842b73267213b4c0b9f36ba5351e895ddb55267c17ed6fed41aba231b8cdd2",
+    "vectors/fixtures/mail-bare-file.eml": "62b91709d66c9a64497a17af9fc3dbe6962decca9d660c109802edacb22bbd52",
+    "vectors/fixtures/mail-bare-parts.eml": "92e9c0ca6376f3050e56e201147e15ae1a6a91e5cf80eaef30dfc5780d7d32f1",
     "vectors/fixtures/mail-basic.eml": "19f9499d0a7cbd18b833c168a0d1de9639b2b7edc1f62e5b718548c2e79ceefc",
     "vectors/fixtures/mail-bracketless-id.eml": "50a19945dc3549c0581ab7f00f26d60b01d85d08d0dcdc7b8364914349b404ad",
     "vectors/fixtures/mail-cut-delimiter.eml": "953fa89f055fd256daa114af72b2bbe9a279e0ce96a6c0a806b9d72f8c8a7ed9",
@@ -98,7 +100,7 @@
     "vectors/search/chunks.json": "6fc4e98bdf1306f7d5a2635fa2db4c3d96dc8856fbd61df49bc2f67d4d44de3a",
     "vectors/search/queries.json": "972cf01d0e2156ce83142c16a01a199b2384eefd24f96b808513bf185ad1b50b",
     "vectors/search/store.json": "96c8f875c1c550e2ce6e7f8ed18287b1ba9dbb1136be595d530494aa14f47fad",
-    "vectors/summaries.json": "f9e208fa13669b30bb4b3e2dd67f7837a7af0cf2dba3e5a1f6b6828083ad96b4",
+    "vectors/summaries.json": "afba976df0cc770f80fd0059c966bbe2adc35963109f1f28d0635daee616ecd7",
     "vectors/sync/01-remote-flag-pulled.json": "6a4b3024acbf0ff2cdd7e4f439cebd7dd74f52a35833d9c99b9e52f4432c2f44",
     "vectors/sync/02-local-flag-pushed.json": "363a2fcd621d00471dd840266603c3245d5cbf09f7d388ac7bfb71f6bbb63cbb",
     "vectors/sync/03-flags-merge-both-sides.json": "9be2de8b17c5fa33018c3dcdb3dab46673c60096f6e06eb8d6851fcbfbe292d1",
@@ -251,7 +253,7 @@
       "/references": 4
     },
     "vectors/summaries.json": {
-      "/cases": 56
+      "/cases": 59
     }
   },
   "sync": 130
