@@ -436,7 +436,7 @@ Every other source then projects the change as its own `Dirty` or `Tombstone` an
 
 1. Map the action onto its capabilities (STORAGE Annex B's table):
    - a `move` of a message is `mail.message.move`;
-   - a `set-flags` is one capability per flag it changes against the item's current set; an `add` or `copy` also one per flag it carries;
+   - a `set-flags` is one capability per flag it changes against the item's current set; an `add` or `copy` also one per flag it carries, the flag's case ignored; `$Important` and `$Junk` are `mail.flags.important` and `mail.flags.junk` for a source with a row for them, else `mail.flags.keywords`;
    - a calendar write also reads its resources, the new one of an `add` or `update` and the current one of an `update` or `remove`, for `calendar.scheduling` (attendees not all marked `SCHEDULE-AGENT=CLIENT` or `NONE`), `calendar.occurrence.update` and `calendar.online-meeting`;
    - an `add` carrying `supersedes` also maps onto the `remove` of the item it names;
    - a VTODO resource landing in a collection, by an `add` or `update` writing one or a `move` or `copy` of one, also reads `calendar.component.vtodo` there: a stated `none` refuses, no row passes.
@@ -445,7 +445,7 @@ Every other source then projects the change as its own `Dirty` or `Tombstone` an
    - A refusal reports capability, source and `detail`; show the `detail` of a `partial` one.
    - A scheduled resource refused for want of `calendar.scheduling` can still be written once the user accepts that nobody is told: write `SCHEDULE-AGENT=NONE` on every `ORGANIZER` and `ATTENDEE` lacking `CLIENT` or `NONE`, which the drain reads as you do, the resource no longer being scheduled.
 4. For an intent (Annex B.2):
-   - The candidates are `list_capability_sources(account, collection, capability)` at the anchor collection: the item's own for an intent addressing one, the `parent` for a `collection-create` naming one, else any collection of the account and kind the new collection takes.
+   - The candidates are `list_capability_sources(account, collection, capability)` at the anchor collection: the item's own for an intent addressing one, the `parent` for a `collection-create` naming one, else any collection of the account and kind the new collection takes, and the collection itself for a `collection-rename` or `collection-delete`, which is queued on it.
    - One candidate is the performer. Several take the user's choice if it is still listed: the latest `set-performer` pending in the queue for the account and capability before the one `load_performer` returns. Otherwise refuse with the candidates and let the user pick, once or through a `set-performer` action.
    - Write the performer into the payload's `source`.
    - A `submit` naming `copy` also needs `mail.submit.copy` from that performer; a `calendar-reply` or `calendar-cancel` naming `recurrence_id` also needs `calendar.reply.occurrence` or `calendar.cancel.occurrence`. Against an account whose sources declare nothing, leave `recurrence_id` out and refuse the occurrence.
@@ -461,7 +461,7 @@ Every other source then projects the change as its own `Dirty` or `Tombstone` an
 **Declare**, as the owner, for every source it runs, before draining an action for it and again when its configuration changes:
 
 1. `BEGIN`; `delete_capabilities(source)`.
-2. One source-wide `set_capability`, under the account the source syncs for, for every capability of Annex B's base set you know of the kinds the source syncs, `none` included (`calendar.component.vtodo` only where you know the answer) and given a `detail` where the user deserves the reason.
+2. One source-wide `set_capability`, under the account the source syncs for, for every capability of Annex B's base set you know of the kinds the source syncs, `none` included (`calendar.component.vtodo`, `mail.flags.important` and `mail.flags.junk` only where you know the answer) and given a `detail` where the user deserves the reason.
 3. One more naming a collection wherever the remote's access rights differ there (a read-only calendar, a reserved label), and on each collection the source holds for an implementation reaching only those (a provider's own reply verb, `none` source-wide).
 4. `COMMIT`.
 

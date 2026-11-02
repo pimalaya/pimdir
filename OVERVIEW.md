@@ -190,7 +190,7 @@ A process that does not own the store still originates changes: a client filing 
 
 The owner applies actions in append order, each in one transaction with the deletion of its row, so application is exactly once.
 
-Seven actions change the store: add, set flags, remove, move, copy, update, and choosing a verb's performer (below). Four intents ask a source to act outside it: sending a message, answering an invitation, cancelling one, creating a collection. The standard ships a schema for each payload, and one it refuses (a field missing, of another type, or unknown to its version) is parked whole, never half applied. The name is an open string, so an application carries actions of its own. An owner that does not recognise a kind, or lacks the means to perform it, skips the row and leaves it for the process that can.
+Seven actions change the store: add, set flags, remove, move, copy, update, and choosing a verb's performer (below). Six intents ask a source to act outside it: sending a message, answering an invitation, cancelling one, creating, renaming and deleting a collection. The standard ships a schema for each payload, and one it refuses (a field missing, of another type, or unknown to its version) is parked whole, never half applied. The name is an open string, so an application carries actions of its own. An owner that does not recognise a kind, or lacks the means to perform it, skips the row and leaves it for the process that can.
 
 A reader may overlay pending actions on what it shows, so a queued change appears before it is applied. A producer keeps the number of the row it appended and asks later whether it still waits, failed, or was applied, and for an addition which item it became, without matching the body against the store.
 

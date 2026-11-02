@@ -1,7 +1,7 @@
 ---
 cairn: change
 id: mail-write-names-from-himalaya
-status: draft
+status: landed
 created: 2026-11-02
 ---
 

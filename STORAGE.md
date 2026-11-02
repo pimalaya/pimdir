@@ -910,7 +910,7 @@ An owner holding two for one source exposes them as two sources, or picks one by
 
 **Intents.** An intent (Annex B.2) is performed by exactly one source, which its payload names in `source`.
 
-Its candidates are the sources of the account of the collection it anchors the intent on whose row there (the collection's own, or else the source-wide one) has some support (`list_capability_sources`), whether or not the source has synced yet. An intent addressing an item is anchored on the item's collection; one creating a collection on the parent it names, else on a collection of the account and kind the new one takes.
+Its candidates are the sources of the account of the collection it anchors the intent on whose row there (the collection's own, or else the source-wide one) has some support (`list_capability_sources`), whether or not the source has synced yet. An intent addressing an item is anchored on the item's collection; one creating a collection on the parent it names, else on a collection of the account and kind the new one takes; one renaming or deleting a collection on that collection.
 
 No candidate is a refusal; one is the performer. With two or more, the performer is the user's choice while it is still a candidate: the latest `set-performer` still queued for the account and capability, read over the store as §15.4 reads a producer's own actions, else the one `load_performer` returns.
 
@@ -1133,7 +1133,7 @@ A capability's name is lowercase words of letters, digits and hyphens joined by 
 
 A name is never given another meaning: a new behaviour takes a new name. A name beginning with `x-` is an application's own, and this part defines none.
 
-The table names every capability this part defines. Each forms the **base set** (§15.6), read as unsupported where a declared source has no row for it, but `calendar.component.vtodo`, which is read only where a row states it, as is a name added after `storage-v1.0.0`, which the table marks with the version adding it.
+The table names every capability this part defines. Each forms the **base set** (§15.6), read as unsupported where a declared source has no row for it, but `calendar.component.vtodo`, `mail.flags.important` and `mail.flags.junk`, each read only where a row states it, as is a name added after `storage-v1.0.0`, which the table marks with the version adding it.
 
 | Capability | Kind | Needed by |
 | --- | --- | --- |
@@ -1145,7 +1145,9 @@ The table names every capability this part defines. Each forms the **base set** 
 | `mail.flags.flagged` | `message/rfc822` | a flag change on `\Flagged` |
 | `mail.flags.answered` | `message/rfc822` | a flag change on `\Answered` |
 | `mail.flags.draft` | `message/rfc822` | a flag change on `\Draft` |
-| `mail.flags.keywords` | `message/rfc822` | a flag change on any other flag |
+| `mail.flags.important` | `message/rfc822` | a flag change on `$Important` (RFC 8457); read only where a row states it (B.1) |
+| `mail.flags.junk` | `message/rfc822` | a flag change on `$Junk` (RFC 9051 §2.3.2); read only where a row states it (B.1) |
+| `mail.flags.keywords` | `message/rfc822` | a flag change on any other flag, and on `$Important` or `$Junk` for a source stating no row for theirs (B.1) |
 | `mail.submit` | `message/rfc822` | a `submit` (B.2) |
 | `mail.submit.copy` | `message/rfc822` | a `submit` naming `copy`, beside `mail.submit` |
 | `contacts.card.add` | `text/vcard` | an `add` of a card |
@@ -1167,12 +1169,16 @@ The table names every capability this part defines. Each forms the **base set** 
 | `calendar.cancel` | `text/calendar` | a `calendar-cancel` (B.2) |
 | `calendar.cancel.occurrence` | `text/calendar` | a `calendar-cancel` naming `recurrence_id`, beside `calendar.cancel` |
 | `collection.create` | the anchor's | a `collection-create` (B.2) |
+| `collection.rename` | the anchor's | a `collection-rename` (B.2) |
+| `collection.delete` | the anchor's | a `collection-delete` (B.2) |
 
 ### B.1 State
 
 What a source pushes when the owner applies a §15.3 action, read by the owner's backstop and the producer's gate (§15.6) against the sources concerned.
 
 A **flag change** is a flag a `set-flags` adds or removes against the item's current set, or one an `add` or `copy` carries into the collection, whose set starts empty there: a `set-flags` restating a flag needs nothing for it, a draft added with `\Draft` needs `mail.flags.draft`.
+
+A flag names its capability compared without regard to ASCII case, as IMAP compares flags and keywords (RFC 9051 §2.3.2), so `$important` is `$Important`. A change on `$Important` or `$Junk` needs `mail.flags.important` or `mail.flags.junk` from a source stating a row for it, `none` included, and `mail.flags.keywords` from one stating none: a source carrying these two as fields of its own while taking no arbitrary keyword (Gmail's `IMPORTANT` and `SPAM` labels, Graph's `importance`) supports them without `mail.flags.keywords`, and a declaration written before them reads as it did.
 
 A resource is **scheduled** when one of its components names an `ATTENDEE` and some `ORGANIZER` or `ATTENDEE` of that component lacks `SCHEDULE-AGENT=CLIENT` or `SCHEDULE-AGENT=NONE` (RFC 6638 §7.1). A source supporting `calendar.scheduling` notifies the attendees of what it pushes (RFC 6638 §3.2).
 
@@ -1194,6 +1200,8 @@ Performed by the source the payload names (§15.6), outside the store, then ackn
 | `calendar-reply` | `{ "v": 1, "source": id, ( "seq": n \| "link_id": key ), "partstat": "ACCEPTED" \| "TENTATIVE" \| "DECLINED", "comment": text?, "recurrence_id": text? }` | the account's reply sent to the item's organizer, `comment` with it (RFC 5546 §3.2.3), for the one occurrence `recurrence_id` names when present; the new `PARTSTAT` arrives with the next sync |
 | `calendar-cancel` | `{ "v": 1, "source": id, ( "seq": n \| "link_id": key ), "comment": text?, "recurrence_id": text? }` | an event the account organises cancelled, the attendees notified with `comment` (RFC 5546 §3.2.5), only the occurrence `recurrence_id` names when present; the removal, or the series without that occurrence, arrives with the next sync |
 | `collection-create` | `{ "v": 1, "source": id, "name": label, "parent": collection? }` | a collection named `name` created on the source's server, under `parent` when present, of the anchor's kind; it arrives with the next sync |
+| `collection-rename` | `{ "v": 1, "source": id, "name": label }` | the collection the action is queued on renamed `name` on the source's server, its parent and its items kept; the new name arrives with the next sync |
+| `collection-delete` | `{ "v": 1, "source": id }` | the collection the action is queued on deleted on the source's server, with the items it holds; the deletion arrives with the next sync |
 
 A `submit` naming `copy` needs `mail.submit.copy` beside `mail.submit`, from the same performer.
 
@@ -1220,3 +1228,13 @@ It is read beside the intent, as `copy` is beside `submit`: a payload naming it 
 The performer acknowledges the intent once the server holds the collection; one already holding a collection of that name under that parent is a success, the intent being at least once (§15.5).
 
 The collection reaches the store with the next sync of the performer, under the id its owner gives it (§9.2) and with `name` as its label, which is how the producer recognises it. A source whose implementation cannot create collections declares `none`, its `detail` saying so.
+
+`collection.rename` and `collection.delete` address the collection the action is queued on, the anchor, which the payload does not restate, so a rename of the collection in the store (§14) leaves the row addressing it. It is a collection of the account that the performer syncs. A source keeping a collection fixed (an IMAP `INBOX`, a provider's system folder or label, a default calendar) declares `none` on that collection alone.
+
+A rename changes the collection's label alone. `name` is one level of the hierarchy, as for `collection-create`, and the collection keeps its parent, a move under another parent being no rename. A performer finding a sibling already named `name` parks the row, and one finding the collection already so named acknowledges it, the intent being at least once (§15.5).
+
+The new name reaches the store with the next sync of the performer, as a rename another client made on that server does. Where the owner derives the collection's id from its name (an IMAP mailbox's), the performer SHOULD follow the rename in the store with `rename_collection` (§14) when it acknowledges the intent, so the items keep their bindings rather than leaving under the old id and arriving under the new one.
+
+A delete removes the collection and the items it holds, and never another collection. A performer finding a collection under it on the server parks the row naming them, deleting nothing: a server deleting the children with it (Graph) would remove what nobody named, and one refusing (an IMAP server, a JMAP `mailboxHasChild`) would leave the request half done. The person deletes the children first. The performer acknowledges the intent once the server no longer holds the collection, one already gone being a success.
+
+The deletion reaches the store with the next sync of the performer, as a deletion another client made on that server does. The store removes no item for it and queues no `remove`: whether another source mirroring the collection loses it too is SYNC.md §5's rule on deleting a collection, which only an engine's configuration enables.

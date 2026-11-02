@@ -42,6 +42,12 @@
     { "action": "calendar-cancel", "valid": true, "payload": { "v": 1, "source": "caldav", "seq": 9 } },
     { "action": "calendar-cancel", "valid": false, "payload": { "v": 1, "seq": 9 }, "note": "no performer" },
     { "action": "collection-create", "valid": true, "payload": { "v": 1, "source": "imap", "name": "Projects", "parent": "INBOX" } },
-    { "action": "collection-create", "valid": false, "payload": { "v": 1, "source": "imap", "name": "" }, "note": "an empty name" }
+    { "action": "collection-create", "valid": false, "payload": { "v": 1, "source": "imap", "name": "" }, "note": "an empty name" },
+    { "action": "collection-rename", "valid": true, "payload": { "v": 1, "source": "imap", "name": "Archive 2026" } },
+    { "action": "collection-rename", "valid": false, "payload": { "v": 1, "source": "imap", "name": "Archive", "collection": "Projects" }, "note": "the collection renamed is the one the action is queued on, never restated" },
+    { "action": "collection-rename", "valid": false, "payload": { "v": 1, "source": "imap" }, "note": "no new name" },
+    { "action": "collection-delete", "valid": true, "payload": { "v": 1, "source": "graph" } },
+    { "action": "collection-delete", "valid": false, "payload": { "v": 1 }, "note": "no performer" },
+    { "action": "collection-delete", "valid": false, "payload": { "v": 1, "source": "graph", "recursive": true }, "note": "a delete never takes the collections under it" }
   ]
 }

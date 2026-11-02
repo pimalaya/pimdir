@@ -16,7 +16,7 @@
         "required": ["action", "valid", "payload"],
         "additionalProperties": false,
         "properties": {
-          "action": { "enum": ["add", "set-flags", "remove", "move", "copy", "update", "set-performer", "submit", "calendar-reply", "calendar-cancel", "collection-create"] },
+          "action": { "enum": ["add", "set-flags", "remove", "move", "copy", "update", "set-performer", "submit", "calendar-reply", "calendar-cancel", "collection-create", "collection-rename", "collection-delete"] },
           "valid": { "type": "boolean" },
           "payload": { "type": "object" },
           "note": { "type": "string" }

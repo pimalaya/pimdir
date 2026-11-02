@@ -5,6 +5,8 @@
     "payloads/calendar-cancel.v1.schema.json": "baa43b7ad692d6517ce0bfdfbd230e6ac86f060594b8cf327c0dc29355f689c9",
     "payloads/calendar-reply.v1.schema.json": "cfa88045bc8e2b96ad17baa2dbec39e78b6dd58ab29e74857db0170f2e0d13c4",
     "payloads/collection-create.v1.schema.json": "7a51f04cd4fa1e46b6aac02827ed4b97e446c3fb1a33eacb1d93e8262a5d8759",
+    "payloads/collection-delete.v1.schema.json": "a4993ee051e5f66203451d02c172e3203a40187aacc6e93dbed160b15eb7ef99",
+    "payloads/collection-rename.v1.schema.json": "9c19b9da111bb20513f1fe71de6bd554b7c048eb026bcb33460ca413089cf51e",
     "payloads/copy.v1.schema.json": "5724d1de7b0d9a76538ad54ec4f40022353b068e7f2cb63563d9d2e2662b248c",
     "payloads/move.v1.schema.json": "8ce122eb35c4248cfa239caea8d1604669b79191777bd68231dd0560861a4ec9",
     "payloads/remove.v1.schema.json": "ca8b5c8598f2735ca92f6c7d50d1977f59be57717671414b2f08b951effb0202",
@@ -88,10 +90,10 @@
     "vectors/fixtures/todo-someday.ics": "cbad49748cacfebee3a43b6b4ad87d09d662edfaebcda29a652eaaff04fcc1ca",
     "vectors/fixtures/todo-waiting.ics": "72a107067723eacc1511a2989385588bd046eb5edd071b47694d101976ca52a4",
     "vectors/objects.json": "b901f40b9612c0e3244a72cc8aaaae1ae10e506c5e48a108d8dc2638ff6efcdd",
-    "vectors/payloads.json": "a2279add35d8a11bf528565860a68b3b8cc552f83a0382723eee71139022f293",
+    "vectors/payloads.json": "a3a3c10b0ce19e976441edc226b2980355754199747cf17fa8be89df1ad96f17",
     "vectors/schema/manifest.schema.json": "96f560e9d11124166a2539390a36a1275438ce74bd95e8d8e307415252d6e678",
     "vectors/schema/objects.schema.json": "27d5271230b92359ea242565def4f1fab4bfde465bca7ce263c961c8cf94398b",
-    "vectors/schema/payloads.schema.json": "4cc11b793686a8555650c5fa710f66a770e2adc79687787786e63dc0bd1f6a8a",
+    "vectors/schema/payloads.schema.json": "6c09799093379a01472a0e2dde8925a5e9eab05474ec432bfd8a7e2cd1f045a2",
     "vectors/schema/search-chunks.schema.json": "0d98341ffd6455327e176688d4affe359b04dc0317d2a3bb920d4fcc6a0d653c",
     "vectors/schema/search-queries.schema.json": "53e3c285601ceb22bacc5fbbdd48fadf96d5241fe3992c541410d4b4f2cff9df",
     "vectors/schema/search-store.schema.json": "9dbc82edf388f855ab33f29a73935c715cb028743625034c230d608ba0eb4447",
@@ -238,7 +240,7 @@
       "/objects": 13
     },
     "vectors/payloads.json": {
-      "/cases": 41
+      "/cases": 47
     },
     "vectors/search/chunks.json": {
       "/cases": 10

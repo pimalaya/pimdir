@@ -286,7 +286,7 @@ words="
     $(: platform calls, protocol words and libraries)
     fcntl flock fsync lockf lstat mmap openat renameat2 unlink synchronous
     getetag multiget multipart inline charset bm25 unicode61 base64 zoneinfo
-    client
+    client importance
     $(: the parts of a time a document spells, and example values)
     hhmm mm a b c i n x z abc alice caf réunion work band delta bounded primary
     expected cbf29ce484222325 shift
