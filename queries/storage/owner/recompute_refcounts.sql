@@ -1,9 +1,8 @@
--- Recount from the six pointers that pin an object, in one grouped pass, so
--- O(items+bindings+queue). The correlated-subquery form is O(objects x items),
--- since the OR across object_hash and conflict_object is a disjunction no index
--- serves: on twenty thousand items it took 80 seconds against this one's 121 ms.
--- The left join is what settles an object no pointer names any more, counting
--- zero rather than leaving it unvisited (§5).
+-- Recount from the six pointers that pin an object in one grouped pass, linear
+-- in the pointers (§7): a correlated subquery per object would be quadratic,
+-- the OR across object_hash and conflict_object being a disjunction no index
+-- serves. The left join is what settles an object no pointer names any more,
+-- counting zero rather than leaving it unvisited (§5).
 UPDATE objects SET refcount = counted.n
 FROM (
   SELECT o.hash AS hash, count(r.hash) AS n FROM objects o

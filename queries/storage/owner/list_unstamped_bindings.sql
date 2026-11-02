@@ -3,9 +3,15 @@
 -- whose item's `date` falls in the round's scope, or is unknown and the
 -- round lists its whole scope. A band round lists by a date filter, which
 -- never returns an undated member, so its absence there proves nothing. A
--- pending create is no member of the remote and is never listed here; a
--- placement out of scope is not either, absence meaning deleted only in
--- scope. Read after the last page's own stamps, in its write.
+-- round whose listing a date filter narrowed (:narrowed 1, SYNC.md §4) proves
+-- the absence only of what its filter could list: a member dated before the
+-- round opened. An undated member, or one dated at or after that instant, is
+-- absent there only when the connector enumerated the collection's handles
+-- unfiltered (:enumerated 1, the enumeration in the `handles` slot) and that
+-- enumeration lacks its handle. A pending create is no member of the remote
+-- and is never listed here; a placement out of scope is not either, absence
+-- meaning deleted only in scope. Read after the last page's own stamps, in
+-- its write.
 SELECT b.handle, b.link_id
 FROM bindings b
 JOIN sources r ON r.collection = b.collection AND r.source = b.source
@@ -18,4 +24,9 @@ WHERE b.collection = :collection AND b.source = :source
   AND CASE WHEN s.date IS NULL THEN r.round_band = 0
            ELSE (r.round_since IS NULL OR s.date >= r.round_since)
                 AND (r.round_until IS NULL OR s.date < r.round_until) END
+  AND (:narrowed = 0
+       OR s.date < r.round_started_at
+       OR (:enumerated = 1
+           AND NOT EXISTS (SELECT 1 FROM temp.param p
+                           WHERE p.slot = 'handles' AND p.value = b.handle)))
 ORDER BY b.handle;

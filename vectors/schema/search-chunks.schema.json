@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/pimalaya/pimdir/vectors/schema/search-chunks.schema.json",
+  "$comment": "SPDX-License-Identifier: MIT OR Apache-2.0",
   "title": "The chunk cases (SEARCH.md section 6), vectors/search/chunks.json",
   "type": "object",
   "required": ["v", "cases"],
@@ -13,11 +14,35 @@
       "items": {
         "type": "object",
         "required": ["label", "fields", "chunks"],
+        "additionalProperties": false,
         "properties": {
           "label": { "type": "string" },
-          "fields": { "type": "object" },
-          "chunks": { "type": "array", "items": { "type": "object", "required": ["ord", "field", "start", "end"], "additionalProperties": false, "properties": { "ord": { "type": "integer" }, "field": { "enum": ["body", "note"] }, "start": { "type": "integer" }, "end": { "type": "integer" } } } }
+          "fields": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": { "body": { "$ref": "#/$defs/text" }, "note": { "$ref": "#/$defs/text" } }
+          },
+          "chunks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["ord", "field", "start", "end"],
+              "additionalProperties": false,
+              "properties": { "ord": { "type": "integer", "minimum": 0 }, "field": { "enum": ["body", "note"] }, "start": { "type": "integer", "minimum": 0 }, "end": { "type": "integer", "minimum": 0 } }
+            }
+          }
         }
+      }
+    }
+  },
+  "$defs": {
+    "text": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "type": "string" },
+          { "type": "object", "required": ["repeat", "times"], "additionalProperties": false, "properties": { "repeat": { "type": "string" }, "times": { "type": "integer", "minimum": 0 } } }
+        ]
       }
     }
   }

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pimalaya/pimdir/payloads/collection-create.v1.schema.json",
+  "$comment": "SPDX-License-Identifier: MIT OR Apache-2.0",
+  "title": "The payload of a collection-create intent at v 1 (STORAGE.md Annex B.2)",
+  "type": "object",
+  "required": ["v", "source", "name"],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "const": 1 },
+    "source": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "parent": { "type": "string", "minLength": 1 }
+  }
+}

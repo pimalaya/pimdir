@@ -6,9 +6,16 @@ SELECT i.collection, i.seq, i.link_id,
                            WHERE f.collection = i.collection AND f.link_id = i.link_id), '') END AS flags,
        i.object_hash, i.sort_key, i.level,
        s.name, s.media_type, s.size, s.part
-FROM items i JOIN file_summary s ON s.collection = i.collection AND s.link_id = i.link_id
-WHERE i.collection IN (SELECT value FROM temp.param WHERE slot = 'collections') AND i.deleted = 0
-  AND s.name LIKE :pattern ESCAPE '\'
-  AND (:after_key IS NULL
-       OR (i.sort_key, i.seq, i.collection) > (:after_key, :after_seq, :after_collection))
+FROM (SELECT DISTINCT value AS id FROM temp.param WHERE slot = 'collections') p
+JOIN items i ON i.rowid IN (
+  SELECT x.rowid FROM items x
+  WHERE x.collection = p.id AND x.deleted = 0
+    AND (x.sort_key, x.seq) >= (coalesce(:after_key, ''), coalesce(:after_seq, 0))
+    AND (x.sort_key, x.seq, x.collection)
+        > (coalesce(:after_key, ''), coalesce(:after_seq, 0), coalesce(:after_collection, ''))
+    AND EXISTS (SELECT 1 FROM file_summary n
+                WHERE n.collection = x.collection AND n.link_id = x.link_id
+                  AND n.name LIKE :pattern ESCAPE '\')
+  ORDER BY x.sort_key, x.seq LIMIT :limit)
+JOIN file_summary s ON s.collection = i.collection AND s.link_id = i.link_id
 ORDER BY i.sort_key, i.seq, i.collection LIMIT :limit;

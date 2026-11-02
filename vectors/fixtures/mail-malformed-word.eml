@@ -1,0 +1,6 @@
+Subject: =?UTF-8?B?not*base64?= =?UTF-8?Q?bad=ZZ?= =?x-unknown?Q?abc?= =?UTF-8?B?b2s=?=
+From: Alice Example <alice@example.org>
+To: bob@example.org
+Date: Sat, 01 Aug 2026 10:00:00 +0000
+
+Two malformed words and one in an unknown charset stay as they are written.

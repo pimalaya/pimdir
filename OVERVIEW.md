@@ -32,17 +32,23 @@ A store is a directory holding one SQLite database and one directory of bodies. 
 
 A body is never edited. An edit writes a new body and the item points at it; the old body stays until nothing points at it and a collector removes it.
 
+One algorithm names every body, and a name is checked before a path is built from it, so a name never reaches outside the directory of bodies. A file once written is never replaced, and its bytes are checked against its name whenever they are read whole, and by a write finding its name taken, which sets aside a file that fails rather than keep it in place of the bytes in hand. A body that fails is treated as missing: the store's owner sets the file aside rather than delete it, since it may be the only copy left, and fetches the body again from a source that holds it.
+
 That makes a body a fact: what each source holds can be fetched again from the remotes and the bodies rebuilt from them. The database also holds what no remote does: local edits not yet pushed, the queued actions, the links a person made between items, and the collections no source syncs. So it is never thrown away to be rebuilt without the user agreeing to lose them.
 
 The search index is a third file beside the two, derived from both, and dropping it loses nothing.
 
-A store carries the version of its schema. A newer implementation upgrades an older store in place and keeps everything in it; an older one refuses a newer store rather than guess at it, and no implementation rebuilds a store it cannot read.
+A store carries the version of its schema. While the standard is a draft, a store also names the exact draft that wrote it, and only a program of that draft opens it: any other refuses it rather than convert it, and a released program refuses every draft's store. Once released, a newer implementation upgrades an older store in place and keeps everything in it; an older owner refuses a newer store, while an older reader, or a program queueing actions, opens one whose changes it may ignore, which the store records apart for each. No implementation rebuilds a store it cannot read.
 
-The standard ships one way of writing the database, its canonical schema and statements, for a recent SQLite. An implementation bound to an older SQLite, a phone's own, may write the same model its own way. The store names which way it was written, a program refuses one it does not speak, and the shared test vectors hold both to the same outcomes.
+The database has one format on disk, which loads on old SQLite releases, a phone's own included. The standard ships its statements for a recent SQLite; an implementation bound to an older one writes its own, keeping their names, inputs, outputs and effects, and the shared test vectors hold both to the same outcomes.
+
+A store has an identity drawn when it is created, and counts how many times it was restored from a copy. Whatever follows the store (an index, a window on a mailbox, a program waiting on an action it queued) records both and starts over when either changed, since a restored copy may hand out again what the store already gave. A store is backed up through SQLite's own copy, then its bodies; it is never mirrored by a file-synchronisation tool, and several devices share a person's data through their sources, each with a store of its own.
+
+A store is private to its user: its files are readable by that user alone, and any program that can write the database is trusted as the owner is, the queue being an agreement between trusted programs rather than a lock against others. It holds no credential, and a name a server or a message hands it (an attachment's file name, a folder's) never becomes a path unchecked.
 
 Sync and search need the store: a sync needs, per source, what that source last agreed to, else a delete on one side and an add on the other look the same, and a search needs one meaning of a match, which only the store's summaries, addresses and bodies give. The bodies are what is optional: a store holding bases and summaries alone still syncs flags and lists items.
 
-Normative: STORAGE §1, §3, §4.1, §4.2, §5, §6.
+Normative: STORAGE §1, §3, §4.1, §4.2, §4.5, §5, §6, §8, §18.
 
 ## 2. The model
 
@@ -64,7 +70,7 @@ A **reference** links one item to another of any kind: a message to the contact 
 
 A reference is recorded once, by a person or by an owner's rule (a message to its sender's card, its event, its attachments; a task to its project and the message it was made from), never recomputed and never required. An item with no identity of its own (a message without a Message-ID, a card without a UID) takes none, since another may share its key.
 
-An attachment is a file standing for a part of its message. It is recorded when the message's body enters the store, holds no bytes of its own until it is saved to a folder, and goes once no reference names it.
+An attachment is a file standing for a part of its message. It is recorded when the message's body enters the store, holds no bytes of its own until it is saved to a folder, and goes once no reference names it. The walk of a message's parts stops at a fixed depth and count, and a message stands for a fixed number of attachments at most, so a reader finding that many reads the rest from the body.
 
 Nothing enters the store unnamed: a source lists each member with its identity and summary, so a listed message is an item from the moment its page lands, its body fetched later or never.
 
@@ -76,15 +82,17 @@ Normative: STORAGE §2, §4.3, §14.2, Annex A.
 
 The **handle** is the source's id for an item in a collection: an IMAP UID, a DAV resource name. It belongs to one source and can be renumbered, so it never identifies an item across collections or sources.
 
-The **link id** is the item's key in its collection, taken from what the content declares about itself: a Message-ID, a vCard or iCalendar UID. It is the same in every collection and on every source, which is how the store knows that a message in the inbox and the same message in the archive are one item.
+The **link id** is the item's key in its collection, taken from what the content declares about itself: a Message-ID, a vCard or iCalendar UID. It is the same in every collection and on every source, which is how the store knows that a message in the inbox and the same message in the archive are one item. Every program reads a message's header by the same rules, its identity, date and subject included, so two programs give one message one key.
 
 Content that declares nothing gets a derived key, which asserts no identity: two such items are never assumed equal. A collection holding one identity twice (a double delivery, or a server that let two resources share a UID) keeps both: the second copy gets a minted key and the store judges neither.
 
+When a key arrives that the collection already holds, in whatever state, one decision says what it means: the source's own pending copy is that copy delivered, another source's live copy is the same item, a deleted or trashed one comes back, and a second copy from the same source, or another message reusing the identity, gets a minted key beside it. A minted key already taken, by anything, is minted again rather than taken over.
+
 The **hash** is the content. It is the deduplication key and the body's file name.
 
-The **seq** is the public id: a small integer, the same wherever the item is filed, that a client shows and accepts in place of the link id. It is assigned once and never reused, so a stale id never addresses a different item.
+The **seq** is the public id: a small integer, the same wherever the item is filed among items of its kind, that a client shows and accepts in place of the link id. A message and an event declaring one identity are two items with two ids. It is assigned once and never reused, so a stale id never addresses a different item.
 
-Normative: STORAGE §9.
+Normative: STORAGE §9, Annex A.1.
 
 ## 4. Roles
 
@@ -92,17 +100,19 @@ An **owner** is the one process that mutates the store. There is at most one at 
 
 A **reader** opens the database read-only and sees a consistent snapshot while the owner works. Any number may run at once. A reader shows live items only, lists from the summaries, and treats a body that is not there yet as not fetched rather than as an error.
 
+A list is read a page at a time, each page resuming after the last row shown, and a page costs the same however deep it lies. A list over several collections reads each one in its own order and merges them, so neither the other collections of the store nor its other kinds slow it down.
+
 A **producer** wants a change but does not own the store. It appends an action to the queue and the owner applies it later.
 
 An **indexer** is a reader that writes the search index, and a **query client** reads the index with the store attached.
 
-Normative: STORAGE §8, §14.1, §15; SEARCH §3.
+Normative: STORAGE §8, §9.3, §14.1, §15; SEARCH §3.
 
 ## 5. Sync
 
 The store is an offline replica of each source. For every item and every source, the binding remembers the base: the flags and the body that source last agreed to. A sync compares three things per item (the local state, the base, and what the source reports now) and derives what each side owes the other.
 
-Flags merge element-wise and never conflict: a flag added on one side and untouched on the other is added. Bodies matter only for mutable kinds, contacts and calendar objects. A body changed locally is pushed, one changed remotely is pulled, and both changed is a conflict, settled by the source's policy or left for a person with the diverging body kept beside the item.
+Flags merge element-wise and never conflict: a flag added on one side and untouched on the other is added. Bodies matter only for mutable kinds, contacts and calendar objects. A body changed locally is pushed, one changed remotely is pulled, and both changed is a conflict, settled by the source's policy or left for a person with the diverging body kept beside the item. A policy preferring the local body keeps the server's in the trash before it pushes over it, and never pushes over a server body nobody has read: it waits for that body to be fetched first.
 
 A push is confirmed before local state moves: an accepted push moves the base, a rejected one leaves the change pending for the next run. The source's checkpoint is recorded only after the last push of a run, so an interrupted run resumes rather than forgets.
 
@@ -114,7 +124,8 @@ A mail collection may be synced under a **scope**: a window on each message's ow
 
 - it is inside the window;
 - the round has listed everything;
-- the deletion would not remove most of a large mailbox at once (such a round is held open until the user confirms).
+- the listing could have named it: a listing narrowed by arrival date proves nothing of a message without a usable date, or dated ahead of its arrival, unless the source also enumerates every identifier in the folder;
+- the deletion would not remove most of a large mailbox at once, nor follow from a listing that named nothing at all (such a round is held open until the user confirms).
 
 What a source says it removed is removed whatever its date, and what the user changed is pushed whatever its date. A sync deletes on a server only what the user deleted or another server removed.
 
@@ -128,6 +139,8 @@ An engine speaks five verbs:
 - **Mutate** stages a local edit offline through the same write a sync uses.
 - **Rekey** rebuilds a collection whose source renumbered every handle, carrying each item's state across by link id.
 
+The engine reads and writes the store through the store's own interface, a load and a batch of operations applied in order in one transaction, which the storage part defines so it stands alone for an owner that never syncs. The store records which version of the sync part wrote its sync state, and an engine refuses state another draft of it wrote.
+
 A connector knows nothing of the store and answers three requests:
 
 - list what the collection holds, page by page, each member with its identity and summary;
@@ -136,7 +149,7 @@ A connector knows nothing of the store and answers three requests:
 
 What it does over IMAP, JMAP or DAV is its own business.
 
-Normative: SYNC §3 to §8.
+Normative: SYNC §3 to §8 and §10; STORAGE §14.
 
 ## 6. Several sources
 
@@ -149,7 +162,7 @@ For that to be honest, a binding keeps two agreement points:
 
 Measuring both from one point would make a source's own unpushed edit look like another source's disagreement. The second point is also the common ancestor a merge reads, so the store keeps that body for as long as a binding names it. A pull that brings no body agrees to nothing and leaves it in place.
 
-A divergence between sources is settled by the collection's policy: keep the incoming body, keep the existing one, or flag the item with the diverging body kept and every source's push held until a person decides. A policy that picks one body keeps the other in the trash rather than losing it. A divergence with a body nobody has read yet is always left for a person.
+A divergence between sources is settled by the collection's policy: keep the incoming body, keep the existing one, or flag the item with the diverging body kept and every source's push held until a person decides. A policy that picks one body keeps the other in the trash rather than losing it, as often as one source loses. A divergence with a body nobody has read yet, the incoming one or the item's own, is held as a person's conflict until that body is fetched, and only then settled by the policy. A person's decision names the diverging bodies it was made over, so an edit made without the conflict in view, or decided over an earlier one, waits for a person rather than settle it.
 
 A divergence between a source and its own remote belongs to that binding alone. The two are recorded separately and neither implies the other.
 
@@ -159,7 +172,7 @@ Normative: SYNC §9; STORAGE §10.
 
 ## 7. Retention
 
-Removal from every source is not removal from the store. When an item's last binding goes, the row and its body are kept, hidden from sync and from the live reads, and listed in a trash view. Only an explicit purge deletes the row; the body then falls to the collector. An identity that comes back revives the retained row, keeping its public id and body, so a restore costs no network.
+Removal from every source is not removal from the store. When an item's last binding goes, the row and its body are kept, hidden from sync and from the live reads, and listed in a trash view. Only an explicit purge deletes the row; the body then falls to the collector. A purge deletes the row, not every trace of it: erasing an item, on the user's request, also collects its body, clears it from the search index and leaves nothing of it in the free space of the database files. An identity that comes back revives the retained row, keeping its public id and, for a message, its body, so a restore costs no network. A contact, an event or a file revived without its body comes back to be fetched, its old body kept apart in the trash, since its server may hold another version now. A message revives only when it is the same message, its subject, date, sender and size agreeing; another message reusing the identifier is filed beside it.
 
 Mail older than a sync's window is not removed either. It stays stored and readable until the owner, on the user's request, collects what lies below a date, which frees the space and tells no server anything. Widening the window later lists it again.
 
@@ -173,27 +186,27 @@ Normative: STORAGE §11.
 
 ## 8. The queue
 
-A process that does not own the store still originates changes: a client filing a message, a submission daemon, a search client tagging a hit. It appends an action to the queue: a kind, a versioned JSON payload addressing items by public id, and the body the action needs, written to the blob directory first so it is pinned.
+A process that does not own the store still originates changes: a client filing a message, a submission daemon, a search client tagging a hit. It appends an action to the queue: its name, a versioned JSON payload addressing items by public id, and the body the action needs, written to the blob directory first so it is pinned.
 
 The owner applies actions in append order, each in one transaction with the deletion of its row, so application is exactly once.
 
-Seven kinds are defined: add, set flags, remove, move, copy, update, and choosing a verb's performer (below). The kind is an open string, so an application carries intents of its own, a mail submission being the worked example. An owner that does not recognise a kind, or lacks the means to perform it, skips the row and leaves it for the process that can.
+Seven actions change the store: add, set flags, remove, move, copy, update, and choosing a verb's performer (below). Four intents ask a source to act outside it: sending a message, answering an invitation, cancelling one, creating a collection. The standard ships a schema for each payload, and one it refuses (a field missing, of another type, or unknown to its version) is parked whole, never half applied. The name is an open string, so an application carries actions of its own. An owner that does not recognise a kind, or lacks the means to perform it, skips the row and leaves it for the process that can.
 
 A reader may overlay pending actions on what it shows, so a queued change appears before it is applied. A producer keeps the number of the row it appended and asks later whether it still waits, failed, or was applied, and for an addition which item it became, without matching the body against the store.
 
 An addition may supersede another item, a task filed into another list. The owner applies it with the removal of the other in one step, and no server is told of that removal until the addition has reached its own, so a creation a server refuses never costs the original.
 
-Sources do not all push the same things: one server moves messages and another cannot, one calendar sends invitation replies and another does not, one holds tasks and another refuses them. The owner declares what each source supports, from a vocabulary the standard fixes. A producer reads it before appending, so the user learns of a gap when acting rather than from a failed sync.
+Sources do not all push the same things: one server moves messages and another cannot, one calendar sends invitation replies and another does not, one holds tasks and another refuses them. The owner declares what each source supports, from a vocabulary the standard fixes, and parks an action a source cannot carry out. A producer is advised to read the same declaration before appending, so the user learns of a gap when acting rather than from a parked action; the owner's check is the one that holds.
 
 A verb such as sending a message, replying to an invitation or creating a folder on the server is performed by one source. When an account has several that could, the user chooses which.
 
-Normative: STORAGE §15.
+Normative: STORAGE §15, Annex B.
 
 ## 9. The change feed
 
 Every item and collection carries a stamp drawn from one counter that only increases, taken when the row last changed in a way a reader can see, and no two rows share one. A consumer that derives anything from the store (the search index, a window listing a mailbox) remembers the last stamp drawn when it last looked and asks for what moved above it.
 
-A deleted row cannot carry a stamp, so purged items and collected bodies are counted separately, and a consumer reconciles its keys only when that count moved.
+A deleted row cannot carry a stamp, so purged items, collected bodies and renamed collections are counted separately, and a consumer reconciles its keys only when that count moved.
 
 Normative: STORAGE §4.5.
 
@@ -208,27 +221,34 @@ A summary holds what a list row shows and sorts by; the index answers what the s
 
 Text is folded (case and accents) before any full-text engine sees it, so engines that tokenise alike find the same words.
 
-Long texts are cut into chunks along their paragraphs as they are extracted; snippets are drawn from the chunks, and an embedding index can reuse them. Occurrences are expanded again when the time zone database they were resolved through changes version, since a zoned time moves with it.
+Long texts are cut into chunks along their paragraphs as they are extracted; snippets are drawn from the chunks, and an embedding index can reuse them. Occurrences are expanded again when the time zone database they were resolved through changes version, since a zoned time moves with it, and when the zone floating times are read in changes, which the index remembers. A time a clock change repeats or skips is read at the offset before the change, as the store's sort key reads it.
 
-An owner keeping an index is expected to refresh it after each write it commits, so a list reading its rows from the store and its filters from the index sees them one write apart at most, and an agenda lists a window's occurrences in time order straight from the index. A refresh may stop between batches and resume where it stopped. The index remembers apart how far its last complete refresh reached, so a collection renamed while a refresh was cut short is still reconciled by the next one. An index an earlier draft built is told by its schema and rebuilt, which loses nothing.
+Hostile content costs a bounded amount, the same for every implementation: a message's parts are walked to a fixed depth and count, as the store walks them (§2), a calendar item writes a fixed number of occurrences, and a recurrence rule is followed for a fixed number of steps. An item cut short says from when its occurrences are missing, and an answer reaching past that says so.
 
-A query is a list of terms, free text or field and value, joined by and, or and not, under a formal grammar. A query the grammar does not accept, an unknown field included, is refused whole rather than guessed at. The refusal gives the position at fault, what was expected there and the fields that exist, so a person or an agent can correct it.
+An owner keeping an index is expected to refresh it after each write it commits, so a list reading its rows from the store and its filters from the index sees them one write apart at most, and an agenda lists a window's occurrences in time order straight from the index. A refresh may stop between batches and resume where it stopped. A renamed collection counts among the store's removals, so one renamed while a refresh was cut short is still reconciled by the next. A body the indexer could not read is tried again on every refresh until it reads. A message that leaves the store leaves nothing of its own in the index: its thread is rebuilt as if it had never been there, and its id stays only where a remaining message names it as its parent.
+
+An index names the version of the search part it follows and the way it is written. An indexer rebuilds an earlier version of its own kind, which loses nothing, and leaves alone an index of another kind or a later version, as a query client refuses one it does not understand. One built from another store or another copy of it is rebuilt.
+
+A query is a list of terms, free text or field and value, joined by and, or and not, under a formal grammar. A query the grammar does not accept, an unknown field included, is refused whole rather than guessed at, and so is one longer, deeper or holding more terms than fixed limits. Text is matched as the words it holds, in order, so a character a full-text engine reads as an operator is only a separator, whatever engine the index uses. The refusal gives the position at fault, what was expected there and the fields that exist, so a person or an agent can correct it.
 
 Structured terms compile to seeks on the store, text terms to matches on the index, and the answer is their intersection in the store's own order. A hit is one item per account with every placement it has. The answer states its coverage:
 
 - how many items in scope have no body to search;
+- how many calendar items in scope had their occurrences cut short before the end of the date range;
 - whether the store holds every item of the date range, from the sources' coverage (§5);
 - whether the date range left the horizon;
 - how far the index lags the store.
 
-An index may be written another way too, on an older full-text engine or none, as long as every query finds the same items; only the order by relevance is its own.
+An index may be written another way too, on an older full-text engine or none, as long as every query finds the same items, but for words only an HTML part holds, which no two implementations need reduce alike; only the order by relevance is its own. An answer can be read a page at a time, by walking the store's order and testing each item against the index, or from the best matches down.
 
 Normative: SEARCH.
 
 ## 11. What binds an implementation
 
-The three parts bind: STORAGE by the profile an implementation meets (reader, producer or owner), SYNC and SEARCH in full when offered. The vectors under vectors/ bind every implementation; the canonical schema under migrations/ and the statements under queries/ bind one written the canonical way, and one written its own way keeps their meaning and their effects.
+The three parts bind by profile: the store's reader, producer and owner, the sync part's engine and connector, the search part's indexer and query client, each part's conformance section saying what each owes and how an implementation states the ones it meets. The vectors under vectors/, the schema under migrations/, the store's one format on disk, and the schemas of the queue's payloads bind every implementation; the statements under queries/ bind by their names, inputs and outputs, and one written its own way keeps their meaning and their effects.
 
-Most implementations are readers or producers; the owner, the engine and the index are what io-pimdir, the reference implementation, is for. The vectors exist because the values that matter most fail silently: two implementations naming a body differently never error, they only stop sharing bodies. [GUIDE.md](./GUIDE.md) §1 lists what each profile owes and in what order to build.
+Most implementations are readers or producers; the owner, the engine and the index are what io-pimdir, the reference implementation, is for. The vectors exist because the values that matter most fail silently: two implementations naming a body differently never error, they only stop sharing bodies. [GUIDE.md](./GUIDE.md) §1 orders the build.
 
-A canonical statement binds by its name, its parameters and the columns it answers; its text is a reference an implementation may replace with its own. Each part has a version of its own, and an implementation states which version of each it conforms to. The store's major version is its schema version, so a store written under one major is read by every implementation of that major speaking its way of writing it.
+A canonical statement binds by its name, its parameters and the columns it answers; its text is a reference an implementation may replace with its own. Each part has a version of its own, and an implementation states which version of each it conforms to. The store's major version is its schema version, so a store written under one major is opened by every owner of that major, and by older readers and producers as far as the levels it records allow.
+
+Normative: STORAGE §16, §17; SYNC §12; SEARCH §12.

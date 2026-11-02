@@ -1,0 +1,8 @@
+From: Alice Example <alice@example.org>
+To: bob@example.org
+Date: Sat, 01 Aug 2026 10:00:00 +0000
+
+Subject: After a stray CR
+Message-ID: <stray-cr@example.org>
+
+The header goes on past its line holding a CR.

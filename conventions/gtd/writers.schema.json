@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/pimalaya/pimdir/conventions/gtd/writers.schema.json",
+  "$comment": "SPDX-License-Identifier: MIT OR Apache-2.0",
   "title": "The task writer cases (conventions/gtd.md), conventions/gtd/writers.json",
   "type": "object",
   "required": ["v", "now", "cases"],

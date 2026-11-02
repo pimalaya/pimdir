@@ -4,14 +4,15 @@
 -- which is document order when the writer walks the parts in it. One row per
 -- file: the placement holding no body wins, it being the one standing for the
 -- part (`min()` picks the row the bare columns are read from), and
--- `object_hash` is any placement's body, so a file saved to a folder reads
--- as held.
+-- `object_hash` is the body of any placement in the account's file
+-- collections, so a file saved to a folder reads as held, and a file of
+-- another account under the same key never does (§9.2).
 SELECT link_id, collection, seq, name, media_type, size, part, object_hash
 FROM (
   SELECT r.to_link_id AS link_id, i.collection, i.seq, s.name, s.media_type, s.size, s.part,
          (SELECT h.object_hash FROM items h JOIN collections hc ON hc.id = h.collection
           WHERE h.link_id = r.to_link_id AND h.deleted = 0 AND h.object_hash IS NOT NULL
-            AND hc.kind = 'application/octet-stream'
+            AND hc.kind = 'application/octet-stream' AND hc.account IS :account
           LIMIT 1) AS object_hash,
          min(i.object_hash IS NOT NULL)
   FROM item_reference r

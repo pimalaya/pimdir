@@ -1,0 +1,54 @@
+Message-ID: <bare-parts-1@example.org>
+Subject: Your order
+From: Shop <orders@shop.example.org>
+To: bob@example.org
+Date: Wed, 07 Oct 2026 08:15:00 +0000
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="m"
+
+--m
+Content-Type: multipart/signed; protocol="application/pgp-signature"; micalg=pgp-sha256; boundary="s"
+
+--s
+Content-Type: multipart/related; boundary="r"
+
+--r
+Content-Type: text/html; charset=utf-8
+
+<p>Your order.</p><img src="cid:logo@shop.example.org">
+--r
+Content-Type: image/png
+Content-ID: <logo@shop.example.org>
+Content-Transfer-Encoding: base64
+
+iVBORw0KGgo=
+--r--
+--s
+Content-Type: application/pgp-signature; name="signature.asc"
+Content-Disposition: attachment; filename="signature.asc"
+
+-----BEGIN PGP SIGNATURE-----
+-----END PGP SIGNATURE-----
+--s--
+--m
+Content-Type: application/pdf; name="order.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQK
+--m
+Content-Type: message/rfc822
+
+Subject: Note
+From: alice@example.org
+
+Hi.
+--m
+Content-Type: text/csv; name="lines.csv"
+
+a,b
+--m
+Content-Type: text/plain
+Content-Disposition: X-Unknown
+
+kept
+--m--

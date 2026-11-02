@@ -1,9 +1,8 @@
--- The task rows holding a body, store-wide, live or not, for a backfill
--- that re-derives task_summary columns from the bodies (§6): a keyset page
--- on the key (collection, link_id), a NULL :after_collection the first
--- page.
+-- The task rows holding a body, store-wide, live or not, for the
+-- re-derivation of a later Annex A revision (§6): a keyset page on the key
+-- (collection, link_id), on list_held_mail's terms.
 SELECT i.collection, i.link_id, i.seq, i.object_hash
 FROM task_summary t JOIN items i ON i.collection = t.collection AND i.link_id = t.link_id
 WHERE i.object_hash IS NOT NULL
-  AND (:after_collection IS NULL OR (t.collection, t.link_id) > (:after_collection, :after_link_id))
+  AND (t.collection, t.link_id) > (coalesce(:after_collection, ''), coalesce(:after_link_id, ''))
 ORDER BY t.collection, t.link_id LIMIT :limit;

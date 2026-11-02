@@ -1,0 +1,16 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//pimalaya//pimdir vectors//EN
+BEGIN:VEVENT
+UID:event-people@example.org
+DTSTAMP:20261001T000000Z
+SUMMARY:Plan\, review\; Q3
+LOCATION:Room 4\nSecond floor
+DTSTART;TZID=Europe/Paris:20261015T140000
+DURATION:PT1H
+RDATE;TZID=Europe/Paris:20261022T140000
+ORGANIZER;CN="Erin Example":mailto:Erin@Example.COM
+ATTENDEE;CN=Frank;ROLE=REQ-PARTICIPANT:mailto:frank@example.com
+ATTENDEE;PARTSTAT=ACCEPTED:mailto:Gina@Example.org
+END:VEVENT
+END:VCALENDAR

@@ -1,36 +1,74 @@
 -- pimdir store schema, version 1. Section references are to STORAGE.md.
 --
--- Applied by a migration runner (§6) against an empty database, inside a
--- transaction; the runner sets `PRAGMA user_version = 1` on success. Pure DDL,
--- so every implementation of the canonical shape (§4.1) applies the identical
--- bytes. Needs SQLite >= 3.37 for STRICT tables and DROP COLUMN, and no JSON
--- function. While STORAGE.md is a draft this file is edited in place; once
--- version 1 is released it never changes, and a change to the schema is a
--- migration to the next version (§6).
+-- Applied by a migration runner (§6) to a fresh database, inside a
+-- transaction; the runner sets `PRAGMA user_version = 1` on success. Loads on
+-- SQLite >= 3.18 (§4.1): a column's type is held by a CHECK on typeof() rather
+-- than by STRICT, and nothing here calls a JSON function. While STORAGE.md is
+-- a draft this file is edited in place, store_meta.format_version naming the
+-- draft a store was written under (§4.2); once version 1 is released it never
+-- changes, and a change to the schema is a migration to the next version (§6).
+
+-- Pages freed by a delete go back to the filesystem when the owner asks
+-- (§4.1). A database takes the mode only while it holds no table, so it is
+-- set first.
+PRAGMA auto_vacuum = INCREMENTAL;
 
 -- Store-level metadata: exactly one row.
 CREATE TABLE store_meta (
-    id          INTEGER PRIMARY KEY CHECK (id = 1),
-    format      TEXT    NOT NULL DEFAULT 'pimdir',
-    version     INTEGER NOT NULL,           -- tracks user_version (§4.2)
-    hash_algo   TEXT    NOT NULL,           -- 'blake3' (default) or 'sha256-128'
-    created_at  TEXT    NOT NULL,           -- RFC 3339, Z (§13)
+    id              INTEGER PRIMARY KEY CHECK (id = 1),
+    format          TEXT    NOT NULL DEFAULT 'pimdir' CHECK (typeof(format) = 'text'),
+    -- The version of STORAGE.md whose schema the store holds (§4.2): the
+    -- draft's own name while it is a draft, storage-vN once released. A
+    -- program opens a draft's store only under that exact draft.
+    format_version  TEXT    NOT NULL CHECK (typeof(format_version) = 'text'),
+    version         INTEGER NOT NULL CHECK (typeof(version) = 'integer'),  -- tracks user_version (§4.2)
+    -- The lowest schema version a reader, and a producer, must know to open
+    -- the store (§4.2), raised by a migration changing what they read or write
+    -- (§6).
+    read_version    INTEGER NOT NULL CHECK (typeof(read_version) = 'integer'),
+    produce_version INTEGER NOT NULL CHECK (typeof(produce_version) = 'integer'),
+    -- Which store this is and which copy of it (§4.5, §8): 32 lowercase hex
+    -- digits drawn at creation and never changed, and 1 at creation, raised by
+    -- every restore, so a consumer never takes a restored copy for the store
+    -- it followed.
+    store_id        TEXT    NOT NULL CHECK (typeof(store_id) = 'text')
+                    CHECK (length(store_id) = 32 AND store_id NOT GLOB '*[^0-9a-f]*'),
+    incarnation     INTEGER NOT NULL CHECK (typeof(incarnation) = 'integer') CHECK (incarnation >= 1),
+    -- The content hash naming every body (§5): BLAKE3 alone, a closed
+    -- vocabulary (§13), so another algorithm is a value a migration adds,
+    -- raising read_version (§6), and never a store a program reads as corrupt.
+    hash_algo       TEXT    NOT NULL CHECK (typeof(hash_algo) = 'text') CHECK (hash_algo IN ('blake3')),
+    created_at      TEXT    NOT NULL CHECK (typeof(created_at) = 'text'),  -- RFC 3339, Z (§13)
     -- The Annex A revision the summaries were derived under (§6): an owner at
-    -- a later one re-derives what changed, then records it, never lowering it.
-    derivation  INTEGER NOT NULL DEFAULT 1,
+    -- a later one re-derives what changed, then records it; one at an earlier
+    -- one writing summaries records its own, so the next later owner
+    -- re-derives them.
+    derivation      INTEGER NOT NULL CHECK (typeof(derivation) = 'integer'),
+    -- The version of SYNC.md whose engine wrote the sync state (§14): NULL
+    -- until an engine writes, then its own, the draft's name while SYNC.md is
+    -- a draft and sync-vN once released. An engine refuses a version it does
+    -- not implement (SYNC.md §10).
+    sync_version    TEXT    CHECK (typeof(sync_version) IN ('text', 'null')),
     -- Hands out the next item `seq`; only ever increases, so a public id is
     -- never reused store-wide (§9.1).
-    next_seq    INTEGER NOT NULL DEFAULT 1,
+    next_seq        INTEGER NOT NULL DEFAULT 1 CHECK (typeof(next_seq) = 'integer'),
     -- The next change stamp (§4.5), drawn by the triggers below; a consumer
     -- records next_change - 1, the last stamp drawn.
-    next_change INTEGER NOT NULL DEFAULT 1,
-    -- Rows that left without a stamp (§4.5): purged items and collected
-    -- objects, counted by the delete triggers below.
-    purges      INTEGER NOT NULL DEFAULT 0,
-    -- The statements the store is written in (§4.1): `pimdir` for the canonical
-    -- text, an implementation's own name for a shape of its own.
-    shape       TEXT    NOT NULL DEFAULT 'pimdir'
-) STRICT;
+    next_change     INTEGER NOT NULL DEFAULT 1 CHECK (typeof(next_change) = 'integer'),
+    -- Rows that left without a stamp and renamed collections (§4.5): purged
+    -- items and collected objects, counted by the delete triggers below, and
+    -- every rename, counted by collections_restamp_items.
+    purges          INTEGER NOT NULL DEFAULT 0 CHECK (typeof(purges) = 'integer')
+);
+
+-- The store's id never changes and its incarnation never goes down (§8): a
+-- consumer comparing the two then never takes one store, or an older copy,
+-- for another.
+CREATE TRIGGER store_meta_identity BEFORE UPDATE OF store_id, incarnation ON store_meta
+WHEN NEW.store_id IS NOT OLD.store_id OR NEW.incarnation < OLD.incarnation
+BEGIN
+    SELECT RAISE(ABORT, 'store identity is fixed');
+END;
 
 -- Collections: mailboxes, address books, calendars. Hierarchy is by `parent`,
 -- never by nesting rows.
@@ -40,17 +78,17 @@ CREATE TABLE store_meta (
 -- itself (`work/INBOX`, `home/INBOX`) and records the grouping in this column
 -- rather than leaving readers to parse it back out.
 CREATE TABLE collections (
-    id          TEXT PRIMARY KEY,          -- stable id (base32 uuid or backend id), unique store-wide
-    account     TEXT,                      -- owning account, NULL in a single-account store
+    id          TEXT PRIMARY KEY CHECK (typeof(id) = 'text'),  -- stable id (base32 uuid or backend id), unique store-wide
+    account     TEXT CHECK (typeof(account) IN ('text', 'null')),  -- owning account, NULL in a single-account store
     -- The media type every item shares, a closed set (§13), '' until declared.
-    kind        TEXT NOT NULL CHECK (kind IN ('', 'message/rfc822', 'text/vcard', 'text/calendar',
+    kind        TEXT NOT NULL CHECK (typeof(kind) = 'text') CHECK (kind IN ('', 'message/rfc822', 'text/vcard', 'text/calendar',
                 'application/octet-stream')),
-    name        TEXT NOT NULL,             -- logical name (INBOX, Contacts)
-    parent      TEXT REFERENCES collections(id) ON UPDATE CASCADE ON DELETE SET NULL,
-    color       TEXT,                      -- optional presentation
-    description TEXT,
-    sort_order  INTEGER,
-    conflict    TEXT NOT NULL DEFAULT 'manual'
+    name        TEXT NOT NULL CHECK (typeof(name) = 'text'),  -- logical name (INBOX, Contacts)
+    parent      TEXT CHECK (typeof(parent) IN ('text', 'null')) REFERENCES collections(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    color       TEXT CHECK (typeof(color) IN ('text', 'null')),  -- optional presentation
+    description TEXT CHECK (typeof(description) IN ('text', 'null')),
+    sort_order  INTEGER CHECK (typeof(sort_order) IN ('integer', 'null')),
+    conflict    TEXT NOT NULL DEFAULT 'manual' CHECK (typeof(conflict) = 'text')
                 CHECK (conflict IN ('manual', 'prefer-incoming', 'prefer-existing')),
     -- What the collection is for (§14), as its source says, NULL when it says
     -- nothing, or as its owner made it for `attachments`: a mail role is the
@@ -59,13 +97,13 @@ CREATE TABLE collections (
     -- book a source writes to when none is named, and `attachments` the file
     -- collection holding an account's stand-ins (§14.3). An open vocabulary,
     -- checked by no constraint: a reader reads a role it does not know as none.
-    role        TEXT,
+    role        TEXT CHECK (typeof(role) IN ('text', 'null')),
     -- Handle-space epoch, bumped by the owner on a backend identity reset, so a
     -- reader derives an IMAP UIDVALIDITY from the store alone (§12).
-    generation  INTEGER NOT NULL DEFAULT 1,
+    generation  INTEGER NOT NULL DEFAULT 1 CHECK (typeof(generation) = 'integer'),
     -- The change stamp (§4.5), maintained by the triggers below.
-    changed     INTEGER NOT NULL DEFAULT 0
-) STRICT;
+    changed     INTEGER NOT NULL DEFAULT 0 CHECK (typeof(changed) = 'integer')
+);
 
 -- The merged view's filter axis. Partial: a single-account store writes no
 -- account and pays for no index.
@@ -86,11 +124,14 @@ BEGIN
 END;
 
 -- A renamed collection restamps its items under the new id (§4.5), else a
--- consumer keyed on the old id drops them and never learns the new one.
+-- consumer keyed on the old id drops them and never learns the new one, and
+-- counts in purges, since the keys under the old id are gone like a purged
+-- row's and a consumer reconciles its keys when that count moves.
 CREATE TRIGGER collections_restamp_items AFTER UPDATE OF id ON collections
 WHEN OLD.id IS NOT NEW.id
 BEGIN
     UPDATE items SET changed = -1 WHERE collection IN (OLD.id, NEW.id);
+    UPDATE store_meta SET purges = purges + 1 WHERE id = 1;
 END;
 
 -- One row per source syncing a collection (a server, a phone): its sync
@@ -99,30 +140,30 @@ END;
 -- open; the coverage is the scope of the last round that closed, and the
 -- store is complete over it.
 CREATE TABLE sources (
-    collection       TEXT NOT NULL REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
-    source           TEXT NOT NULL,        -- source id ('left', 'right', 'phone')
-    checkpoint       BLOB,                 -- opaque remote cursor (QRESYNC/JMAP state, DAV sync-token)
-    covered_since    TEXT,                 -- the coverage's floor, RFC 3339 Z, NULL unbounded
-    covered_until    TEXT,                 -- its ceiling, exclusive, NULL unbounded
+    collection       TEXT NOT NULL CHECK (typeof(collection) = 'text') REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    source           TEXT NOT NULL CHECK (typeof(source) = 'text'),  -- source id ('left', 'right', 'phone')
+    checkpoint       BLOB CHECK (typeof(checkpoint) IN ('blob', 'null')),  -- opaque remote cursor (QRESYNC/JMAP state, DAV sync-token)
+    covered_since    TEXT CHECK (typeof(covered_since) IN ('text', 'null')),  -- the coverage's floor, RFC 3339 Z, NULL unbounded
+    covered_until    TEXT CHECK (typeof(covered_until) IN ('text', 'null')),  -- its ceiling, exclusive, NULL unbounded
     -- When the last round closed, stamped by SQLite; NULL is never complete,
     -- and then the coverage carries no bound.
-    covered_at       TEXT CHECK (covered_at IS NOT NULL OR (covered_since IS NULL AND covered_until IS NULL)),
+    covered_at       TEXT CHECK (typeof(covered_at) IN ('text', 'null')) CHECK (covered_at IS NOT NULL OR (covered_since IS NULL AND covered_until IS NULL)),
     -- The last round id drawn (open_round), so a restarted round stamps
     -- afresh and a binding's stamp names one listing.
-    round            INTEGER NOT NULL DEFAULT 0,
-    round_since      TEXT,                 -- the open round's scope, NULL bounds open
-    round_until      TEXT,
-    round_cursor     BLOB,                 -- the connector's resume cursor, opaque
-    round_checkpoint BLOB,                 -- the checkpoint the round lands when it closes
+    round            INTEGER NOT NULL DEFAULT 0 CHECK (typeof(round) = 'integer'),
+    round_since      TEXT CHECK (typeof(round_since) IN ('text', 'null')),  -- the open round's scope, NULL bounds open
+    round_until      TEXT CHECK (typeof(round_until) IN ('text', 'null')),
+    round_cursor     BLOB CHECK (typeof(round_cursor) IN ('blob', 'null')),  -- the connector's resume cursor, opaque
+    round_checkpoint BLOB CHECK (typeof(round_checkpoint) IN ('blob', 'null')),  -- the checkpoint the round lands when it closes
     -- When the open round began, stamped by SQLite; NULL is no round open,
     -- and then it carries nothing.
-    round_started_at TEXT CHECK (round_started_at IS NOT NULL OR (round_since IS NULL AND
+    round_started_at TEXT CHECK (typeof(round_started_at) IN ('text', 'null')) CHECK (round_started_at IS NOT NULL OR (round_since IS NULL AND
                      round_until IS NULL AND round_cursor IS NULL AND round_checkpoint IS NULL)),
     -- Whether the open round lists only the band its coverage lacks, whose
     -- absence infers no delete of an undated member; 0 with no round open.
-    round_band       INTEGER NOT NULL DEFAULT 0 CHECK (round_band = 0 OR (round_band = 1 AND round_started_at IS NOT NULL)),
+    round_band       INTEGER NOT NULL DEFAULT 0 CHECK (typeof(round_band) = 'integer') CHECK (round_band = 0 OR (round_band = 1 AND round_started_at IS NOT NULL)),
     PRIMARY KEY (collection, source)
-) STRICT;
+);
 
 -- A coverage a reader lists with the collection (list_collections) moves
 -- the collection's stamp (§4.5), so a window saying "mail since" follows the
@@ -140,21 +181,21 @@ END;
 
 -- What each source can do (§15.6), declared by the owner, read by producers
 -- before they enqueue. A declaration writes every capability of the kinds the
--- source syncs, `none` included, so a source with no row is undeclared, the
--- state of a store from an owner predating §15.6, and gated by nothing. A row
--- naming a collection overrides the source's row there (a read-only calendar
--- in a writable account); NULL is the source-wide row, so the key is an
--- expression index. A source id names one remote store-wide; `account` is the
--- one it syncs for, NULL in a single-account store, so a source is a candidate
--- for its account's intents before it has synced a collection.
+-- source syncs, `none` included, so a source with no row is undeclared and
+-- gated by nothing. A row naming a collection overrides the source's row there
+-- (a read-only calendar in a writable account); NULL is the source-wide row,
+-- so the key is an expression index. A source id names one remote store-wide;
+-- `account` is the one it syncs for, NULL in a single-account store, so a
+-- source is a candidate for its account's intents before it has synced a
+-- collection.
 CREATE TABLE capabilities (
-    account    TEXT,
-    source     TEXT NOT NULL,
-    collection TEXT REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
-    capability TEXT NOT NULL,              -- Annex B name, or an `x-` one
-    support    TEXT NOT NULL CHECK (support IN ('full', 'partial', 'none')),
-    detail     TEXT                        -- what is missing or why, for a human
-) STRICT;
+    account    TEXT CHECK (typeof(account) IN ('text', 'null')),
+    source     TEXT NOT NULL CHECK (typeof(source) = 'text'),
+    collection TEXT CHECK (typeof(collection) IN ('text', 'null')) REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    capability TEXT NOT NULL CHECK (typeof(capability) = 'text'),  -- Annex B name, or an `x-` one
+    support    TEXT NOT NULL CHECK (typeof(support) = 'text') CHECK (support IN ('full', 'partial', 'none')),
+    detail     TEXT CHECK (typeof(detail) IN ('text', 'null'))  -- what is missing or why, for a human
+);
 
 CREATE UNIQUE INDEX capabilities_key ON capabilities(source, ifnull(collection, ''), capability);
 
@@ -163,24 +204,30 @@ CREATE UNIQUE INDEX capabilities_key ON capabilities(source, ifnull(collection, 
 -- `set-performer` action. `account` is NULL in a single-account store, so the
 -- key is an expression index rather than a primary key.
 CREATE TABLE performers (
-    account    TEXT,
-    capability TEXT NOT NULL,
-    source     TEXT NOT NULL
-) STRICT;
+    account    TEXT CHECK (typeof(account) IN ('text', 'null')),
+    capability TEXT NOT NULL CHECK (typeof(capability) = 'text'),
+    source     TEXT NOT NULL CHECK (typeof(source) = 'text')
+);
 
 CREATE UNIQUE INDEX performers_key ON performers(ifnull(account, ''), capability);
 
 -- Content-addressed body index; the bytes live in blob files (§5).
+--
+-- A hash is a name, never a path: the BLAKE3 digest as 52 characters of
+-- lowercase base32 (§5), so no row, and through the foreign keys onto it no
+-- pointer and no queued body, names `..`, a separator or anything else a path
+-- could be built from.
 --
 -- The refcount floor is load-bearing rather than tidy: a double release either
 -- fails every later write on a foreign key that names neither the object nor
 -- the miscount, or goes unnoticed entirely. The CHECK moves the failure to the
 -- statement that caused it (§7).
 CREATE TABLE objects (
-    hash     TEXT PRIMARY KEY,             -- content hash under store_meta.hash_algo, base32
-    size     INTEGER NOT NULL,             -- body length in bytes
-    refcount INTEGER NOT NULL DEFAULT 0 CHECK (refcount >= 0)
-) STRICT;
+    hash     TEXT PRIMARY KEY CHECK (typeof(hash) = 'text')
+             CHECK (length(hash) = 52 AND hash NOT GLOB '*[^a-z2-7]*'),
+    size     INTEGER NOT NULL CHECK (typeof(size) = 'integer'),  -- body length in bytes
+    refcount INTEGER NOT NULL DEFAULT 0 CHECK (typeof(refcount) = 'integer') CHECK (refcount >= 0)
+);
 
 -- A collected object leaves no stamp either (§4.5): the index holds its text
 -- until it learns the row is gone.
@@ -196,27 +243,27 @@ END;
 --
 -- What the item says about itself is its kind's summary row (§4.4).
 CREATE TABLE items (
-    collection      TEXT NOT NULL REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
-    link_id         TEXT NOT NULL,         -- the key the item is filed under: the identity hint, escaped as esc:<hint> when it begins like a derived key, a kind fallback, or a minted dup:<hint>#<handle> (§9)
-    seq             INTEGER NOT NULL,      -- public id, shared by every placement of the link id (§9.1)
+    collection      TEXT NOT NULL CHECK (typeof(collection) = 'text') REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    link_id         TEXT NOT NULL CHECK (typeof(link_id) = 'text'),  -- the key the item is filed under: the identity hint, escaped as esc:<hint> when it begins like a derived key, a kind fallback, or a minted dup:<hint>#<handle> (§9)
+    seq             INTEGER NOT NULL CHECK (typeof(seq) = 'integer'),  -- public id, shared by every placement of the link id (§9.1)
     -- Whether the flag set is known: 1 its placement_flag rows are the set,
     -- none being known-empty; 0 unknown, and then it holds no row.
-    flags_known     INTEGER NOT NULL DEFAULT 0 CHECK (flags_known IN (0, 1)),
-    object_hash     TEXT REFERENCES objects(hash),  -- current body, NULL until hydrated
-    sort_key        TEXT NOT NULL DEFAULT '',  -- the kind's ordering key, '' when unknown (§9.3)
+    flags_known     INTEGER NOT NULL DEFAULT 0 CHECK (typeof(flags_known) = 'integer') CHECK (flags_known IN (0, 1)),
+    object_hash     TEXT CHECK (typeof(object_hash) IN ('text', 'null')) REFERENCES objects(hash),  -- current body, NULL until hydrated
+    sort_key        TEXT NOT NULL DEFAULT '' CHECK (typeof(sort_key) = 'text'),  -- the kind's ordering key, '' when unknown (§9.3)
     -- The detail ladder: 1 meta, 2 full (§13).
-    level           INTEGER NOT NULL CHECK (level IN (1, 2)),
-    deleted         INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0, 1)),  -- 1 while a delete propagates across sources
-    retained_at     TEXT,                  -- RFC 3339 instant the last binding vanished (§11)
-    retained_by     TEXT,                  -- the source whose removal retired it, diagnostic
-    conflicted      INTEGER NOT NULL DEFAULT 0 CHECK (conflicted IN (0, 1)),  -- 1 while a cross-source content conflict is unresolved
-    conflict_object TEXT REFERENCES objects(hash),  -- the diverging body a manual conflict recorded
-    changed         INTEGER NOT NULL DEFAULT 0,     -- the change stamp (§4.5), trigger-maintained
+    level           INTEGER NOT NULL CHECK (typeof(level) = 'integer') CHECK (level IN (1, 2)),
+    deleted         INTEGER NOT NULL DEFAULT 0 CHECK (typeof(deleted) = 'integer') CHECK (deleted IN (0, 1)),  -- 1 while a delete propagates across sources
+    retained_at     TEXT CHECK (typeof(retained_at) IN ('text', 'null')),  -- RFC 3339 instant the last binding vanished (§11)
+    retained_by     TEXT CHECK (typeof(retained_by) IN ('text', 'null')),  -- the source whose removal retired it, diagnostic
+    conflicted      INTEGER NOT NULL DEFAULT 0 CHECK (typeof(conflicted) = 'integer') CHECK (conflicted IN (0, 1)),  -- 1 while a cross-source content conflict is unresolved
+    conflict_object TEXT CHECK (typeof(conflict_object) IN ('text', 'null')) REFERENCES objects(hash),  -- the diverging body a manual conflict recorded
+    changed         INTEGER NOT NULL DEFAULT 0 CHECK (typeof(changed) = 'integer'),  -- the change stamp (§4.5), trigger-maintained
     PRIMARY KEY (collection, link_id),
     -- The terminal states §11 and §10 describe, held by the schema.
     CHECK (retained_at IS NULL OR deleted = 1),
     CHECK (conflicted = 1 OR conflict_object IS NULL)
-) STRICT;
+);
 
 -- Resolves a public id back to the internal link id.
 CREATE UNIQUE INDEX items_by_seq ON items(collection, seq);
@@ -230,11 +277,13 @@ CREATE INDEX items_retained ON items(collection, seq) WHERE deleted = 1;
 -- Orders a collection by the kind's own key, `seq` breaking the tie so a keyset
 -- page over a non-unique key is total. Partial on the live rows, which every
 -- listing filters on, so a mailbox whose server expunged most of it does not
--- page past its own trash (§14.1).
+-- page past its own trash (§14.1). A page over a set of collections seeks it
+-- once per collection and merges what each answers (§9.3).
 CREATE INDEX items_by_sort ON items(collection, sort_key, seq) WHERE deleted = 0;
--- The same order across a set of collections (list_mail_page_filtered,
--- search_mail): a page over several walks one order, never sorts the store.
-CREATE INDEX items_by_sort_global ON items(sort_key, seq, collection) WHERE deleted = 0;
+-- The retained rows by the instant they were retired (§11.2), so a purge below
+-- a cutoff seeks it and retained_bytes reads it alone. Partial: a live row, or
+-- a tombstone a source still binds, is not in it.
+CREATE INDEX items_by_retained ON items(retained_at, object_hash) WHERE retained_at IS NOT NULL;
 -- The items waiting for a cross-source decision (list_conflicted_items).
 -- Partial, empty at rest.
 CREATE INDEX items_conflicted ON items(collection, seq) WHERE conflicted = 1;
@@ -292,12 +341,12 @@ END;
 -- and splits it back (§14.1). The flag index answers a flag predicate by a
 -- seek rather than a scan of every placement.
 CREATE TABLE placement_flag (
-    collection TEXT NOT NULL,
-    link_id    TEXT NOT NULL,
-    flag       TEXT NOT NULL CHECK (flag != '' AND flag NOT GLOB '*[^!-~]*'),
+    collection TEXT NOT NULL CHECK (typeof(collection) = 'text'),
+    link_id    TEXT NOT NULL CHECK (typeof(link_id) = 'text'),
+    flag       TEXT NOT NULL CHECK (typeof(flag) = 'text') CHECK (flag != '' AND flag NOT GLOB '*[^!-~]*'),
     PRIMARY KEY (collection, link_id, flag),
     FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
-) STRICT, WITHOUT ROWID;
+) WITHOUT ROWID;
 
 CREATE INDEX placement_flag_by_flag ON placement_flag(flag, collection);
 
@@ -356,30 +405,30 @@ END;
 -- One source's binding of an item: its handle there, the three-way-merge base
 -- last agreed with it, and whether its own sync is stuck on a conflict.
 CREATE TABLE bindings (
-    collection        TEXT NOT NULL,
-    link_id           TEXT NOT NULL,
-    source            TEXT NOT NULL,
+    collection        TEXT NOT NULL CHECK (typeof(collection) = 'text'),
+    link_id           TEXT NOT NULL CHECK (typeof(link_id) = 'text'),
+    source            TEXT NOT NULL CHECK (typeof(source) = 'text'),
     -- The item's backend id on this source (IMAP UID, DAV href). Bound once:
     -- a write resolving this binding to another handle is refused, and the one
     -- licensed rebind is the handle-space rebuild (§10, §12).
-    handle            TEXT NOT NULL,
+    handle            TEXT NOT NULL CHECK (typeof(handle) = 'text'),
     -- Whether the base flag set is known, as items.flags_known says of the
     -- item's: 1 its binding_base_flag rows are the set, 0 unknown.
-    base_flags_known  INTEGER NOT NULL DEFAULT 0 CHECK (base_flags_known IN (0, 1)),
-    base_object       TEXT REFERENCES objects(hash),
-    base_revision     TEXT,                -- etag/modseq for mutable-content backends
+    base_flags_known  INTEGER NOT NULL DEFAULT 0 CHECK (typeof(base_flags_known) = 'integer') CHECK (base_flags_known IN (0, 1)),
+    base_object       TEXT CHECK (typeof(base_object) IN ('text', 'null')) REFERENCES objects(hash),
+    base_revision     TEXT CHECK (typeof(base_revision) IN ('text', 'null')),  -- etag/modseq for mutable-content backends
     -- Whether a base exists at all, which its three value columns cannot say: a
     -- source reporting no revision, no body and no flags still agreed, and that
     -- agreement is what tells a pending push from a settled one (§13).
-    base_present      INTEGER NOT NULL DEFAULT 0 CHECK (base_present IN (0, 1)),
+    base_present      INTEGER NOT NULL DEFAULT 0 CHECK (typeof(base_present) = 'integer') CHECK (base_present IN (0, 1)),
     -- This source diverged from its OWN remote (§10), unlike items.conflicted,
     -- which is the cross-source divergence.
-    conflicted        INTEGER NOT NULL DEFAULT 0 CHECK (conflicted IN (0, 1)),
-    conflict_revision TEXT,                -- the remote revision observed when it did, or NULL
+    conflicted        INTEGER NOT NULL DEFAULT 0 CHECK (typeof(conflicted) = 'integer') CHECK (conflicted IN (0, 1)),
+    conflict_revision TEXT CHECK (typeof(conflict_revision) IN ('text', 'null')),  -- the remote revision observed when it did, or NULL
     -- The diverging remote body at that revision, so a resolver reads base,
     -- local and remote from the store and needs no credentials (§13). Pinned
     -- like any other reference while the binding stays conflicted.
-    conflict_object   TEXT REFERENCES objects(hash),
+    conflict_object   TEXT CHECK (typeof(conflict_object) IN ('text', 'null')) REFERENCES objects(hash),
     -- The shared body this source last reconciled against, the base of the
     -- cross-source merge (§10, §13). base_object answers to the source's own
     -- remote and only a sync moves it, so a body this source folded in and has
@@ -387,11 +436,11 @@ CREATE TABLE bindings (
     -- the source disagree with itself. Meaningful whether or not the binding
     -- is conflicted. Pinned like the base (§5): it is the common ancestor a
     -- merge reads, one body per binding, released when the binding next agrees.
-    shared_object     TEXT REFERENCES objects(hash),
+    shared_object     TEXT CHECK (typeof(shared_object) IN ('text', 'null')) REFERENCES objects(hash),
     -- The id of the last round whose listing carried this handle (SYNC.md
     -- §5), NULL until one did: a round's last page drops the in-scope
     -- bindings it did not stamp.
-    round             INTEGER,
+    round             INTEGER CHECK (typeof(round) IN ('integer', 'null')),
     PRIMARY KEY (collection, link_id, source),
     -- A binding that is not conflicted carries neither (§13).
     CHECK (conflicted = 1 OR (conflict_revision IS NULL AND conflict_object IS NULL)),
@@ -399,20 +448,20 @@ CREATE TABLE bindings (
     -- items.collection, this composite key's parent, so without it the rename
     -- is refused one level down (§14).
     FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
-) STRICT;
+);
 
 -- A binding's base flags (§13), one row per flag, while
 -- bindings.base_flags_known is 1, spelled as placement_flag's. A base carries
 -- no stamp, so its writes draw none.
 CREATE TABLE binding_base_flag (
-    collection TEXT NOT NULL,
-    link_id    TEXT NOT NULL,
-    source     TEXT NOT NULL,
-    flag       TEXT NOT NULL CHECK (flag != '' AND flag NOT GLOB '*[^!-~]*'),
+    collection TEXT NOT NULL CHECK (typeof(collection) = 'text'),
+    link_id    TEXT NOT NULL CHECK (typeof(link_id) = 'text'),
+    source     TEXT NOT NULL CHECK (typeof(source) = 'text'),
+    flag       TEXT NOT NULL CHECK (typeof(flag) = 'text') CHECK (flag != '' AND flag NOT GLOB '*[^!-~]*'),
     PRIMARY KEY (collection, link_id, source, flag),
     FOREIGN KEY (collection, link_id, source) REFERENCES bindings(collection, link_id, source)
         ON UPDATE CASCADE ON DELETE CASCADE
-) STRICT, WITHOUT ROWID;
+) WITHOUT ROWID;
 
 CREATE TRIGGER binding_base_flag_needs_known BEFORE INSERT ON binding_base_flag
 WHEN (SELECT base_flags_known FROM bindings
@@ -434,14 +483,14 @@ END;
 -- SYNC.md §5). Each end cascades with its item: a superseded row purged takes
 -- its pair, and so does a superseding row purged, which then holds nothing.
 CREATE TABLE supersessions (
-    collection    TEXT NOT NULL,           -- the superseded item
-    link_id       TEXT NOT NULL,
-    by_collection TEXT NOT NULL,           -- the item the add created
-    by_link_id    TEXT NOT NULL,
+    collection    TEXT NOT NULL CHECK (typeof(collection) = 'text'),  -- the superseded item
+    link_id       TEXT NOT NULL CHECK (typeof(link_id) = 'text'),
+    by_collection TEXT NOT NULL CHECK (typeof(by_collection) = 'text'),  -- the item the add created
+    by_link_id    TEXT NOT NULL CHECK (typeof(by_link_id) = 'text'),
     PRIMARY KEY (collection, link_id),
     FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE,
     FOREIGN KEY (by_collection, by_link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
-) STRICT;
+) WITHOUT ROWID;
 -- The superseding end, which a purge or a rename of that item cascades by.
 CREATE INDEX supersessions_by ON supersessions(by_collection, by_link_id);
 
@@ -451,19 +500,19 @@ CREATE INDEX supersessions_by ON supersessions(by_collection, by_link_id);
 
 -- message/rfc822 (Annex A.1). Every address is also an item_address row.
 CREATE TABLE mail_summary (
-    collection   TEXT NOT NULL,
-    link_id      TEXT NOT NULL,
-    message_id   TEXT,                     -- bare Message-ID, angle brackets stripped
-    subject      TEXT NOT NULL,            -- decoded (RFC 2047), may be empty
-    sender       TEXT,                     -- first From addr-spec, canonical (§13)
-    sender_name  TEXT,                     -- its display name, decoded, or NULL
-    date         TEXT,                     -- RFC 3339 UTC Z at seconds precision, or NULL
-    size         INTEGER,                  -- raw message octets, or NULL
-    attachment   INTEGER,                  -- 1 has one, 0 has none, NULL not examined
-    invitation   TEXT,                     -- the UID its first text/calendar part carries, NULL none or not examined
+    collection   TEXT NOT NULL CHECK (typeof(collection) = 'text'),
+    link_id      TEXT NOT NULL CHECK (typeof(link_id) = 'text'),
+    message_id   TEXT CHECK (typeof(message_id) IN ('text', 'null')),  -- bare Message-ID, angle brackets stripped
+    subject      TEXT NOT NULL CHECK (typeof(subject) = 'text'),  -- decoded (RFC 2047), may be empty
+    sender       TEXT CHECK (typeof(sender) IN ('text', 'null')),  -- first From address, canonical (Annex A.6)
+    sender_name  TEXT CHECK (typeof(sender_name) IN ('text', 'null')),  -- its display name, decoded, or NULL
+    date         TEXT CHECK (typeof(date) IN ('text', 'null')),  -- RFC 3339 UTC Z at seconds precision, or NULL
+    size         INTEGER CHECK (typeof(size) IN ('integer', 'null')),  -- the body's octets, else the source's figure (Annex A.1), or NULL
+    attachment   INTEGER CHECK (typeof(attachment) IN ('integer', 'null')),  -- 1 has one, 0 has none, NULL not examined
+    invitation   TEXT CHECK (typeof(invitation) IN ('text', 'null')),  -- the UID its first text/calendar part carries, NULL none or not examined
     PRIMARY KEY (collection, link_id),
     FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
-) STRICT;
+);
 
 -- The mail inviting to a calendar item, for link_invitations_to (§14.2).
 -- Partial: most mail invites to nothing.
@@ -472,70 +521,70 @@ CREATE INDEX mail_summary_by_invitation ON mail_summary(invitation) WHERE invita
 -- A message's In-Reply-To ids (Annex A.1), bare, `position` their 0-based
 -- document order. By id, for list_replied.
 CREATE TABLE mail_in_reply_to (
-    collection TEXT    NOT NULL,
-    link_id    TEXT    NOT NULL,
-    position   INTEGER NOT NULL,
-    msg_id     TEXT    NOT NULL,
+    collection TEXT    NOT NULL CHECK (typeof(collection) = 'text'),
+    link_id    TEXT    NOT NULL CHECK (typeof(link_id) = 'text'),
+    position   INTEGER NOT NULL CHECK (typeof(position) = 'integer'),
+    msg_id     TEXT    NOT NULL CHECK (typeof(msg_id) = 'text'),
     PRIMARY KEY (collection, link_id, position),
     FOREIGN KEY (collection, link_id) REFERENCES mail_summary(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
-) STRICT;
+) WITHOUT ROWID;
 
 CREATE INDEX mail_in_reply_to_by_id ON mail_in_reply_to(msg_id);
 
 -- text/vcard (Annex A.2). Every EMAIL is an item_address row.
 CREATE TABLE contact_summary (
-    collection TEXT NOT NULL,
-    link_id    TEXT NOT NULL,
-    uid        TEXT,                       -- the UID verbatim
-    fn         TEXT NOT NULL,              -- FN verbatim, unescaped, may be empty
-    kind       TEXT,                       -- KIND lowercased: individual, group, org, location; NULL when absent
-    org        TEXT,                       -- first ORG component, unescaped, or NULL
+    collection TEXT NOT NULL CHECK (typeof(collection) = 'text'),
+    link_id    TEXT NOT NULL CHECK (typeof(link_id) = 'text'),
+    uid        TEXT CHECK (typeof(uid) IN ('text', 'null')),  -- the UID verbatim
+    fn         TEXT NOT NULL CHECK (typeof(fn) = 'text'),  -- FN decoded (Annex A.2), '' when absent
+    kind       TEXT CHECK (typeof(kind) IN ('text', 'null')),  -- KIND lowercased: individual, group, org, location; NULL when absent
+    org        TEXT CHECK (typeof(org) IN ('text', 'null')),  -- first ORG component, unescaped, or NULL
     PRIMARY KEY (collection, link_id),
     FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
-) STRICT;
+);
 
 -- text/calendar, one table per component (Annex A.3 to A.5): a resource is
 -- one VEVENT, VTODO or VJOURNAL set. A start is carried verbatim with its
 -- parameters; the one resolved instant is items.sort_key.
 CREATE TABLE event_summary (
-    collection    TEXT NOT NULL,
-    link_id       TEXT NOT NULL,
-    uid           TEXT,                    -- the UID verbatim
-    summary       TEXT NOT NULL,           -- SUMMARY unescaped, may be empty
-    location      TEXT,                    -- LOCATION unescaped, or NULL
-    dtstart       TEXT,                    -- the value verbatim
-    dtstart_tzid  TEXT,                    -- the TZID parameter, or NULL
-    dtstart_value TEXT,                    -- 'date-time' or 'date'
-    dtend         TEXT,                    -- the value verbatim, or NULL
-    recurring     INTEGER,                 -- 1 carries an RRULE or RDATE, 0 none, NULL not examined
-    until         TEXT,                    -- the RRULE's UNTIL verbatim, or NULL
+    collection    TEXT NOT NULL CHECK (typeof(collection) = 'text'),
+    link_id       TEXT NOT NULL CHECK (typeof(link_id) = 'text'),
+    uid           TEXT CHECK (typeof(uid) IN ('text', 'null')),  -- the UID verbatim
+    summary       TEXT NOT NULL CHECK (typeof(summary) = 'text'),  -- SUMMARY unescaped, may be empty
+    location      TEXT CHECK (typeof(location) IN ('text', 'null')),  -- LOCATION unescaped, or NULL
+    dtstart       TEXT CHECK (typeof(dtstart) IN ('text', 'null')),  -- the value verbatim
+    dtstart_tzid  TEXT CHECK (typeof(dtstart_tzid) IN ('text', 'null')),  -- the TZID parameter, or NULL
+    dtstart_value TEXT CHECK (typeof(dtstart_value) IN ('text', 'null')),  -- 'date-time' or 'date'
+    dtend         TEXT CHECK (typeof(dtend) IN ('text', 'null')),  -- the value verbatim, or NULL
+    recurring     INTEGER CHECK (typeof(recurring) IN ('integer', 'null')),  -- 1 carries an RRULE or RDATE, 0 none, NULL not examined
+    until         TEXT CHECK (typeof(until) IN ('text', 'null')),  -- the RRULE's UNTIL verbatim, or NULL
     PRIMARY KEY (collection, link_id),
     FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
-) STRICT;
+);
 
 CREATE TABLE task_summary (
-    collection    TEXT NOT NULL,
-    link_id       TEXT NOT NULL,
-    uid           TEXT,
-    summary       TEXT NOT NULL,
-    dtstart       TEXT,
-    dtstart_tzid  TEXT,
-    dtstart_value TEXT,
-    due           TEXT,                    -- the DUE value verbatim, or NULL
-    due_tzid      TEXT,
-    due_value     TEXT,
-    status        TEXT,                    -- STATUS uppercased verbatim, or NULL
-    completed     TEXT,                    -- COMPLETED verbatim (always UTC per RFC 5545), or NULL
-    percent       INTEGER,                 -- PERCENT-COMPLETE, or NULL
-    recurring     INTEGER,
-    until         TEXT,
-    priority      INTEGER CHECK (priority BETWEEN 0 AND 9),  -- PRIORITY, or NULL
-    parent        TEXT,                    -- the UID the first parent RELATED-TO names, or NULL
-    mid           TEXT,                    -- the Message-ID the first mid: URI names, bare, or NULL
-    created       TEXT,                    -- CREATED, else DTSTAMP, as an instant (Annex A.4), or NULL
+    collection    TEXT NOT NULL CHECK (typeof(collection) = 'text'),
+    link_id       TEXT NOT NULL CHECK (typeof(link_id) = 'text'),
+    uid           TEXT CHECK (typeof(uid) IN ('text', 'null')),
+    summary       TEXT NOT NULL CHECK (typeof(summary) = 'text'),
+    dtstart       TEXT CHECK (typeof(dtstart) IN ('text', 'null')),
+    dtstart_tzid  TEXT CHECK (typeof(dtstart_tzid) IN ('text', 'null')),
+    dtstart_value TEXT CHECK (typeof(dtstart_value) IN ('text', 'null')),
+    due           TEXT CHECK (typeof(due) IN ('text', 'null')),  -- the DUE value verbatim, or NULL
+    due_tzid      TEXT CHECK (typeof(due_tzid) IN ('text', 'null')),
+    due_value     TEXT CHECK (typeof(due_value) IN ('text', 'null')),
+    status        TEXT CHECK (typeof(status) IN ('text', 'null')),  -- STATUS uppercased verbatim, or NULL
+    completed     TEXT CHECK (typeof(completed) IN ('text', 'null')),  -- COMPLETED verbatim (always UTC per RFC 5545), or NULL
+    percent       INTEGER CHECK (typeof(percent) IN ('integer', 'null')),  -- PERCENT-COMPLETE, or NULL
+    recurring     INTEGER CHECK (typeof(recurring) IN ('integer', 'null')),
+    until         TEXT CHECK (typeof(until) IN ('text', 'null')),
+    priority      INTEGER CHECK (typeof(priority) IN ('integer', 'null')) CHECK (priority BETWEEN 0 AND 9),  -- PRIORITY, or NULL
+    parent        TEXT CHECK (typeof(parent) IN ('text', 'null')),  -- the UID the first parent RELATED-TO names, or NULL
+    mid           TEXT CHECK (typeof(mid) IN ('text', 'null')),  -- the Message-ID the first mid: URI names, bare, or NULL
+    created       TEXT CHECK (typeof(created) IN ('text', 'null')),  -- CREATED, else DTSTAMP, as an instant (Annex A.4), or NULL
     PRIMARY KEY (collection, link_id),
     FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
-) STRICT;
+);
 
 -- The tasks naming a calendar item their parent, and those naming a mail, for
 -- link_parents_to and link_sources_to (§14.2). Partial: most tasks name
@@ -546,55 +595,57 @@ CREATE INDEX task_summary_by_mid ON task_summary(mid) WHERE mid IS NOT NULL;
 -- A task's CATEGORIES values (Annex A.4), decoded, `position` their 0-based
 -- document order.
 CREATE TABLE task_category (
-    collection TEXT    NOT NULL,
-    link_id    TEXT    NOT NULL,
-    position   INTEGER NOT NULL,
-    value      TEXT    NOT NULL,
+    collection TEXT    NOT NULL CHECK (typeof(collection) = 'text'),
+    link_id    TEXT    NOT NULL CHECK (typeof(link_id) = 'text'),
+    position   INTEGER NOT NULL CHECK (typeof(position) = 'integer'),
+    value      TEXT    NOT NULL CHECK (typeof(value) = 'text'),
     PRIMARY KEY (collection, link_id, position),
     FOREIGN KEY (collection, link_id) REFERENCES task_summary(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
-) STRICT;
+) WITHOUT ROWID;
 
 CREATE TABLE journal_summary (
-    collection    TEXT NOT NULL,
-    link_id       TEXT NOT NULL,
-    uid           TEXT,
-    summary       TEXT NOT NULL,
-    dtstart       TEXT,
-    dtstart_tzid  TEXT,
-    dtstart_value TEXT,
+    collection    TEXT NOT NULL CHECK (typeof(collection) = 'text'),
+    link_id       TEXT NOT NULL CHECK (typeof(link_id) = 'text'),
+    uid           TEXT CHECK (typeof(uid) IN ('text', 'null')),
+    summary       TEXT NOT NULL CHECK (typeof(summary) = 'text'),
+    dtstart       TEXT CHECK (typeof(dtstart) IN ('text', 'null')),
+    dtstart_tzid  TEXT CHECK (typeof(dtstart_tzid) IN ('text', 'null')),
+    dtstart_value TEXT CHECK (typeof(dtstart_value) IN ('text', 'null')),
     PRIMARY KEY (collection, link_id),
     FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
-) STRICT;
+);
 
 -- application/octet-stream, a file (Annex A.7): what its source or its writer
 -- states, the bytes saying nothing of it. One row per placement, so a file
 -- in two folders may carry two names. `part` stays with the file wherever it
 -- is placed.
 CREATE TABLE file_summary (
-    collection TEXT NOT NULL,
-    link_id    TEXT NOT NULL,
-    name       TEXT NOT NULL,              -- the file's name in this collection, may be empty
-    media_type TEXT,                       -- type/subtype lowercased, no parameter, or NULL
-    size       INTEGER,                    -- octets: the body's when held, else as stated
-    part       TEXT,                       -- an attachment's IMAP section in its message, or NULL
+    collection TEXT NOT NULL CHECK (typeof(collection) = 'text'),
+    link_id    TEXT NOT NULL CHECK (typeof(link_id) = 'text'),
+    name       TEXT NOT NULL CHECK (typeof(name) = 'text'),  -- the file's name in this collection, may be empty
+    media_type TEXT CHECK (typeof(media_type) IN ('text', 'null')),  -- type/subtype lowercased, no parameter, or NULL
+    size       INTEGER CHECK (typeof(size) IN ('integer', 'null')),  -- octets: the body's when held, else as stated
+    part       TEXT CHECK (typeof(part) IN ('text', 'null')),  -- an attachment's IMAP section in its message, or NULL
     PRIMARY KEY (collection, link_id),
     FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
-) STRICT;
+);
 
 -- The people an item names, whatever its kind (§4.4, Annex A.6). One generic
 -- table, since "everything about this address" is asked across every kind.
 CREATE TABLE item_address (
-    collection TEXT NOT NULL,
-    link_id    TEXT NOT NULL,
-    role       TEXT NOT NULL,              -- from, to, cc, bcc, email, organizer, attendee, contact (§13)
-    position   INTEGER NOT NULL,           -- 0-based document order within the role
-    address    TEXT NOT NULL,              -- canonical addr-spec (§13)
-    name       TEXT,                       -- display name, decoded, or NULL
+    collection TEXT NOT NULL CHECK (typeof(collection) = 'text'),
+    link_id    TEXT NOT NULL CHECK (typeof(link_id) = 'text'),
+    role       TEXT NOT NULL CHECK (typeof(role) = 'text'),  -- from, to, cc, bcc, email, organizer, attendee, contact (§13)
+    position   INTEGER NOT NULL CHECK (typeof(position) = 'integer'),  -- 0-based document order within the role
+    address    TEXT NOT NULL CHECK (typeof(address) = 'text'),  -- canonical addr-spec (§13)
+    name       TEXT CHECK (typeof(name) IN ('text', 'null')),  -- display name, decoded, or NULL
     PRIMARY KEY (collection, link_id, role, position),
     FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
-) STRICT;
+) WITHOUT ROWID;
 
--- The person axis: every placement naming one address, by role.
+-- The person axis: every placement naming one address, by role. The table has
+-- no rowid, so the index carries the rest of its key and names each placement
+-- without reading the row.
 CREATE INDEX item_address_by_address ON item_address(address, role, collection);
 
 -- A reference from one item to another, whatever their kinds and wherever they
@@ -603,16 +654,16 @@ CREATE INDEX item_address_by_address ON item_address(address, role, collection);
 -- the same reason: the endpoint outlives any one row. A fact recorded once and
 -- never recomputed, which no store requires.
 CREATE TABLE item_reference (
-    from_kind    TEXT NOT NULL,            -- the referring item's collection kind
-    from_link_id TEXT NOT NULL,
-    to_kind      TEXT NOT NULL,            -- the referred item's collection kind
-    to_link_id   TEXT NOT NULL,
+    from_kind    TEXT NOT NULL CHECK (typeof(from_kind) = 'text'),  -- the referring item's collection kind
+    from_link_id TEXT NOT NULL CHECK (typeof(from_link_id) = 'text'),
+    to_kind      TEXT NOT NULL CHECK (typeof(to_kind) = 'text'),  -- the referred item's collection kind
+    to_link_id   TEXT NOT NULL CHECK (typeof(to_link_id) = 'text'),
     -- What the reference says: a name pimdir gives, or an application's own
     -- starting with x-, as for capabilities.
-    role         TEXT NOT NULL CHECK (role IN ('attachment', 'invitation', 'sender', 'parent', 'source', 'related')
+    role         TEXT NOT NULL CHECK (typeof(role) = 'text') CHECK (role IN ('attachment', 'invitation', 'sender', 'parent', 'source', 'related')
                                       OR (substr(role, 1, 2) = 'x-' AND length(role) > 2)),
-    origin       TEXT NOT NULL CHECK (origin IN ('auto', 'user')),  -- a writer's rule, or a person
-    created_at   TEXT NOT NULL,            -- stamped by add_reference (§13)
+    origin       TEXT NOT NULL CHECK (typeof(origin) = 'text') CHECK (origin IN ('auto', 'user')),  -- a writer's rule, or a person
+    created_at   TEXT NOT NULL CHECK (typeof(created_at) = 'text'),  -- stamped by add_reference (§13)
     -- The key leads with the link id, which items_drop_references seeks by.
     PRIMARY KEY (from_link_id, from_kind, to_link_id, to_kind, role),
     CHECK (from_kind != to_kind OR from_link_id != to_link_id),
@@ -623,7 +674,7 @@ CREATE TABLE item_reference (
                 OR from_link_id GLOB 'part:alt:*' OR from_link_id GLOB 'part:dup:*')),
     CHECK (NOT (to_link_id GLOB 'alt:*' OR to_link_id GLOB 'dup:*' OR to_link_id GLOB 'hash:*'
                 OR to_link_id GLOB 'part:alt:*' OR to_link_id GLOB 'part:dup:*'))
-) STRICT;
+) WITHOUT ROWID;
 
 -- references_to, and the trigger's seek on the other end.
 CREATE INDEX item_reference_to ON item_reference(to_link_id, to_kind, from_link_id, from_kind, role);
@@ -650,8 +701,7 @@ END;
 -- gone with its last row takes it, through items_drop_references. A file with
 -- a body, or one a source syncs, is never collected here. Only a reference
 -- with a file end fires it, and it seeks the ends' link ids on items_by_link
--- (`+` keeping the body test off items_by_object, which every bodiless row
--- fills).
+-- (`+` keeping the body test off any other index).
 CREATE TRIGGER item_reference_collects_files AFTER DELETE ON item_reference
 WHEN OLD.from_kind = 'application/octet-stream' OR OLD.to_kind = 'application/octet-stream'
 BEGIN
@@ -671,19 +721,19 @@ END;
 -- store, applied by the owner in append order.
 CREATE TABLE queue (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,  -- global append order
-    created_at  TEXT    NOT NULL,                   -- RFC 3339, Z (§13)
-    producer    TEXT    NOT NULL,                   -- enqueuing process, diagnostic
-    collection  TEXT    NOT NULL REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
-    action      TEXT    NOT NULL,                   -- 'add' | 'set-flags' | 'remove' | 'move' | 'copy' | 'update' | 'set-performer' | an intent (§15.3, Annex B)
-    payload     TEXT    NOT NULL,                   -- versioned JSON, shape per action (§15)
+    created_at  TEXT    NOT NULL CHECK (typeof(created_at) = 'text'),  -- RFC 3339, Z (§13)
+    producer    TEXT    NOT NULL CHECK (typeof(producer) = 'text'),  -- enqueuing process, diagnostic
+    collection  TEXT    NOT NULL CHECK (typeof(collection) = 'text') REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    action      TEXT    NOT NULL CHECK (typeof(action) = 'text'),  -- 'add' | 'set-flags' | 'remove' | 'move' | 'copy' | 'update' | 'set-performer' | an intent (§15.3, Annex B)
+    payload     TEXT    NOT NULL CHECK (typeof(payload) = 'text'),  -- versioned JSON, shape per action (§15)
     -- The collection a `move` or a `copy` targets, or the one holding the item
     -- a superseding `add` replaces (§15.3): written beside the payload, so a
     -- rename follows it, and read in place of the payload's own.
-    target_collection TEXT,
-    object_hash TEXT    REFERENCES objects(hash),   -- pins the payload's body against the collector, or NULL
-    attempts    INTEGER NOT NULL DEFAULT 0,
-    error       TEXT                                -- last failure; non-NULL means parked
-) STRICT;
+    target_collection TEXT CHECK (typeof(target_collection) IN ('text', 'null')),
+    object_hash TEXT CHECK (typeof(object_hash) IN ('text', 'null')) REFERENCES objects(hash),  -- pins the payload's body against the collector, or NULL
+    attempts    INTEGER NOT NULL DEFAULT 0 CHECK (typeof(attempts) = 'integer'),
+    error       TEXT CHECK (typeof(error) IN ('text', 'null'))  -- last failure; non-NULL means parked
+);
 
 -- What became of an applied action (§15.2, §15.4), keyed by the queue row's id:
 -- application deletes the row, so a producer holding the id its enqueue
@@ -694,10 +744,10 @@ CREATE TABLE queue (
 -- item, and the receipt still says what the add created.
 CREATE TABLE receipts (
     id         INTEGER PRIMARY KEY,        -- the applied queue row's id
-    applied_at TEXT    NOT NULL,           -- RFC 3339, Z (§13)
-    collection TEXT    NOT NULL REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
-    seq        INTEGER                     -- the item an `add` created, else NULL
-) STRICT;
+    applied_at TEXT    NOT NULL CHECK (typeof(applied_at) = 'text'),  -- RFC 3339, Z (§13)
+    collection TEXT    NOT NULL CHECK (typeof(collection) = 'text') REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    seq        INTEGER CHECK (typeof(seq) IN ('integer', 'null'))  -- the item an `add` created, else NULL
+);
 
 -- A reader overlays a collection's pending actions (§15.4).
 CREATE INDEX queue_by_collection ON queue(collection, id);
@@ -714,19 +764,27 @@ BEGIN
     SELECT RAISE(ABORT, 'collection holds queued actions');
 END;
 
--- Cross-source identity lookup (dedup, thread stitching) and refcount navigation.
-CREATE INDEX items_by_object ON items(object_hash);
-CREATE INDEX bindings_by_object ON bindings(base_object);
+-- Cross-source identity lookup (dedup, thread stitching) and refcount
+-- navigation. A pointer index is partial on the pointer being set: most rows
+-- point at nothing, an equality implies the pointer is set, and so the foreign
+-- key check of an object's delete seeks it as it would the whole index.
+CREATE INDEX items_by_object ON items(object_hash) WHERE object_hash IS NOT NULL;
+-- The other side of items_by_object: each collection's live rows holding no
+-- body, which the search part's coverage counts per collection (SEARCH.md
+-- §8.2) by a seek. Partial, so a fully synced collection adds nothing, and
+-- covering, the two columns it is partial on costing a byte each.
+CREATE INDEX items_bodiless ON items(collection, deleted, object_hash) WHERE object_hash IS NULL AND deleted = 0;
+CREATE INDEX bindings_by_object ON bindings(base_object) WHERE base_object IS NOT NULL;
 -- The collector's scan (§5). Partial, so it holds only what is about to be
 -- collected and is empty at rest.
 CREATE INDEX objects_garbage ON objects(refcount) WHERE refcount <= 0;
 -- The other four pointers at an object, so recompute_refcounts reaches every
 -- reference by index rather than scanning items, bindings and queue once per
 -- object.
-CREATE INDEX items_by_conflict_object ON items(conflict_object);
-CREATE INDEX bindings_by_conflict_object ON bindings(conflict_object);
-CREATE INDEX bindings_by_shared_object ON bindings(shared_object);
-CREATE INDEX queue_by_object ON queue(object_hash);
+CREATE INDEX items_by_conflict_object ON items(conflict_object) WHERE conflict_object IS NOT NULL;
+CREATE INDEX bindings_by_conflict_object ON bindings(conflict_object) WHERE conflict_object IS NOT NULL;
+CREATE INDEX bindings_by_shared_object ON bindings(shared_object) WHERE shared_object IS NOT NULL;
+CREATE INDEX queue_by_object ON queue(object_hash) WHERE object_hash IS NOT NULL;
 -- The bindings waiting for a decision (list_conflicted_bindings). Partial, so
 -- it holds only what is outstanding and is empty at rest: a run reports that
 -- count on every invocation, and without it the report scans every binding.
@@ -738,3 +796,7 @@ CREATE INDEX bindings_conflicted ON bindings(collection, link_id, source) WHERE 
 -- and one that does not fails here rather than leaving two rows the lookup
 -- answers from at random.
 CREATE UNIQUE INDEX bindings_by_handle ON bindings(collection, source, handle);
+-- Where a source binds one link id in any collection (origin_for_link,
+-- destination_for_link): a Created or a Tombstone placement reads it once,
+-- which the key, leading with the collection, cannot serve.
+CREATE INDEX bindings_by_link ON bindings(link_id, source);

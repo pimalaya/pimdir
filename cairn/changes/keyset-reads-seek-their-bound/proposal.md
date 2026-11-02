@@ -1,7 +1,7 @@
 ---
 cairn: change
 id: keyset-reads-seek-their-bound
-status: active
+status: landed
 created: 2026-10-30
 ---
 
@@ -23,3 +23,7 @@ No schema moves: every edit is to a statement's text, keeping its name, paramete
 ## Lands in
 
 The next STORAGE text after the rewrite, as a patch.
+
+## Landed
+
+On 2026-10-31, with the release audit's batch 3 (cairn/log/2026-10-31-keyset-reads-seek-their-bound.md): the leading-key bound became the cursor's own row value, coalesced, a page over a set of collections a merge of each collection's seek, and the audit's schema changes (`items_by_sort_global` dropped among them) landed beside it, so the change is not the patch its What foresaw.

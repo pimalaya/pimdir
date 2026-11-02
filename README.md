@@ -1,8 +1,8 @@
 # 📁 Pimdir [![Matrix](https://img.shields.io/badge/chat-%23pimalaya-blue?style=flat&logo=matrix&logoColor=white)](https://matrix.to/#/#pimalaya:matrix.org) [![Mastodon](https://img.shields.io/badge/news-%40pimalaya-blue?style=flat&logo=mastodon&logoColor=white)](https://fosstodon.org/@pimalaya) [![Sponsor](https://img.shields.io/badge/sponsor-pink?style=flat&logo=github-sponsors&logoColor=white)](https://pimalaya.org/sponsor/)
 
-Pimdir is **local-first standard** for **personal information**: mail, contacts, calendars, tasks and files in **one portable store**, kept **a replica of every source**, and **searchable** through one query language.
+Pimdir is a **local-first standard** for **personal information**: mail, contacts, calendars, tasks and files in **one portable store**, kept **a replica of every source**, and **searchable** through one query language.
 
-The canonical part is the schema, the reference statements and the test vectors, so every implementation agrees on the same store. [io-pimdir](https://github.com/pimalaya/io-pimdir) is the reference implementation.
+The canonical part is the schema, the reference statements, the payload schemas and the test vectors, so every implementation agrees on the same store. [io-pimdir](https://github.com/pimalaya/io-pimdir) is the reference implementation.
 
 ## Table of contents
 
@@ -25,7 +25,7 @@ The canonical part is the schema, the reference statements and the test vectors,
 - **Scalable**: real indexes, a change feed, and keyset pages that cost the same at any depth
 - **Transactional**: a flag change or a multi-item move is one atomic commit
 - **Deduplicated**: a body is stored once, by content hash
-- **Retentive**: an upstream expunge never erases the local copy; only an explicit purge does
+- **Retentive**: an upstream expunge never removes the local copy; only an explicit purge does, and an erasure clears it from the files
 - **Offline-first**: every edit is staged locally and reconciled by a three-way merge
 - **Searchable**: a full-text index over bodies, occurrences and threads
 
@@ -46,7 +46,7 @@ Two informative documents around them:
 
 Sync and search are optional, but neither stands without the store. Where the overview or the guide disagrees with a part, the part wins.
 
-Two things to know first: removal is a **soft delete** (only an explicit purge erases), and the **action queue** is how any process other than the store's owner writes to it.
+Two things to know first: removal is a **soft delete** (only an explicit purge removes, and an erasure clears what it leaves in the files), and the **action queue** is how any process other than the store's owner writes to it.
 
 ## Usage
 
@@ -54,7 +54,7 @@ There are three ways to use the standard, from the most work to the least. They 
 
 ###   Implement the documents
 
-Write the store yourself, in any language with a SQLite binding, from the three parts and the guide. Run the canonical schema and statements verbatim (the recommended shape, on SQLite 3.37 or newer), or a shape of your own on an older SQLite, named in `store_meta.shape` (STORAGE §4.1). The test vectors say when you are done: the model vectors bind every shape, checks/ the canonical one.
+Write the store yourself, in any language with a SQLite binding, from the three parts and the guide. Create the store with the canonical schema, which loads on SQLite 3.18 or newer, and run the canonical statements verbatim on SQLite 3.37 or newer, or statements of your own on an older one keeping their names, parameters, results and effects (STORAGE §4.1, §4.4). The test vectors say when you are done: the model vectors bind every implementation, checks/ the canonical text.
 
 This suits the small profiles: readers, producers and query clients.
 
@@ -80,8 +80,9 @@ SEARCH.md       the search layer (normative, optional)
 GUIDE.md        the implementation guide (informative)
 migrations/     canonical schema migrations: storage/ and search/
 queries/        the reference statements, one file each
+payloads/       the JSON Schemas of the queue's payloads
 vectors/        the normative test data
-checks/         schema, statement, name and vector checks (nix flake check)
+checks/         schema, floor, statement, name, vector and reference checks (nix flake check), tags (CI)
 conventions/    Pimalaya's own conventions, outside the standard (gtd.md)
 cairn/          the dated history (log/) and audit ledgers (changes/)
 ```
@@ -90,11 +91,13 @@ The history follows [Cairn](https://github.com/pimalaya/cairn), the documents th
 
 ## Status
 
-Draft: **storage-draft-07**, **sync-draft-06** and **search-draft-07**, each named by a git tag. An implementation states the version of each part it conforms to.
+Draft: **storage-draft-08**, **sync-draft-07** and **search-draft-08**, each named by a git tag. An implementation states the version of each part it conforms to.
 
 A released part is versioned `<part>-vX.Y.Z`: STORAGE's major is the store schema version, SEARCH's the index schema version, SYNC's a breaking change to the connector seam or the engine.
 
-STORAGE freezes first, once the reference implementation passes every check and vector and a real store survives one upgrade cycle. Until then, schema version 1 is edited in place and an older draft store is reconciled on open; after it, every schema change is a migration.
+While STORAGE is a draft, a store opens only under the exact draft that wrote it, every other draft and every release refusing it: a program built on a draft is reinstalled over a new store, never upgraded.
+
+STORAGE freezes first, once the reference implementation passes every check and vector at the draft to be released. Until then, schema version 1 is edited in place; after it, every schema change is a migration, stating which older readers and producers may still open the store.
 
 ## License
 
@@ -102,6 +105,8 @@ This project is licensed under either of:
 
 - [MIT license](LICENSE-MIT)
 - [Apache License, Version 2.0](LICENSE-APACHE)
+
+at your option. That covers all of it: the documents, the canonical SQL under migrations/ and queries/, the payload schemas under payloads/, the vectors, their fixtures and their schemas under vectors/, the conventions and the checks. Each JSON Schema and each check script states it as `SPDX-License-Identifier: MIT OR Apache-2.0`.
 
 ## Social
 

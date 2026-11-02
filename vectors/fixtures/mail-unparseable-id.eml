@@ -1,0 +1,7 @@
+Message-ID: 4711 at relay
+Subject: Relay notice
+From: Relay <relay@example.org>
+To: bob@example.org
+Date: Sat, 01 Aug 2026 10:00:00 +0000
+
+A bracketless Message-ID holding whitespace names nothing.
