@@ -367,7 +367,8 @@
         "cursor": { "$ref": "#/$defs/maybe" },
         "checkpoint": { "$ref": "#/$defs/maybe" },
         "narrowed": { "type": "boolean" },
-        "enumerated": { "$ref": "#/$defs/handles" }
+        "enumerated": { "$ref": "#/$defs/handles" },
+        "capped": { "type": "boolean" }
       }
     },
     "head": {

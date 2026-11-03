@@ -1,0 +1,45 @@
+{
+  "v": 3,
+  "label": "a copy of a placement holding no body into a collection its source does not sync is refused",
+  "note": "a's card is at Meta, its body never fetched, and the person copies it into Work, which only b syncs. A create holding no body is delivered only by a server-side copy from its origin, which a alone holds and which a's sync of Work would push; but a syncs no Work, and b is offered the create only once the store holds its body. Staged, it would wait for ever, so the copy is refused, staging nothing, for the upgrade to fetch the body first (SYNC.md §7)",
+  "store": {
+    "collections": [
+      { "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" },
+      { "id": "Work", "account": null, "kind": "text/vcard", "conflict": "manual" }
+    ],
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0 }],
+    "bindings": [
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": null, "base_revision": "r1", "base_present": 1 }
+    ],
+    "sources": [
+      { "collection": "Contacts", "source": "a", "checkpoint": "a1" },
+      { "collection": "Work", "source": "b", "checkpoint": "b1" }
+    ],
+    "objects": {}
+  },
+  "run": { "verb": "mutate", "collection": "Contacts", "source": "a", "mutation": { "kind": "Copy", "seq": 1, "to": "Work" } },
+  "remote": {
+    "snapshot": null,
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "failed": true,
+    "store": {
+      "collections": [
+      { "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" },
+      { "id": "Work", "account": null, "kind": "text/vcard", "conflict": "manual" }
+    ],
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0 }],
+    "bindings": [
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": null, "base_revision": "r1", "base_present": 1 }
+    ],
+    "sources": [
+      { "collection": "Contacts", "source": "a", "checkpoint": "a1" },
+      { "collection": "Work", "source": "b", "checkpoint": "b1" }
+    ]
+    }
+  }
+}

@@ -98,7 +98,7 @@
     "vectors/schema/search-queries.schema.json": "53e3c285601ceb22bacc5fbbdd48fadf96d5241fe3992c541410d4b4f2cff9df",
     "vectors/schema/search-store.schema.json": "9dbc82edf388f855ab33f29a73935c715cb028743625034c230d608ba0eb4447",
     "vectors/schema/summaries.schema.json": "5dcd70af3d37d44420d5b5289ba5643a6e8905f0c9dc63d285e91a57287f4a54",
-    "vectors/schema/sync.schema.json": "5fc273b9b34d6848eb694eae489142652c8b1d43d5554fb5bc3320903cddbb2c",
+    "vectors/schema/sync.schema.json": "80c4ed28a23a734d8c0a66ff276364fbaa56a6884fe090e2b168b37a68f00add",
     "vectors/search/chunks.json": "6fc4e98bdf1306f7d5a2635fa2db4c3d96dc8856fbd61df49bc2f67d4d44de3a",
     "vectors/search/queries.json": "972cf01d0e2156ce83142c16a01a199b2384eefd24f96b808513bf185ad1b50b",
     "vectors/search/store.json": "96c8f875c1c550e2ce6e7f8ed18287b1ba9dbb1136be595d530494aa14f47fad",
@@ -147,6 +147,11 @@
     "vectors/sync/129-a-resolution-naming-one-of-two-conflicts-parks.json": "6d2e7ecfb9eb99870dac064808746173d45c88b7abf3403cba32e60a8c87de8b",
     "vectors/sync/13-both-edited-manual-conflicts.json": "6c616893ae34e7ace6ea69701a32dd6ff31ce403eaadd2315d1c50aa8ab80ebc",
     "vectors/sync/130-a-fetch-meeting-a-failing-file-under-its-name-files-it-again.json": "a256cda0367e4f5e530f6e1f8fe1f0ca334940d44fbcc1c06c4c5c71b20435d2",
+    "vectors/sync/131-a-resolution-naming-both-conflicts-settles-both.json": "bbda6b45f77c2b9fc564d92ab80a8269d74060530eaf566ee329f3bc9f52b4fc",
+    "vectors/sync/132-an-edit-over-an-unread-base-waits-for-its-body.json": "efdca3021c8cff63d73afd8eac9c49817ff4e85e39cd7981175418f7971ee0e2",
+    "vectors/sync/133-an-upgrade-reads-the-unread-base-under-an-edit.json": "cc8d4775e128cd5c76b6fdd79879fe7b6b2ab3e5fbc1dcf80b50479a035a81a8",
+    "vectors/sync/134-a-capped-round-finds-no-member-absent.json": "391fb922639e7fa32d1c48eb1a5e321711b6c3424fc62695cef2bbb1b84dfb8a",
+    "vectors/sync/135-a-bodiless-copy-to-another-source-is-refused.json": "79f0e1e41dea5cfe542a60f5bda7863d8b29e345fbf8daee1105d3cf6f607837",
     "vectors/sync/14-both-edited-prefer-remote-pulls.json": "3357cb86e1ee835b72252e36cb3dca7a1004b0c1d83ab251b6e673069f3c353f",
     "vectors/sync/15-both-edited-prefer-local-over-an-unread-body-conflicts.json": "aacf9e098c9bfd1b84273a4dc112fc7332bd599f8102a28dcfa8d3000a72915f",
     "vectors/sync/16-vanished-local-edit-restages-a-create.json": "db7d2649db9d74c45239e8a3cab93b0feb92908e484a9b00cdb70879630c64a5",
@@ -258,5 +263,5 @@
       "/cases": 59
     }
   },
-  "sync": 130
+  "sync": 135
 }

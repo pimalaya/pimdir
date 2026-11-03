@@ -1749,6 +1749,14 @@ for path in sync_cases:
         item = after_items.get((binding["collection"], binding["link_id"]), {})
         if item.get("deleted") == 1 or item.get("conflicted") == 1:
             continue
+        # An edit staged before the run waits (SYNC.md section 5).
+        before = next((b for b in store.get("bindings", []) if b["collection"] == binding["collection"]
+                       and b["source"] == binding["source"] and b["handle"] == binding["handle"]), {})
+        held = next((i for i in store.get("items", []) if i["collection"] == binding["collection"]
+                     and i["link_id"] == binding["link_id"]), {})
+        if before.get("base_revision") == binding["base_revision"] and before.get("base_object") is None \
+                and held.get("object") == item.get("object"):
+            continue
         require(f"{label}: binding {binding['handle']}, its server's body unread, faces no body it would push over it", item.get("object") is None)
     # No collection policy chooses against a body nobody read (SYNC.md section
     # 9): a prefer- settle reported Overruled leaves the item holding a body,
@@ -1776,9 +1784,7 @@ for path in sync_cases:
     # policy's push over the server's body or a revived row's, is gated on one
     # whose body the run read, a member carrying it or a fetch answering it,
     # never on one nobody read; a body read and pushed over is kept, a retained
-    # item holding it (SYNC.md sections 5 and 6, STORAGE.md section 11.1). A
-    # local edit over a base naming its revision and no body is not judged
-    # here.
+    # item holding it (SYNC.md sections 5 and 6, STORAGE.md section 11.1).
     based = {b["handle"]: b for b in store.get("bindings", [])
              if b["collection"] == run["collection"] and b["source"] == run["source"]}
     fixtures_of = {object_label: spec["body"] for object_label, spec in store.get("objects", {}).items()}
@@ -1792,7 +1798,7 @@ for path in sync_cases:
             continue
         gate = push.get("if_match")
         base = based.get(push["handle"], {})
-        agreed = bool(base) and base.get("base_revision") == gate
+        agreed = bool(base) and base.get("base_revision") == gate and base.get("base_object") is not None
         carried = [member for page in pages for member in page["items"]
                    if member["handle"] == push["handle"] and member.get("revision") == gate and member.get("carries") is True]
         fetched = any(answer.get("revision") == gate and answer.get("body")
@@ -1834,16 +1840,20 @@ for path in sync_cases:
     last_page = listing[-1] if listing else {}
     narrowed = last_page.get("narrowed") is True
     enumerated = last_page.get("enumerated")
+    capped = last_page.get("capped") is True
     opened = (row.get("round_started_at") if row.get("round_open") else None) or \
         datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     for at, page in enumerate(listing):
         require(f"{label}: page {at} of a narrowed listing says so, as every page of the round does", page.get("narrowed", False) == narrowed)
+        require(f"{label}: page {at} of a capped listing says so, as every page of the round does", page.get("capped", False) == capped)
         require(f"{label}: page {at} hands an enumeration only as the last page of a narrowed round",
                 "enumerated" not in page or (page is last_page and narrowed and isinstance(page["enumerated"], list)))
         require(f"{label}: page {at} is narrowed only on a mail collection, by a date filter", not page.get("narrowed")
                 or all(c["kind"] == "message/rfc822" for c in store.get("collections", [])))
 
     def provable(binding):
+        if capped:
+            return False
         if not narrowed:
             return True
         date_ = dates.get(binding["link_id"])
@@ -1932,6 +1942,18 @@ for path in sync_cases:
             require(f"{label}: an Edit settling a conflict nobody resolved, or resolving one that does not stand, fails", case["expect"].get("failed") is True)
             for table in ("items", "bindings"):
                 check(f"{label}: a refused resolution leaves the {table} as they were", after.get(table, store.get(table)), store.get(table))
+    # A bodiless Copy or Move needs its source to sync the target (SYNC.md
+    # section 7).
+    if mutation.get("kind") in ("Copy", "Move"):
+        item = next((i for i in store.get("items", []) if i["collection"] == run["collection"] and i["seq"] == mutation["seq"]), {})
+        binding = next((b for b in store.get("bindings", []) if b["collection"] == run["collection"]
+                        and b["link_id"] == item.get("link_id") and b["source"] == run["source"]), {})
+        syncs = any(row["collection"] == mutation["to"] and row["source"] == run["source"]
+                    for row in store.get("bindings", []) + store.get("sources", []))
+        if item.get("object") is None and not (binding.get("base_present") == 1 and syncs):
+            require(f"{label}: a {mutation['kind']} no body nor origin could deliver fails", case["expect"].get("failed") is True)
+            for table in ("items", "bindings"):
+                check(f"{label}: a refused {mutation['kind']} leaves the {table} as they were", after.get(table, store.get(table)), store.get(table))
     for push in case["expect"].get("pushes", []):
         require(f"{label}: push {push.get('handle')} names a kind", push.get("kind") in {"Add", "Remove", "SetFlags", "Update"})
         require(f"{label}: push {push.get('handle')} carries a key", "key" in push)

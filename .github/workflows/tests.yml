@@ -29,3 +29,25 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - run: bash checks/tags.sh
+
+  # io-pimdir, at the revision checks/io-pimdir.rev pins, runs this tree's
+  # vectors: the freeze gate (README.md, Status).
+  implementation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          path: pimdir
+          persist-credentials: false
+      - id: rev
+        run: echo "rev=$(tr -d '[:space:]' < pimdir/checks/io-pimdir.rev)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: pimalaya/io-pimdir
+          ref: ${{ steps.rev.outputs.rev }}
+          path: io-pimdir
+          persist-credentials: false
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+        with:
+          extra_nix_config: experimental-features = nix-command flakes
+      - run: bash pimdir/checks/implementation.sh io-pimdir

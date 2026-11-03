@@ -628,6 +628,10 @@ A store is opened as one source. `load` reads the shared items and that source's
 
   A `Superseded` or `Rekeyed` drop marks nothing deleted.
 - `StoreObject { hash, size, bytes? }`: an object row, with its bytes, or naming a body a consumer already streamed to its path through §5's write.
+- `Overrule { handle }`: the next upsert of `handle` in the batch settles its conflicts by an engine's or a connector's rule (SYNC.md §7), so each diverging body it does not adopt, the binding's `conflict_object` then the item's, is kept as a retained item (§11, SYNC.md §9). It MUST be refused when a conflict it settles holds no diverging body. With no conflict standing it keeps nothing.
+- `Settle { handle }`: the next upsert of `handle` in the batch is a person's resolution of the item's conflict (SYNC.md §7): the item takes the upsert's body, `items.conflicted` cleared and its `conflict_object` released, nothing kept. An item in no conflict ignores it.
+
+  Both precede the upsert they qualify, and only they tell it from a sync's upsert, which leaves an item's conflict standing and keeps what a policy discards (SYNC.md §9).
 - `SetCheckpoint { checkpoint }` and `SetCoverage { since, until }`: the source's checkpoint, and a narrower coverage it serves (§10).
 - `OpenRound { since, until, band }`, `Stamp { handles }`, `SetRoundCursor { cursor, checkpoint }` and `CloseRound { since, until, checkpoint }`: a round's (§10). `OpenRound` comes first in its batch, `Stamp` after the upserts of the handles it names, and `CloseRound` last; a `SetRoundCursor` naming no cursor keeps the one recorded.
 

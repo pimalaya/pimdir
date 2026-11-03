@@ -1,0 +1,39 @@
+{
+  "v": 3,
+  "label": "an edit through a binding in conflict, over an item in conflict, resolving both settles both in one write",
+  "note": "the store of 129, whose resolves now names c2 and c4: the person decided over both diverging bodies. The item takes c3, its conflict cleared and c2 released; b's base adopts its conflict's revision and body (s3, c4) and its conflict clears, so b owes c3 gated on s3; b's shared_object moves to c3, a's stays. Nothing is retained nor reported, a person's resolution keeping nothing it discards (SYNC.md §7, §9; STORAGE.md §14, Settle)",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
+    "objects": { "c1": { "body": "fixtures/card-basic.vcf" }, "c2": { "body": "fixtures/card-basic-edited.vcf" }, "c3": { "body": "fixtures/card-basic-renamed.vcf" }, "c4": { "body": "fixtures/card-basic-retitled.vcf" } },
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c3", "level": 2, "deleted": 0, "conflicted": 1, "conflict_object": "c2" }],
+    "bindings": [
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": "c3", "base_revision": "r2", "base_present": 1, "shared_object": "c3" },
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "b", "handle": "b.vcf", "base_flags": [], "base_object": "c2", "base_revision": "s2", "base_present": 1, "conflicted": 1, "conflict_revision": "s3", "conflict_object": "c4", "shared_object": "c1" }
+    ],
+    "sources": [
+      { "collection": "Contacts", "source": "a", "checkpoint": "a1" },
+      { "collection": "Contacts", "source": "b", "checkpoint": "b1" }
+    ]
+  },
+  "run": { "verb": "mutate", "collection": "Contacts", "source": "b", "mutation": { "kind": "Edit", "seq": 1, "object": "c3", "if_match": "c3", "resolves": ["c2", "c4"] } },
+  "remote": {
+    "snapshot": null,
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c3", "level": 2, "deleted": 0, "conflicted": 0, "conflict_object": null }],
+      "bindings": [
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": "c3", "base_revision": "r2", "base_present": 1, "shared_object": "c3" },
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "b", "handle": "b.vcf", "base_flags": [], "base_object": "c4", "base_revision": "s3", "base_present": 1, "conflicted": 0, "conflict_revision": null, "conflict_object": null, "shared_object": "c3" }
+      ],
+      "sources": [
+        { "collection": "Contacts", "source": "a", "checkpoint": "a1" },
+        { "collection": "Contacts", "source": "b", "checkpoint": "b1" }
+      ]
+    }
+  }
+}

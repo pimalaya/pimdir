@@ -11,6 +11,6 @@ change: two-silent-losses-fold-into-draft-08
 - [x] STORAGE §5: the exclusive create and copy, a name held verified, an owner's quarantine and a producer's failure; §7 and §18 follow; the Android note; vector 130
 - [x] GUIDE §1, §4, §11, §13, §16, OVERVIEW §1 and §6, vectors/README.md follow; vectors/manifest.json restated
 - [x] `nix flake check path:$PWD` and checks/tags.sh green (2026-11-01); log cairn/log/2026-11-01-two-silent-losses-fold-into-draft-08.md
-- [ ] A resolution naming both an item's conflict and a binding's settles both in one write: no vector states the rows it leaves (129 pins only the refusal of a resolution naming one), open for the io-pimdir work to propose against SYNC §7
+- [x] A resolution naming both an item's conflict and a binding's settles both in one write: no vector states the rows it leaves (129 pins only the refusal of a resolution naming one), open for the io-pimdir work to propose against SYNC §7 Closed by cairn/log/2026-11-03-the-freeze-gaps-fold-into-draft-08.md (vector 131).
 - [ ] A producer meeting its name held by a failing file waits for the owner to free it, by a write, a read or a collection of its own; no owner operation verifies a name on request: open, low
 - [ ] vectors/sync/ has no way to state a file under a name with no row, the crash's own state; vector 130 stands for it with a row nothing points at: open, low

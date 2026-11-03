@@ -124,7 +124,7 @@ A mail collection may be synced under a **scope**: a window on each message's ow
 
 - it is inside the window;
 - the round has listed everything;
-- the listing could have named it: a listing narrowed by arrival date proves nothing of a message without a usable date, or dated ahead of its arrival, unless the source also enumerates every identifier in the folder;
+- the listing could have named it: a listing narrowed by arrival date proves nothing of a message without a usable date, or dated ahead of its arrival, unless the source also enumerates every identifier in the folder; and a listing the server caps at a number of messages proves nothing at all;
 - the deletion would not remove most of a large mailbox at once, nor follow from a listing that named nothing at all (such a round is held open until the user confirms).
 
 What a source says it removed is removed whatever its date, and what the user changed is pushed whatever its date. A sync deletes on a server only what the user deleted or another server removed.
