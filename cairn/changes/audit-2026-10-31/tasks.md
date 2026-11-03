@@ -100,7 +100,7 @@ Severity is high, medium or low; reviewers are sec(urity), perf(ormance), spec (
 ## Followers
 
 - [x] io-pimdir follows storage-draft-08, sync-draft-07 and search-draft-08, and its spec suites fail rather than skip in CI without the spec checkout. Done: io-pimdir the-crate-follows-storage-draft-08, landed 2026-11-02, re-vendored at b63b39a.
-- [ ] pimdir's CI runs io-pimdir's vector runner at a pinned revision once io-pimdir follows.
+- [x] pimdir's CI runs io-pimdir's vector runner at a pinned revision once io-pimdir follows. Done: checks/implementation.sh in CI, io-pimdir pinned in checks/io-pimdir.rev (first 4e64216, cairn/log/2026-11-03-the-freeze-gaps-fold-into-draft-08.md).
 - [x] The Android shape shrinks to its statements (android cairn/changes/platform-sqlite). Done: android cairn/log/2026-11-01-platform-sqlite.md.
 - [x] io-pimdir reads a message's header and resolves a zoned time as Annex A.1 and A.3 now say (its `instant`, `strip_angles`, `message_ids`, `decode`, `mailboxes` and calendar `resolve` differ, listed in cairn/log/2026-10-31-identity-and-derivations.md), records revision 3 and re-derives held mail, binds `:collection` to `seq_for_link_any` and re-vendors vectors/; the Android app follows it. Done: io-pimdir the-crate-follows-storage-draft-08, landed 2026-11-02, re-vendored at b63b39a.
 - [x] The Android app names bodies by BLAKE3 alone, one shard level deep, and reads a queued body from `queue.object_hash` (it creates `sha256-128` stores today, 2026-10-30-every-vocabulary-is-open-or-closed); io-pimdir drops `:hash_algo` from `init_store_meta` and reads objects.json `v` 2 and summaries.json `v` 3 (cairn/log/2026-10-31-the-blob-store.md). Done: android cairn/log/2026-11-01-platform-sqlite.md.
