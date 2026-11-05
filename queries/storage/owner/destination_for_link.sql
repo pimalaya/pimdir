@@ -5,7 +5,7 @@
 -- provisional handle it derives, the bare key first; its handle tells which.
 -- The counterpart of origin_for_link, read from the same rows, both keys a
 -- seek on bindings_by_link.
-SELECT collection, handle FROM bindings
-WHERE (link_id = :link_id OR link_id = 'dup:' || :link_id || '#' || char(1) || :link_id)
-  AND source = :source AND collection != :collection AND base_present = 0
-ORDER BY link_id != :link_id, collection LIMIT 1;
+SELECT b.collection, b.handle FROM items i JOIN bindings b ON b.item = i.id
+WHERE (i.link_id = :link_id OR i.link_id = 'dup:' || :link_id || '#' || char(1) || :link_id)
+  AND b.source = :source AND b.collection != :collection AND b.base_present = 0
+ORDER BY i.link_id != :link_id, b.collection LIMIT 1;

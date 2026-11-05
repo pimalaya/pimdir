@@ -133,12 +133,12 @@ pages=(":after_collection=NULL" ":after_key=NULL" ":after_seq=NULL" ":limit=10" 
 for statement in list_mail_page_filtered search_mail; do
     steps="$(floor_plan "$statement" "${pages[@]}")"
     floor_expect "page: $statement merges each collection's seek below the cursor, scanning nothing" \
-        "$(grep -c 'CORRELATED LIST SUBQUERY' <<<"$steps" || true)$(grep -c 'USING INDEX items_by_sort (collection=? AND .*(sort_key,seq)<(?,?))' <<<"$steps" || true)$(grep -c 'SCAN TABLE items AS i\b' <<<"$steps" || true)" "110"
+        "$(grep -c 'CORRELATED LIST SUBQUERY' <<<"$steps" || true)$(grep -cE 'USING (COVERING )?INDEX items_by_sort \(collection=\? AND .*\(sort_key,seq\)<\(\?,\?\)\)' <<<"$steps" || true)$(grep -c 'SCAN TABLE items AS i\b' <<<"$steps" || true)" "110"
 done
 for statement in search_contacts search_calendar search_files; do
     steps="$(floor_plan "$statement" "${pages[@]}")"
     floor_expect "page: $statement merges each collection's seek above the cursor, scanning nothing" \
-        "$(grep -c 'CORRELATED LIST SUBQUERY' <<<"$steps" || true)$(grep -c 'USING INDEX items_by_sort (collection=? AND (sort_key,seq)>(?,?))' <<<"$steps" || true)$(grep -c 'SCAN TABLE items AS i\b' <<<"$steps" || true)" "110"
+        "$(grep -c 'CORRELATED LIST SUBQUERY' <<<"$steps" || true)$(grep -cE 'USING (COVERING )?INDEX items_by_sort \(collection=\? AND \(sort_key,seq\)>\(\?,\?\)\)' <<<"$steps" || true)$(grep -c 'SCAN TABLE items AS i\b' <<<"$steps" || true)" "110"
 done
 for statement in list_mail_page_desc list_items_page_desc; do
     floor_expect "page: $statement seeks its cursor on items_by_sort, the first page's too" \

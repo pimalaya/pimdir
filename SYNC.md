@@ -1,6 +1,6 @@
 # Pimdir sync specification
 
-Status: sync-draft-07, requiring storage-draft-08
+Status: sync-draft-08, requiring storage-draft-09
 
 The sync part of the pimdir standard: how one or more sources reconcile through a store ([STORAGE.md](./STORAGE.md)), so the store is an offline replica of each source and every source sees every other's changes. It fixes what an engine derives from the store's rows and a source's answers, and what it writes back.
 
@@ -538,7 +538,8 @@ Every verb begins with a load naming a collection and a selection, `All`, `Handl
 
 - A mutation asks for the one placement it edits, or for every holder of the link id an `Add` must not collide with. A `Copy` or a `Move` also loads its target for the identity it carries into it, and the sources syncing the target (`collection_sources`) for a placement holding no body (§7).
 - An upgrade asks for the handles it raises.
-- A delta, the last page of a round and a rekey ask for the whole collection, being the only steps that reason about what is missing from it.
+- A delta, reasoning about what it does not list only through what owes a push, asks for `Handles` of the members it lists or drops and of those `list_owing_bindings` names, and for `Links` of the hints it carries and of those `list_lacking_items` names: every placement a push or a propagation can concern, so its load grows with what moved, not with the collection.
+- The last page of a round and a rekey ask for the whole collection: what each finds absent, and whether a mass absence parks it (§5, §8), is counted over every based binding of the source in its scope.
 - A page before the last and a head ask for `Handles` of their members and `Links` of the hints they carry, which naming them needs (§6).
 
 Every verb ends in a batch. A sync's carries the round's own operations: `OpenRound` first in its first page's batch, `Stamp` after the page's upserts, `SetRoundCursor` with every page and head (a head's carrying no cursor, so the one a page landed stays), `CloseRound` last in the write after the last chunk, and `SetCoverage` beside a delta's checkpoint. Its drops are `Deleted` for a member gone from the source, `Superseded` for a provisional handle an accepted add or a landed arrival replaced (§4, §6), and `Rekeyed` for a handle a rekey renumbered (§8). A mutation's `Edit` states `Overrule` before its upsert when it carries `overrule`, and `Settle` when its `resolves` names the item's conflict (§7); an upgrade settling a conflict under `PreferLocal` states `Overrule` before the upsert adopting the fetched body (§6).
@@ -547,7 +548,7 @@ A batch is cut between candidates, never inside one, and a rekey is never cut. T
 
 **The write keys another message apart.** A `Links` load answers this source's holders alone, so a page before the last, a head and an upgrade name a member without seeing an item another source binds under the same hint, and cannot apply §6's rule for another message reusing a `Message-ID`. The write applies it whichever step named the member (STORAGE §14), and an engine whose load showed the row mints the member the same way first, so both name it alike.
 
-**The version of the sync state.** An engine records its version, this part's (`sync-draft-07` now), in `store_meta.sync_version` with `set_sync_version` (STORAGE §14), in the transaction of its first write to a store naming none. A store naming none holds no sync state yet.
+**The version of the sync state.** An engine records its version, this part's (`sync-draft-08` now), in `store_meta.sync_version` with `set_sync_version` (STORAGE §14), in the transaction of its first write to a store naming none. A store naming none holds no sync state yet.
 
 While this part is a draft, an engine MUST refuse a store whose `sync_version` names another version than its own draft's, naming both, and run no verb on it: a draft's sync state is read under that draft alone, as a draft's store is (STORAGE §4.2). Once this part is released, an engine MUST refuse sync state a draft wrote, or a major above its own; sync state of a major below its own it reads as that major defines it, and records its own version only in the write converting what the majors between them changed.
 
@@ -577,7 +578,7 @@ Every case pins two rules: no `Remove` is pushed but for a tombstone the store h
 
 ## 12. Conformance
 
-An implementation offering sync conforms by one profile or both, stated as STORAGE §17 says (`sync-draft-07 engine`, `sync-draft-07 connector (IMAP)`), and MUST meet every section its row names and pass the vectors it names.
+An implementation offering sync conforms by one profile or both, stated as STORAGE §17 says (`sync-draft-08 engine`, `sync-draft-08 connector (IMAP)`), and MUST meet every section its row names and pass the vectors it names.
 
 | Profile | What it does | Owes | Vectors |
 | --- | --- | --- | --- |

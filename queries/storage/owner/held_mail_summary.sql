@@ -8,7 +8,7 @@
 -- as in lookup_objects (§9).
 SELECT m.attachment, m.invitation FROM items i
 JOIN collections c ON c.id = i.collection
-JOIN mail_summary m ON m.collection = i.collection AND m.link_id = i.link_id
+JOIN mail_summary m ON m.item = i.id
 WHERE i.link_id = :link_id AND i.object_hash = :object
   AND i.link_id NOT LIKE 'alt:%' AND i.link_id NOT LIKE 'hash:%' AND i.link_id NOT LIKE 'dup:%'
   AND c.account IS :account

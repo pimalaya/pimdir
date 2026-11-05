@@ -9,7 +9,7 @@ SELECT DISTINCT 'message/rfc822', mi.link_id, 'text/calendar', e.link_id, 'invit
 FROM items e
 JOIN collections ec ON ec.id = e.collection AND ec.kind = 'text/calendar'
 JOIN mail_summary s ON s.invitation = e.link_id
-JOIN items mi ON mi.collection = s.collection AND mi.link_id = s.link_id AND mi.deleted = 0
+JOIN items mi ON mi.id = s.item AND mi.deleted = 0
 WHERE e.link_id BETWEEN coalesce(:link_id, '') AND coalesce(:link_id, x'') AND e.deleted = 0
   AND NOT (mi.link_id GLOB 'alt:*' OR mi.link_id GLOB 'dup:*' OR mi.link_id GLOB 'hash:*') AND NOT (e.link_id GLOB 'alt:*' OR e.link_id GLOB 'dup:*' OR e.link_id GLOB 'hash:*')
 ON CONFLICT DO NOTHING;

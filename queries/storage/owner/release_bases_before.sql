@@ -9,16 +9,16 @@ UPDATE bindings SET
        shared_object = CASE WHEN bindings.shared_object = i.object_hash THEN NULL ELSE bindings.shared_object END,
        base_present = 1
 FROM items i
-WHERE bindings.collection = i.collection AND bindings.link_id = i.link_id
+WHERE bindings.item = i.id
   AND (bindings.base_object = i.object_hash OR bindings.shared_object = i.object_hash)
   AND i.collection IN (SELECT value FROM temp.param WHERE slot = 'collections')
   AND i.deleted = 0 AND i.conflicted = 0 AND i.object_hash IS NOT NULL
   AND i.sort_key < coalesce(:until, x'')
   AND (SELECT kind FROM collections c WHERE c.id = i.collection) = 'message/rfc822'
   AND EXISTS (SELECT 1 FROM bindings b
-              WHERE b.collection = i.collection AND b.link_id = i.link_id)
+              WHERE b.item = i.id)
   AND NOT EXISTS (SELECT 1 FROM bindings b
-                  WHERE b.collection = i.collection AND b.link_id = i.link_id
+                  WHERE b.item = i.id
                     AND (b.conflicted = 1
                          OR NOT (b.base_present = 1 OR b.base_flags_known = 1
                                  OR b.base_object IS NOT NULL OR b.base_revision IS NOT NULL)
@@ -26,5 +26,5 @@ WHERE bindings.collection = i.collection AND bindings.link_id = i.link_id
   AND NOT EXISTS (SELECT 1 FROM sources s
                   WHERE s.collection = i.collection
                     AND NOT EXISTS (SELECT 1 FROM bindings b
-                                    WHERE b.collection = i.collection AND b.link_id = i.link_id
+                                    WHERE b.item = i.id
                                       AND b.source = s.source));

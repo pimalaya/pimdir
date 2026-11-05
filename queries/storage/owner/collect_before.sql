@@ -13,29 +13,28 @@
 -- collected.
 DELETE FROM items
 WHERE collection = :collection AND deleted = 0 AND conflicted = 0
-  AND link_id IN (SELECT link_id FROM mail_summary
-                  WHERE collection = :collection AND date < :before)
+  AND id IN (SELECT item FROM mail_summary WHERE date < :before)
   AND EXISTS (SELECT 1 FROM bindings b
-              WHERE b.collection = items.collection AND b.link_id = items.link_id)
+              WHERE b.item = items.id)
   AND NOT EXISTS (SELECT 1 FROM bindings b
-                  WHERE b.collection = items.collection AND b.link_id = items.link_id
+                  WHERE b.item = items.id
                     AND (b.conflicted = 1
                          OR NOT (b.base_present = 1 OR b.base_flags_known = 1
                                  OR b.base_object IS NOT NULL OR b.base_revision IS NOT NULL)
                          OR (items.flags_known = 1 AND b.base_flags_known = 1
-                             AND (EXISTS (SELECT flag FROM placement_flag f
-                                          WHERE f.collection = items.collection AND f.link_id = items.link_id
+                             AND (items.marks != b.base_marks
+                                  OR EXISTS (SELECT flag FROM placement_flag f
+                                          WHERE f.item = items.id
                                           EXCEPT
                                           SELECT flag FROM binding_base_flag g
-                                          WHERE g.collection = b.collection AND g.link_id = b.link_id
+                                          WHERE g.item = b.item
                                             AND g.source = b.source)
                                   OR EXISTS (SELECT flag FROM binding_base_flag g
-                                             WHERE g.collection = b.collection AND g.link_id = b.link_id
+                                             WHERE g.item = b.item
                                                AND g.source = b.source
                                              EXCEPT
                                              SELECT flag FROM placement_flag f
-                                             WHERE f.collection = items.collection
-                                               AND f.link_id = items.link_id)))))
+                                             WHERE f.item = items.id)))))
   AND NOT EXISTS (SELECT 1 FROM item_reference r
                   WHERE r.origin = 'user'
                     AND ((r.from_link_id = items.link_id AND r.from_kind = 'message/rfc822')

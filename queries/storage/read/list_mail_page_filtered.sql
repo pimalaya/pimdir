@@ -10,8 +10,12 @@
 -- stays the seek's bound on the first page too.
 SELECT i.collection, i.seq, i.link_id,
        CASE WHEN i.flags_known = 1
-            THEN coalesce((SELECT group_concat(f.flag, ' ') FROM placement_flag f
-                           WHERE f.collection = i.collection AND f.link_id = i.link_id), '') END AS flags,
+            THEN trim(CASE WHEN i.marks & 1 THEN '\Seen ' ELSE '' END
+                   || CASE WHEN i.marks & 2 THEN '\Answered ' ELSE '' END
+                   || CASE WHEN i.marks & 4 THEN '\Flagged ' ELSE '' END
+                   || CASE WHEN i.marks & 8 THEN '\Draft ' ELSE '' END
+                   || CASE WHEN i.marks & 16 THEN '\Deleted ' ELSE '' END
+                   || coalesce((SELECT group_concat(f.flag, ' ') FROM placement_flag f WHERE f.item = i.id), '')) END AS flags,
        i.object_hash, i.sort_key, i.level,
        s.message_id, s.subject, s.sender, s.sender_name, s.date, s.size, s.attachment
 FROM (SELECT DISTINCT value AS id FROM temp.param WHERE slot = 'collections') p
@@ -23,11 +27,10 @@ JOIN items i ON i.rowid IN (
     AND (x.sort_key, x.seq, x.collection)
         < (coalesce(:after_key, x''), coalesce(:after_seq, 0), coalesce(:after_collection, ''))
     AND (:seen IS NULL
-         OR :seen = EXISTS (SELECT 1 FROM placement_flag f
-                            WHERE f.collection = x.collection AND f.link_id = x.link_id AND f.flag = '\Seen'))
+         OR :seen = (x.marks & 1))
     AND (:attachment IS NULL
          OR EXISTS (SELECT 1 FROM mail_summary a
-                    WHERE a.collection = x.collection AND a.link_id = x.link_id AND a.attachment = :attachment))
+                    WHERE a.item = x.id AND a.attachment = :attachment))
   ORDER BY x.sort_key DESC, x.seq DESC LIMIT :limit)
-LEFT JOIN mail_summary s ON s.collection = i.collection AND s.link_id = i.link_id
+LEFT JOIN mail_summary s ON s.item = i.id
 ORDER BY i.sort_key DESC, i.seq DESC, i.collection DESC LIMIT :limit;

@@ -1,2 +1,2 @@
-INSERT INTO mail_in_reply_to(collection, link_id, position, msg_id)
-VALUES(:collection, :link_id, :position, :msg_id);
+INSERT INTO mail_in_reply_to(item, position, msg_id)
+VALUES((SELECT id FROM items WHERE collection = :collection AND link_id = :link_id), :position, :msg_id);

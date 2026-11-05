@@ -2,5 +2,5 @@
 -- keyed by link id. Rides bindings_by_handle, so it is a seek: answering it by
 -- loading the collection is what makes a one-row write cost a whole-mailbox
 -- read (§14).
-SELECT link_id FROM bindings
-WHERE collection = :collection AND source = :source AND handle = :handle;
+SELECT i.link_id FROM bindings b JOIN items i ON i.id = b.item
+WHERE b.collection = :collection AND b.source = :source AND b.handle = :handle;

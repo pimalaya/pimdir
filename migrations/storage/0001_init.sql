@@ -242,13 +242,22 @@ END;
 -- `retained_at`), keeping its body pinned until an explicit purge (§11).
 --
 -- What the item says about itself is its kind's summary row (§4.4).
+--
+-- `id` is the placement's own key, which every child of it carries: never
+-- reused (AUTOINCREMENT) and never shown, a consumer keeping (collection,
+-- seq) and a writer (collection, link_id), the key the store files it under.
 CREATE TABLE items (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
     collection      TEXT NOT NULL CHECK (typeof(collection) = 'text') REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
     link_id         TEXT NOT NULL CHECK (typeof(link_id) = 'text'),  -- the key the item is filed under: the identity hint, escaped as esc:<hint> when it begins like a derived key, a kind fallback, or a minted dup:<hint>#<handle> (§9)
     seq             INTEGER NOT NULL CHECK (typeof(seq) = 'integer'),  -- public id, shared by every placement of the link id (§9.1)
     -- Whether the flag set is known: 1 its placement_flag rows are the set,
     -- none being known-empty; 0 unknown, and then it holds no row.
     flags_known     INTEGER NOT NULL DEFAULT 0 CHECK (typeof(flags_known) = 'integer') CHECK (flags_known IN (0, 1)),
+    -- The system flags of the set (§13), by their exact bytes: \Seen 1,
+    -- \Answered 2, \Flagged 4, \Draft 8, \Deleted 16; every other flag is a
+    -- placement_flag row. 0 while the set is unknown.
+    marks           INTEGER NOT NULL DEFAULT 0 CHECK (typeof(marks) = 'integer') CHECK (marks BETWEEN 0 AND 31),
     object_hash     TEXT CHECK (typeof(object_hash) IN ('text', 'null')) REFERENCES objects(hash),  -- current body, NULL until hydrated
     sort_key        TEXT NOT NULL DEFAULT '' CHECK (typeof(sort_key) = 'text'),  -- the kind's ordering key, '' when unknown (§9.3)
     -- The detail ladder: 1 meta, 2 full (§13).
@@ -259,10 +268,13 @@ CREATE TABLE items (
     conflicted      INTEGER NOT NULL DEFAULT 0 CHECK (typeof(conflicted) = 'integer') CHECK (conflicted IN (0, 1)),  -- 1 while a cross-source content conflict is unresolved
     conflict_object TEXT CHECK (typeof(conflict_object) IN ('text', 'null')) REFERENCES objects(hash),  -- the diverging body a manual conflict recorded
     changed         INTEGER NOT NULL DEFAULT 0 CHECK (typeof(changed) = 'integer'),  -- the change stamp (§4.5), trigger-maintained
-    PRIMARY KEY (collection, link_id),
+    UNIQUE (collection, link_id),
+    -- What a binding's foreign key names, so its collection is its item's.
+    UNIQUE (id, collection),
     -- The terminal states §11 and §10 describe, held by the schema.
     CHECK (retained_at IS NULL OR deleted = 1),
-    CHECK (conflicted = 1 OR conflict_object IS NULL)
+    CHECK (conflicted = 1 OR conflict_object IS NULL),
+    CHECK (flags_known = 1 OR marks = 0)
 );
 
 -- Resolves a public id back to the internal link id.
@@ -279,7 +291,10 @@ CREATE INDEX items_retained ON items(collection, seq) WHERE deleted = 1;
 -- listing filters on, so a mailbox whose server expunged most of it does not
 -- page past its own trash (§14.1). A page over a set of collections seeks it
 -- once per collection and merges what each answers (§9.3).
-CREATE INDEX items_by_sort ON items(collection, sort_key, seq) WHERE deleted = 0;
+CREATE INDEX items_by_sort ON items(collection, sort_key, seq, marks) WHERE deleted = 0;
+-- The unread mail of a collection in its order (count_unread, a page under
+-- the read filter): partial on the bit, so a mailbox mostly read holds few.
+CREATE INDEX items_unread ON items(collection, sort_key, seq) WHERE deleted = 0 AND marks & 1 = 0;
 -- The retained rows by the instant they were retired (§11.2), so a purge below
 -- a cutoff seeks it and retained_bytes reads it alone. Partial: a live row, or
 -- a tombstone a source still binds, is not in it.
@@ -302,14 +317,15 @@ CREATE INDEX items_by_changed ON items(changed);
 CREATE TRIGGER items_stamp_insert AFTER INSERT ON items
 BEGIN
     UPDATE items SET changed = (SELECT next_change FROM store_meta WHERE id = 1)
-    WHERE collection = NEW.collection AND link_id = NEW.link_id;
+    WHERE id = NEW.id;
     UPDATE store_meta SET next_change = next_change + 1 WHERE id = 1;
 END;
 
 CREATE TRIGGER items_stamp_update AFTER UPDATE OF
-    flags_known, object_hash, sort_key, level, deleted, retained_at, conflicted, conflict_object
+    flags_known, marks, object_hash, sort_key, level, deleted, retained_at, conflicted, conflict_object
 ON items
 WHEN OLD.flags_known IS NOT NEW.flags_known
+  OR OLD.marks IS NOT NEW.marks
   OR OLD.object_hash IS NOT NEW.object_hash
   OR OLD.sort_key IS NOT NEW.sort_key
   OR OLD.level IS NOT NEW.level
@@ -319,7 +335,7 @@ WHEN OLD.flags_known IS NOT NEW.flags_known
   OR OLD.conflict_object IS NOT NEW.conflict_object
 BEGIN
     UPDATE items SET changed = (SELECT next_change FROM store_meta WHERE id = 1)
-    WHERE collection = NEW.collection AND link_id = NEW.link_id;
+    WHERE id = NEW.id;
     UPDATE store_meta SET next_change = next_change + 1 WHERE id = 1;
 END;
 
@@ -327,7 +343,7 @@ CREATE TRIGGER items_stamp_request AFTER UPDATE OF changed ON items
 WHEN NEW.changed = -1
 BEGIN
     UPDATE items SET changed = (SELECT next_change FROM store_meta WHERE id = 1)
-    WHERE collection = NEW.collection AND link_id = NEW.link_id;
+    WHERE id = NEW.id;
     UPDATE store_meta SET next_change = next_change + 1 WHERE id = 1;
 END;
 
@@ -336,24 +352,23 @@ BEGIN
     UPDATE store_meta SET purges = purges + 1 WHERE id = 1;
 END;
 
--- A placement's flags (§13), one row per flag, while items.flags_known is 1.
--- A flag is printable and holds no space, so a reader joins a set with spaces
--- and splits it back (§14.1). The flag index answers a flag predicate by a
--- seek rather than a scan of every placement.
+-- A placement's flags other than the system flags items.marks holds (§13),
+-- one row per flag, while items.flags_known is 1. A flag is printable and
+-- holds no space, so a reader joins a set with spaces and splits it back
+-- (§14.1). The flag index answers a flag predicate by a seek rather than a
+-- scan of every placement.
 CREATE TABLE placement_flag (
-    collection TEXT NOT NULL CHECK (typeof(collection) = 'text'),
-    link_id    TEXT NOT NULL CHECK (typeof(link_id) = 'text'),
-    flag       TEXT NOT NULL CHECK (typeof(flag) = 'text') CHECK (flag != '' AND flag NOT GLOB '*[^!-~]*'),
-    PRIMARY KEY (collection, link_id, flag),
-    FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
+    item INTEGER NOT NULL CHECK (typeof(item) = 'integer') REFERENCES items(id) ON DELETE CASCADE,
+    flag TEXT    NOT NULL CHECK (typeof(flag) = 'text') CHECK (flag != '' AND flag NOT GLOB '*[^!-~]*'),
+    PRIMARY KEY (item, flag)
 ) WITHOUT ROWID;
 
-CREATE INDEX placement_flag_by_flag ON placement_flag(flag, collection);
+CREATE INDEX placement_flag_by_flag ON placement_flag(flag);
 
 -- An unknown set holds no row: a flag written under it fails here, and a set
 -- becoming unknown loses its rows.
 CREATE TRIGGER placement_flag_needs_known BEFORE INSERT ON placement_flag
-WHEN (SELECT flags_known FROM items WHERE collection = NEW.collection AND link_id = NEW.link_id) IS NOT 1
+WHEN (SELECT flags_known FROM items WHERE id = NEW.item) IS NOT 1
 BEGIN
     SELECT RAISE(ABORT, 'flags unknown');
 END;
@@ -361,19 +376,19 @@ END;
 CREATE TRIGGER items_forget_flags AFTER UPDATE OF flags_known ON items
 WHEN NEW.flags_known = 0
 BEGIN
-    DELETE FROM placement_flag WHERE collection = NEW.collection AND link_id = NEW.link_id;
+    DELETE FROM placement_flag WHERE item = NEW.id;
 END;
 
 -- A flag added or removed requests the placement's stamp (§4.5), so a set
 -- written again as it was, which moves no row, stamps nothing.
 CREATE TRIGGER placement_flag_stamp_insert AFTER INSERT ON placement_flag
 BEGIN
-    UPDATE items SET changed = -1 WHERE collection = NEW.collection AND link_id = NEW.link_id;
+    UPDATE items SET changed = -1 WHERE id = NEW.item;
 END;
 
 CREATE TRIGGER placement_flag_stamp_delete AFTER DELETE ON placement_flag
 BEGIN
-    UPDATE items SET changed = -1 WHERE collection = OLD.collection AND link_id = OLD.link_id;
+    UPDATE items SET changed = -1 WHERE id = OLD.item;
 END;
 
 CREATE TRIGGER collections_stamp_insert AFTER INSERT ON collections
@@ -405,16 +420,21 @@ END;
 -- One source's binding of an item: its handle there, the three-way-merge base
 -- last agreed with it, and whether its own sync is stuck on a conflict.
 CREATE TABLE bindings (
+    item              INTEGER NOT NULL CHECK (typeof(item) = 'integer'),
+    -- The item's collection, kept for the handle index and held equal to it by
+    -- the foreign key below, which a rename cascades through.
     collection        TEXT NOT NULL CHECK (typeof(collection) = 'text'),
-    link_id           TEXT NOT NULL CHECK (typeof(link_id) = 'text'),
     source            TEXT NOT NULL CHECK (typeof(source) = 'text'),
     -- The item's backend id on this source (IMAP UID, DAV href). Bound once:
     -- a write resolving this binding to another handle is refused, and the one
     -- licensed rebind is the handle-space rebuild (§10, §12).
     handle            TEXT NOT NULL CHECK (typeof(handle) = 'text'),
     -- Whether the base flag set is known, as items.flags_known says of the
-    -- item's: 1 its binding_base_flag rows are the set, 0 unknown.
+    -- item's: 1 base_marks and its binding_base_flag rows are the set, 0
+    -- unknown.
     base_flags_known  INTEGER NOT NULL DEFAULT 0 CHECK (typeof(base_flags_known) = 'integer') CHECK (base_flags_known IN (0, 1)),
+    -- The base's system flags, as items.marks holds the item's (§13).
+    base_marks        INTEGER NOT NULL DEFAULT 0 CHECK (typeof(base_marks) = 'integer') CHECK (base_marks BETWEEN 0 AND 31),
     base_object       TEXT CHECK (typeof(base_object) IN ('text', 'null')) REFERENCES objects(hash),
     base_revision     TEXT CHECK (typeof(base_revision) IN ('text', 'null')),  -- etag/modseq for mutable-content backends
     -- Whether a base exists at all, which its three value columns cannot say: a
@@ -441,31 +461,28 @@ CREATE TABLE bindings (
     -- §5), NULL until one did: a round's last page drops the in-scope
     -- bindings it did not stamp.
     round             INTEGER CHECK (typeof(round) IN ('integer', 'null')),
-    PRIMARY KEY (collection, link_id, source),
+    PRIMARY KEY (item, source),
     -- A binding that is not conflicted carries neither (§13).
     CHECK (conflicted = 1 OR (conflict_revision IS NULL AND conflict_object IS NULL)),
+    CHECK (base_flags_known = 1 OR base_marks = 0),
     -- ON UPDATE as well as ON DELETE: renaming a collection cascades into
-    -- items.collection, this composite key's parent, so without it the rename
-    -- is refused one level down (§14).
-    FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
+    -- items.collection, so its bindings follow it (§14).
+    FOREIGN KEY (item, collection) REFERENCES items(id, collection) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
--- A binding's base flags (§13), one row per flag, while
--- bindings.base_flags_known is 1, spelled as placement_flag's. A base carries
--- no stamp, so its writes draw none.
+-- A binding's base flags other than its base_marks (§13), one row per flag,
+-- while bindings.base_flags_known is 1, spelled as placement_flag's. A base
+-- carries no stamp, so its writes draw none.
 CREATE TABLE binding_base_flag (
-    collection TEXT NOT NULL CHECK (typeof(collection) = 'text'),
-    link_id    TEXT NOT NULL CHECK (typeof(link_id) = 'text'),
-    source     TEXT NOT NULL CHECK (typeof(source) = 'text'),
-    flag       TEXT NOT NULL CHECK (typeof(flag) = 'text') CHECK (flag != '' AND flag NOT GLOB '*[^!-~]*'),
-    PRIMARY KEY (collection, link_id, source, flag),
-    FOREIGN KEY (collection, link_id, source) REFERENCES bindings(collection, link_id, source)
-        ON UPDATE CASCADE ON DELETE CASCADE
+    item   INTEGER NOT NULL CHECK (typeof(item) = 'integer'),
+    source TEXT    NOT NULL CHECK (typeof(source) = 'text'),
+    flag   TEXT    NOT NULL CHECK (typeof(flag) = 'text') CHECK (flag != '' AND flag NOT GLOB '*[^!-~]*'),
+    PRIMARY KEY (item, source, flag),
+    FOREIGN KEY (item, source) REFERENCES bindings(item, source) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
 CREATE TRIGGER binding_base_flag_needs_known BEFORE INSERT ON binding_base_flag
-WHEN (SELECT base_flags_known FROM bindings
-      WHERE collection = NEW.collection AND link_id = NEW.link_id AND source = NEW.source) IS NOT 1
+WHEN (SELECT base_flags_known FROM bindings WHERE item = NEW.item AND source = NEW.source) IS NOT 1
 BEGIN
     SELECT RAISE(ABORT, 'base flags unknown');
 END;
@@ -473,8 +490,7 @@ END;
 CREATE TRIGGER bindings_forget_base_flags AFTER UPDATE OF base_flags_known ON bindings
 WHEN NEW.base_flags_known = 0
 BEGIN
-    DELETE FROM binding_base_flag
-    WHERE collection = NEW.collection AND link_id = NEW.link_id AND source = NEW.source;
+    DELETE FROM binding_base_flag WHERE item = NEW.item AND source = NEW.source;
 END;
 
 -- What an `add` carrying `supersedes` replaced (§15.3): the item it tombstoned,
@@ -483,16 +499,12 @@ END;
 -- SYNC.md §5). Each end cascades with its item: a superseded row purged takes
 -- its pair, and so does a superseding row purged, which then holds nothing.
 CREATE TABLE supersessions (
-    collection    TEXT NOT NULL CHECK (typeof(collection) = 'text'),  -- the superseded item
-    link_id       TEXT NOT NULL CHECK (typeof(link_id) = 'text'),
-    by_collection TEXT NOT NULL CHECK (typeof(by_collection) = 'text'),  -- the item the add created
-    by_link_id    TEXT NOT NULL CHECK (typeof(by_link_id) = 'text'),
-    PRIMARY KEY (collection, link_id),
-    FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE,
-    FOREIGN KEY (by_collection, by_link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
+    item    INTEGER NOT NULL CHECK (typeof(item) = 'integer') REFERENCES items(id) ON DELETE CASCADE,  -- the superseded item
+    by_item INTEGER NOT NULL CHECK (typeof(by_item) = 'integer') REFERENCES items(id) ON DELETE CASCADE,  -- the item the add created
+    PRIMARY KEY (item)
 ) WITHOUT ROWID;
--- The superseding end, which a purge or a rename of that item cascades by.
-CREATE INDEX supersessions_by ON supersessions(by_collection, by_link_id);
+-- The superseding end, which a purge of that item cascades by.
+CREATE INDEX supersessions_by ON supersessions(by_item);
 
 -- The summaries (§4.4, Annex A): what a reader lists an item from without
 -- its body, one table per kind, at most one row per item, cascading with it.
@@ -500,8 +512,7 @@ CREATE INDEX supersessions_by ON supersessions(by_collection, by_link_id);
 
 -- message/rfc822 (Annex A.1). Every address is also an item_address row.
 CREATE TABLE mail_summary (
-    collection   TEXT NOT NULL CHECK (typeof(collection) = 'text'),
-    link_id      TEXT NOT NULL CHECK (typeof(link_id) = 'text'),
+    item INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
     message_id   TEXT CHECK (typeof(message_id) IN ('text', 'null')),  -- bare Message-ID, angle brackets stripped
     subject      TEXT NOT NULL CHECK (typeof(subject) = 'text'),  -- decoded (RFC 2047), may be empty
     sender       TEXT CHECK (typeof(sender) IN ('text', 'null')),  -- first From address, canonical (Annex A.6)
@@ -509,9 +520,7 @@ CREATE TABLE mail_summary (
     date         TEXT CHECK (typeof(date) IN ('text', 'null')),  -- RFC 3339 UTC Z at seconds precision, or NULL
     size         INTEGER CHECK (typeof(size) IN ('integer', 'null')),  -- the body's octets, else the source's figure (Annex A.1), or NULL
     attachment   INTEGER CHECK (typeof(attachment) IN ('integer', 'null')),  -- 1 has one, 0 has none, NULL not examined
-    invitation   TEXT CHECK (typeof(invitation) IN ('text', 'null')),  -- the UID its first text/calendar part carries, NULL none or not examined
-    PRIMARY KEY (collection, link_id),
-    FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
+    invitation   TEXT CHECK (typeof(invitation) IN ('text', 'null'))  -- the UID its first text/calendar part carries, NULL none or not examined
 );
 
 -- The mail inviting to a calendar item, for link_invitations_to (§14.2).
@@ -521,34 +530,28 @@ CREATE INDEX mail_summary_by_invitation ON mail_summary(invitation) WHERE invita
 -- A message's In-Reply-To ids (Annex A.1), bare, `position` their 0-based
 -- document order. By id, for list_replied.
 CREATE TABLE mail_in_reply_to (
-    collection TEXT    NOT NULL CHECK (typeof(collection) = 'text'),
-    link_id    TEXT    NOT NULL CHECK (typeof(link_id) = 'text'),
+    item       INTEGER NOT NULL CHECK (typeof(item) = 'integer') REFERENCES mail_summary(item) ON DELETE CASCADE,
     position   INTEGER NOT NULL CHECK (typeof(position) = 'integer'),
     msg_id     TEXT    NOT NULL CHECK (typeof(msg_id) = 'text'),
-    PRIMARY KEY (collection, link_id, position),
-    FOREIGN KEY (collection, link_id) REFERENCES mail_summary(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
+    PRIMARY KEY (item, position)
 ) WITHOUT ROWID;
 
 CREATE INDEX mail_in_reply_to_by_id ON mail_in_reply_to(msg_id);
 
 -- text/vcard (Annex A.2). Every EMAIL is an item_address row.
 CREATE TABLE contact_summary (
-    collection TEXT NOT NULL CHECK (typeof(collection) = 'text'),
-    link_id    TEXT NOT NULL CHECK (typeof(link_id) = 'text'),
+    item INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
     uid        TEXT CHECK (typeof(uid) IN ('text', 'null')),  -- the UID verbatim
     fn         TEXT NOT NULL CHECK (typeof(fn) = 'text'),  -- FN decoded (Annex A.2), '' when absent
     kind       TEXT CHECK (typeof(kind) IN ('text', 'null')),  -- KIND lowercased: individual, group, org, location; NULL when absent
-    org        TEXT CHECK (typeof(org) IN ('text', 'null')),  -- first ORG component, unescaped, or NULL
-    PRIMARY KEY (collection, link_id),
-    FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
+    org        TEXT CHECK (typeof(org) IN ('text', 'null'))  -- first ORG component, unescaped, or NULL
 );
 
 -- text/calendar, one table per component (Annex A.3 to A.5): a resource is
 -- one VEVENT, VTODO or VJOURNAL set. A start is carried verbatim with its
 -- parameters; the one resolved instant is items.sort_key.
 CREATE TABLE event_summary (
-    collection    TEXT NOT NULL CHECK (typeof(collection) = 'text'),
-    link_id       TEXT NOT NULL CHECK (typeof(link_id) = 'text'),
+    item INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
     uid           TEXT CHECK (typeof(uid) IN ('text', 'null')),  -- the UID verbatim
     summary       TEXT NOT NULL CHECK (typeof(summary) = 'text'),  -- SUMMARY unescaped, may be empty
     location      TEXT CHECK (typeof(location) IN ('text', 'null')),  -- LOCATION unescaped, or NULL
@@ -557,14 +560,11 @@ CREATE TABLE event_summary (
     dtstart_value TEXT CHECK (typeof(dtstart_value) IN ('text', 'null')),  -- 'date-time' or 'date'
     dtend         TEXT CHECK (typeof(dtend) IN ('text', 'null')),  -- the value verbatim, or NULL
     recurring     INTEGER CHECK (typeof(recurring) IN ('integer', 'null')),  -- 1 carries an RRULE or RDATE, 0 none, NULL not examined
-    until         TEXT CHECK (typeof(until) IN ('text', 'null')),  -- the RRULE's UNTIL verbatim, or NULL
-    PRIMARY KEY (collection, link_id),
-    FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
+    until         TEXT CHECK (typeof(until) IN ('text', 'null'))  -- the RRULE's UNTIL verbatim, or NULL
 );
 
 CREATE TABLE task_summary (
-    collection    TEXT NOT NULL CHECK (typeof(collection) = 'text'),
-    link_id       TEXT NOT NULL CHECK (typeof(link_id) = 'text'),
+    item INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
     uid           TEXT CHECK (typeof(uid) IN ('text', 'null')),
     summary       TEXT NOT NULL CHECK (typeof(summary) = 'text'),
     dtstart       TEXT CHECK (typeof(dtstart) IN ('text', 'null')),
@@ -581,9 +581,7 @@ CREATE TABLE task_summary (
     priority      INTEGER CHECK (typeof(priority) IN ('integer', 'null')) CHECK (priority BETWEEN 0 AND 9),  -- PRIORITY, or NULL
     parent        TEXT CHECK (typeof(parent) IN ('text', 'null')),  -- the UID the first parent RELATED-TO names, or NULL
     mid           TEXT CHECK (typeof(mid) IN ('text', 'null')),  -- the Message-ID the first mid: URI names, bare, or NULL
-    created       TEXT CHECK (typeof(created) IN ('text', 'null')),  -- CREATED, else DTSTAMP, as an instant (Annex A.4), or NULL
-    PRIMARY KEY (collection, link_id),
-    FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
+    created       TEXT CHECK (typeof(created) IN ('text', 'null'))  -- CREATED, else DTSTAMP, as an instant (Annex A.4), or NULL
 );
 
 -- The tasks naming a calendar item their parent, and those naming a mail, for
@@ -595,24 +593,19 @@ CREATE INDEX task_summary_by_mid ON task_summary(mid) WHERE mid IS NOT NULL;
 -- A task's CATEGORIES values (Annex A.4), decoded, `position` their 0-based
 -- document order.
 CREATE TABLE task_category (
-    collection TEXT    NOT NULL CHECK (typeof(collection) = 'text'),
-    link_id    TEXT    NOT NULL CHECK (typeof(link_id) = 'text'),
+    item       INTEGER NOT NULL CHECK (typeof(item) = 'integer') REFERENCES task_summary(item) ON DELETE CASCADE,
     position   INTEGER NOT NULL CHECK (typeof(position) = 'integer'),
     value      TEXT    NOT NULL CHECK (typeof(value) = 'text'),
-    PRIMARY KEY (collection, link_id, position),
-    FOREIGN KEY (collection, link_id) REFERENCES task_summary(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
+    PRIMARY KEY (item, position)
 ) WITHOUT ROWID;
 
 CREATE TABLE journal_summary (
-    collection    TEXT NOT NULL CHECK (typeof(collection) = 'text'),
-    link_id       TEXT NOT NULL CHECK (typeof(link_id) = 'text'),
+    item INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
     uid           TEXT CHECK (typeof(uid) IN ('text', 'null')),
     summary       TEXT NOT NULL CHECK (typeof(summary) = 'text'),
     dtstart       TEXT CHECK (typeof(dtstart) IN ('text', 'null')),
     dtstart_tzid  TEXT CHECK (typeof(dtstart_tzid) IN ('text', 'null')),
-    dtstart_value TEXT CHECK (typeof(dtstart_value) IN ('text', 'null')),
-    PRIMARY KEY (collection, link_id),
-    FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
+    dtstart_value TEXT CHECK (typeof(dtstart_value) IN ('text', 'null'))
 );
 
 -- application/octet-stream, a file (Annex A.7): what its source or its writer
@@ -620,33 +613,28 @@ CREATE TABLE journal_summary (
 -- in two folders may carry two names. `part` stays with the file wherever it
 -- is placed.
 CREATE TABLE file_summary (
-    collection TEXT NOT NULL CHECK (typeof(collection) = 'text'),
-    link_id    TEXT NOT NULL CHECK (typeof(link_id) = 'text'),
+    item INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
     name       TEXT NOT NULL CHECK (typeof(name) = 'text'),  -- the file's name in this collection, may be empty
     media_type TEXT CHECK (typeof(media_type) IN ('text', 'null')),  -- type/subtype lowercased, no parameter, or NULL
     size       INTEGER CHECK (typeof(size) IN ('integer', 'null')),  -- octets: the body's when held, else as stated
-    part       TEXT CHECK (typeof(part) IN ('text', 'null')),  -- an attachment's IMAP section in its message, or NULL
-    PRIMARY KEY (collection, link_id),
-    FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
+    part       TEXT CHECK (typeof(part) IN ('text', 'null'))  -- an attachment's IMAP section in its message, or NULL
 );
 
 -- The people an item names, whatever its kind (§4.4, Annex A.6). One generic
 -- table, since "everything about this address" is asked across every kind.
 CREATE TABLE item_address (
-    collection TEXT NOT NULL CHECK (typeof(collection) = 'text'),
-    link_id    TEXT NOT NULL CHECK (typeof(link_id) = 'text'),
+    item       INTEGER NOT NULL CHECK (typeof(item) = 'integer') REFERENCES items(id) ON DELETE CASCADE,
     role       TEXT NOT NULL CHECK (typeof(role) = 'text'),  -- from, to, cc, bcc, email, organizer, attendee, contact (§13)
     position   INTEGER NOT NULL CHECK (typeof(position) = 'integer'),  -- 0-based document order within the role
     address    TEXT NOT NULL CHECK (typeof(address) = 'text'),  -- canonical addr-spec (§13)
     name       TEXT CHECK (typeof(name) IN ('text', 'null')),  -- display name, decoded, or NULL
-    PRIMARY KEY (collection, link_id, role, position),
-    FOREIGN KEY (collection, link_id) REFERENCES items(collection, link_id) ON UPDATE CASCADE ON DELETE CASCADE
+    PRIMARY KEY (item, role, position)
 ) WITHOUT ROWID;
 
 -- The person axis: every placement naming one address, by role. The table has
 -- no rowid, so the index carries the rest of its key and names each placement
 -- without reading the row.
-CREATE INDEX item_address_by_address ON item_address(address, role, collection);
+CREATE INDEX item_address_by_address ON item_address(address, role);
 
 -- A reference from one item to another, whatever their kinds and wherever they
 -- are filed (§4.3, §14.2): an endpoint is a kind and a link id, so one held in
@@ -710,8 +698,7 @@ BEGIN
                       CASE WHEN OLD.to_kind = 'application/octet-stream' THEN OLD.to_link_id END)
       AND +object_hash IS NULL
       AND (SELECT kind FROM collections c WHERE c.id = items.collection) = 'application/octet-stream'
-      AND NOT EXISTS (SELECT 1 FROM bindings b
-                      WHERE b.collection = items.collection AND b.link_id = items.link_id)
+      AND NOT EXISTS (SELECT 1 FROM bindings b WHERE b.item = items.id)
       AND NOT EXISTS (SELECT 1 FROM item_reference r
                       WHERE (r.from_link_id = items.link_id AND r.from_kind = 'application/octet-stream')
                          OR (r.to_link_id = items.link_id AND r.to_kind = 'application/octet-stream'));
@@ -788,7 +775,7 @@ CREATE INDEX queue_by_object ON queue(object_hash) WHERE object_hash IS NOT NULL
 -- The bindings waiting for a decision (list_conflicted_bindings). Partial, so
 -- it holds only what is outstanding and is empty at rest: a run reports that
 -- count on every invocation, and without it the report scans every binding.
-CREATE INDEX bindings_conflicted ON bindings(collection, link_id, source) WHERE conflicted = 1;
+CREATE INDEX bindings_conflicted ON bindings(item, source) WHERE conflicted = 1;
 -- Resolves a source handle back to its link id (link_for_handle), which is what
 -- a batch dropping a placement needs: a drop names a handle, the shared item is
 -- keyed by link id. UNIQUE, because a handle names one item per source (§10):
@@ -796,7 +783,3 @@ CREATE INDEX bindings_conflicted ON bindings(collection, link_id, source) WHERE 
 -- and one that does not fails here rather than leaving two rows the lookup
 -- answers from at random.
 CREATE UNIQUE INDEX bindings_by_handle ON bindings(collection, source, handle);
--- Where a source binds one link id in any collection (origin_for_link,
--- destination_for_link): a Created or a Tombstone placement reads it once,
--- which the key, leading with the collection, cannot serve.
-CREATE INDEX bindings_by_link ON bindings(link_id, source);

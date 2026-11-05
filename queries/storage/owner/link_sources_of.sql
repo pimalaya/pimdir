@@ -6,7 +6,7 @@ INSERT INTO item_reference(from_kind, from_link_id, to_kind, to_link_id, role, o
 SELECT DISTINCT 'text/calendar', ti.link_id, 'message/rfc822', mi.link_id, 'source', 'auto',
        strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 FROM items ti
-JOIN task_summary t ON t.collection = ti.collection AND t.link_id = ti.link_id
+JOIN task_summary t ON t.item = ti.id
 JOIN items mi ON mi.link_id = t.mid AND mi.deleted = 0
 JOIN collections mc ON mc.id = mi.collection AND mc.kind = 'message/rfc822'
 WHERE ti.link_id BETWEEN coalesce(:link_id, '') AND coalesce(:link_id, x'') AND ti.deleted = 0

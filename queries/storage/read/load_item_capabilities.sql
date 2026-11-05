@@ -3,7 +3,7 @@
 -- wins over the source-wide row; an undeclared source comes back once with a
 -- NULL capability, as in load_capabilities.
 WITH holders AS (
-    SELECT b.source FROM bindings b JOIN items i ON i.collection = b.collection AND i.link_id = b.link_id
+    SELECT b.source FROM bindings b JOIN items i ON i.id = b.item
     WHERE i.collection = :collection AND i.seq = :seq
 ),
 effective AS (

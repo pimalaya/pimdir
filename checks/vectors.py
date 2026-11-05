@@ -1210,7 +1210,7 @@ for path in sorted(root.rglob("*.json")):
 store_schema = sqlite3.connect(":memory:")
 for migration in sorted((root.parent / "migrations" / "storage").glob("*.sql")):
     store_schema.executescript(migration.read_text())
-SQL_TABLES = {table: {row[0] for row in store_schema.execute("SELECT name FROM pragma_table_info(?)", (table,))} - {"collection", "link_id"}
+SQL_TABLES = {table: {row[0] for row in store_schema.execute("SELECT name FROM pragma_table_info(?)", (table,))} - {"collection", "link_id", "item"}
               for table in (*TABLES, "file_summary")}
 SQL_TABLES["mail_summary"] |= {"in_reply_to"}
 SQL_TABLES["task_summary"] |= {"categories"}

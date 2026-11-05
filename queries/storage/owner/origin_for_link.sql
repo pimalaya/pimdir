@@ -5,10 +5,10 @@
 -- first. NULL :object means any body. The minted form is dup:, the key, #,
 -- U+0001 and the key again, so the key it names is cut out by its length and
 -- both arms seek bindings_by_link, the exact test kept as the filter.
-SELECT collection, handle FROM bindings
-WHERE link_id IN (:link_id, CASE WHEN :link_id GLOB 'dup:*'
-                                 THEN substr(:link_id, 5, (length(:link_id) - 6) / 2) END)
-  AND (link_id = :link_id OR 'dup:' || link_id || '#' || char(1) || link_id = :link_id)
-  AND source = :source AND collection != :collection
-  AND base_present = 1 AND (:object IS NULL OR base_object = :object)
-ORDER BY link_id != :link_id, collection LIMIT 1;
+SELECT b.collection, b.handle FROM items i JOIN bindings b ON b.item = i.id
+WHERE i.link_id IN (:link_id, CASE WHEN :link_id GLOB 'dup:*'
+                                   THEN substr(:link_id, 5, (length(:link_id) - 6) / 2) END)
+  AND (i.link_id = :link_id OR 'dup:' || i.link_id || '#' || char(1) || i.link_id = :link_id)
+  AND b.source = :source AND b.collection != :collection
+  AND b.base_present = 1 AND (:object IS NULL OR b.base_object = :object)
+ORDER BY i.link_id != :link_id, b.collection LIMIT 1;

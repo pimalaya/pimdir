@@ -3,5 +3,5 @@
 -- item's row is written. An unknown set binds the slot empty. A flag that
 -- moves requests the stamp (§4.5); a set written as it was moves none.
 DELETE FROM placement_flag
-WHERE collection = :collection AND link_id = :link_id
+WHERE item = (SELECT id FROM items WHERE collection = :collection AND link_id = :link_id)
   AND flag NOT IN (SELECT value FROM temp.param WHERE slot = 'flags');

@@ -1,6 +1,10 @@
 SELECT seq, link_id,
        CASE WHEN items.flags_known = 1
-            THEN coalesce((SELECT group_concat(f.flag, ' ') FROM placement_flag f
-                           WHERE f.collection = items.collection AND f.link_id = items.link_id), '') END AS flags,
+            THEN trim(CASE WHEN items.marks & 1 THEN '\Seen ' ELSE '' END
+                   || CASE WHEN items.marks & 2 THEN '\Answered ' ELSE '' END
+                   || CASE WHEN items.marks & 4 THEN '\Flagged ' ELSE '' END
+                   || CASE WHEN items.marks & 8 THEN '\Draft ' ELSE '' END
+                   || CASE WHEN items.marks & 16 THEN '\Deleted ' ELSE '' END
+                   || coalesce((SELECT group_concat(f.flag, ' ') FROM placement_flag f WHERE f.item = items.id), '')) END AS flags,
        object_hash, sort_key, level FROM items
 WHERE collection = :collection AND seq = :seq AND deleted = 0;

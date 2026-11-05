@@ -1,6 +1,6 @@
 # Pimdir search specification
 
-Status: search-draft-08, requiring storage-draft-08
+Status: search-draft-09, requiring storage-draft-09
 
 The search part of the pimdir standard: a full-text index over a store ([STORAGE.md](./STORAGE.md)) and the query language over it, cross-domain.
 
@@ -43,7 +43,7 @@ The index is derived. Every row is recomputed from the store and the bodies, and
 - The **canonical shape** is [migrations/search/0001_init.sql](./migrations/search/0001_init.sql) and the statements under queries/search/, every table `STRICT`, and is the RECOMMENDED one. It needs **SQLite ≥ 3.43** with FTS5, for `contentless_delete`, a floor above the store's.
 - An index of another shape (FTS4, FTS3, or no full-text module) MAY answer the same language: every query's hit set is the one vectors/search/ gives, its text folded as §5 says and its text terms matched as §8.5 says. Its order by relevance is its own (§8.2), and so is how it keeps itself current.
 - **The hit-set guarantee leaves out text reduced from HTML, and a part's text beyond seven-bit ASCII in a charset other than UTF-8.** §6 pins neither how a `text/html` part becomes text nor, but as a recommendation, how another charset is decoded, so a word that text alone holds MAY be a hit in one conforming index and not in another. The vectors hold no such word.
-- **An index names its version and its shape.** Whatever its shape, an index holds a one-row table `index_meta` whose `format` is `pimdir-index`, whose `format_version` names the version of this part it follows, this draft's name, `search-draft-08`, while this part is a draft and `search-vN` once released (N its major), and whose `shape` names its shape: `canonical` for the canonical one, written by `init_index_meta`, and a name of the implementation's own for another, never `canonical`. Versions are ordered: drafts by their number, every draft below every release, releases by their major.
+- **An index names its version and its shape.** Whatever its shape, an index holds a one-row table `index_meta` whose `format` is `pimdir-index`, whose `format_version` names the version of this part it follows, this draft's name, `search-draft-09`, while this part is a draft and `search-vN` once released (N its major), and whose `shape` names its shape: `canonical` for the canonical one, written by `init_index_meta`, and a name of the implementation's own for another, never `canonical`. Versions are ordered: drafts by their number, every draft below every release, releases by their major.
 - **An indexer rebuilds only an older index of its own shape.** An indexer MUST refuse an index.db holding no `index_meta`, one whose `shape` is not its own, and one whose `format_version` lies above its own, naming the index's version and shape and its own, and MUST NOT rebuild, write nor delete it: a person deleting index.db hands the store to another indexer, losing nothing (§1). An index of its own shape whose `format_version` lies below its own, and one whose `index_meta` lacks `format_version`, which a draft before search-draft-08 wrote and whose indexer refuses this draft's store (STORAGE §4.2), MUST be rebuilt: there are no index migrations.
 - An index of the indexer's own shape and version MUST also be rebuilt when its `index_meta.tokenizer` differs from §5's, its schema text from 0001_init.sql's (the canonical shape), when it was built from another store or another copy of it, or when its `store_change` lies above the store's last stamp. `index_meta.store_id` and `store_incarnation` record the store's `store_id` and `incarnation` when the index was created (`init_index_meta`), and a store answering others is another (STORAGE §4.5).
 - **A query client reads only an index it implements.** It MUST refuse an index whose `shape` or `format_version` it does not implement, naming both, rather than answer from it; while this part is a draft it implements its own draft alone, as STORAGE §4.2 has a program open only its own draft's store.
@@ -451,7 +451,7 @@ checks/vectors.py validates that every fixture and placement resolves, re-derive
 
 ## 12. Conformance
 
-An implementation offering search conforms by one profile or both, stated as STORAGE §17 says with the shape it builds or reads (`search-draft-08 indexer (canonical)`, `search-draft-08 query client (canonical)`), and MUST meet every section its row names and answer the vectors it names.
+An implementation offering search conforms by one profile or both, stated as STORAGE §17 says with the shape it builds or reads (`search-draft-09 indexer (canonical)`, `search-draft-09 query client (canonical)`), and MUST meet every section its row names and answer the vectors it names.
 
 | Profile | What it does | Owes | Vectors |
 | --- | --- | --- | --- |

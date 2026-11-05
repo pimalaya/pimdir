@@ -1,4 +1,4 @@
 -- The task summaries, on load_mail_summaries's terms.
-SELECT link_id, uid, summary, dtstart, dtstart_tzid, dtstart_value, due, due_tzid, due_value,
-       status, completed, percent, recurring, until, priority, parent, mid, created
-FROM task_summary WHERE collection = :collection;
+SELECT i.link_id, s.uid, s.summary, s.dtstart, s.dtstart_tzid, s.dtstart_value, s.due, s.due_tzid, s.due_value,
+       s.status, s.completed, s.percent, s.recurring, s.until, s.priority, s.parent, s.mid, s.created
+FROM items i JOIN task_summary s ON s.item = i.id WHERE i.collection = :collection;

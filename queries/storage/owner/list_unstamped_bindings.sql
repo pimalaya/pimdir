@@ -12,10 +12,11 @@
 -- and is never listed here; a placement out of scope is not either, absence
 -- meaning deleted only in scope. Read after the last page's own stamps, in
 -- its write.
-SELECT b.handle, b.link_id
+SELECT b.handle, i.link_id
 FROM bindings b
+JOIN items i ON i.id = b.item
 JOIN sources r ON r.collection = b.collection AND r.source = b.source
-LEFT JOIN mail_summary s ON s.collection = b.collection AND s.link_id = b.link_id
+LEFT JOIN mail_summary s ON s.item = b.item
 WHERE b.collection = :collection AND b.source = :source
   AND r.round_started_at IS NOT NULL
   AND b.round IS NOT r.round

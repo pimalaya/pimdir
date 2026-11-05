@@ -1,10 +1,10 @@
-INSERT INTO task_summary(collection, link_id, uid, summary, dtstart, dtstart_tzid,
+INSERT INTO task_summary(item, uid, summary, dtstart, dtstart_tzid,
                          dtstart_value, due, due_tzid, due_value, status, completed,
                          percent, recurring, until, priority, parent, mid, created)
-VALUES(:collection, :link_id, :uid, :summary, :dtstart, :dtstart_tzid,
+VALUES((SELECT id FROM items WHERE collection = :collection AND link_id = :link_id), :uid, :summary, :dtstart, :dtstart_tzid,
        :dtstart_value, :due, :due_tzid, :due_value, :status, :completed,
        :percent, :recurring, :until, :priority, :parent, :mid, :created)
-ON CONFLICT(collection, link_id) DO UPDATE SET
+ON CONFLICT(item) DO UPDATE SET
     uid = excluded.uid, summary = excluded.summary, dtstart = excluded.dtstart,
     dtstart_tzid = excluded.dtstart_tzid, dtstart_value = excluded.dtstart_value,
     due = excluded.due, due_tzid = excluded.due_tzid, due_value = excluded.due_value,

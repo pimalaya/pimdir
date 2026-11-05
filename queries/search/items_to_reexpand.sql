@@ -10,8 +10,8 @@
 -- end, so a local or date-only UNTIL still compares.
 SELECT i.collection, i.seq FROM store.items i
 JOIN store.collections c ON c.id = i.collection
-LEFT JOIN store.event_summary e ON e.collection = i.collection AND e.link_id = i.link_id
-LEFT JOIN store.task_summary t ON t.collection = i.collection AND t.link_id = i.link_id
+LEFT JOIN store.event_summary e ON e.item = i.id
+LEFT JOIN store.task_summary t ON t.item = i.id
 WHERE c.kind = 'text/calendar' AND i.deleted = 0
   AND (
     :tzdb_version IS NOT (SELECT m.tzdb_version FROM index_meta m WHERE m.id = 1)

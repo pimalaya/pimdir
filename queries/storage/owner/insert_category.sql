@@ -1,2 +1,2 @@
-INSERT INTO task_category(collection, link_id, position, value)
-VALUES(:collection, :link_id, :position, :value);
+INSERT INTO task_category(item, position, value)
+VALUES((SELECT id FROM items WHERE collection = :collection AND link_id = :link_id), :position, :value);

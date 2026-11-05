@@ -18,7 +18,7 @@ FROM (
   FROM item_reference r
   JOIN items i ON i.link_id = r.to_link_id AND i.deleted = 0
   JOIN collections c ON c.id = i.collection AND c.kind = r.to_kind AND c.account IS :account
-  LEFT JOIN file_summary s ON s.collection = i.collection AND s.link_id = i.link_id
+  LEFT JOIN file_summary s ON s.item = i.id
   WHERE r.from_kind = 'message/rfc822' AND r.from_link_id = :link_id
     AND r.role = 'attachment' AND r.to_kind = 'application/octet-stream'
   GROUP BY r.to_link_id

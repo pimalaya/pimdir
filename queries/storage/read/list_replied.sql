@@ -6,8 +6,8 @@
 -- mail_in_reply_to_by_id.
 SELECT DISTINCT r.msg_id
 FROM mail_in_reply_to r
-JOIN items i ON i.collection = r.collection AND i.link_id = r.link_id
-JOIN collections c ON c.id = r.collection
+JOIN items i ON i.id = r.item
+JOIN collections c ON c.id = i.collection
 WHERE i.deleted = 0
   AND (c.role IS NULL OR c.role NOT IN ('sent', 'drafts'))
   AND r.msg_id IN (SELECT value FROM temp.param WHERE slot = 'ids')

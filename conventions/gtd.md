@@ -1,6 +1,6 @@
 # Pimalaya task conventions
 
-Status: gtd-draft-03, informative, requiring storage-draft-08 and search-draft-08
+Status: gtd-draft-04, informative, requiring storage-draft-09 and search-draft-09
 
 How Pimalaya's task consumers (the Android app, unfog) organise to-dos the GTD way over a pimdir store, and how they keep time spent on them, so that a task one of them writes reads as the other would have written it. Everything here is a reading of standard iCalendar properties and of what the store already holds ([STORAGE.md](../STORAGE.md), [SEARCH.md](../SEARCH.md)); it adds no table, column, statement or rule to the store, and another client that never read it sees and edits the same tasks.
 

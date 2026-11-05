@@ -1,3 +1,3 @@
 -- The event summaries, on load_mail_summaries's terms.
-SELECT link_id, uid, summary, location, dtstart, dtstart_tzid, dtstart_value, dtend, recurring, until
-FROM event_summary WHERE collection = :collection;
+SELECT i.link_id, s.uid, s.summary, s.location, s.dtstart, s.dtstart_tzid, s.dtstart_value, s.dtend, s.recurring, s.until
+FROM items i JOIN event_summary s ON s.item = i.id WHERE i.collection = :collection;
