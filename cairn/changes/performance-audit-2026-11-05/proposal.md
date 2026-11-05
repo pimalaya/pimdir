@@ -119,7 +119,7 @@ What is left on the phone is statement runs, each at 6 to 11 times its host cost
 - the system flags carried as columns (F2), ending a typical message's flag and base-flag statements and its stamp requests, which leaves that change's step 2 nothing to save on a new message (one stamp from its insert either way);
 - multi-row `INSERT … VALUES` for a page's fresh members (those no other op of the batch names, so the batch's order holds), up to the 999 variables: per-row triggers are cheap natively, so the step 3 objection to multi-row inserts weighs less than the calls they save.
 
-io-pimdir has the same flaw by another road: rusqlite's `execute`, `query_row` and `prepare` (src/client.rs:1349 `rows`, 324 call sites) never consult the statement cache (rusqlite 0.41.1's `Connection::execute` prepares each call, its src/lib.rs:629; the cache holds 16 by default). `prepare_cached`, with a capacity above the hot path's distinct statements, should give the CLI what the list-binding fix gave the app (2x on this bench, 3.3x on the app's host page).
+io-pimdir has the same flaw by another road: rusqlite's `execute`, `query_row` and `prepare` (src/client.rs:1349 `rows`, 324 call sites) never consult the statement cache (rusqlite 0.41.1's `Connection::execute` prepares each call, its src/lib.rs:629), and the crate took rusqlite without its default `cache` feature, so it had no cache at all. With `prepare_cached` and 256 statements per connection (io-pimdir cairn/log/2026-11-05-statements-are-prepared-once.md), 50,000 messages written through the owner went from 17.55 s to 2.94 s (6x), more than the app's 3.3x since io-pimdir had cached nothing.
 
 ### F5. The schema spends its bytes on repeated keys: an integer placement id
 

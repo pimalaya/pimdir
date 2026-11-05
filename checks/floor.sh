@@ -103,4 +103,55 @@ for shell in "$floor" sqlite3; do
     }
 done
 
-echo "the store schema loads on SQLite $version, $(wc -l < <("$floor" "$dir/floor.db" "$objects")) objects, every write to its $tables tables compiling, a body's name checked, an object's delete seeking its pointers, its triggers stored as the canonical text writes them and no trusted_schema there"
+# The keyset reads seek on the floor as invariants.sh asserts they do on a
+# current SQLite (STORAGE.md §9.3, §14.1), which is where the Android app runs
+# them verbatim. The floor has no STRICT, so the list parameters' table there
+# leaves `value` untyped: declared `ANY` outside a STRICT table it would take
+# NUMERIC affinity, and `x.collection = p.id` would no longer seek its
+# collection, a page then sorting the whole collection. The floor's shell has
+# no .parameter either, so each parameter is spelled as a literal.
+param="CREATE TEMP TABLE param (slot TEXT NOT NULL, position INTEGER NOT NULL, value, PRIMARY KEY (slot, position));
+INSERT INTO temp.param VALUES ('collections', 0, 'INBOX'), ('collections', 1, 'Sent');"
+floor_plan() {
+    local file="$1"; shift
+    local text
+    text="$(grep -v '^ *--' "$root/queries/storage/read/$file.sql")"
+    for binding in "$@"; do
+        text="${text//${binding%%=*}/${binding#*=}}"
+    done
+    "$floor" "$dir/floor.db" "$param EXPLAIN QUERY PLAN $text"
+}
+floor_failures=0
+floor_expect() {
+    if [ "$2" != "$3" ]; then
+        echo "$1: expected [$3], got [$2] on SQLite $version" >&2
+        floor_failures=$((floor_failures + 1))
+    fi
+}
+pages=(":after_collection=NULL" ":after_key=NULL" ":after_seq=NULL" ":limit=10" ":pattern='%a%'"
+       ":seen=NULL" ":attachment=NULL" ":since=NULL")
+for statement in list_mail_page_filtered search_mail; do
+    steps="$(floor_plan "$statement" "${pages[@]}")"
+    floor_expect "page: $statement merges each collection's seek below the cursor, scanning nothing" \
+        "$(grep -c 'CORRELATED LIST SUBQUERY' <<<"$steps" || true)$(grep -c 'USING INDEX items_by_sort (collection=? AND .*(sort_key,seq)<(?,?))' <<<"$steps" || true)$(grep -c 'SCAN TABLE items AS i\b' <<<"$steps" || true)" "110"
+done
+for statement in search_contacts search_calendar search_files; do
+    steps="$(floor_plan "$statement" "${pages[@]}")"
+    floor_expect "page: $statement merges each collection's seek above the cursor, scanning nothing" \
+        "$(grep -c 'CORRELATED LIST SUBQUERY' <<<"$steps" || true)$(grep -c 'USING INDEX items_by_sort (collection=? AND (sort_key,seq)>(?,?))' <<<"$steps" || true)$(grep -c 'SCAN TABLE items AS i\b' <<<"$steps" || true)" "110"
+done
+for statement in list_mail_page_desc list_items_page_desc; do
+    floor_expect "page: $statement seeks its cursor on items_by_sort, the first page's too" \
+        "$(floor_plan "$statement" ":after_key=NULL" ":after_seq=NULL" ":limit=10" ":collection='INBOX'" | grep -c 'items_by_sort (collection=? AND (sort_key,seq)<(?,?))' || true)" "1"
+done
+for statement in list_items_page_asc list_contacts_page_asc list_events_page_asc list_tasks_page_asc list_journals_page_asc list_files_page_asc; do
+    floor_expect "page: $statement seeks its cursor on items_by_sort" \
+        "$(floor_plan "$statement" ":after_key=''" ":after_seq=0" ":limit=10" ":collection='INBOX'" | grep -c 'items_by_sort (collection=? AND (sort_key,seq)>(?,?))' || true)" "1"
+done
+for statement in count_mail count_mail_by_day count_unread; do
+    floor_expect "since: $statement seeks the floor on items_by_sort" \
+        "$(floor_plan "$statement" ":seen=NULL" ":attachment=NULL" ":since='2026-10-06T00:00:00Z'" ":shift=NULL" | grep -c 'items_by_sort (collection=? AND sort_key>?)' || true)" "1"
+done
+[ "$floor_failures" = 0 ] || exit 1
+
+echo "the store schema loads on SQLite $version, $(wc -l < <("$floor" "$dir/floor.db" "$objects")) objects, every write to its $tables tables compiling, a body's name checked, an object's delete seeking its pointers, its keyset reads seeking their collection and bound, its triggers stored as the canonical text writes them and no trusted_schema there"

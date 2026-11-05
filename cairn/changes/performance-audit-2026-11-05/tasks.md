@@ -16,12 +16,12 @@ The ledger of proposal.md: one line per action, each closed by the log entry, ve
 - [x] android: a page write split on the host and the phone (a-page-lands-in-few-statements, 2026-11-05): 97% and 86% inside statements; the cause, `create_param` through `execSQL` flushing the statement cache, fixed there (F4)
 - [ ] android: the phone's profile after the list-binding fix, ranking what is left (a-page-lands-in-few-statements' open task; F4, phase 1 item 9)
 - [ ] android: a test failing a page write whose profile names a DDL statement run through `execSQL` (F4)
-- [ ] io-pimdir: `prepare_cached` behind a switch, tests/search_scale.rs and a write bench at 100k and 300k, on and off (F4)
-- [ ] pimdir: checks/invariants.sh's plan asserts on the floor, with a param table 3.18 loads (F10)
+- [x] io-pimdir: tests/search_scale.rs before and after `prepare_cached`: 50,000 messages written through the owner in 17.55 s, then 2.94 s; the index in 5.05 s, then 4.80 s (F4)
+- [x] pimdir: the keyset reads planned on the floor, a param table with `value` untyped (checks/floor.sh, cairn/log/2026-11-05-the-floor-plans-the-keyset-reads.md); STORAGE §4.4's sentence on the column's affinity waits for storage-draft-09 (F10)
 
 ## Phase 1, implementations and the index
 
-- [ ] io-pimdir: `prepare_cached` throughout and the cache capacity set above the hot path's distinct statements (F4)
+- [x] io-pimdir: `prepare_cached` throughout, rusqlite's `cache` feature on, 256 statements per connection (io-pimdir cairn/log/2026-11-05-statements-are-prepared-once.md) (F4)
 - [ ] pimdir: `list_owing_bindings` and `list_lacking_items` (STORAGE §14, SYNC §10), a sync vector on every status, plan asserts (F3)
 - [ ] io-pimdir: delta and last-page loads by them, closing a-delta-loads-what-it-names (F3)
 - [ ] io-pimdir: the planner in src/search/plan.rs: scope, term sets read once, a store-order or smallest-set driver, dedup by `(account, seq)`, a keyset cursor, a count apart (F1, F11)
