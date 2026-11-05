@@ -26,6 +26,12 @@ CREATE TABLE store_meta (
     purges          INTEGER NOT NULL DEFAULT 0 CHECK (typeof(purges) = 'integer')
 );
 
+CREATE TRIGGER store_meta_identity BEFORE UPDATE OF store_id, incarnation ON store_meta
+WHEN NEW.store_id IS NOT OLD.store_id OR NEW.incarnation < OLD.incarnation
+BEGIN
+    SELECT RAISE(ABORT, 'store identity is fixed');
+END;
+
 CREATE TABLE collections (
     id          TEXT PRIMARY KEY CHECK (typeof(id) = 'text'),
     account     TEXT CHECK (typeof(account) IN ('text', 'null')),
@@ -205,6 +211,12 @@ CREATE TRIGGER binding_base_flag_needs_known BEFORE INSERT ON binding_base_flag
 WHEN (SELECT base_flags_known FROM bindings WHERE item = NEW.item AND source = NEW.source) IS NOT 1
 BEGIN
     SELECT RAISE(ABORT, 'base flags unknown');
+END;
+
+CREATE TRIGGER bindings_forget_base_flags AFTER UPDATE OF base_flags_known ON bindings
+WHEN NEW.base_flags_known = 0
+BEGIN
+    DELETE FROM binding_base_flag WHERE item = NEW.item AND source = NEW.source;
 END;
 
 CREATE TABLE mail_summary (

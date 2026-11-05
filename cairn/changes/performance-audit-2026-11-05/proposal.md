@@ -267,7 +267,17 @@ What it settles for storage-draft-09:
 - **The integer placement id** halves the bytes and takes another third off the write (52 to 55% below draft-08 with the columns), and pages read twice as fast. Worth the freeze slipping one draft.
 - **The count by day** moves with none of them: it is a pass over the collection's dates, so the list recounts it at most once per pass (F2, F13) or folds the feed.
 
-The app's path runs about twice this bench's statements per message (27 against 12 to 16), so its gains are of the same order or larger; FillPageMeasure against the chosen schema, then one phone run, confirm them before draft-09 is written.
+The app's path, measured by the Android session on 2026-11-05 (android/android/app/src/test/java/org/pimalaya/measure/Draft09Measure.java, Robolectric over the platform's SQLite 3.18.2, six pages of 500 fresh messages carrying `\Seen` and `\Flagged`, every statement compiled once per page in both paths):
+
+| Path | ms per page of 500 | Runs per message |
+| --- | --- | --- |
+| the app's own write, draft-08 (FillPageMeasure) | 79 to 104 | 28 |
+| its statements alone, draft-08 | 60 to 66 | 28.0 |
+| its statements alone, the candidate (bench/draft09-id.sql) | 33 to 42 (−45%) | 16.0 (−43%) |
+
+The flag rows are 24 of draft-08's 63 ms in statements, `ADD_FLAGS` alone 11.9 with its stamp chain; the integer id takes about 3.5 ms more off the binding, summary, address and reply inserts. Left by the schema: the app's per-message reads (`LINK_FOR_HANDLE`, `HELD_ITEM`, `SEQ_FOR_LINK_ANY`, `ITEM_BOUND`, `LOAD_KIND`), 16 of the candidate's 33 ms, and the Java around the statements, 25 to 35 ms a page: end to end about 90 to 60 ms a page on the host (−30%), the reads by link per page being the next lever (a-page-lands-in-few-statements' step 3), no schema question. The phone run waits for the app to open draft-09 stores.
+
+Settled: storage-draft-09 carries the system flags as columns and the integer placement id, without the pending stamp.
 
 ## Decisions for the user
 
