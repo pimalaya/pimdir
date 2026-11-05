@@ -235,9 +235,43 @@ Phase 3, only if measured necessary:
 - io-pimdir's own items (phase 1 items 4, 6 without its spec part, 8's coverage, the refresh skipping unchanged work) touch no draft and land on draft-08 meanwhile, `prepare_cached` before any io-pimdir measurement.
 - Before draft-09 is written, a bench of its candidate store schemas against the tagged draft-08 (bench/draft09.c), on 3.51 and the 3.18 floor, reporting per message the milliseconds, the bytes and the statement runs, decides phase 2's content.
 
+## The draft-09 bench (2026-11-05)
+
+bench/draft09.sh, from the repository root: bench/draft09.c built by bench/draft09.nix against SQLite 3.18.2 and the pinned nixpkgs' 3.50.4, both with the AOSP flags; the schemas written by bench/variants.pl from migrations/storage/0001_init.sql (rows), the same with the system flags as columns (cols), and bench/draft09-id.sql (cols keyed by an integer placement id, holding only the tables a mail write touches). 20,000 fresh mail placements in batches of 500, three runs each, as a canonical writer lands them: the seq lookup, the item, the flags kept as rows through `temp.param` (every flag for rows, the keyword alone for cols and id), the binding and its base flags, the summary, four addresses, the sender rule. A message holds `\Seen` two times in three, `\Answered` one in five, `\Flagged` one in seven, `$Forwarded` one in ten. Desktop, one idle core, tmpfs.
+
+| Schema | 3.18.2 ms | 3.50.4 ms | Runs | Bytes | Stamps |
+| --- | --- | --- | --- | --- | --- |
+| rows (draft-08) | 0.081 | 0.071 | 15.7 | 1,907 | 2.1 |
+| rows, pending stamp | 0.073 (−10%) | 0.066 (−7%) | 15.7 | 1,912 | 1.0 |
+| cols | 0.059 (−27%) | 0.053 (−26%) | 12.4 | 1,706 | 1.1 |
+| cols, pending stamp | 0.059 (−27%) | 0.052 (−27%) | 12.4 | 1,711 | 1.0 |
+| id | 0.0385 (−52%) | 0.0336 (−53%) | 12.4 | 972 | 1.1 |
+| id, pending stamp | 0.038 (−53%) | 0.032 (−55%) | 12.4 | 979 | 1.0 |
+
+Per message: milliseconds of SQL, statement runs, bytes of pimdir.db after a checkpoint, stamps drawn. Every variant stamps each item once at least and leaves none pending.
+
+The mail list's reads over 100,000 of those messages, a third unread, median of five:
+
+| Read | rows 3.18 | cols 3.18 | id 3.18 | rows 3.50 | cols 3.50 | id 3.50 |
+| --- | --- | --- | --- | --- | --- | --- |
+| page of 50 unread | 0.163 ms | 0.064 | 0.036 | 0.137 | 0.066 | 0.041 |
+| page of 50, flags read | 0.064 | 0.060 | 0.035 | 0.066 | 0.064 | 0.040 |
+| count unread | 68.1 | 8.3 | 7.8 | 66.6 | 3.7 | 3.8 |
+| count unread since 2024 | 42.3 | 5.4 | 5.3 | 42.9 | 1.1 | 1.1 |
+| count by day | 76.5 | 79.0 | 77.2 | 27.8 | 28.3 | 27.9 |
+
+What it settles for storage-draft-09:
+
+- **The system flags as columns** take a fifth of the statements and a quarter of the SQL off a message, and make an unread count 8 times faster on 3.18 and 18 times on 3.50. Taken as the representation, as recommended.
+- **The pending stamp** saves 7 to 10% on draft-08 and nothing measurable once the flags are columns (0 to 4%), as F4 predicted: one of the two, and the columns are the one.
+- **The integer placement id** halves the bytes and takes another third off the write (52 to 55% below draft-08 with the columns), and pages read twice as fast. Worth the freeze slipping one draft.
+- **The count by day** moves with none of them: it is a pass over the collection's dates, so the list recounts it at most once per pass (F2, F13) or folds the feed.
+
+The app's path runs about twice this bench's statements per message (27 against 12 to 16), so its gains are of the same order or larger; FillPageMeasure against the chosen schema, then one phone run, confirm them before draft-09 is written.
+
 ## Decisions for the user
 
-- Phase 2 moves the store to storage-draft-09 while the freeze is close: apps on draft-08 (pinned on 2026-11-03) reinstall over a new store (README, Status). After v1 each is a migration, F5 rewriting every child table. Recommended: take item 10 now as the representation, the mirror only if a second encoding of a flag set is judged too sharp; take item 11 now if the freeze can slip one draft, else leave it to v2.
+- Phase 2 moves the store to storage-draft-09 while the freeze is close: apps on draft-08 (pinned on 2026-11-03) reinstall over a new store (README, Status). After v1 each is a migration, F5 rewriting every child table. Recommended, on the draft-09 bench: take item 10 now as the representation, the mirror only if a second encoding of a flag set is judged too sharp; take item 11 now too, its bytes and its write cost halved being worth the freeze slipping one draft.
 - a-page-lands-in-few-statements' step 2 against item 10: one of the two, not both. The pending stamp reserves a second stamp value and needs a closing statement no writer may forget; the columns remove the restamp requests it batches.
 - SEARCH §8.2: a hit placed by its first placement in the order walked.
 - SEARCH §4: "after each write batch" relaxed to "when writes pause", within a stated lag.

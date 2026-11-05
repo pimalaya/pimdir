@@ -10,7 +10,8 @@ The ledger of proposal.md: one line per action, each closed by the log entry, ve
 ## Phase 0, measure
 
 - [ ] pimdir: tag storage-draft-08, sync-draft-07 and search-draft-08 at the commit pinning io-pimdir 42a2f26 (the user's)
-- [ ] pimdir: bench/draft09.c, draft-09's candidate store schemas against draft-08 on 3.51 and the 3.18 floor (proposal.md, Sequence)
+- [x] pimdir: bench/draft09.c, draft-09's candidate store schemas against draft-08 on 3.50 and the 3.18 floor (proposal.md, The draft-09 bench): flags as columns and the integer placement id kept, the pending stamp dropped
+- [ ] android: FillPageMeasure against the chosen schema, then one phone run, before draft-09 is written
 
 - [x] android: a page write split on the host and the phone (a-page-lands-in-few-statements, 2026-11-05): 97% and 86% inside statements; the cause, `create_param` through `execSQL` flushing the statement cache, fixed there (F4)
 - [ ] android: the phone's profile after the list-binding fix, ranking what is left (a-page-lands-in-few-statements' open task; F4, phase 1 item 9)
