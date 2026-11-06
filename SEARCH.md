@@ -272,7 +272,7 @@ A query is whitespace-separated terms, implicitly conjoined, with `or`, `not`, p
 
 A `date:` or `when:` value is a point or a range of points (`date-value`, §8.3):
 
-- A year, a month, a day, `today` and `yesterday` each cover their calendar span, in the time zone the client states, UTC when it states none.
+- A year, a month, a day, `today` and `yesterday` each cover their calendar span, in the time zone the client states, an IANA name, UTC when it states none: from the first instant of its first day there to the first instant of the day after its last, so a day a transition moves lasts 23 or 25 hours, and `today` turns over at midnight there. A client SHOULD state the user's zone, the one its indexer states as `floating_zone` (§7), so the days a query names and the floating times and dates the index placed agree; a query client reads it from `index_meta.floating_zone` (`load_index_meta`).
 - A relative amount (`3d`, `2w`, `1y`: days, weeks of seven days, calendar years) names the instant that long before `now`.
 - A single point is its span, a single relative amount the span from its instant to `now`.
 - A range `a..b` runs from the start of `a`'s span to the end of `b`'s, either side open.
@@ -429,25 +429,25 @@ Tagging from a query stages one `set-flags` action per placement of each hit thr
 
 ## 11. Test vectors
 
-vectors/search/ holds the fixture store and the queries every conforming implementation MUST answer alike, each file stating the version of its format, `v` 2 for queries.json and `v` 1 for the other two, and conforming to its JSON Schema under vectors/schema/:
+vectors/search/ holds the fixture store and the queries every conforming implementation MUST answer alike, each file stating the version of its format, `v` 3 for queries.json and `v` 1 for the other two, and conforming to its JSON Schema under vectors/schema/:
 
 - `store.json`: collections (`id`, `account`, `kind`), items (`collection`, `seq`, `link_id`, `flags`, and a `fixture` or a `summary` for a bodiless item) and the references the store records (`from_kind`, `from_link_id`, `to_kind`, `to_link_id`, `role`, `origin`), given rather than derived.
 - `queries.json`: the `now` relative dates resolve against, in UTC, the horizon and the coverage, and the cases, then the `occurrences` windows, each a `start`, an `end` and the `rows` `occurrences_between` answers for it, `(collection, seq, start, end)` in its order.
 - `chunks.json`: field texts and the chunk boundaries §6 cuts them into.
 
-A case has a `query`, an optional `sort` (`date`, `name`, `relevance`), and one answer:
+A case has a `query`, an optional `sort` (`date`, `name`, `relevance`), an optional `zone` and `now`, and one answer:
 
 - the expected `hits` as `(account, seq)` pairs, a list when the case says `ordered` and a set otherwise;
 - or the `threads` of a threaded listing (§9), each its id, `count`, `first`, `last` and hits;
 - or the `error` of a refusal, its `code`, `start` and `end` compared and the rest not.
 
-A case whose date range leaves the horizon says `horizon_left`. A case stating `cut` compares the count `cut_before` answers over its collections and its range (§8.2). A case stating `temporal`, `"full"` or its `since`, `until` and `filling`, compares the temporal coverage, which the collections' `sources` rows in store.json (`source`, `covered_since`, `covered_until`, `covered_at`) give. A case not stating it compares nothing there.
+A case stating a `zone`, an IANA name, is asked stating it (§8.1), on an index whose indexer stated it as its floating zone (§7); a case stating a `now` resolves its dates against that instant in place of the file's, the index still drawn around the file's. A case whose date range leaves the horizon says `horizon_left`. A case stating `cut` compares the count `cut_before` answers over its collections and its range (§8.2). A case stating `temporal`, `"full"` or its `since`, `until` and `filling`, compares the temporal coverage, which the collections' `sources` rows in store.json (`source`, `covered_since`, `covered_until`, `covered_at`) give. A case not stating it compares nothing there.
 
-An implementation builds the store, indexes it at `now` stating no zone, so `UTC` (§7), and compares.
+An implementation builds the store, indexes it at `now` stating no zone, so `UTC` (§7), and compares; for the cases stating a zone, it indexes it again stating that zone, which re-expands every calendar item, and compares those.
 
 The cases bind every shape (§2), but a case sorted by `relevance` binds its order only where the shape ranks by bm25: another compares its hits as a set, and one refusing `relevance` skips it. The fold and the tokenisation are pinned by cases whose hits depend on diacritics (a Latin accent, a Greek tonos), a domain token or a digits-only telephone number, §8.5's compilation by text terms holding FTS5's syntax, §8.3's limits by a query at and one past each, and §7's bounds by a series stepping by the hour and one by the second.
 
-checks/vectors.py validates that every fixture and placement resolves, re-derives every refusal, the limits of §8.3 read from its table, and every chunk boundary from §8.3, §8.4 and §6, and checks that every other query is one the grammar accepts, and that every occurrence row names a calendar item and overlaps its window in order. It also re-derives the hits of every case whose query is one text term on the `title` field, compiling it as §8.5 says over an FTS5 table of the fixtures' titles, and refuses a case holding an FTS5 metacharacter that the term's text spliced raw would answer alike; and it expands the series a simple rule states (a UTC start, a fixed step, limiting `BYxxx` parts), so the windows and the `cut` counts reaching them follow §7's bounds. Only an implementation runs a case against the store.
+checks/vectors.py validates that every fixture and placement resolves, re-derives every refusal, the limits of §8.3 read from its table, and every chunk boundary from §8.3, §8.4 and §6, and checks that every other query is one the grammar accepts, and that every occurrence row names a calendar item and overlaps its window in order. It also re-derives the hits of every case whose query is one text term on the `title` field, compiling it as §8.5 says over an FTS5 table of the fixtures' titles, and refuses a case holding an FTS5 metacharacter that the term's text spliced raw would answer alike; and it expands the series a simple rule states (a UTC start, a fixed step, limiting `BYxxx` parts), so the windows and the `cut` counts reaching them follow §7's bounds; and it re-derives the hits of every case stating a zone, one `collection:` and one `date:` term over single events, each read as an indexer stating that zone places it. Only an implementation runs a case against the store.
 
 ## 12. Conformance
 

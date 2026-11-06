@@ -231,6 +231,8 @@ An index names the version of the search part it follows and the way it is writt
 
 A query is a list of terms, free text or field and value, joined by and, or and not, under a formal grammar. A query the grammar does not accept, an unknown field included, is refused whole rather than guessed at, and so is one longer, deeper or holding more terms than fixed limits. Text is matched as the words it holds, in order, so a character a full-text engine reads as an operator is only a separator, whatever engine the index uses. The refusal gives the position at fault, what was expected there and the fields that exist, so a person or an agent can correct it.
 
+A query's days, months and years are the user's, read in the zone the client states, which is meant to be the one the indexer read floating times in, so an event at half past midnight lands on the day its owner sees it on.
+
 Structured terms compile to seeks on the store, text terms to matches on the index, and the answer is their intersection in the store's own order. A hit is one item per account with every placement it has. The answer states its coverage:
 
 - how many items in scope have no body to search;

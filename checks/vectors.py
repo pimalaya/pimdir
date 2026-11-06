@@ -383,25 +383,33 @@ def instant(text):
     return datetime.fromisoformat(text.replace("Z", "+00:00"))
 
 
-def point_span(point, now):
-    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+def point_span(point, now, zone=timezone.utc):
+    """A point's span (SEARCH.md section 8.1), its days read in `zone`."""
+    def midnight(day):
+        return datetime(day.year, day.month, day.day, tzinfo=zone).astimezone(timezone.utc)
+
+    today = now.astimezone(zone).date()
     if point == "today":
-        return midnight, midnight + timedelta(days=1)
+        return midnight(today), midnight(today + timedelta(days=1))
     if point == "yesterday":
-        return midnight - timedelta(days=1), midnight
+        return midnight(today - timedelta(days=1)), midnight(today)
     amount = re.fullmatch(r"(\d+)([dwy])", point)
     if amount:
         n, unit = int(amount.group(1)), amount.group(2)
         start = now.replace(year=now.year - n) if unit == "y" else now - timedelta(days=n * (7 if unit == "w" else 1))
         return start, now
-    low, high = span_of(point) or (None, None)
-    if low is None and re.fullmatch(r"\d{4}-\d{2}-\d{2}", point):
-        low = f"{point}T00:00:00Z"
-        high = (instant(low) + timedelta(days=1)).isoformat().replace("+00:00", "Z")
-    return (instant(low), instant(high)) if low else (None, None)
+    if re.fullmatch(r"\d{4}", point):
+        return midnight(date(int(point), 1, 1)), midnight(date(int(point) + 1, 1, 1))
+    if re.fullmatch(r"\d{4}-\d{2}", point):
+        year, month = int(point[:4]), int(point[5:])
+        return midnight(date(year, month, 1)), midnight(date(year + month // 12, month % 12 + 1, 1))
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", point):
+        day = date.fromisoformat(point)
+        return midnight(day), midnight(day + timedelta(days=1))
+    return None, None
 
 
-def horizon_left_of(query, collections, now, horizon):
+def horizon_left_of(query, collections, now, horizon, zone=timezone.utc):
     terms = query.split()
     if any(not re.fullmatch(r"[a-z]+:\S+", term) for term in terms) or "(" in query:
         return None
@@ -420,8 +428,8 @@ def horizon_left_of(query, collections, now, horizon):
         return None
     calendar = any(c["kind"] == "text/calendar" for c in scope) and (not kinds or kinds & {"event", "task", "journal"})
     low, _, high = dated.partition("..") if ".." in dated else (dated, "", dated)
-    start = point_span(low, now)[0] if low else None
-    end = point_span(high, now)[1] if high else None
+    start = point_span(low, now, zone)[0] if low else None
+    end = point_span(high, now, zone)[1] if high else None
     leaves = start is None or end is None or start < instant(horizon["start"]) or end > instant(horizon["end"])
     return bool(calendar and leaves)
 
@@ -2014,9 +2022,25 @@ for reference in store.get("references", []):
         endpoint = (reference[f"{end}_kind"], reference[f"{end}_link_id"])
         require(f"search store: reference {end} {endpoint} is held", endpoint in endpoints)
 
+# A case's now and zone (SEARCH.md section 11), the file's now and UTC by
+# default.
+def clock_of(case):
+    label = f"search {case['query']!r}"
+    now = case.get("now", queries["now"])
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", now) is None:
+        failures.append(f"{label}: now {now!r} is no UTC instant")
+        now = queries["now"]
+    try:
+        zone = ZoneInfo(case["zone"]) if "zone" in case else timezone.utc
+    except (ZoneInfoNotFoundError, ValueError):
+        failures.append(f"{label}: zone {case['zone']!r} names no IANA zone")
+        zone = timezone.utc
+    return instant(now), zone
+
+
 # A case answers hits, a threaded listing or a refusal (SEARCH.md section 11),
 # and the grammar above accepts its query or refuses it as the case says.
-KEYS = {"query", "hits", "threads", "error", "sort", "ordered", "horizon_left", "temporal", "cut", "note"}
+KEYS = {"query", "hits", "threads", "error", "sort", "ordered", "horizon_left", "temporal", "cut", "zone", "now", "note"}
 for case in queries["cases"]:
     label = f"search {case['query']!r}"
     require(f"{label}: known keys only", set(case) <= KEYS)
@@ -2037,7 +2061,8 @@ for case in queries["cases"]:
         derived = temporal_of(case["query"], store["collections"])
         require(f"{label}: a temporal case is one checks/vectors.py re-derives", derived is not None)
         check(f"{label}: temporal", temporal, derived)
-    left = None if "error" in case else horizon_left_of(case["query"], store["collections"], instant(queries["now"]), queries["horizon"])
+    now, zone = clock_of(case)
+    left = None if "error" in case else horizon_left_of(case["query"], store["collections"], now, queries["horizon"], zone)
     if left is not None:
         check(f"{label}: horizon_left", case.get("horizon_left", False), left)
     try:
@@ -2046,7 +2071,7 @@ for case in queries["cases"]:
     except Refused as refused:
         got = {"code": refused.code, "start": refused.start, "end": refused.end}
     if "error" in case:
-        require(f"{label}: refusals carry no sort, order or coverage", not set(case) & {"sort", "ordered", "horizon_left", "temporal", "cut"})
+        require(f"{label}: refusals carry no sort, order, coverage or clock", not set(case) & {"sort", "ordered", "horizon_left", "temporal", "cut", "zone", "now"})
         require(f"{label}: a known code", case["error"].get("code") in CODES)
         check(f"{label}: refusal", got, case["error"])
     else:
@@ -2306,7 +2331,7 @@ for window_case in queries["occurrences"]:
               [row for row in window_case["rows"] if (row[0], row[1]) == key], derived)
 
 
-def cut_of(query, collections, now):
+def cut_of(query, collections, now, zone=timezone.utc):
     """The cut a plain query of kind:, collection:, account: and date: terms
     reports (SEARCH.md section 8.2): the series of its collections cut
     before its range's end. None for a query this does not read."""
@@ -2320,7 +2345,7 @@ def cut_of(query, collections, now):
         elif name == "account":
             scope = [c for c in scope if c["account"] == value]
         elif name in ("date", "when") and ".." not in value:
-            end = point_span(value, now)[1]
+            end = point_span(value, now, zone)[1]
         else:
             return None
     if end is None:
@@ -2338,10 +2363,65 @@ for case in queries["cases"]:
     if "cut" in case:
         label = f"search {case['query']!r}"
         require(f"{label}: cut is a count", isinstance(case["cut"], int) and case["cut"] >= 0)
-        derived = cut_of(case["query"], store["collections"], instant(queries["now"]))
+        derived = cut_of(case["query"], store["collections"], *clock_of(case))
         require(f"{label}: a cut case is one checks/vectors.py re-derives", derived is not None)
         check(f"{label}: cut", case["cut"], derived)
 
+
+# The hits of a case stating a zone (SEARCH.md sections 7, 8.1), over single
+# events placed as an index stating that zone places them.
+def single_event(bytes_, zone):
+    found = [c for c in components(bytes_)[2][0][2] if c[0] in ("VEVENT", "VTODO", "VJOURNAL", "VTIMEZONE")]
+    if len(found) != 1 or found[0][0] != "VEVENT":
+        return None
+    properties = {prop: (params, value) for prop, params, value in found[0][1]}
+    if {"RRULE", "RDATE", "RECURRENCE-ID", "DURATION"} & set(properties) or "DTSTART" not in properties:
+        return None
+
+    def at(params, value):
+        if re.fullmatch(r"\d{8}", value):
+            day = date(int(value[0:4]), int(value[4:6]), int(value[6:8]))
+            return datetime(day.year, day.month, day.day, tzinfo=zone).astimezone(timezone.utc), day
+        wall = datetime.strptime(value.removesuffix("Z"), "%Y%m%dT%H%M%S")
+        if value.endswith("Z"):
+            return wall.replace(tzinfo=timezone.utc), None
+        tzid = params.get("TZID")
+        return wall.replace(tzinfo=ZoneInfo(tzid) if tzid else zone, fold=0).astimezone(timezone.utc), None
+
+    start, day = at(*properties["DTSTART"])
+    if "DTEND" in properties:
+        end = at(*properties["DTEND"])[0]
+    elif day is not None:
+        after = day + timedelta(days=1)
+        end = datetime(after.year, after.month, after.day, tzinfo=zone).astimezone(timezone.utc)
+    else:
+        end = start
+    return start, end
+
+
+for case in queries["cases"]:
+    if "zone" not in case:
+        continue
+    label = f"search {case['query']!r}"
+    terms = dict(term.partition(":")[::2] for term in case["query"].split())
+    if not (len(case["query"].split()) == 2 and set(terms) == {"collection", "date"} and ".." not in terms["date"]
+            and "hits" in case):
+        failures.append(f"{label}: a zoned case is one checks/vectors.py re-derives")
+        continue
+    now, zone = clock_of(case)
+    since, until = point_span(terms["date"], now, zone)
+    derived = set()
+    for item in store["items"]:
+        if item["collection"] != terms["collection"]:
+            continue
+        span = single_event((root / item["fixture"]).read_bytes(), zone) if "fixture" in item else None
+        if span is None:
+            failures.append(f"{label}: {item['link_id']} is no single event this re-derives")
+            continue
+        start, end = span
+        if start < until and (end > since or (start == end and start >= since)):
+            derived.add((accounts[item["collection"]], item["seq"]))
+    check(f"{label}: hits read in {case['zone']}", sorted(map(tuple, case["hits"])), sorted(derived))
 # The task writers (conventions/gtd.md section 1): every case's shape and
 # references, and what its edit may change, re-derived from the bytes on both
 # sides by a second path, so an expected fixture that touches a line the
