@@ -13,8 +13,8 @@ change: a-delivered-create-waits-for-its-arrival
 - [x] Review 2026-11-11: no re-pend on a closing round (vector 139 keeps both waiting), report while waiting, early delivery MAY, a delete leaves one collection (SYNC §4), the destination derived at landing, the terms of §2 and §5 aligned
 - [x] GUIDE §9 to §12 follow
 - [x] `nix flake check path:$PWD` green on the working tree, its seven checks (2026-11-11)
-- [x] `nix flake check` on the tracked files green at commit (2026-11-12); checks/tags.sh: sync-draft-09 has no tag yet, the tag being the owner's to make
-- [x] checks/io-pimdir.rev to the io-pimdir commit following it (branch delivered-create): 3a51ae7
+- [x] `nix flake check` on the tracked files green at commit (2026-11-12); tag sync-draft-09 on the commit pinning io-pimdir 816df1e (the owner, 2026-11-12)
+- [x] checks/io-pimdir.rev to the io-pimdir commit following it (branch delivered-create): 3a51ae7, then 816df1e once squashed into io-pimdir master (2026-11-12)
 - [x] sync-draft-09 (the owner, 2026-11-12): SYNC Status, §10 and §12, STORAGE §14 and §17 examples, README, AGENTS.md, invariants; storage-draft-09 unchanged, no migration moving
 - [x] An outcome states whether a relocating `Remove` relocated (SYNC §2, §4, §11): vectors to format 4, 20, 48 and 137 state it, 140 a delete delivering nothing; checks/vectors.py requires it
 - [ ] collect_before (STORAGE §11.3) may collect a live delivered create holding a body, its staged flags lost once its arrival is named afresh: open, low
