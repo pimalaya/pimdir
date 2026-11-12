@@ -30,7 +30,7 @@ Triage first: each accepted item becomes its own change with its own delta. Noth
 - [x] Scope the refcount-zero sweep to the hashes the batch touched: **not needed, measured**. The partial index `objects_garbage` already makes both halves O(garbage). At the steady state a batch actually meets (every object live, nothing to collect) the full list-plus-delete sweep is flat at 6.9 µs across 10 000, 100 000 and 400 000 objects. Scoping it would add a bound parameter and a JSON array to save nothing.
 - [x] Permit the blob write before `BEGIN` (§14 step 1): `orphan-blobs-are-swept-by-nobody`, which is what made the justification true.
 - [x] Reconsider the column order of `items_retained`: `retained-page-by-seq` re-ordered it to `(collection, seq)`, measured across every retained read. The extra `(retained_at)` index the audit proposed alongside it was **rejected on measurement**: 54.88 ms against 56.45 ms at 500 collections, because the purge cost is the per-row foreign-key check on `bindings`, not the lookup.
-- [ ] `WITHOUT ROWID` for `objects` and `sources`. Untouched, carried into `algorithm-audit-2026-09-04`.
+- [x] `WITHOUT ROWID` for `objects` and `sources`. Untouched, carried into `algorithm-audit-2026-09-04`. Closed 2026-11-13 (audit-2026-11-12, V8): dropped on 2026-10-30, unmeasured (cairn/changes/algorithm-audit-2026-09-04/tasks.md, cairn/log/2026-10-30-algorithm-audit-2026-09-04.md).
 - [x] Decide what a `DELETE FROM collections` means for the refcounts it orphans: `collector-recomputes-and-producers-pin` (2026-09-05), `delete_collection` followed by `recompute_refcounts` in one transaction, the only sanctioned delete on the table.
 
 ## Smaller

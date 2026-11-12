@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "a pull carrying no body empties the item and keeps the body its binding agreed with",
   "note": "a and b agreed on c1. a's server edits the card and a's listing carries no body: the pull drops the item's body to Meta and moves a's base to r2 with no object, as before, but a agreed to no body, so its shared_object stays c1, pinned with b's as the common ancestor of whatever a's body turns out to be (SYNC.md §5, §9; STORAGE §5)",
   "store": {

@@ -1,0 +1,37 @@
+{
+  "v": 6,
+  "label": "a tombstoned delivered create of a mutable kind landing on an arrival that carries no body revives as a divergence, its delete not pushed",
+  "note": "the card's create was delivered, an add accepted with no handle, and deleted here since, its Remove held for the page naming the member. The delta names it under a.vcf at r1 and carries no body. The page lands the create on a.vcf, but r1 is a revision the tombstone's base does not name, and nothing has read what the server holds there, which another client may have edited: by the rule for a tombstone that is a remote edit, which revives it. So it lands live, recorded as Manual records a divergence whatever the policy: conflicted at r1 with no conflict_object, the base at r1 naming no body, reported Conflicted beside the landing's Created. The staged delete is not pushed over a body nobody read; the upgrade fetches that body, and the person deletes again (SYNC.md §5, §6)",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
+    "objects": { "c1": { "body": "fixtures/card-basic.vcf" } },
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 1 }],
+    "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "\u0001urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 1 }],
+    "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d0" }]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "Contacts",
+    "source": "dav",
+    "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual" }
+  },
+  "remote": {
+    "snapshot": {
+      "items": [{ "handle": "a.vcf", "flags": [], "revision": "r1", "meta": { "body": "fixtures/card-basic.vcf" } }],
+      "vanished": [],
+      "complete": false,
+      "checkpoint": "d1"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [{ "kind": "Created", "handle": "a.vcf" }, { "kind": "Conflicted", "handle": "a.vcf" }],
+    "store": {
+      "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0, "conflicted": 0 }],
+      "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": null, "base_revision": "r1", "base_present": 1, "conflicted": 1, "conflict_revision": "r1", "conflict_object": null }],
+      "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d1" }]
+    }
+  }
+}

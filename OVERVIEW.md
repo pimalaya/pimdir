@@ -36,11 +36,11 @@ One algorithm names every body, and a name is checked before a path is built fro
 
 That makes a body a fact: what each source holds can be fetched again from the remotes and the bodies rebuilt from them. The database also holds what no remote does: local edits not yet pushed, the queued actions, the links a person made between items, and the collections no source syncs. So it is never thrown away to be rebuilt without the user agreeing to lose them.
 
-The search index is a third file beside the two, derived from both, and dropping it loses nothing.
+The search index is a third file beside the two, derived from both, and dropping it loses nothing. One subdirectory is set apart for whatever the owner keeps of its own beside them, which the standard never looks into; nothing else of a program's own belongs in the store's directory.
 
-A store carries the version of its schema. While the standard is a draft, a store also names the exact draft that wrote it, and only a program of that draft opens it: any other refuses it rather than convert it, and a released program refuses every draft's store. Once released, a newer implementation upgrades an older store in place and keeps everything in it; an older owner refuses a newer store, while an older reader, or a program queueing actions, opens one whose changes it may ignore, which the store records apart for each. No implementation rebuilds a store it cannot read.
+A store carries the version of its schema. While the standard is a draft, a store also names the exact draft that wrote it, and only a program of that draft opens it: any other refuses it rather than convert it, and a released program refuses every draft's store. Once released, a newer implementation upgrades an older store in place and keeps everything in it; an older owner refuses a newer store, while an older reader, or a program queueing actions, opens one whose changes it may ignore, which the store records apart for each, judging it by that record alone and never by what a newer schema added. One change no older program may ignore is a kind of item added later: every older reader and producer then refuses the whole store, even one that lists mail alone, a cost the standard accepts rather than define what an unknown kind looks like everywhere. No implementation rebuilds a store it cannot read.
 
-The database has one format on disk, which loads on old SQLite releases, a phone's own included. The standard ships its statements for a recent SQLite; an implementation bound to an older one writes its own, keeping their names, inputs, outputs and effects, and the shared test vectors hold both to the same outcomes.
+The database has one format on disk, which loads on old SQLite releases, a phone's own included. The standard ships its statements for a recent SQLite; an implementation bound to an older one writes its own, keeping the inputs, the outputs and the effect of each name it runs, or reaching the same effect through statements named its own way, and the shared test vectors hold both to the same outcomes.
 
 A store has an identity drawn when it is created, and counts how many times it was restored from a copy. Whatever follows the store (an index, a window on a mailbox, a program waiting on an action it queued) records both and starts over when either changed, since a restored copy may hand out again what the store already gave. A store is backed up through SQLite's own copy, then its bodies; it is never mirrored by a file-synchronisation tool, and several devices share a person's data through their sources, each with a store of its own.
 
@@ -116,7 +116,7 @@ The store is an offline replica of each source. For every item and every source,
 
 Flags merge element-wise and never conflict: a flag added on one side and untouched on the other is added. Bodies matter only for mutable kinds, contacts and calendar objects. A body changed locally is pushed, one changed remotely is pulled, and both changed is a conflict, settled by the source's policy or left for a person with the diverging body kept beside the item. A policy preferring the local body keeps the server's in the trash before it pushes over it, and never pushes over a server body nobody has read: it waits for that body to be fetched first.
 
-A push is confirmed before local state moves: an accepted push moves the base, a rejected one leaves the change pending for the next run. A create the source took without naming the member yet, an add answered with no id or a move carried out into another collection, is held as delivered until the listing that names it: an action taken on it meanwhile, a delete or a move back, waits for that listing rather than staying on the device. The source's checkpoint is recorded only after the last push of a run, so an interrupted run resumes rather than forgets.
+A push is confirmed before local state moves: an accepted push moves the base, a rejected one leaves the change pending for the next run. A create the source took without naming the member yet, an add answered with no id or a move carried out into another collection, is held as delivered until the listing that names it: an action taken on it meanwhile, a delete or a move back, waits for that listing rather than staying on the device. Should the member never show, no run gives the create up: only the user does, and the item then goes to the trash with all it held, reported, to come back if the member appears after all. The source's checkpoint is recorded only after the last push of a run, so an interrupted run resumes rather than forgets.
 
 A source lists a collection in one of two ways: the changes since its checkpoint, or a whole listing, a **round**. A round may come in pages, newest first, each page named and committed as it lands, so a large mailbox shows its newest mail within seconds and an interrupted round resumes where it stopped.
 
@@ -129,7 +129,7 @@ A mail collection may be synced under a **scope**: a window on each message's ow
 - the listing could have named it: a listing narrowed by arrival date proves nothing of a message without a usable date, or dated ahead of its arrival, unless the source also enumerates every identifier in the folder; and a listing the server caps at a number of messages proves nothing at all;
 - the deletion would not remove most of a large mailbox at once, nor follow from a listing that named nothing at all (such a round is held open until the user confirms).
 
-What a source says it removed is removed whatever its date, and what the user changed is pushed whatever its date. A sync deletes on a server only what the user deleted or another server removed.
+What a source says it removed is removed whatever its date, and what the user changed is pushed whatever its date. A connector says so only of what its source states removed, never of what a listing merely failed to return: that inference is the engine's, under the conditions above. A sync deletes on a server only what the user deleted or another server removed.
 
 Each source records its **coverage**, the window its last round covered and when, so a reader can say "mail since" and a search knows where it stops being exhaustive.
 
@@ -190,7 +190,7 @@ Normative: STORAGE §11.
 
 A process that does not own the store still originates changes: a client filing a message, a submission daemon, a search client tagging a hit. It appends an action to the queue: its name, a versioned JSON payload addressing items by public id, and the body the action needs, written to the blob directory first so it is pinned.
 
-The owner applies actions in append order, each in one transaction with the deletion of its row, so application is exactly once.
+The owner applies actions in append order, each with the deletion of its row in one transaction, alone or in a short run of them where a failure undoes its own action only, so application is exactly once. A producer may likewise append several actions at once, all or none.
 
 Seven actions change the store: add, set flags, remove, move, copy, update, and choosing a verb's performer (below). Six intents ask a source to act outside it: sending a message, answering an invitation, cancelling one, creating, renaming and deleting a collection. The standard ships a schema for each payload, and one it refuses (a field missing, of another type, or unknown to its version) is parked whole, never half applied. The name is an open string, so an application carries actions of its own. An owner that does not recognise a kind, or the version of a payload, or lacks the means to perform it, skips the row and leaves it untouched for the process that can.
 
@@ -203,6 +203,8 @@ An addition may supersede another item, a task filed into another list. The owne
 Sources do not all push the same things: one server moves messages and another cannot, one calendar sends invitation replies and another does not, one holds tasks and another refuses them. The owner declares what each source supports, from a vocabulary the standard fixes, and parks an action a source cannot carry out. A producer is advised to read the same declaration before appending, so the user learns of a gap when acting rather than from a parked action; the owner's check is the one that holds.
 
 A verb such as sending a message, replying to an invitation or creating a folder on the server is performed by one source. When an account has several that could, the user chooses which.
+
+A sending may end with nobody knowing whether the message left: the connection dropped once it was handed over. Such an action is set aside under a mark every program reads alike, and never sent again unasked. It ends when its performer learns that it went, when the user asks for it to be sent again, accepting a second copy, or when the user withdraws it.
 
 Normative: STORAGE §15, Annex B.
 
@@ -251,10 +253,10 @@ Normative: SEARCH.
 
 ## 11. What binds an implementation
 
-The three parts bind by profile: the store's reader, producer and owner, the sync part's engine and connector, the search part's indexer and query client, each part's conformance section saying what each owes and how an implementation states the ones it meets. The vectors under vectors/, the schema under migrations/, the store's one format on disk, and the schemas of the queue's payloads bind every implementation; the statements under queries/ bind by their names, inputs and outputs, and one written its own way keeps their meaning and their effects.
+The three parts bind by profile: the store's reader, producer and owner, the sync part's engine and connector, the search part's indexer and query client, each part's conformance section saying what each owes and how an implementation states the ones it meets. The vectors under vectors/, the schema under migrations/, the store's one format on disk, and the schemas of the queue's payloads bind every implementation; the statements under queries/ bind what runs under their names, inputs, outputs and effect, and an implementation may reach a section's effect through statements of its own, which the store's invariants and the vectors still bind.
 
 Most implementations are readers or producers; the owner, the engine and the index are what io-pimdir, the reference implementation, is for. The vectors exist because the values that matter most fail silently: two implementations naming a body differently never error, they only stop sharing bodies. [GUIDE.md](./GUIDE.md) §1 orders the build.
 
-A canonical statement binds by its name, its parameters and the columns it answers; its text is a reference an implementation may replace with its own. Each part has a version of its own, and an implementation states which version of each it conforms to. The store's major version is its schema version, so a store written under one major is opened by every owner of that major, and by older readers and producers as far as the levels it records allow.
+A canonical statement binds by its name, its parameters, the columns it answers and its effect; its text is a reference an implementation may replace with its own. Once the store is released, adding a statement or changing what one takes or answers is a minor version, and so is removing one, which that version lists. Each part has a version of its own, and an implementation states which version of each it conforms to. The store's major version is its schema version, so a store written under one major is opened by every owner of that major, and by older readers and producers as far as the levels it records allow.
 
 Normative: STORAGE §16, §17; SYNC §12; SEARCH §12.

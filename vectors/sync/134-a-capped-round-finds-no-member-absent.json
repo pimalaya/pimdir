@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "a capped round finds no member absent, the cap leaving out the same members at every round",
   "note": "the store of 75, the server capping the folder (an IMAP server under a folder size limit, listing only its newest messages): the round's one page, its last, says capped. 10 is a based binding of imap the round did not list, as at every round, so its absence proves nothing: it is neither dropped nor pushed, the item stays live and jmap is offered no Tombstone. The round closes with its checkpoint and coverage as any round does; only a removal the source states deletes there (SYNC.md §4, §5, a capped listing)",
   "store": {

@@ -7,7 +7,7 @@
   "required": ["v", "label", "note", "store", "run", "remote", "expect"],
   "additionalProperties": false,
   "properties": {
-    "v": { "const": 5 },
+    "v": { "const": 6 },
     "label": { "type": "string" },
     "note": { "type": "string" },
     "store": { "$ref": "#/$defs/store" },
@@ -269,7 +269,7 @@
     "mutation": {
       "type": "object",
       "required": ["kind"],
-      "properties": { "kind": { "enum": ["Add", "Edit", "Remove", "SetFlags", "Copy", "Move"] } },
+      "properties": { "kind": { "enum": ["Add", "Edit", "Remove", "SetFlags", "Copy", "Move", "Abandon"] } },
       "allOf": [
         { "if": { "properties": { "kind": { "const": "Add" } } },
           "then": { "required": ["object", "flags"], "additionalProperties": false,
@@ -290,7 +290,10 @@
                                     "base": { "$ref": "#/$defs/flags" } } } },
         { "if": { "properties": { "kind": { "enum": ["Copy", "Move"] } } },
           "then": { "required": ["seq", "to"], "additionalProperties": false,
-                    "properties": { "kind": true, "seq": { "type": "integer", "minimum": 1 }, "to": { "type": "string" } } } }
+                    "properties": { "kind": true, "seq": { "type": "integer", "minimum": 1 }, "to": { "type": "string" } } } },
+        { "if": { "properties": { "kind": { "const": "Abandon" } } },
+          "then": { "required": ["seq"], "additionalProperties": false,
+                    "properties": { "kind": true, "seq": { "type": "integer", "minimum": 1 } } } }
       ]
     },
     "run": {
@@ -471,7 +474,7 @@
       "required": ["kind", "handle"],
       "additionalProperties": false,
       "properties": {
-        "kind": { "enum": ["Added", "Disagreed", "FlagsChanged", "ContentChanged", "Vanished", "Conflicted", "Overruled", "Created"] },
+        "kind": { "enum": ["Added", "Disagreed", "FlagsChanged", "ContentChanged", "Vanished", "Conflicted", "Overruled", "Created", "Abandoned"] },
         "handle": { "type": "string" },
         "link_id": { "type": "string" }
       }

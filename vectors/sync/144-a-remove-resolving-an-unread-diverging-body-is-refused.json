@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "a remove stating a resolution over a conflict whose diverging body nobody read is refused",
   "note": "the binding diverged at r2 and the diverging body is not fetched yet, its conflict_object null. A remove stating resolves, naming c3, names no conflict it meets: a body nobody has read is named by no resolution, so nobody decided to delete it. It is refused and stages nothing, the rows as they were, and the base never pairs r2 with the old body c1; the upgrade fetches the body first (SYNC.md §6, §7; STORAGE §15.3)",
   "store": {

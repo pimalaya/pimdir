@@ -1,0 +1,38 @@
+{
+  "v": 6,
+  "label": "an abandon is refused on a create that was never delivered",
+  "note": "the create of Trash is still pending, its binding holding no base: no source took it, so there is no arrival to give up waiting for, and a person withdrawing it stages a Remove. An Abandon gives up a delivered create and nothing else: it is refused, staging nothing, the rows as they were (SYNC.md §7)",
+  "store": {
+    "collections": [{ "id": "Trash", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {
+      "m1": { "body": "fixtures/mail-basic.eml" }
+    },
+    "items": [
+      { "collection": "Trash", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" }
+    ],
+    "bindings": [
+      { "collection": "Trash", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "Trash", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [{ "collection": "Trash", "source": "imap", "checkpoint": "t0" }]
+  },
+  "run": { "verb": "mutate", "collection": "Trash", "source": "imap", "mutation": { "kind": "Abandon", "seq": 1 } },
+  "remote": { "snapshot": null, "fetch": {} },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "failed": true,
+    "store": {
+      "items": [
+        { "collection": "Trash", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" }
+      ],
+      "bindings": [
+        { "collection": "Trash", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }
+      ],
+      "sources": [{ "collection": "Trash", "source": "imap", "checkpoint": "t0" }]
+    }
+  }
+}

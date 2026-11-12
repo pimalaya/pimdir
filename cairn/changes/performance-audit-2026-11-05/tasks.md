@@ -23,7 +23,7 @@ The ledger of proposal.md: one line per action, each closed by the log entry, ve
 ## Phase 1, implementations and the index
 
 - [x] io-pimdir: `prepare_cached` throughout, rusqlite's `cache` feature on, 256 statements per connection (io-pimdir cairn/log/2026-11-05-statements-are-prepared-once.md) (F4)
-- [ ] pimdir: `list_owing_bindings` and `list_lacking_items` (STORAGE §14, SYNC §10), a sync vector on every status, plan asserts (F3)
+- [x] pimdir: `list_owing_bindings` and `list_lacking_items` (STORAGE §14, SYNC §10), a sync vector on every status, plan asserts (F3) Closed 2026-11-13: both statements and their plan asserts landed with storage-draft-09 and draft-10 (cairn/log/2026-11-05-storage-draft-09.md, cairn/log/2026-11-12-draft-10-schema-and-statements.md); the check on every status is a scenario of checks/invariants.sh, not a sync vector, a vector comparing rows and pushes and never the statement a load ran: "owing: every projected status ...", the delivered create rows included. Closed by cairn/log/2026-11-13-draft-10-text-and-rules.md
 - [ ] io-pimdir: delta and last-page loads by them, closing a-delta-loads-what-it-names (F3)
 - [ ] io-pimdir: the planner in src/search/plan.rs: scope, term sets read once, a store-order or smallest-set driver, dedup by `(account, seq)`, a keyset cursor, a count apart (F1, F11)
 - [ ] pimdir: SEARCH §8.2, a hit placed by its first placement walked, the store-order form by membership in each term's matches; vectors walking pages to the end (F1)
@@ -39,10 +39,10 @@ The ledger of proposal.md: one line per action, each closed by the log entry, ve
 
 ## Phase 2, the store schema before storage-v1
 
-- [ ] Decide: item 10 now, item 11 now or in v2 (proposal.md, Decisions)
-- [ ] pimdir: the system flags as columns, `items.marks` and `bindings.base_marks`, as the representation (or the mirror and its invariant), their indexes, the counts and seen tests on them, vectors pinning the exact-bytes split (F2, F4)
-- [ ] pimdir: the integer placement id, every child keyed by it, the index keyed on it (F5, F6)
-- [ ] pimdir: the stamps, a-page-lands-in-few-statements' step 2 only if the flags stay rows (F4, proposal.md Decisions)
+- [x] Decide: item 10 now, item 11 now or in v2 (proposal.md, Decisions) Closed 2026-11-13 (audit-2026-11-12, V8): decided on 2026-11-05, both taken now, item 10 as the representation (cairn/changes/storage-draft-09/proposal.md, cairn/log/2026-11-05-storage-draft-09.md).
+- [x] pimdir: the system flags as columns, `items.marks` and `bindings.base_marks`, as the representation (or the mirror and its invariant), their indexes, the counts and seen tests on them, vectors pinning the exact-bytes split (F2, F4) Closed 2026-11-13 (audit-2026-11-12, V8): landed by storage-draft-09 as the representation, cairn/log/2026-11-05-storage-draft-09.md.
+- [x] pimdir: the integer placement id, every child keyed by it, the index keyed on it (F5, F6) Closed 2026-11-13 (audit-2026-11-12, V8): landed by storage-draft-09, cairn/log/2026-11-05-storage-draft-09.md.
+- [x] pimdir: the stamps, a-page-lands-in-few-statements' step 2 only if the flags stay rows (F4, proposal.md Decisions) Closed 2026-11-13 (audit-2026-11-12, V8): the flags did not stay rows, so the pending stamp has nothing left to save and was dropped on 2026-11-05 (cairn/changes/storage-draft-09/proposal.md, Not in this draft).
 
 ## Phase 3, only if measured necessary
 

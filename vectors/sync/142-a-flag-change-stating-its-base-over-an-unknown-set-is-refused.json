@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "a flag change stating the set its producer read is refused over a placement whose flags are unknown",
   "note": "the message was named by a listing stating no flags, so its set and its base's are unknown. A queued set-flags stating a base, here an empty one read from a stale view, has no set to add \\Seen to: applying it as a replace would write every flag the server holds as removed. The mutation is refused and stages nothing, which the drain parks; the same payload stating no base replaces the set, the producer then owning it whole (SYNC.md §7; STORAGE §15.2, §15.3)",
   "store": {

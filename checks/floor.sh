@@ -10,12 +10,16 @@
 # pointer indexes there as they do now. The objects it creates, and the text
 # of its triggers and views, are compared with those the sqlite3 on PATH
 # creates from the same text, and the floor is checked to know no
-# trusted_schema (§18). Needs that sqlite3 and the floor's shell, named by the
-# second argument.
+# trusted_schema (§18). The rehearsal migrations of checks/rehearsal/ (§6) run
+# there too: on the floor a table changes only by a rebuild, and a rebuild run
+# with foreign keys on commits with every referencing row gone. Needs that
+# sqlite3 and the floor's shell, named by the second argument; the third
+# names the rehearsal's directory.
 set -euo pipefail
 
 root="${1:-$PWD}"
 floor="${2:?the sqlite3 shell of the floor SQLite}"
+rehearsal="${3:-$root/checks/rehearsal}"
 dir="$(mktemp -d)"
 trap 'rm -rf "$dir"' EXIT
 
@@ -276,5 +280,10 @@ for since in NULL "'2026-10-06T00:00:00Z'"; do
         "$(floor_plan count_unread ":attachment=NULL" ":since=$since" | grep -c 'SEARCH TABLE items AS i USING INDEX items_unread (collection=? AND sort_key>?)' || true)$(floor_plan count_unread ":attachment=NULL" ":since=$since" | grep -c 'items_by_sort' || true)" "10"
 done
 [ "$floor_failures" = 0 ] || exit 1
+
+# A migration keeps every row on the floor too (§6): the additive one, the
+# rebuild with foreign keys off before the transaction and the edit of a
+# CHECK, with the rebuild §6 forbids, which loses the rows there silently.
+bash "$rehearsal/run.sh" "$root" "$floor"
 
 echo "the store schema loads on SQLite $version, $(wc -l < <("$floor" "$dir/floor.db" "$objects")) objects, every write to its $tables tables compiling, a body's name checked, $refusals mis-shaped writes refused, an object's delete seeking its pointers, its keyset reads seeking their collection and bound, its triggers stored as the canonical text writes them and no trusted_schema there"

@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "a flag one source folded in reads as dirty for the other and is pushed there",
   "note": "source a pulled \\Flagged earlier (its base has it); source b's base does not, so b's projection is Dirty and its sync adds what b's server lacks of the shared set, with no cross-merge (SYNC.md §4, §9)",
   "store": {

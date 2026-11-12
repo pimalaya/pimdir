@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "an edit stating no resolution over an item conflict is refused, keeping the conflict and both bodies",
   "note": "the store of 118 to 123: a pulled c3 into the item, then b's own edit c2 diverged under manual. A frontend read the card at c3 before the conflict arose and queued an ordinary update, c4 over c3, stating no resolves: its if_match still names the body the item keeps, but it settles nothing nobody decided. It is refused and stages nothing, which the drain parks naming the conflict: the item keeps c3 and its conflict over c2, and both bindings are as they were (SYNC.md §7; STORAGE §15.2, §15.3)",
   "store": {

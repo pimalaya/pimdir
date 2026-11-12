@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "a fetched body whose name a file failing it holds sets that file aside and lands",
   "note": "the store of 30, but the file under c2's name holds bytes that do not hash to it (corrupt), as a crash in the middle of an exclusive create and copy leaves part of a body under its name; nothing has read it since. The Full fetch brings c2, and the owner's write finds the name held: it verifies the file there, which fails, moves it into quarantine/ and files the fetched bytes, so the item and the base name a body that reads. Keeping the file there would leave the item pointing at bytes the next read sets aside, the fetched copy, perhaps the only good one, gone (STORAGE §5, §7; SYNC.md §6). The format states no file under quarantine/",
   "store": {

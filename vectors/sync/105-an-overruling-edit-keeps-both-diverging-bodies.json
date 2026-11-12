@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "an overruling edit settling a binding's conflict and the item's in one write keeps both bodies, the second minted again over the first",
   "note": "vectors 100 and 102 at once: the item holds a's c3 with c2, b's earlier body, as its conflict_object under manual, and b's own remote has since moved to s3, whose body c4 the upgrade fetched into b's conflict_object (SYNC.md §5, §6). A one-way engine whose source is a settles b for the store by restating c3 with overrule. Both diverging bodies are kept as retained items keyed over b's handle, the binding's c4 first under dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#b.vcf, then the item's c2 under the key minted again over it, held by the row the same write inserted (STORAGE.md §9), each reported Overruled in that order (SYNC.md §7, §9). b's base adopts s3 and c4, so b owes c3; the item's conflict clears and b's shared_object moves to c3",
   "store": {

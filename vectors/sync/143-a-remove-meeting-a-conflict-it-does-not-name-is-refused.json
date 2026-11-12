@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "a remove stating no resolution over a conflicted binding is refused, keeping the conflict and both bodies",
   "note": "the store of vector 32: the binding diverged at r2 and the upgrade read the server's body, c3. A frontend queued a delete of the card before the conflict arose, stating the body it read and no resolves. Meeting the conflict, the remove is refused and stages nothing, which the drain parks naming the conflict: applied, it would adopt r2 and c3 as the base and push a delete of the server's edit, which nobody saw. The item keeps c2 live and the binding its conflict; a remove naming c3 settles it (vector 32) (SYNC.md §7; STORAGE §15.2, §15.3)",
   "store": {

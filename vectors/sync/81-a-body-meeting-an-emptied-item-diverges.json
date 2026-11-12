@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "a source's new body meeting an item another source's pull emptied is a divergence, never dropped",
   "note": "the store 80 left: a pulled an edit it has not read, the item holds no body. b's upgrade fetches c3 at s2, an edit b's server made meanwhile. b changed (c3 against its base c1), the item changed for b (it holds no body where b agreed c1, so its body is one nobody read), and the two disagree: under manual the shared body stays absent, the item is flagged and c3 is recorded as its conflict_object. Dropping c3, or adopting it, would let a's unread edit or b's be pushed over the other. b's shared_object stays c1: an upsert leaving the item conflicted moves none (SYNC.md §9)",
   "store": {

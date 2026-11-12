@@ -1,6 +1,6 @@
 # Pimdir storage specification
 
-Status: storage-draft-10, the base, requiring no other part
+Status: storage-draft-10, the base, requiring no other part, released together with the sync part
 
 The storage part of the pimdir standard, and its base: a **SQLite database** (the index and the mutable state) plus a **content-addressed blob directory** (the bodies). The two layers over it are [SYNC.md](./SYNC.md), how sources reconcile through the store, and [SEARCH.md](./SEARCH.md), the index and query language over it.
 
@@ -100,13 +100,18 @@ mystore/
   objects/             the content-addressed blob directory (§5)
     ab/abcd…            a body, at objects/<hash[0:2]>/<hash>
   quarantine/          the bodies that failed their name, kept, never read (§7)
+  local/               the owner's own state, which this standard never defines
   index.db             the search index, when one is built (SEARCH.md)
   index.lock           its indexer lock
 ```
 
 A directory is a pimdir store if and only if it contains a pimdir.db whose `store_meta.format` is `'pimdir'`. The lock files are empty, created by the first handle that takes one, and hold no state. The quarantine/ directory is created by the first move into it.
 
-The index is derived and droppable. No other file belongs in the directory; an implementation MUST ignore a file it does not own, and the collector (§5) walks objects/ only, never quarantine/.
+The index is derived and droppable.
+
+**One name is the owner's.** The subdirectory local/ is reserved for the state an owner keeps of its own beside the store: its configuration, a lock of its own, a mark of work under way. The owner creates it when it first needs it, with mode `0700` (§18). This standard never defines what it holds: a reader and a producer ignore it, the collector never walks it, no rule of this document reads it, and a backup copies it with the store (§8). State kept there that follows the store is a consumer's, checked against the store's id and incarnation as §4.5 says.
+
+No other file belongs in the directory, an implementation's own included: what an implementation keeps of its own is under local/ or outside the store directory (§6). An implementation MUST ignore a file it does not own, save the temporaries the collector removes (§5), and the collector walks objects/ only, never quarantine/ nor local/.
 
 ## 4. The database
 
@@ -139,6 +144,10 @@ Version 1 is [migrations/storage/0001_init.sql](./migrations/storage/0001_init.s
 - a producer, one whose `read_version` and `produce_version` both are.
 
 A reader or a producer opening a store below its own version reads it as that version defines it. While this part is a draft the exact `format_version` governs alone, and the three stay `1`.
+
+**A store above a program's version is judged by `store_meta` alone.** A released reader or producer opening a store whose `version` is above its own MUST judge it by six columns of `store_meta` and by nothing else of the schema: `format` is `pimdir`; `format_version` is `storage-v` followed by `version`, a draft's name being refused; `version` equals `PRAGMA user_version`; `read_version`, and for a producer `produce_version` too, is at most its own version; `hash_algo` is one it knows (§6 step 2). These six columns keep their name, their type and their meaning in every version of this part: no migration renames, drops nor redefines one.
+
+Such a program MUST NOT refuse the store, nor read it as corrupt, for a `user_version` above its own, nor for a table, a column, an index, a trigger or a view it does not know: a later version's schema is not its own to verify, and its statements name their columns (§4.4), so what that version added moves nothing they read or write. It reads, and enqueues, as its own version defines. What it compares of the schema's text is §18's, against a version it knows alone.
 
 ### 4.3 Tables
 
@@ -178,7 +187,11 @@ An item plus one binding per source is the whole model. Single-source is the N=1
 
 The named, parameterised statements servicing §14 live under [queries/storage/](./queries/storage/), one file per statement named after it, sorted by the profile that runs it: read/ is the reader's (§14.1), queue/ the producer's (§15.1), owner/ the rest, an owner running all three. An implementation reads them by listing its directories. A file's leading comment says what the statement alone cannot; the rules are this document's.
 
-A statement's name, its named parameters and the columns it answers, in order, bind every implementation; its text is a reference, RECOMMENDED verbatim (§4.1). One running text of its own MUST keep all three and the statement's effect, the rules this document states and §7's invariants. Its text for one name MAY be several statements, run in order in one transaction, the caller's or one it opens, so long as it keeps the three and the effect: no other connection's write comes between them, and the name answers the rows the one statement answers. A fix to the text keeping the three is a patch of this part; a change to any of them is a minor version at least. The search index's statements are under queries/search/ on the same terms.
+**What a name binds.** A canonical name binds the text run under that name: the name, its named parameters, the columns it answers, in order, and its effect. The canonical text is a reference, RECOMMENDED verbatim (§4.1). An implementation running text of its own under a canonical name MUST keep all four, the rules this document states and §7's invariants. Its text for one name MAY be several statements, run in order in one transaction, the caller's or one it opens, so long as it keeps them: no other connection's write comes between them, and the name answers the rows the one statement answers.
+
+**An effect may be reached otherwise.** An implementation MAY reach the effect a section states through statements of its own, under names of its own, in place of the canonical ones that section names (a write folding a batch in fewer statements, a collector deleting what it lists in one). Such statements are bound by §7's invariants, by the column rule below, by every rule this document states for that effect and by the vectors (§16), and none of them takes a canonical name while differing from it in a parameter, a column or its effect. Where this document says that an operation runs a statement, in §14, §15 and elsewhere, it describes the reference form: what binds is the effect that statement has, in the transaction and the order stated, reached by that statement or by another.
+
+**What a change costs.** Once this part is released, a fix to a statement's text keeping its parameters, its columns and its effect is a patch; a statement added is a minor version; a change to a statement's parameters, its columns or its effect is a minor version at least; and a statement removed is a minor version too, which lists it. The search index's statements are under queries/search/ on the same terms.
 
 queries/signatures.json states the three for every statement of both directories: its name, its parameters in order of first appearance, the list slots it reads and the columns it answers, in order, each under a name of its own. It is generated from the statements (checks/signatures.py) and held to them, so a change to a statement that moves any of the three shows in that file, and one that moves none is a change of text alone.
 
@@ -216,12 +229,16 @@ Bytes live under objects/, one file per hash, at `objects/<hash[0:2]>/<hash>`: o
 
 **Write** never replaces: a period-prefixed temporary file in the shard directory, named uniquely to the writer so two processes storing one body never share it, `fsync`, a move onto the final name that fails when the name exists, then `fsync` the directory. The move is `link(2)` of the temporary to the final name then `unlink(2)` of the temporary, on Linux `renameat2` with `RENAME_NOREPLACE`, or the platform's no-replace move (below); never `rename(2)`, which replaces. Each of these is atomic: the name appears holding the whole body or not at all.
 
+**The directories are flushed.** A write creating its shard directory flushes objects/ too, so the new directory outlasts a power loss as the body in it does. A writer keeping a name it found held (below) flushes the shard directory all the same, before the row naming that body commits: the entry may be another writer's, moved and not flushed yet. The collector flushes every directory it unlinked in before it answers, so an erase answers only once its unlinks are durable (§11.5).
+
+**A temporary is the store's own.** Every period-prefixed regular file under objects/, in it or in a shard directory, is a writer's temporary, whoever wrote it, and no implementation keeps another file there. A writer unlinks its own once its move is made or has failed. One a writer left behind, killed between its `link` and its `unlink` or inside an exclusive copy (below), may hold a whole body under a second name that no row names and no walk by name finds: the collector unlinks every one and reports them (below).
+
 **An exclusive create and copy** is the one move that is not atomic, and a writer MAY use it only where no atomic no-replace move is offered or allowed (on Android before API 30, or where `renameat2` refuses `RENAME_NOREPLACE`): the final name created with `O_CREAT | O_EXCL`, which fails when the name exists, a link included; the temporary's bytes copied into it; the file `fsync`ed; then the temporary unlinked. While the copy runs, and after a crash in it, the name holds part of the body, which a read finds failing its name (§7). A copy that fails unlinks the part it created, whose bytes the temporary still holds; a part a crash left behind is set aside by the next write of that body (below).
 
 **A name held is verified.** When the final name exists, the writer MUST verify the file already there against its name (§7) before it keeps it, and so MUST a writer that skips its write because it finds the name or its row there. A file that passes is kept and the temporary unlinked: no write replaces a body, so a file another process verified, read or pinned is never swapped under it. A file that fails holds no body and is never kept in place of the bytes in hand:
 
 - an owner moves it into quarantine/ as §7 moves a body failing its name, holding the staging lock exclusively and serialised against its own writers, after verifying it again under the lock, then makes its move again;
-- a producer, which moves nothing (§7), fails its write and enqueues nothing, reporting the name, its bytes staying with its caller until the owner frees the name (a write, a read or a collection of its own).
+- a producer, which moves nothing (§7), fails its write and enqueues nothing, reporting the name, its bytes staying with its caller until the owner frees the name (a write, a read or a collector's run of its own).
 
 Any other failure of the move fails the write. A body streamed to its path (§14) is written the same way, named by the digest of the bytes streamed.
 
@@ -234,10 +251,12 @@ Any other failure of the move fails the write. A body streamed to its path (§14
 **The collector** is one operation, run when asked:
 
 1. It MUST `recompute_refcounts` first (§7), so a count a writer left behind is settled before anything is judged by it.
-2. It deletes the rows at `refcount <= 0` (`list_garbage_objects`, `delete_garbage_objects`).
-3. It walks objects/ and unlinks every file no row names (`object_exists`, a point lookup per file), crash orphans included. It unlinks only a regular file, read by `lstat`, whose name is well-formed and begins with the two characters naming its shard directory, itself a directory and not a link, named by two characters of the alphabet. Anything else it leaves in place and reports: a link, any other name, and a period-prefixed temporary file, which belongs to a writer and MUST be left alone. It never walks quarantine/ (§7).
+2. It deletes the rows at `refcount <= 0` (`list_garbage_objects` and `delete_garbage_objects` in the reference form, §4.4).
+3. It walks objects/ and unlinks every file no row names (`object_exists`, a point lookup per file), crash orphans included. Of the files named as bodies it unlinks only a regular file, read by `lstat`, whose name is well-formed and begins with the two characters naming its shard directory, itself a directory and not a link, named by two characters of the alphabet.
+4. It unlinks every period-prefixed regular file it meets, in objects/ and in each shard directory, read by `lstat`: a temporary (above), which under its locks no writer is still to move. It reports each.
+5. Anything else it leaves in place and reports: a link, a period-prefixed name that is no regular file, any other name. It flushes every directory it unlinked in (above). It never walks quarantine/ (§7) nor local/ (§3).
 
-It MUST hold the owner lock and take the staging lock exclusively (§8), which proves no other process is between a body and its row.
+It MUST hold the owner lock and take the staging lock exclusively (§8), which proves no other process is between a body and its row, nor between a temporary and its move.
 
 It MUST NOT run while one of the owner's own verbs is between two chunks (§14): a body streamed in one chunk and attached in the next is exactly a row no pointer names yet. Scheduling it is the owner's; a store that never collects grows without bound.
 
@@ -265,13 +284,23 @@ An owner opening a store runs these steps in order, and nothing else changes the
 
 1. Read `PRAGMA user_version`, `0` for a fresh database, which goes to step 3.
 2. Read `load_store_meta`. A store §4.2 says the program does not open MUST be refused, naming both versions: a draft's store under another draft or a release, a store lacking `format_version`, a released store above the highest version the implementation knows. So MUST a store whose `hash_algo` the implementation does not know, naming it (§7). It is never reconciled, migrated, rebuilt nor written, whatever the profile opening it.
-3. For each migration above the store's version, in order: open a transaction, run the script, set `user_version` and, through `set_store_version`, the three versions the migration states, commit. A failed script rolls back and stops, the store left at the last version committed. A fresh database runs `init_store_meta` in the transaction applying 0001_init.sql, so the row a later migration stamps exists.
+3. For each migration above the store's version, in order: open a transaction, run the script, set `user_version` and, through `set_store_version`, the three versions the migration states, commit. A failed script rolls back and stops, the store left at the last version committed. A fresh database runs `init_store_meta` in the transaction applying 0001_init.sql, so the row a later migration stamps exists. A migration rebuilding a table, or editing a `CHECK`, is run as the two paragraphs below say.
+
+**A migration that rebuilds a table.** SQLite changes a table's constraints, and on the SQLite floor (§4.1) drops or renames a column, only by a rebuild: a new table created, the rows copied, the old table dropped, the new one renamed to its name. With foreign keys on, dropping a table deletes its rows first, and every row referencing them goes or is nulled by its `ON DELETE` action, in that transaction and with no error. A rebuild MUST NOT run in one transaction with foreign keys on, as step 3 runs any other migration: on the floor it commits with every referencing row gone, `PRAGMA integrity_check` clean. A migration states that it rebuilds, and then:
+
+- the runner sets `PRAGMA foreign_keys = OFF` before it opens the transaction, the pragma changing nothing inside one, and `ON` again once the transaction has ended, committed or rolled back;
+- the script creates the new table under a temporary name, with every column, constraint and `WITHOUT ROWID` clause of the old one but what the migration changes, copies the rows by named columns (§4.4), drops the old table and renames the new one to its name, in that order, so every reference another table makes keeps naming it;
+- the script creates again every index and every trigger of the table, which the drop took, and drops before the rebuild, then creates again after it, every trigger and view of another table whose text names the table: a current SQLite refuses the rename while the schema names a table that is gone;
+- the script keeps the table's row of `sqlite_sequence` where the table is declared `AUTOINCREMENT` (`items`, `queue`), read before the drop and written back after the rename, so no placement id and no queue id is handed out twice (§4.3, §15);
+- the runner reads `PRAGMA foreign_key_check` before the commit, which MUST answer no row, and `PRAGMA integrity_check`, which MUST answer `ok`; any other answer rolls the migration back.
+
+**A closed vocabulary grows by its `CHECK`.** A migration adding a value to a closed vocabulary (§13) need not rebuild: it MAY edit the constraint in the table's stored text, in the migration's transaction and with foreign keys on, under `PRAGMA writable_schema = ON`, replacing the `CHECK`'s text exactly and nothing else, then raising `PRAGMA schema_version` and setting `writable_schema` off, the runner reading `PRAGMA integrity_check` before the commit as above. Every row and every other schema object stays as it was. SQLite refuses that edit on a connection in defensive mode (§18), so the runner applies such a migration with the connection out of it, for that transaction alone.
 
 There are no down-migrations, and no implementation rebuilds a store it cannot read: it refuses it (step 2), and a corrupt one is repaired (§7) or refused. A migration MUST preserve every row of every table and the meaning of every column it keeps: the queue, the receipts, the references, the capabilities, the performers, the retained rows and the collections no source syncs hold state no source restores.
 
 A **reader** or a **producer** never changes the schema: it runs step 2 under its own profile's terms (§4.2), and opens any store it does not refuse as it stands.
 
-**pimdir.db holds the canonical schema alone.** An implementation keeps state of its own outside the store directory (§3), never in pimdir.db, and a newer owner adds to the schema only through a migration to a later version, which an older owner refuses (step 2).
+**pimdir.db holds the canonical schema alone.** An implementation keeps state of its own outside pimdir.db, under local/ (§3) or outside the store directory, and a newer owner adds to the schema only through a migration to a later version, which an older owner refuses (step 2).
 
 **Derivations are revised.** Annex A carries a revision, and `store_meta.derivation` the one a store's summaries, addresses and sort keys stand under, written by `init_store_meta` as the creator's.
 
@@ -299,6 +328,8 @@ At most one process on one host owns pimdir.db at a time, and only the owner mut
 
 An owner MUST hold an exclusive advisory lock on owner.lock for as long as it owns the store. The lock belongs to the open file, so a crashed owner leaves nothing to recover. An owner that cannot take it MUST fail immediately, naming the store, and never wait: what to do next is the caller's. The database's busy timeout is unaffected.
 
+**A lock file stays.** A lock file, once created, MUST NOT be removed, renamed nor replaced while the store exists, by any program: a lock belongs to the open file, so a process opening a new file at the path would take a lock the holder of the old one does not exclude, and two owners would write one store. An owner SHOULD verify, before each write transaction, that the file it holds locked is still the one at the path (on Unix, `fstat` on its descriptor and `stat` on the path answering one device and one inode), and give up the store, writing nothing more, when it is not.
+
 Every lock this standard names (owner.lock and objects.lock here, index.lock in SEARCH.md) MUST be taken whole-file on the open file:
 
 - on Unix, with `flock(2)`: `LOCK_EX` exclusive or `LOCK_SH` shared, `LOCK_NB` added where a rule forbids waiting;
@@ -313,11 +344,11 @@ The rule is about processes: one owner opening several handles takes the lock on
 Two lesser roles exist, both local-host only:
 
 - **Readers** open read-only and see consistent WAL snapshots, any number at once, while an owner runs. A reader MUST NOT take either lock.
-- **Producers** perform the §15 enqueue transaction and nothing else, and MUST NOT assume when the owner applies it. A producer MUST hold the staging lock on objects.lock shared across the blob write and the enqueue that pins it: that is the window a collector must not run inside.
+- **Producers** perform the §15 enqueue transaction and nothing else, and MUST NOT assume when the owner applies it. A producer MUST hold the staging lock on objects.lock shared across the blob write and the enqueue that pins it: that is the window a collector must not run inside. It holds it so across any `store_object` or `pin_object`, whether or not it wrote the blob, and across the verification of a body it names without writing (§5), until the transaction naming that body has committed: a row it creates or pins is then never one the collector is deleting, and a file it verified never one the collector unlinks before its pin lands.
 
 On a network filesystem neither SQLite's locking nor advisory locks are reliable. Such a store MUST be owned by exactly one process on one host, SHOULD be enforced single-instance with a lease, and MUST use rollback-journal mode or `PRAGMA locking_mode = EXCLUSIVE`, never WAL's shared memory or `mmap`.
 
-**Copies.** A backup MUST copy pimdir.db consistently, through SQLite's online backup API or `VACUUM INTO`, never as a file under a running owner, and then objects/ and quarantine/, whose files may be the only copy of a body (§7), holding the staging lock shared across the copies, though it writes nothing, so no collector unlinks a body the copied database names (§5).
+**Copies.** A backup MUST copy pimdir.db consistently, through SQLite's online backup API or `VACUUM INTO`, never as a file under a running owner, and then objects/ and quarantine/, whose files may be the only copy of a body (§7), and local/ (§3), holding the staging lock shared across the copies, though it writes nothing, so no collector unlinks a body the copied database names (§5).
 
 A restore puts them back before any program opens the store, then runs `raise_incarnation` on the copy, given the replaced store's `incarnation` when that store can still be read. The restored store keeps its `store_id` and answers an incarnation no consumer of it recorded (§4.5). The statement raises it by a random stride above both, so two restores of one backup answer two incarnations even when neither could read the store it replaced; an incarnation is compared for equality, and its size says nothing.
 
@@ -342,7 +373,7 @@ The escaped key is the item's link id like any other, minted over as any other (
 
 **Minting.** The key **minted** over a key and a handle is `dup:`, the key, `#` and the handle, concatenated verbatim (`dup:abc@host#1174`, `dup:alt:Alert|2026-08-01T10:00:00Z|cron@host#1175`). A minted key that is held is **minted again** over the same handle, as often as it takes to reach a free key (`dup:dup:abc@host#1174#1174`). Minting yields a free key, and never lands, joins nor revives a row holding the key it would mint.
 
-**Assigning the key.** A writer naming a member a source lists or fetches (SYNC.md §6), or staging a create (SYNC.md §7), SHALL take its `link_id` from the first row of this table that matches what holds `k` in the collection. A member is minted over its handle, a create over the provisional handle it derives (§2). A handle the source already binds is no member to name: its key was resolved once (SYNC.md §6), and a `hash:` key changing under it retires its binding (§10).
+**Assigning the key.** A writer naming a member a source lists or fetches (SYNC.md §6), or staging a create (SYNC.md §7), MUST take its `link_id` from the first row of this table that matches what holds `k` in the collection. A member is minted over its handle, a create over the provisional handle it derives (§2). A handle the source already binds is no member to name: its key was resolved once (SYNC.md §6), and a `hash:` key changing under it retires its binding (§10).
 
 **Agreeing.** A row holding a message **agrees** with the member, the `Add` or the create being keyed when their summaries agree on `subject`, `date` and `sender` (Annex A.1), compared byte for byte, `NULL` matching `NULL`, and, for a retained row, on `size` too where both state one: no source holds a retained message any more, and reviving it makes its body the member's unread, as linking does (SYNC.md §6). A row of another kind agrees with anything. A message that does not agree is another one reusing the `Message-ID`, and is never joined, landed nor revived: one body would stand for two messages.
 
@@ -454,11 +485,11 @@ An item's conflict MUST be cleared, releasing its pin the same way, by:
 
 A write filling an item a pull emptied (SYNC.md §9) adopts a body and, under `manual`, leaves the conflict standing. While it stands, every binding of the item projects `Conflict` (SYNC.md §3), so no source pushes the disputed body over another. `list_conflicted_items` lists what awaits a decision.
 
-A write resolving an existing `(collection, link_id, source)` binding to a different handle SHALL be refused, recording no trace of the incoming handle. A rebind is licensed only by a drop of the bound handle in the same batch, with reason `Superseded` (a provisional handle an accepted add replaced) or `Rekeyed` (§12).
+A write resolving an existing `(collection, link_id, source)` binding to a different handle MUST be refused, recording no trace of the incoming handle. A rebind is licensed only by a drop of the bound handle in the same batch, with reason `Superseded` (a provisional handle an accepted add replaced) or `Rekeyed` (§12).
 
 A source holding one identity twice never reaches the refusal: the second copy resolves to a minted key (§9) and is stored as an item beside the first. Two items is the report; the store picks no survivor and warns about nothing.
 
-The other direction is a rebind too: a handle names one link id per source. A write resolving a bound handle to a different link id, a `hash:` key that changed under the same DAV resource (§9), SHALL retire the old binding first, in the same transaction, as a `Deleted` drop of that handle would (§11).
+The other direction is a rebind too: a handle names one link id per source. A write resolving a bound handle to a different link id, a `hash:` key that changed under the same DAV resource (§9), MUST retire the old binding first, in the same transaction, as a `Deleted` drop of that handle would (§11).
 
 The unique index on `(collection, source, handle)` refuses a write that does not.
 
@@ -512,6 +543,7 @@ An item owes something, and stays, while:
 
 - it has no binding: no source holds it, so no relisting restores it (a copy kept on the device);
 - it is conflicted, or a binding of it is conflicted or has no base;
+- a binding of it is a delivered create's, based under a provisional handle (§2): no listing has named its member yet, and the flags, the body or the delete staged on it are owed to the page that lands it (SYNC.md §5);
 - its flags differ from a binding's base flags, both known, by a system flag or by a flag either set holds and the other lacks;
 - a person's reference names it (§14.2), which no relisting restores.
 
@@ -551,11 +583,11 @@ A purge removes a row from the store's tables, not its bytes from the store's fi
 Every connection writing pimdir.db or index.db MUST set `PRAGMA secure_delete = ON`, so the pages and the cells a delete frees are zeroed as they are freed. An owner erasing an item, at the user's request, runs in order:
 
 1. its purge (§11.2), once it is retained, or `delete_unbound_item` for one no source binds (§14.3), the pins released in the same transaction;
-2. the collector (§5), which unlinks every body no row names any more;
+2. the collector (§5), which unlinks every body no row names any more and every temporary a writer left behind, and flushes the directories it unlinked in before it answers;
 3. where an index is kept, a refresh deleting the item's placement, its bodies and the thread rows it gave (SEARCH.md §4, §9), then `optimize_text`;
 4. `PRAGMA wal_checkpoint(TRUNCATE)` on pimdir.db and index.db, again until it reports every frame checkpointed.
 
-The item's bytes are then in neither database nor in objects/, unless another item names the same body. A backup, quarantine/ (§7) and the filesystem's own copies (free blocks, snapshots) are beyond the store's reach (§18).
+The item's bytes are then in neither database nor in objects/, under a body's name or a temporary's, unless another item names the same body. A backup, quarantine/ (§7) and the filesystem's own copies (free blocks, snapshots) are beyond the store's reach (§18).
 
 ## 12. Collection generation
 
@@ -569,7 +601,9 @@ Two implementations produce byte-identical stores only with identical encodings.
 
 A **closed** vocabulary is held by a schema `CHECK`: a value outside it is refused at the write, and adding one is a new schema version raising `read_version` (§6). An **open** one is checked by no constraint, so it grows within a version: a reader MUST read a value it does not know as this section says for that column, never as an error.
 
-Closed: `kind`, `level`, `marks` and `base_marks`, `deleted` and `conflicted`, `conflict`, `support`, `origin`, `hash_algo`, and `item_reference.role`, whose `CHECK` also takes any name in an application's `x-` space. Open: `collections.role`, `action`, `capability`.
+Closed: `kind`, `level`, `marks` and `base_marks`, `deleted` and `conflicted`, `conflict`, `support`, `origin`, `hash_algo`, and `item_reference.role`, whose `CHECK` also takes any name in an application's `x-` space. Open: `collections.role`, `action`, `capability`, `item_address.role`, `dtstart_value` and `due_value`.
+
+**A kind added later locks older programs out.** `kind` being closed, a fifth kind is a value a migration adds, raising `read_version`: every reader and every producer of an earlier version then refuses the whole store (§4.2), one that lists nothing but mail included. This part accepts that cost rather than define what an unknown kind reads as in every store-wide read (the feed, the address axis, the references).
 
 - **`kind`** (TEXT, on `collections`): `'message/rfc822'`, `'text/vcard'`, `'text/calendar'` or `'application/octet-stream'`, closed; `''` on a collection not yet declared.
 - **`level`** (INTEGER): `1` meta, `2` full, closed.
@@ -582,7 +616,8 @@ Closed: `kind`, `level`, `marks` and `base_marks`, `deleted` and `conflicted`, `
 - **`sort_key`** (TEXT): §9.3; `''` unknown; a timestamp as `2026-08-01T10:00:00Z`. The one column exempt from byte-identity: a zoned time resolves through a time zone database two writers may hold at different versions, and a wrong key loses nothing.
 - **`changed`** (INTEGER, on `items` and `collections`): the stamp of §4.5, `-1` only inside the statement requesting one; `next_change` and `purges` (INTEGER, on `store_meta`) its counters, the second counting every item purged or evicted, every object collected and every collection renamed or deleted.
 - **The summary columns**: Annex A's, decoded or verbatim as it says, an instant with the `Z` designator, `NULL` for absent and unknown unless it says otherwise.
-- **`role`, `address`, `position`** (on `item_address`): a role of Annex A.6, the canonical addr-spec, and the 0-based document order within the role.
+- **`role`, `address`, `position`** (on `item_address`): a role of Annex A.6, the canonical addr-spec, and the 0-based document order within the role. `role` is open: a reader reads a row whose role it does not know as naming its address in no role, so it lists the row under none of the roles it shows and still answers it where a read asks for any role (`list_address_placements`). A card's telephone has no row: the table holds addresses, and whether a card holds a `TEL` is the search index's to answer (`has:phone`, SEARCH.md §6).
+- **`dtstart_value`, `due_value`** (TEXT, on the calendar summaries): `date-time` or `date` (Annex A.3, A.4), open: a reader meeting another value does not interpret the `dtstart` or the `due` beside it, reading the property from the body where it holds one, and otherwise shows no time for it, ordering the item by its `sort_key`.
 - **`from_kind`, `to_kind`, `role`, `origin`** (on `item_reference`): a collection kind as `collections.kind` holds it; `attachment`, `invitation`, `sender`, `parent`, `source`, `related` or `x-` and a name; `auto` or `user` (§14.2).
 - **`base_revision`** (TEXT): an opaque etag or modseq, or `NULL`.
 - **`conflict_revision`, `conflict_object`** (on a binding): the remote revision and body observed when the binding was marked conflicted. A binding that is not conflicted MUST NOT carry either.
@@ -601,7 +636,7 @@ Closed: `kind`, `level`, `marks` and `base_marks`, `deleted` and `conflicted`, `
 - **`action`** (TEXT): `'add'`, `'set-flags'`, `'remove'`, `'move'`, `'copy'`, `'update'`, `'set-performer'` (§15.3), an intent of Annex B.2, or an application's own action, skipped by an owner that does not know it.
 - **`capability`** (TEXT, on `capabilities` and `performers`): a name of Annex B, or an application's own starting with `x-`. **`collection`** (TEXT, on `capabilities`): `NULL` for the source-wide row, a collection id for an override there. **`account`** (TEXT, on `capabilities` and `performers`): the account of §9.2, `NULL` in a single-account store.
 - **`support`** (TEXT): `'full'`, `'partial'` or `'none'`, closed. **`detail`** (TEXT): what a human reads about it, or `NULL`.
-- **`payload`** (TEXT): versioned JSON with a leading integer `v`, the payload's version for its `action`, typed by the action's schema under payloads/ and parked when malformed (§15.3), a row whose `v` the owner does not know being skipped (§15.2), never read as a version it knows. **`target_collection`** (TEXT): the collection a `move` or a `copy` names as `to`, or the one an `add` names in `supersedes`, `NULL` for any other action; written by the producer with the payload, followed by a rename (§14), and read by the owner in place of the payload's own. **`object_hash`** (TEXT, on `queue`): the body the action carries, pinned (§15.1), read by the owner in place of the payload's `object` (§15.3), or `NULL`. **`error`** (TEXT): `NULL` while pending; set when parked.
+- **`payload`** (TEXT): versioned JSON with a leading integer `v`, the payload's version for its `action`, typed by the action's schema under payloads/ and parked when malformed (§15.3), a row whose `v` the owner does not know being skipped (§15.2), never read as a version it knows. **`target_collection`** (TEXT): the collection a `move` or a `copy` names as `to`, or the one an `add` names in `supersedes`, `NULL` for any other action; written by the producer with the payload, followed by a rename (§14), and read by the owner in place of the payload's own. **`object_hash`** (TEXT, on `queue`): the body the action carries, pinned (§15.1), read by the owner in place of the payload's `object` (§15.3), or `NULL`. **`error`** (TEXT): `NULL` while pending; set when parked. Its text is free, save one reserved prefix: a text beginning with `unconfirmed: `, the word, a colon and one space, says the row is an intent whose outcome is unknown (§15.2), and no other row's begins so.
 - **`seq`** (INTEGER, on `receipts`): the public id (§9.1) of the item an applied `add` created, or of the item a performed intent left in the store when its performer knows it; `NULL` otherwise. **`collection`** (TEXT, on `receipts`): the collection the row was queued on, following its rename; `NULL` reads "its collection is gone", the row applied and the collection deleted since.
 - **`generation`** (INTEGER): the epoch of §12, starting at 1.
 - **`derivation`** (INTEGER, on `store_meta`): the Annex A revision of §6.
@@ -620,10 +655,10 @@ A store is opened as one source. `load` reads the shared items and that source's
   A `Created` placement's origin is `origin_for_link`, never a binding under a provisional handle, and a `Tombstone` placement's destination `destination_for_link`, a pending create or a delivered one (SYNC.md §3), each a seek on `items_by_link` for the key and for the key a minted form names, then on the binding's own key, so a projection reads them per placement, never every binding of the store. `list_superseded_pending` names the tombstones whose remove is held (§15.3, SYNC.md §5). `list_superseded_bindings` names, for each pending create superseding an item of its own identity, the member it may be moved from: the superseded item's binding of this source in its collection (SYNC.md §4).
 - **`lookup_objects(account, links)`**: the link ids in the `links` slot (§4.4), `account` the caller's own (§9.2): across collections a link id is one body downloaded once where the rows agree (§9), across accounts it is not a fact. It answers, for each row of the account holding a body under one of the keys, the body's hash and size and the `subject`, `date` and `sender` the row's mail summary states, the three `NULL` for a row holding none: the witnesses a link is checked against (SYNC.md §6), one row per holder so the caller adopts from one that agrees. A writer-derived key never matches (§9).
 - **`held_mail_summary(account, link_id, hash)`**: the mark and the invitation a row of `account` holding the body `hash` under `link_id` states, a row stating its mark first, for a placement linked to it (Annex A.1). A writer-derived key never matches (§9).
-- **`write(ops)`** applies one batch (below) as one transaction:
+- **`write(ops)`** applies one batch (below) as one transaction, the statements each step names being the reference form (§4.4):
   1. A `StoreObject` carries the index row and optionally the bytes. With bytes, write the blob first (§5), then `store_object`; without, the body is already at its path, streamed there by the consumer through §5's write. The blob write MAY precede `BEGIN` and SHOULD for a body of any size; the writer's lock (§8), not the file's age, keeps a collector out of the window.
 
-     A `SetCheckpoint` runs `ensure_collection` then `upsert_checkpoint`; a `SetCoverage` runs `set_coverage` beside it. A `DeliverPlacement` runs `deliver_binding`. A round's ops run `ensure_collection` then `open_round` (`OpenRound`), `stamp_bindings` after the upserts of the handles it names (`Stamp`), `set_round_cursor` (`SetRoundCursor`) and `close_round` (`CloseRound`), in the batch's order.
+     A `SetCheckpoint` runs `ensure_collection` then `upsert_checkpoint`; a `SetCoverage` runs `set_coverage` beside it. A `DeliverPlacement` has the effect of `deliver_binding`. A round's ops run `ensure_collection` then `open_round` (`OpenRound`), `stamp_bindings` after the upserts of the handles it names (`Stamp`), `set_round_cursor` (`SetRoundCursor`) and `close_round` (`CloseRound`), in the batch's order.
 
      Placement upserts and drops are merged into the shared items and bindings, `set_conflict` carrying the collection's policy. The reference form is the **diff**:
 
@@ -632,7 +667,7 @@ A store is opened as one source. `load` reads the shared items and that source's
      - then `insert_item`, `insert_binding`, `update_item`, `update_binding`, and `delete_binding` for a binding a `Deleted` drop removes, each row write carrying its set's system flags (`marks`, `base_marks`, `0` for an unknown set) and followed by its other flags' (§4.4): `retain_flags` and `add_flags` after the item's, `retain_base_flags` and `add_base_flags` after the binding's, the `flags` slot holding those flags (empty for an unknown set), both skipped where the set holds none and the row holds none;
      - and `delete_item_bindings` with `retain_item` for an item the result no longer holds, purged at once when `held_elsewhere` says the identity moved (§11, §11.1).
 
-     `update_binding` carries no handle: a rebind is refused (§10) except through §12's rebuild.
+     `update_binding` carries no handle: a rebind is refused unless a drop of the bound handle in the same batch licenses it, with reason `Superseded` or `Rekeyed` (§10, §12).
 
      A named placement carries its summary and addresses, derived by the writer under Annex A and written with the item (`upsert_<kind>_summary`, `replace_addresses`, `insert_address`; for mail `replace_in_reply_to` and `insert_in_reply_to`, for a task `replace_categories` and `insert_category`). A calendar resource whose component changed under its key leaves its old table (`delete_event_summary`, `delete_task_summary`, `delete_journal_summary`).
 
@@ -644,7 +679,7 @@ A store is opened as one source. `load` reads the shared items and that source's
 
 - `UpsertPlacement`: one placement of the source: its handle, its link id when the writer names the member, its flags, object, level, sort key, summary, address and list rows, base and conflict, merged into the shared item and the source's binding (§10, the diff above).
 - `DropPlacement { handle, reason }`: the source's binding of a handle goes, for a reason:
-  - `Deleted`: the member is gone from the source; the item is marked deleted, and retained once no binding is left (§11);
+  - `Deleted`: the member is gone from the source, or is a delivered create given up on request, which no listing ever named (SYNC.md §7); the item is marked deleted, and retained once no binding is left (§11);
   - `Superseded`: a provisional handle an accepted add or a landed arrival replaced, licensing the binding to move to another handle in the same batch (§10);
   - `Rekeyed`: a handle a rebuild renumbered, licensing the move too and making the batch a rebuild (§12).
 
@@ -662,7 +697,7 @@ A store is opened as one source. `load` reads the shared items and that source's
 
 **The write keys another message apart.** An upsert naming a mail member by its bare hint is keyed by §9's table against every row the collection holds under that key, whatever the writer saw of them: a row holding a message the member does not agree with (§9), one another source binds included, gives the upsert the identity minted over its handle, minted again over a held key, and is never joined, landed nor revived. A writer that saw the row mints the same way first, so both name the member alike.
 
-**Chunks.** A writer MAY cut one operation's writes into several batches, its **chunks**, each committed apart (an engine pushing in bounded chunks, SYNC.md §5). A body stored in one chunk may first be referenced by a later one, so the collector MUST NOT run between two chunks of one operation (§5), nor a collection or a release below a date (§11.3, §11.4).
+**Chunks.** A writer MAY cut one operation's writes into several batches, its **chunks**, each committed apart (an engine pushing in bounded chunks, SYNC.md §5). A body stored in one chunk may first be referenced by a later one, so the collector MUST NOT run between two chunks of one operation (§5), nor an eviction or a release below a date (§11.3, §11.4).
 
 **The version of the sync state.** The rows an engine writes for its sources, **sync state** (`bindings` and their base flags, `sources`, and the cross-source columns `deleted`, `conflicted` and `conflict_object` of `items`), follow the sync part their engine implements. `store_meta.sync_version` names it: `NULL` until an engine writes, then its version (`sync-draft-10`, or `sync-vN` once released), written by `set_sync_version` in the transaction of the engine's first write and whenever another version takes the store over. What an engine does with a version it did not write is the sync part's (SYNC.md §10); a program writing no sync state never reads it.
 
@@ -715,7 +750,7 @@ A **reader** (§8) opens read-only and projects the store as a local backend. Re
 - **`list_items_page(collection, after, limit)`**: a keyset page in link-id order, the sweep that sees every item once.
 - **`list_items_page_asc`**, **`list_items_page_desc`** `(collection, after_key, after_seq, limit)`: the natural order (§9.3), cursor `(sort_key, seq)`.
 - **`count_mail(collections, seen, attachment, since)`**, **`count_mail_by_day(collections, seen, attachment, shift, since)`**, **`count_unread(collections, attachment, since)`**: the live mail of a set of collections under the read and attachment filters, `seen` and `attachment` (`NULL` for either), in all, per day of the `Date` on the reader's clock, `shift` its offset from UTC in whole minutes (`120` east, `-300` west, `NULL` UTC), and unread per collection, so a list is sized by a count before it loads. A count reads `mail_summary` only for the attachment filter, and tests the read filter on the item's `marks` bit, so a count reads no flag row; `count_unread` reads `items_unread`, the unread rows alone, so a mailbox mostly read is counted from what it has not read.
-- **`list_mail_page_filtered`**: the page under the same filters across the set, cursor `(sort_key, seq, collection)`, merged from each collection's (§9.3). **`search_mail`**: the same page over a `LIKE` pattern on the subject, the sender and its name, until the search part's index (SEARCH.md) answers the body; a pattern one collection of the set never matches reads that collection's summaries whole. The store keeps `LIKE` and requires no FTS5 (§4.1): text search, indexed, is the search part's.
+- **`list_mail_page_filtered`**: the page under the same filters across the set, cursor `(sort_key, seq, collection)`, merged from each collection's (§9.3). **`search_mail`**: the same page over a `LIKE` pattern on the subject, the sender and its name, never the body: the reader's filter for a store without an index, the search part (SEARCH.md) answering the body where one is built. A pattern one collection of the set never matches reads that collection's summaries whole. `LIKE` folds the case of ASCII letters alone and no accent, where the search part's index folds both (SEARCH.md §5), so the two answer differently on an accented letter. The store keeps `LIKE` and requires no FTS5 (§4.1): text search, indexed, is the search part's.
 - `since` is a floor on the sort key (§9.3), an RFC 3339 instant: a row below it is left out, an undated one below any, and `NULL` sets none. It is a seek on the index, so a list cut at a date costs the rows above it, never the store's. `search_mail` takes no floor.
 
   A floor is a reader's window, not a sync scope: a scope holds an undated message (SYNC.md §5), so it is synced and kept, while a floor lists it only once it is `NULL`. A reader showing undated mail beside a window lists it apart.
@@ -723,7 +758,7 @@ A **reader** (§8) opens read-only and projects the store as a local backend. Re
 
   A message counts once however many collections of the set file it (its `seq`), its size the largest a placement states. `held` 1 keeps the messages a placement holds the body of, 0 those none does (what a download would fetch), `NULL` either. An undated row lies below every date, held only by a range open below.
 - **`get_mail_row(collection, link_id)`**: one live mail row in `list_mail_page_filtered`'s columns.
-- **`search_contacts`**, **`search_calendar`**, **`search_files`** `(collections, pattern, after_key, after_seq, after_collection, limit)`: `search_mail`'s `LIKE` over a contact's name and addresses, a calendar item's summary (and an event's location), a file's name, A to Z across the set, merged as `list_mail_page_filtered` is, until the search part's index answers them.
+- **`search_contacts`**, **`search_calendar`**, **`search_files`** `(collections, pattern, after_key, after_seq, after_collection, limit)`: `search_mail`'s `LIKE` over a contact's name and addresses, a calendar item's summary (and an event's location), a file's name, A to Z across the set, merged as `list_mail_page_filtered` is: the same filter for a store without an index, folding as `search_mail` does.
 - **`describe_endpoint(kind, link_id)`**: a reference's end as a link shows it, its first live placement and a title from whichever summary it has (§14.2).
 - **`list_mail_page_desc`**, **`list_contacts_page_asc`**, **`list_events_page_asc`**, **`list_tasks_page_asc`**, **`list_journals_page_asc`**, **`list_files_page_asc`**: the same page joined with the kind's summary. A mixed calendar merges its three pages on `(sort_key, seq)`, the page an item comes from saying which table holds it.
 - **`get_mail`**, **`get_contact`**, **`get_event`**, **`get_task`**, **`get_journal`**, **`get_file`**: one item. **`list_attachments(account, link_id)`**: the files a message attaches (§14.3).
@@ -756,7 +791,7 @@ A **reference** says that one item bears on another: a message and the file it a
 - **`add_reference`** records one between two endpoints the store holds, each with at least one row of `items` in a collection of its kind, and records nothing otherwise. An item never refers to itself.
 - A reference is unique on its endpoints and role: recording it again changes nothing, save that `user` takes over `auto`, never the reverse. `add_reference` answers the reference as it stands, recorded now or before, and no row when an end is missing or derived, so a caller tells "linked" from "cannot link".
 - **`remove_reference`** deletes one, whatever its origin. A rule matching again records it anew; no suppression is kept.
-- **A reference goes with the last row of either endpoint.** `items_drop_references` deletes it when a delete leaves no row of `items` (live, tombstoned or retained) under that link id in a collection of that kind: a purge, a collection below a date or a collection's delete of the last copy.
+- **A reference goes with the last row of either endpoint.** `items_drop_references` deletes it when a delete leaves no row of `items` (live, tombstoned or retained) under that link id in a collection of that kind: a purge, an eviction (§11.3) or a collection's delete of the last copy.
 - A move, a tombstone, a retention and the loss of one copy among several keep it, so a restore finds it. Every reference's two endpoints are therefore held. Whether an endpoint is live is the reader's to ask (`list_link_placements`).
 - A reference stamps nothing in the feed (§4.5) and is local to the store: no source learns of it, and another store records its own.
 
@@ -815,6 +850,8 @@ A producer enqueues in one transaction: `ensure_collection`, at most one `store_
 
 `created_at` is stamped by the statement, and the row's `id` is the handle the producer follows it by (§15.4). This is the only write a non-owner may perform, and when the owner applies it is the owner's (§8).
 
+A producer MAY enqueue several actions in one transaction, each on the terms above, its body stored and pinned before its `enqueue_action`: all of them are appended or none, in the order enqueued, which their ids keep. It holds the staging lock across them all (§8).
+
 ### 15.2 Applying
 
 The owner drains the pending actions store-wide in ascending `id` (`list_pending_actions`), the append order a producer relies on.
@@ -825,7 +862,9 @@ The handle draining is not the source an action is for. An action against an exi
 
 `claim_action` runs **first** in the transaction. The pending list is read outside any transaction, so a row it names may be gone by the time its turn comes, cancelled (§15.5) or applied by another handle of the owning process. A claim that deletes nothing means the row is not this transaction's to apply.
 
-A failed apply MUST roll its transaction back before anything else, which restores the claimed row; a park or a retry then runs in a transaction of its own.
+**A run of actions in one transaction.** An owner MAY apply a bounded run of pending actions in one transaction, in ascending `id`, each under a savepoint of its own: the savepoint opens, `claim_action` runs first in it, the action is applied, its receipt recorded, and the savepoint released. The bound is the owner's, and the transaction still spans no network I/O. Every action of a run is applied exactly once or not at all: the commit lands every released savepoint together, and a transaction that does not commit applies none, each claimed row restored.
+
+A failed apply MUST be rolled back before anything else, which restores the claimed row and undoes whatever the apply wrote: its transaction, or in a run its savepoint alone, the actions applied before it standing. The park or the retry is recorded only after that rollback, in a transaction of its own or, in a run, in the run's transaction outside the savepoint rolled back, and the run goes on with the next row.
 
 A failed action is retried (`bump_attempts`), a bounded number of times the owner chooses, then parked. One the owner judges permanently unappliable is parked at once (`park_action`): the attempt counted, `error` set, the action skipped, later ones proceeding, read back with `load_parked_actions` and never silently deleted.
 
@@ -837,7 +876,11 @@ An `update` or a `remove` meeting a conflict, the item's or that of the binding 
 
 A `set-flags` stating `base` and meeting an item whose flag set is unknown MUST be parked (§15.3): there is no set to change.
 
-**Skipping is not parking.** An owner that does not recognise an action, does not know the payload version `v` a row states for an action it knows, or does not run the source an intent names, SHALL leave the row pending and untouched (`error` `NULL`, `attempts` unbumped) and SHALL NOT block later actions on it. A payload it does not know is read no further: whether its other members would be valid at a version the owner knows decides nothing, and it is never parked as malformed.
+**An intent whose outcome is unknown.** A performer that sent an intent's request and cannot tell whether it took effect (a submission whose connection dropped once the message was handed over) MUST park the row with an `error` beginning with the reserved prefix `unconfirmed: `, the text after it free (§13), and MUST NOT perform it again of its own accord: the effect may be made, and a second one is not undone. Annex B.2 says which intents can end so. `unconfirmed: ` is the one reserved prefix of `queue.error`: no row in another state carries it, and any other text is free.
+
+A parked row is listed by no drain, so nothing retries it. It leaves that state in three ways only (§15.5): confirmed by its performer, which acknowledges it with its receipt once it learns the effect was made; retried on a person's request, who accepts that it may be performed twice, `retry_action` putting it back among the pending rows; or withdrawn, by `cancel_action`. A producer following the row tells the state by the prefix (§15.4).
+
+**Skipping is not parking.** An owner that does not recognise an action, does not know the payload version `v` a row states for an action it knows, or does not run the source an intent names, MUST leave the row pending and untouched (`error` `NULL`, `attempts` unbumped) and MUST NOT block later actions on it. A payload it does not know is read no further: whether its other members would be valid at a version the owner knows decides nothing, and it is never parked as malformed.
 
 A capability a declared source does not support is not a skip: the row is parked (§15.6). A drain has three outcomes per row: applied, parked, skipped.
 
@@ -845,7 +888,7 @@ A capability a declared source does not support is not a skip: the row is parked
 
 Existing items are addressed by `seq`. A payload is a JSON object, typed by the JSON Schema (2020-12) of its action and version, payloads/<action>.v<v>.schema.json, which binds. The shapes below and in Annex B.2 restate them: `n` an integer from 1, `hash` an object name (§5), `key`, `id`, `collection`, `addr` and `label` a non-empty string, `text` any string, `[…]` a flag set as distinct flags (§13), `[addr…]` a non-empty array of `addr`, `[hash…]` a non-empty array of distinct `hash`, a quoted value the member's one value and quoted values joined by `|` its choices, `?` an optional member, and `( a | b )` exactly one of two members.
 
-**A payload is valid whole, malformed or unknown.** A payload whose action and `v` an implementation knows is typed by their schema: one missing a member its schema requires, stating one of another type, or holding a member its version does not define is malformed: a producer MUST NOT enqueue it, and an owner knowing its action and version MUST park it, an intent's performer likewise, never applying it in part nor ignoring a member. One whose action it does not know, an application's own (`x-`) included, or whose `v` it does not know for an action it knows, is **unknown** to it, neither valid nor malformed: an owner skips it (§15.2) and a reader lists it (§15.4). A payload changing shape, a member added included, takes the next `v`, which an owner not knowing it skips. While this part is a draft, a payload's shape at its `v` is edited in place, as version 1 of the schema is (§4.2), a draft's store opening under that draft alone. vectors/payloads.json holds valid and malformed payloads of every action, and unknown ones. At `v: 1`:
+**A payload is valid whole, malformed or unknown.** A payload whose action and `v` an implementation knows is typed by their schema: one missing a member its schema requires, stating one of another type, or holding a member its version does not define is malformed: a producer MUST NOT enqueue it, and an owner knowing its action and version MUST park it, an intent's performer likewise, never applying it in part nor ignoring a member. One whose action it does not know, an application's own (`x-`) included, or whose `v` it does not know for an action it knows, is **unknown** to it, neither valid nor malformed: an owner skips it (§15.2) and a reader lists it (§15.4). A payload of an action it knows that states no `v`, or a `v` that is not an integer, is malformed and parked, never skipped: it states no version an owner could come to know, and a row waiting on it would wait for ever. A payload changing shape, a member added included, takes the next `v`, which an owner not knowing it skips. While this part is a draft, a payload's shape at its `v` is edited in place, as version 1 of the schema is (§4.2), a draft's store opening under that draft alone. vectors/payloads.json holds valid and malformed payloads of every action, and unknown ones. At `v: 1`:
 
 - **`add`**: `{ "v": 1, "link_id": key?, "flags": […], "object": hash, "supersedes": { "collection": collection, "seq": n }? }`. Creates an item staged as a local creation to push under its provisional handle (§2); the owner derives its summary and addresses from `object` (Annex A).
 
@@ -867,13 +910,13 @@ Existing items are addressed by `seq`. A payload is a JSON object, typed by the 
   A row stating `base` and meeting an item whose flag set is unknown MUST be parked: there is no set to add to nor remove from, and replacing would write the unread flags as removed.
 - **`remove`**: `{ "v": 1, "seq": n, "if_match": hash?, "resolves": [hash…]? }`. Tombstones the shared item, every source that binds it pushing the delete (SYNC.md §9); already absent is success, and bound by nobody it is retained at once (below).
 
-  `if_match` and `resolves` read as an `update`'s do (below), on the same rules. `if_match` is the body the producer read and deletes: when the item's current body is another, the owner MUST park the row, naming both, the delete having been decided over a body since replaced. A producer deleting a mutable item it read SHOULD state it; a row without it removes whatever the item holds.
+  `if_match` and `resolves` read as an `update`'s do (below), on the same rules. `if_match` is the body the producer read and deletes: when the item's current body is another, or the item holds none, the owner MUST park the row, naming both, the delete having been decided over a body the item no longer holds. A producer deleting a mutable item it read SHOULD state it; a row without it removes whatever the item holds.
 
   `resolves` makes the remove a person's resolution of a conflict by deleting, naming the `conflict_object` of each conflict the producer showed. A remove meeting a conflict, the item's or that of the binding it runs through, MUST be parked, naming the conflict, unless `resolves` names the `conflict_object` of each conflict it meets; one stating `resolves` and meeting none MUST be parked. So a remove queued before a conflict arose, or without it in view, never deletes a diverging body nobody saw, and one whose diverging body nobody has read is named by no resolution. A producer MUST NOT state `resolves` on any other remove.
 - **`move`**, **`copy`**: `{ "v": 1, "seq": n, "to": collection }`, a `copy` being a `move` without the removal. The producer writes `to` as `target_collection` too, as it writes an `add`'s `supersedes.collection`, and the owner reads the target from the column, which a rename follows (§14). A target the store does not declare, or of another kind, parks the action rather than ensuring a collection nothing configured.
 - **`update`**: `{ "v": 1, "seq": n, "object": hash, "if_match": hash?, "resolves": [hash…]? }`. Repoints a mutable item's body; the owner re-derives its summary and addresses.
 
-  `if_match` is the body the producer read and replaced. When the item's current body is another, the owner MUST park the row, naming both: applying it would drop another write without a merge (SYNC.md §7). A producer editing a body it read SHOULD state it; a row without it applies over whatever the item holds.
+  `if_match` is the body the producer read and replaced. When the item's current body is another, or the item holds none (a pull having emptied it, SYNC.md §5), the owner MUST park the row, naming both, an absent body as none: the body the producer read is not what the item holds, and applying the row would drop another write without a merge (SYNC.md §7). A producer editing a body it read SHOULD state it; a row without it applies over whatever the item holds.
 
   `resolves` makes the update a person's resolution of a conflict, naming the diverging bodies it was decided over: the `conflict_object` of each conflict the producer showed, the item's (`list_conflicted_items`) and its bindings' (`list_conflicted_bindings`). A producer deciding a conflict (a resolution command or form) states it, and MUST NOT state it on any other update: an ordinary edit, written before a conflict arose or without it in view, never settles one.
 
@@ -893,11 +936,11 @@ The intents of Annex B.2 are actions of their own, versioned the same way. An ap
 
 ### 15.4 Reading the queue
 
-A reader MAY overlay a collection's pending actions (`load_pending_actions`) for read-your-writes. An overlay SHOULD fold a row as the owner would apply it to the rows the reader sees: a `set-flags` stating `base` as the change it is, over the set the item shows; and nothing for a row the owner would park, a `set-flags` stating `base` over an unknown set, an `update` or a `remove` whose `if_match` names another body than the item shows, or one meeting a conflict its `resolves` does not name.
+A reader MAY overlay a collection's pending actions (`load_pending_actions`) for read-your-writes. An overlay SHOULD fold a row as the owner would apply it to the rows the reader sees: a `set-flags` stating `base` as the change it is, over the set the item shows; and nothing for a row the owner would park, a `set-flags` stating `base` over an unknown set, an `update` or a `remove` whose `if_match` names another body than the item shows, the item showing none included, or one meeting a conflict its `resolves` does not name.
 
 A row whose action, or whose `v`, the reader does not know (§15.3) is folded into nothing and still listed as pending, with its action and its `created_at`: it is somebody's write the reader cannot show, never one it may hide.
 
-A producer follows one row by the `id` its enqueue answered, under the store id and incarnation it recorded with it (§4.5). `load_action` reads the row while it is pending (`error` `NULL`) or parked. Once it is gone, `load_receipt` says it was applied and, for an `add`, which item it created, so a producer learns the `seq` of what it staged without matching the body. A receipt outlives the collection its row was queued on: once that collection is deleted, by the `collection-delete` the receipt answers or otherwise, its `collection` reads `NULL`, the row applied all the same.
+A producer follows one row by the `id` its enqueue answered, under the store id and incarnation it recorded with it (§4.5). `load_action` reads the row while it is pending (`error` `NULL`) or parked, a parked intent whose `error` begins with `unconfirmed: ` being one whose outcome is unknown (§15.2): neither performed nor failed, which a producer shows as such. Once it is gone, `load_receipt` says it was applied and, for an `add`, which item it created, so a producer learns the `seq` of what it staged without matching the body. A receipt outlives the collection its row was queued on: once that collection is deleted, by the `collection-delete` the receipt answers or otherwise, its `collection` reads `NULL`, the row applied all the same.
 
 A performed intent leaves a receipt too, acknowledged or replaced (§15.5), so a producer tells a message sent or a collection created from a row withdrawn.
 
@@ -910,6 +953,8 @@ A row found in neither was cancelled by request (§15.5), or applied longer ago 
 A performer acknowledging an intent it performed MUST record the intent's receipt (`record_receipt`) in that same transaction: its `id`, the collection it was queued on and, as `seq`, the item its effect left in the store when the performer knows it, `NULL` otherwise (a collection created, which arrives with a later sync; a message sent, its copy filed by the provider).
 
 A withdrawal records none, which is how a producer tells the two apart (§15.4). An intent that failed is parked or left pending, never acknowledged.
+
+**Retrying.** `retry_action(id)` puts a parked row back among the pending ones, on a person's request and never of the owner's own accord: its `error` is cleared, its `id` and its `attempts` kept, so the next drain lists it in its place in the append order and it is applied or performed as any pending row is. It answers the id of the row it put back, and nothing for a row that is pending or gone. It is the one way an intent parked `unconfirmed: ` is performed again (§15.2).
 
 An intent whose effect is not a store mutation is therefore at-least-once, and deduplicating is the performer's.
 
@@ -966,22 +1011,22 @@ A schema mismatch fails a query; a body named differently, a summary derived dif
 
 - **vectors/objects.json**: bodies to their BLAKE3 digests, names and paths (§5), and the RFC 4648 §10 base32 vectors.
 - **vectors/summaries.json** and **vectors/fixtures/**: bodies to the `link_id`, summary row, address rows and `sort_key` Annex A produces, the attachment mark read without the body, a message's attachments as its stand-ins name them (Annex A.7), the hedged cases, the encodings that split earlier writers, the charset tables an encoded word is decoded through, the header parses and the line ends of Annex A.1, a field stated twice, the zone resolution of A.3, a resource of overrides alone, the fold and the trim of A.2, and the `alt:`, `hash:`, escaped and minted keys of §9, the fallback of an unusable `UID` among them.
-- **vectors/payloads.json**: queue payloads of every action, each with its outcome, valid or malformed against the schemas under payloads/, or unknown where its action or its `v` names no schema, a known action at `v` 2, an action this part does not define and an application's own among them (§15.2, §15.3).
+- **vectors/payloads.json**: queue payloads of every action, each with its outcome, valid or malformed against the schemas under payloads/, a known action stating no `v` or one that is no integer among the malformed, or unknown where its action or its `v` names no schema, a known action at `v` 2, an action this part does not define and an application's own among them (§15.2, §15.3).
 - vectors/sync/ and vectors/search/ belong to the other parts.
 
 These are the **model vectors**, which §17 binds by profile: objects.json every implementation, since two stores naming bodies differently cannot share a blob directory; payloads.json every producer and owner; summaries.json an owner, for each summary kind it writes, the minted, `alt:` and `hash:` keys they give included. A summary vector states a row as the model holds it, its lists (`in_reply_to`, `categories`) as arrays though the store keeps them as rows, and a consumer MUST compare parsed structures, never JSON text. The values are authored from the prose, never from an implementation.
 
-The canonical text alone is bound by checks/: invariants.sh runs the canonical statements through the scenarios this part argues from, and a change to a statement or a rule is checked against it before it lands; schema.sh prepares every statement against the canonical schema and refuses, in the canonical text, a JSON function, a `STRICT` store table or an untyped column (§4.1), and a statement reading `*` or inserting without a column list (§4.4); floor.sh loads the schema on SQLite 3.18, compiles every write into it there and checks a body's name there (§5).
+The canonical text alone is bound by checks/: invariants.sh runs the canonical statements through the scenarios this part argues from, and a change to a statement or a rule is checked against it before it lands; schema.sh prepares every statement against the canonical schema and refuses, in the canonical text, a JSON function, a `STRICT` store table or an untyped column (§4.1), and a statement reading `*` or inserting without a column list (§4.4); floor.sh loads the schema on SQLite 3.18, compiles every write into it there and checks a body's name there (§5). checks/rehearsal/ holds migrations that never ship, an additive one, a rebuild and the edit of a `CHECK` (§6), which invariants.sh and floor.sh run on a populated store, each keeping every row and every schema object, beside the rebuild §6 forbids, which does not.
 
 Every file under vectors/ states the version of its format as a top-level `v` and conforms to the JSON Schema of that format under vectors/schema/, which checks/vectors.py validates; an implementation meeting a `v` it does not know MUST NOT read the file as a version it knows. An implementation that vendors vectors/ SHOULD record their digests and re-check them against this repository in its CI, since a frozen copy keeps passing while the format moves.
 
 ## 17. Conformance
 
-An implementation conforms to this part by one profile, each holding the one before. It MUST meet every section its row names, run the statements of its directories on §4.4's terms and pass the vectors its row names, and MUST state its conformance as each part's version and the profile it meets there, the layers' by SYNC.md §12 and SEARCH.md §12: `storage-draft-10 owner, sync-draft-10 engine, search-draft-10 indexer (canonical)`. One running text of its own for any statement of its directories (§4.4) adds `(own statement text)` after its profile: `storage-draft-10 owner (own statement text), sync-draft-10 engine`.
+An implementation conforms to this part by one profile, each holding the one before. It MUST meet every section its row names, keep §4.4's terms for the statements of its directories, each run under its canonical name or its effect reached through statements of its own, and pass the vectors its row names, and MUST state its conformance as each part's version and the profile it meets there, the layers' by SYNC.md §12 and SEARCH.md §12: `storage-draft-10 owner, sync-draft-10 engine, search-draft-10 indexer (canonical)`. One running text of its own for any statement of its directories, or reaching an effect through statements of its own (§4.4), adds `(own statement text)` after its profile: `storage-draft-10 owner (own statement text), sync-draft-10 engine`.
 
 | Profile | What it does | Owes | Statements | Vectors |
 | --- | --- | --- | --- | --- |
-| reader | opens the store read-only and lists it, holding no lock | §3, §4 (a busy timeout, §4.2's refusals), §6 step 2, §7, §8, §9, §11.1's reads, §13, §14.1 to §14.3's reads, §15.4, §18 | read/ | objects.json |
+| reader | opens the store read-only and lists it, holding no lock | §3, §4 (a busy timeout, §4.2's refusals), §6 step 2, §7, §8, §9, §11.1's reads, §12's read, §13, §14's reads of a collection's kind, account, name and role, §14.1 to §14.3's reads, §15.4, §18 | read/ | objects.json |
 | producer | a reader that enqueues actions, under the staging lock | the reader's, §5, §15.1, §15.3, §15.6's gate and performer, Annex B | read/, queue/ | objects.json, payloads.json |
 | owner | the one process that mutates the store | every section and both annexes | read/, queue/, owner/ | objects.json, payloads.json, summaries.json for each summary kind it writes |
 
@@ -991,13 +1036,13 @@ An engine (SYNC.md §12) is an owner. An indexer and a query client (SEARCH.md �
 
 A store holds a person's mail, contacts and calendars. The rules bounding what hostile content costs and keeping a name from becoming a path bind where they are stated: a name checked before a path is built from it and no link followed (§5), a body never replaced and a name held verified before it is kept (§5), a body verified when read (§7), a message's walk and its stand-ins bounded (Annex A.1, §14.3), the search part's expansion and queries bounded (SEARCH.md §7, §8.3). This section states the rest.
 
-- **Modes.** A program creating a store MUST create its directory, objects/, its shard directories and quarantine/ with mode `0700` and every file in them `0600`, index.db, the lock files and SQLite's `-wal` and `-shm` included, or on Windows with an ACL granting its own user alone. A program opening a store whose directory or pimdir.db another user can read or write SHOULD refuse it, or open it only once the user confirms.
+- **Modes.** A program creating a store MUST create its directory, objects/, its shard directories and quarantine/ with mode `0700` and every file in them `0600`, index.db, the lock files and SQLite's `-wal` and `-shm` included, as an owner creates local/ and what it keeps there (§3), or on Windows with an ACL granting its own user alone. A program opening a store whose directory or pimdir.db another user can read or write SHOULD refuse it, or open it only once the user confirms.
 - **Write access is the trust boundary.** SQLite holds no right per table, so a process that can write pimdir.db can write any row, not the queue's alone: every producer is trusted as the owner is, and the queue is a protocol between trusted processes, never a boundary. An owner MAY ask the user before it performs an intent another process queued (a message sent, an invitation answered).
 - **Read access can block.** A lock is taken on a file open for reading, so a process able to read the store directory can hold owner.lock, objects.lock or index.lock and stop the owner, the collector, every producer or the indexer, which the modes above prevent. A lock file MUST be opened without following a symbolic link (`O_NOFOLLOW`, `FILE_FLAG_OPEN_REPARSE_POINT` on Windows), a link there failing the open and naming the store.
 - **Names are untrusted.** A file's name (Annex A.7), an attachment's `filename`, a collection's name and a part's section come from content or from a server, and the store keeps them as stated. A program deriving a filesystem path from one, saving an attachment or mirroring a folder, MUST neutralise in it every path separator (`/`, and `\` where the platform reads one), a `.` or `..` component, NUL, every control character (U+0001 to U+001F, U+007F to U+009F) and every bidirectional formatting character (U+061C, U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069), and MUST NOT write outside the directory it chose.
 - **Instructions are not content.** A property `X-PIMDIR-` names (Annex B.1's `X-PIMDIR-ONLINE-MEETING`) instructs a performer. A producer enqueuing an `add` or an `update` of a resource the user did not write as it stands (an invitation added to a calendar, an imported file, a resource copied from a message) MUST first remove every such property from it, writing one only as the user asks.
 - **No credential in the store.** No program writes a password, a token, a cookie or any other credential into a column of the store or of the index, the opaque ones included (`checkpoint`, `round_cursor`, `round_checkpoint`, `queue.producer`, `queue.error`, `capabilities.detail`, `retained_by`), and text it records from an error MUST first be scrubbed of the credentials it may carry (a URL's userinfo, an `Authorization` header, a token in a query string). This extends §9.2's account, which records none.
-- **A store from elsewhere.** A crafted pimdir.db or index.db can carry triggers and views that run with the opening program's functions. A program opening a store it did not create (a copy received, a backup someone else made) SHOULD open both with `PRAGMA trusted_schema = OFF` and `SQLITE_DBCONFIG_DEFENSIVE`, which the canonical schemas and statements run under, each where its SQLite offers it: the pragma from SQLite 3.31, `SQLITE_DBCONFIG_DEFENSIVE` from 3.26. A setting its SQLite lacks is no deviation from this rule. Below 3.31, the 3.18 floor of §4.1 among them, nothing keeps a crafted trigger or view from calling a function the program registers, so such a program SHOULD instead read `sqlite_master` before any other statement and refuse the store when it holds a trigger or a view whose text the canonical schema at the store's version does not create, naming it, and SHOULD register no SQL function with a side effect on the connection.
+- **A store from elsewhere.** A crafted pimdir.db or index.db can carry triggers and views that run with the opening program's functions. A program opening a store it did not create (a copy received, a backup someone else made) SHOULD open both with `PRAGMA trusted_schema = OFF` and `SQLITE_DBCONFIG_DEFENSIVE`, which the canonical schemas and statements run under, each where its SQLite offers it: the pragma from SQLite 3.31, `SQLITE_DBCONFIG_DEFENSIVE` from 3.26. A setting its SQLite lacks is no deviation from this rule. Below 3.31, the 3.18 floor of §4.1 among them, nothing keeps a crafted trigger or view from calling a function the program registers, so such a program SHOULD instead read `sqlite_master` before any other statement and refuse the store when it holds a trigger or a view whose text the canonical schema at the store's version does not create, naming it, and SHOULD register no SQL function with a side effect on the connection. That comparison is made against a version the program knows and against no other: a store above its version (§4.2) holds triggers and views it cannot tell from crafted ones, so below 3.31 a reader or a producer SHOULD refuse such a store it did not create, or open it only once the user confirms, while from 3.31 the pragma needs no comparison and the store opens as §4.2 says. Defensive mode refuses the edit by which a closed vocabulary grows (§6): an owner migrating so leaves it for that migration's transaction alone.
 - **Copies and erasure.** A backup holds what the store holds, quarantine/ included (§8), and takes the store's modes. A purge leaves a row's bytes in the database files until the procedure of §11.5 erases them, which reaches no backup, no filesystem snapshot and not quarantine/, which only the user empties (§7).
 
 ## Annex A. Summaries (normative)
@@ -1242,7 +1287,7 @@ An update **changes an occurrence** when the components carrying `RECURRENCE-ID`
 
 ### B.2 Intents
 
-Performed by the source the payload names (§15.6), outside the store, then acknowledged with `cancel_action` and its receipt (§15.5) or parked. An intent addressing an item does so by `seq`, or by `link_id` when the item is still a pending `add` the producer queued, exactly one of the two. Its payload is typed and refused as §15.3 says, a performer parking what its producer should have refused.
+Performed by the source the payload names (§15.6), outside the store, then acknowledged with `cancel_action` and its receipt (§15.5) or parked. Of the intents below, `submit` alone can end with its outcome unknown and is then parked `unconfirmed: ` (§15.2), a message handed over twice being two messages; every other is performed again when its outcome is unknown, a repeat finding its effect made or restating it. An intent addressing an item does so by `seq`, or by `link_id` when the item is still a pending `add` the producer queued, exactly one of the two. Its payload is typed and refused as §15.3 says, a performer parking what its producer should have refused.
 
 | Action | Payload at `v: 1` | Performed as |
 | --- | --- | --- |

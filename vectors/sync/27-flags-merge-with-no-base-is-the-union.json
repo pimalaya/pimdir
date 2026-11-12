@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "flags merged over an unknown base are the union of the two known sets",
   "note": "the base exists but never learned the flags (NULL), so no side is known to have removed anything: local \\Seen and remote \\Flagged both survive, the push adds the \\Seen the server lacks and the union becomes the base (SYNC.md §4, §5)",
   "store": {

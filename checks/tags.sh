@@ -5,7 +5,10 @@
 # each part, the version its Status line states names a git tag once the user
 # made it; the part's document and the files it owns are then the tag's, byte
 # for byte, none added and none removed. A version no tag names yet passes,
-# its files moving freely until tagged. The files a part owns: its migrations,
+# its files moving freely until tagged, unless the check runs with --released,
+# as CI does on the push of a release tag: every normative part's version is
+# then tagged, a draft's as a release's, so no part is released beside one
+# nothing pins. The files a part owns: its migrations,
 # statements and vectors with their schemas, STORAGE the payload schemas too,
 # and the fixtures its vectors name (a fixture no vector names being
 # STORAGE's); vectors/manifest.json, which lists every part's, is none's.
@@ -14,6 +17,11 @@
 # sandbox, in .github/workflows/tests.yml on a checkout with its tags.
 set -euo pipefail
 
+released=0
+if [ "${1:-}" = "--released" ]; then
+    released=1
+    shift
+fi
 root="${1:-$PWD}"
 cd "$root"
 failures=0
@@ -35,7 +43,14 @@ part() {
         return
     fi
     if ! git rev-parse -q --verify "refs/tags/$version^{commit}" > /dev/null; then
-        echo "$document: $version, no tag yet"
+        # A convention is no part of the standard and is pinned by no tag of
+        # a release.
+        if [ "$released" = 1 ] && [ "${document%%/*}" != conventions ]; then
+            echo "$document: $version has no tag, and a release pins every part" >&2
+            failures=$((failures + 1))
+        else
+            echo "$document: $version, no tag yet"
+        fi
         return
     fi
     changed="$( { git diff --name-only "$version" -- "$document" "$@"
@@ -61,6 +76,6 @@ part SEARCH.md migrations/search queries/search vectors/search vectors/schema/se
 part conventions/gtd.md conventions/gtd
 
 if [ "$failures" -gt 0 ]; then
-    echo "$failures part(s) changed after their tag; bump the version on the Status line, README and AGENTS.md" >&2
+    echo "$failures part(s) untagged at a release, or changed after their tag: tag the version, or bump it on the Status line, README and AGENTS.md" >&2
     exit 1
 fi

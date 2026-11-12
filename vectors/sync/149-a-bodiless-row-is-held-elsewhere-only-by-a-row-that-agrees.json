@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "a bodiless message losing its last binding is retained while the row holding its Message-ID elsewhere is another message",
   "note": "Archive holds basic-1@example.org live, the stand-up notes. INBOX holds another message reusing that Message-ID at Meta, no body read (the store vector 148 leaves, its seq its own). A delta states INBOX's member removed. A retiring row with no body is purged at once when another collection of the account holds its identity live, the item having moved; but Archive's row disagrees on subject, date and sender, so it holds nothing of this message: the row is retained, listed in the trash and revived should the member return, never purged for a message it is not (STORAGE §9, §11, §11.1; SYNC.md §5)",
   "store": {

@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "a local edit over a base naming a revision and no body pushes nothing until the upgrade reads that body",
   "note": "a pull at Meta emptied the card at r2 (its base naming r2 and no body), then the person staged c2. The listing still holds r2, so no remote change meets the edit, and no policy is involved; but the body the server holds at r2 is one nobody has read, so an Update gated on r2 would replace it unkept. The run derives none and the edit waits, its rows as they were, the checkpoint moving; the upgrade reads r2's body into the base (vector 133) and the next sync pushes c2 over it (SYNC.md §5, the content axis)",
   "store": {

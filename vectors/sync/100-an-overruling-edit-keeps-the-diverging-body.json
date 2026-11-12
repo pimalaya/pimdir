@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "an edit settling a binding's conflict by a rule of the engine's keeps the diverging body it does not adopt",
   "note": "neverest's one-way overwrite: a and b agreed on c1, a pulled the source's c2 into the item, and b's pull, unable to push, recorded b's own edit c3 at w2 as a conflict. The engine settles it for the store by restating c2 with overrule: the base adopts w2 and c3 as any Edit settling a conflict does (SYNC.md §7), so b owes c2 gated on w2, and c3, which that push will overwrite and nothing else would pin once it lands, is kept as a retained item under the key minted over b's handle and reported Overruled, as a policy's loser is (SYNC.md §9; STORAGE §11). No cross-source divergence: the body b brings is the shared one, so b's shared_object moves to c2",
   "store": {

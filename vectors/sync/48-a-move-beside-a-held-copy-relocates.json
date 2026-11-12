@@ -1,7 +1,7 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "the source half of a move into a collection already holding the identity relocates, never deletes",
-  "note": "Trash held the message under 3 before the move, so the move's create there is keyed by the identity minted over its provisional handle; the tombstone pairs with that create all the same, so the Remove relocates into Trash and carries no link_id, the copy Trash already held proving no delivery; INBOX holds no body, so nothing else could deliver the create, and a plain delete would take the only copy of the move. Accepted, the relocation delivers that create, keyed by the identity minted over its own provisional handle, which the Trash listing can land: its binding keeps the handle and gains a base naming nothing (SYNC.md §2, §3, §4, §5)",
+  "note": "Trash held the message under 3 before the move, so the move's create there is keyed by the identity minted over its provisional handle; the tombstone pairs with that create all the same, so the Remove relocates into Trash and carries no link_id, the copy Trash already held proving no delivery; INBOX holds no body, so nothing else could deliver the create, and a plain delete would take the only copy of the move. Accepted, the relocation delivers that create, keyed by the identity minted over its own provisional handle, which the Trash listing can land: its binding keeps the handle and gains a base naming nothing. The INBOX row, bodiless and bound no more, is purged as held elsewhere: Trash's row under its key states the same subject, date and sender, where a row stating no summary would hold nothing of it and leave it retained (SYNC.md §2, §3, §4, §5; STORAGE §9, §11.1)",
   "store": {
     "collections": [
       { "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" },
@@ -17,6 +17,11 @@
       { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Seen"], "base_object": null, "base_revision": null, "base_present": 1 },
       { "collection": "Trash", "link_id": "basic-1@example.org", "source": "imap", "handle": "3", "base_flags": ["\\Seen"], "base_object": null, "base_revision": null, "base_present": 1 },
       { "collection": "Trash", "link_id": "dup:basic-1@example.org#\u0001basic-1@example.org", "source": "imap", "handle": "\u0001dup:basic-1@example.org#\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "Trash", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "Trash", "link_id": "dup:basic-1@example.org#\u0001basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } }
     ],
     "sources": [
       { "collection": "INBOX", "source": "imap", "checkpoint": "c0" },

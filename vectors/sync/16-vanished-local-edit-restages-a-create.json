@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "a vanished member holding a local edit is re-staged as a pending create",
   "note": "the body left the base and the remote dropped the member, the listing naming only the other card; new content beats a delete on both sides, so the binding loses its base and moves to a provisional handle instead of being dropped, and the next run adds it (SYNC.md §5). A listing naming no member would park instead (SYNC.md §5, an empty listing)",
   "store": {

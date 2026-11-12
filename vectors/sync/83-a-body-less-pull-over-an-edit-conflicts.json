@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "a pull carrying no body over another source's edit is recorded as a conflict, whatever the policy",
   "note": "b folded its edit c3 into the item; a still holds c1 and owes the push. a's server edits the card meanwhile and a's listing carries no body. Under prefer-remote a's own axis drops the local body and pulls, but nothing has read a's new body, so the write cannot let it replace c3: the item keeps c3 and is flagged with no conflict_object yet, the upgrade fetching a's body into it (vector 84), and no push carries c3 over a's unread edit. a's shared_object stays c1 (SYNC.md §5, §9)",
   "store": {

@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "a remove naming the item's conflict settles it by deleting, the item keeping its body under the tombstone",
   "note": "the store of 118 to 124: a pulled c3 into the item, then b's own edit c2 diverged under manual. Shown both, the user deletes the card through b, and the queued remove names the diverging body, c2, in resolves. The item is tombstoned, its conflict cleared and its conflict_object released, keeping c3 so an edit still beats the delete; a tombstone adopts no content, so both bindings stand as they were, each source pushing its Remove at its next sync. The same remove stating no resolves is refused, as vector 143's is (SYNC.md §7, §9; STORAGE §14, §15.3)",
   "store": {

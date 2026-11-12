@@ -33,7 +33,8 @@
       };
 
       # The canonical files with the documents that name them, and the
-      # scenarios, whose capability names checks/names.sh reads.
+      # scenarios, whose capability names checks/names.sh reads, and AGENTS.md,
+      # which names each part's version.
       standard = lib.fileset.toSource {
         root = ./.;
         fileset = lib.fileset.unions [
@@ -49,6 +50,7 @@
           ./GUIDE.md
           ./conventions
           ./README.md
+          ./AGENTS.md
         ];
       };
 
@@ -107,7 +109,7 @@
         '';
 
         invariants = pkgs.runCommand "pimdir-invariants" { nativeBuildInputs = [ pkgs.sqlite ]; } ''
-          bash ${./checks/invariants.sh} ${format} ${./checks/waivers.txt} | tee $out
+          bash ${./checks/invariants.sh} ${format} ${./checks/waivers.txt} ${./checks/rehearsal} | tee $out
         '';
 
         names = pkgs.runCommand "pimdir-names" { nativeBuildInputs = [ pkgs.sqlite ]; } ''
@@ -124,6 +126,12 @@
           ${python pkgs}/bin/python3 ${./checks/signatures.py} ${format} | tee $out
         '';
 
+        # The bytes a release froze, against checks/frozen.sha256: nothing
+        # while every part is a draft.
+        frozen = pkgs.runCommand "pimdir-frozen" { } ''
+          bash ${./checks/frozen.sh} ${format} ${./checks/frozen.sha256} | tee $out
+        '';
+
         # Every markdown file outside cairn/, and every file a link names, so
         # the whole source rather than a fileset.
         references = pkgs.runCommand "pimdir-references" { nativeBuildInputs = [ pkgs.perl ]; } ''
@@ -132,7 +140,7 @@
       } // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
         # Android's flags build on Linux alone (malloc.h, fdatasync).
         floor = pkgs.runCommand "pimdir-floor" { nativeBuildInputs = [ pkgs.sqlite ]; } ''
-          bash ${./checks/floor.sh} ${format} ${sqliteFloor pkgs}/bin/sqlite3 | tee $out
+          bash ${./checks/floor.sh} ${format} ${sqliteFloor pkgs}/bin/sqlite3 ${./checks/rehearsal} | tee $out
         '';
       });
 

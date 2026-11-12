@@ -20,7 +20,8 @@ jobs:
       - run: nix flake check -L
 
   # A part changed after its tag without a bump fails here: the check reads
-  # the tags and their trees, which the nix sandbox does not see.
+  # the tags and their trees, which the nix sandbox does not see. On the push
+  # of a release tag (storage-v1.0.0) it also fails on a part no tag pins.
   tags:
     runs-on: ubuntu-latest
     steps:
@@ -28,7 +29,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - run: bash checks/tags.sh
+      - run: bash checks/tags.sh ${{ (github.ref_type == 'tag' && contains(github.ref_name, '-v')) && '--released' || '' }}
 
   # io-pimdir, at the revision checks/io-pimdir.rev pins, runs this tree's
   # vectors: the freeze gate (README.md, Status).

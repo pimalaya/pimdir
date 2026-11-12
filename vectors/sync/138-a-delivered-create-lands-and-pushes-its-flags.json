@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "a delivered create lands on its arrival keeping the flags staged on it, pushed against the listed handle",
   "note": "a relocation into Trash was accepted before Trash was listed, and \\Seen was staged on its create there since, which derived no SetFlags while its handle named no member. The delta naming the member under 7, unread, lands it rather than minting: the base takes the listed flags and the staged body, the staged \\Seen stays, and the flag axis pushes it against 7 (SYNC.md §5, §6)",
   "store": {

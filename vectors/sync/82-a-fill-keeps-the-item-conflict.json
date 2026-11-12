@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "the body a pull left unread fills the item and leaves its conflict standing",
   "note": "the store 81 left. a's upgrade fetches c2 at r2, the body of the pull that emptied the item: a's base names no body, so the upsert fills the item, which adopts c2 without measuring a divergence against it, and the item's conflict with b's c3 stands. Both bodies and their ancestor c1, the shared_object of both bindings, are held and pinned: a resolver reads all three (SYNC.md §6, §9; STORAGE §5, §10)",
   "store": {

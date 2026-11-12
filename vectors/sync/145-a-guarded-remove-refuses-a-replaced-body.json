@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "a remove stating the body it deletes is refused once another write replaced that body",
   "note": "a frontend showed the card at c1 and queued its delete stating if_match c1; before the drain another producer's update applied and the item holds c2 (the store of vector 87). The remove is refused and stages nothing, which the drain parks naming both bodies, rather than delete an edit its user never saw (SYNC.md §7; STORAGE §15.3)",
   "store": {

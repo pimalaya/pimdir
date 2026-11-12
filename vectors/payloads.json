@@ -1,6 +1,6 @@
 {
   "v": 2,
-  "note": "Queue payloads (STORAGE.md section 15.3, Annex B.2): each case an action's payload and its outcome for an owner and a producer of this version. A payload whose action and v name a schema, payloads/<action>.v<v>.schema.json, is valid when that schema accepts it and malformed otherwise: a producer enqueues no malformed one and an owner, or an intent's performer, parks it. One whose action or v names none is unknown: an owner leaves its row pending and untouched (section 15.2), a reader lists it (section 15.4), whatever its other members hold. Bodies are named by the empty body's object name and by len-1's and len-2's (objects.json).",
+  "note": "Queue payloads (STORAGE.md section 15.3, Annex B.2): each case an action's payload and its outcome for an owner and a producer of this version. A payload whose action and v name a schema, payloads/<action>.v<v>.schema.json, is valid when that schema accepts it and malformed otherwise: a producer enqueues no malformed one and an owner, or an intent's performer, parks it. One whose action or v names none is unknown: an owner leaves its row pending and untouched (section 15.2), a reader lists it (section 15.4), whatever its other members hold. One of an action the documents define stating no v, or a v that is no integer, is malformed too: it states no version an owner could wait to know. Bodies are named by the empty body's object name and by len-1's and len-2's (objects.json).",
   "cases": [
     { "action": "add", "outcome": "valid", "payload": { "v": 1, "flags": [], "object": "v4jutopv7gq2nicajxvdnxgjjgn4wjojvxarfn6mtkj4vza7gjra" } },
     { "action": "add", "outcome": "valid", "payload": { "v": 1, "link_id": "file:0123456789abcdef0123456789abcdef", "flags": ["\\Seen", "$label"], "object": "v4jutopv7gq2nicajxvdnxgjjgn4wjojvxarfn6mtkj4vza7gjra", "supersedes": { "collection": "tasks-a", "seq": 7 } } },
@@ -67,7 +67,15 @@
     { "action": "set-flags", "outcome": "unknown", "payload": { "v": 2, "seq": "5" }, "note": "a known action at v 2 that would be malformed at v 1: unknown, never parked" },
     { "action": "snooze", "outcome": "unknown", "payload": { "v": 1, "seq": 5, "until": "2026-12-01T09:00:00Z" }, "note": "an action this draft does not define" },
     { "action": "x-archive", "outcome": "unknown", "payload": { "v": 1, "seq": 5 }, "note": "an application's own action" },
-    { "action": "x-archive", "outcome": "unknown", "payload": { "v": 3 }, "note": "an application's own action at a version of its own" }
+    { "action": "x-archive", "outcome": "unknown", "payload": { "v": 3 }, "note": "an application's own action at a version of its own" },
+
+    { "action": "remove", "outcome": "malformed", "payload": { "seq": 5 }, "note": "a known action stating no v: no version to wait for, so parked, never left pending" },
+    { "action": "set-flags", "outcome": "malformed", "payload": { "v": "1", "seq": 5, "flags": [] }, "note": "a known action whose v is a string" },
+    { "action": "update", "outcome": "malformed", "payload": { "v": 1.5, "seq": 5, "object": "v4jutopv7gq2nicajxvdnxgjjgn4wjojvxarfn6mtkj4vza7gjra" }, "note": "a known action whose v is a fraction" },
+    { "action": "add", "outcome": "malformed", "payload": { "v": null, "flags": [], "object": "v4jutopv7gq2nicajxvdnxgjjgn4wjojvxarfn6mtkj4vza7gjra" }, "note": "a known action whose v is null" },
+    { "action": "submit", "outcome": "malformed", "payload": { "v": true, "source": "smtp", "from": "alice@example.org", "rcpts": ["bob@example.org"] }, "note": "a known action whose v is a boolean, which is no integer" },
+    { "action": "snooze", "outcome": "unknown", "payload": { "seq": 5 }, "note": "an action this draft does not define stating no v: unknown all the same, read no further" },
+    { "action": "x-archive", "outcome": "unknown", "payload": { "v": "one" }, "note": "an application's own action, whatever its v" }
 
   ]
 }

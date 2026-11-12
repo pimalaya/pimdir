@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "an edit stating a resolution of a conflict whose diverging body nobody has read is refused",
   "note": "the store of 101: b's conflict at w2 holds no conflict_object, the diverging body not fetched yet. A resolution names the bodies it was decided over, and none can name a body nobody has read, so an update stating resolves c1 meets a conflict it does not name: refused, staging nothing, and parked until the upgrade fetches the body and a person decides over it (SYNC.md §6, §7; STORAGE §15.3)",
   "store": {

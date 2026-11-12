@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "a round over the whole scope drops an undated member an unfiltered enumeration lacks",
   "note": "the counterpart of 46: the same store and the same widening to [2026-07-01, open), but the source's checkpoint is bound to its scope, so the round lists the whole scope asked for. Graph lists it by receivedDateTime, which an undated member received before the window escapes, so the pages say they are narrowed, and the last hands the ids of the folder enumerated with no filter (enumerated): 11, undated and unlisted, is missing from that enumeration too, so it is absent and dropped with 9, which the filter could list; 12 and 10 are listed. Without the enumeration 11 would stay, as vector 107 keeps its undated draft (SYNC.md §4, §5)",
   "store": {

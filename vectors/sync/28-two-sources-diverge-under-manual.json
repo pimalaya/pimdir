@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "an edit settling one source's conflict while the shared body moved through another is a cross-source divergence",
   "note": "source a folded c3 into the item (its shared_object says so) while b sat on a conflict with its own remote at r2, the diverging body c2 fetched. The user settles b by taking c2: the upsert resolves the binding, which counts as b having changed (SYNC.md §9), the shared body c3 differs from what b last agreed with, c1, and the two disagree. Under manual the shared body stays, the item is flagged with c2 as its diverging body, b's base adopts the revision and body it resolved against, its shared_object staying c1, the ancestor the item's conflict is settled against, and every binding projects Conflict until an Edit or Remove settles the item (SYNC.md §7, §9, §3)",
   "store": {

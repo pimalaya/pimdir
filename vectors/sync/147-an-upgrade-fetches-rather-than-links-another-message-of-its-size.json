@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "an upgrade fetches, never links, a message whose Message-ID another mailbox holds under another subject, though the sizes agree",
   "note": "Archive holds basic-1@example.org, the stand-up notes, with its body, 299 octets. INBOX lists another message reusing that Message-ID, a templated notice sent again: another subject, sender and date, and by chance 299 octets too. The key is free in INBOX, so the member took it bare at Meta, with a seq of its own. Its Full upgrade asks lookup_objects, which answers Archive's body with its size and the subject, date and sender of its row: the size agrees, the three do not, so the body is not adopted and the upgrade fetches. Linked on its size alone, the notice would show the stand-up notes as its body for ever, an immutable kind never fetching again (SYNC.md §6; STORAGE §9, §14)",
   "store": {

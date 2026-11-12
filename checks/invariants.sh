@@ -12,6 +12,7 @@ set -euo pipefail
 
 root="${1:-$PWD}"
 waivers="${2:-$root/checks/waivers.txt}"
+rehearsal="${3:-$root/checks/rehearsal}"
 dir="$(mktemp -d)"
 trap 'rm -rf "$dir"' EXIT
 failures=0
@@ -1010,13 +1011,20 @@ mail INBOX relabelled 33 33 "'2026-08-01T10:00:00Z'" '["$todo"]' '["$done"]'
 sql "INSERT INTO items(collection, link_id, seq, flags_known, level) VALUES('INBOX', 'created', 5, 1, 2);
      INSERT INTO bindings(item, collection, source, handle) VALUES((SELECT id FROM items WHERE collection = 'INBOX' AND link_id = 'created'), 'INBOX', 'imap', char(1) || 'created');
      INSERT INTO mail_summary(item, subject, date) VALUES((SELECT id FROM items WHERE collection = 'INBOX' AND link_id = 'created'), '', '2026-08-01T10:00:00Z');"
+# A delivered create (SYNC.md §2, §5): based under its provisional handle, its
+# base naming nothing, \Seen staged on it since. No listing has named its
+# member, so nothing relists it and what was staged on it is owed to the page
+# that lands it: it stays, though no flag set differs and its base is present.
+sql "INSERT INTO items(collection, link_id, seq, flags_known, marks, level) VALUES('INBOX', 'delivered', 34, 1, 1, 1);
+     INSERT INTO bindings(item, collection, source, handle, base_present) VALUES((SELECT id FROM items WHERE collection = 'INBOX' AND link_id = 'delivered'), 'INBOX', 'imap', char(1) || 'delivered', 1);
+     INSERT INTO mail_summary(item, subject, date) VALUES((SELECT id FROM items WHERE collection = 'INBOX' AND link_id = 'delivered'), '', '2026-08-01T10:00:00Z');"
 run owner/recompute_refcounts
 purges="$(sql "SELECT purges FROM store_meta;")"
 expect "evict: only what owes nothing, below the date, in the collection" \
     "$(run owner/evict_before ":collection='INBOX'" ":before='2026-09-01T00:00:00Z'" | sort -n | tr '\n' ' ')" "1 32 "
 run owner/recompute_refcounts
-expect "evict: an unpushed flag, a keyword on the item alone, on the base alone or exchanged for another, a pending create, the undated and the newer stay" \
-    "$(sql "SELECT link_id FROM items WHERE collection = 'INBOX' ORDER BY link_id;" | tr '\n' ' ')" "created dirty labelled nodate recent relabelled unlabelled "
+expect "evict: an unpushed flag, a keyword on the item alone, on the base alone or exchanged for another, a pending create, a delivered one waiting for its arrival, the undated and the newer stay" \
+    "$(sql "SELECT link_id FROM items WHERE collection = 'INBOX' ORDER BY link_id;" | tr '\n' ' ')" "created delivered dirty labelled nodate recent relabelled unlabelled "
 expect "evict: bindings, summary and addresses go with the item" \
     "$(sql "SELECT (SELECT count(*) FROM bindings WHERE collection = 'INBOX' AND item IN (SELECT id FROM items WHERE link_id = 'old')) + (SELECT count(*) FROM mail_summary WHERE item IN (SELECT id FROM items WHERE collection = 'INBOX' AND link_id = 'old'));")" "0"
 expect "evict: the body is released to the collector, the holder elsewhere untouched" \
@@ -1663,6 +1671,12 @@ expect "search: files by name" \
 
 # --- A store names the draft that wrote it and opens under no other (§4.2) ---
 
+# The format version a new store records, read off init_store_meta: this
+# part's own, which checks/names.sh holds to STORAGE.md's Status line, a
+# draft's name while the part is a draft and storage-vN once it is released,
+# so the scenarios below follow the part across its release unedited.
+own_format="$(grep -o "'storage-[a-z0-9-]*'" "$root/queries/storage/owner/init_store_meta.sql" | tr -d "'")"
+
 # opens <format version>: the open every profile runs first (§6 step 2), its
 # own format version against the one load_store_meta answers. A store lacking
 # the column fails the statement and is refused like any other mismatch.
@@ -1676,14 +1690,21 @@ opens() {
 }
 
 fresh
-expect "format: init_store_meta stamps this draft, version 1 with both compatibility versions, BLAKE3 and the creator's revision" \
-    "$(run read/load_store_meta | cut -d'|' -f1,2,3,8,9,10,11)" "pimdir|1|blake3|3|storage-draft-10|1|1"
-expect "format: a draft's store opens under that draft alone, never under another nor a release" \
-    "$(opens storage-draft-10) $(opens storage-draft-09) $(opens storage-draft-11) $(opens storage-v1)" \
-    "opened refused refused refused"
+expect "format: init_store_meta stamps this part's version, version 1 with both compatibility versions, BLAKE3 and the creator's revision" \
+    "$(run read/load_store_meta | cut -d'|' -f1,2,3,8,9,10,11)" "pimdir|1|blake3|3|$own_format|1|1"
+case "$own_format" in
+    storage-draft-*)
+        expect "format: a draft's store opens under that draft alone, never under another nor a release" \
+            "$(opens "$own_format") $(opens storage-draft-09) $(opens storage-draft-99) $(opens storage-v1)" \
+            "opened refused refused refused" ;;
+    *)
+        expect "format: a released store opens under its release, and under no draft" \
+            "$(opens "$own_format") $(opens storage-draft-10) $(opens storage-draft-99)" \
+            "opened refused refused" ;;
+esac
 sql "ALTER TABLE store_meta DROP COLUMN format_version;"
 expect "format: a store an earlier draft wrote lacks the marker, so load_store_meta fails and it is refused" \
-    "$(fails read/load_store_meta && echo failed) $(opens storage-draft-10)" "failed refused"
+    "$(fails read/load_store_meta && echo failed) $(opens "$own_format")" "failed refused"
 
 # --- A migration states what it raises; an added column is harmless (§6) ---
 
@@ -1722,6 +1743,74 @@ expect "versions: a producer of the version before writes every row it wrote" \
     "$(sql "SELECT count(*) FROM objects WHERE refcount = 1;")|$(sql "SELECT kind FROM collections WHERE id = 'Outbox';")|$(sql "SELECT action, x_note IS NULL FROM queue;")" \
     "1||submit|1"
 
+# --- A released store above a program's version is judged by store_meta (§4.2)
+
+# released <profile> <own version>: the judgement a released program of that
+# schema version makes of the store (§4.2, §6 step 2), from six columns of
+# store_meta and PRAGMA user_version, and from nothing else of the schema: the
+# format, the format version (storage-v and the version, never a draft's
+# name), the version against user_version, the algorithm, and the
+# compatibility version of its profile. An owner opens a version it knows.
+released() {
+    local profile="$1" own="$2" meta format version algo format_version read produce
+    meta="$(run read/load_store_meta 2>/dev/null)" || { echo refused; return; }
+    IFS='|' read -r format version algo _ _ _ _ _ format_version read produce _ <<<"$meta"
+    if [ "$format" != pimdir ] || [ "$format_version" != "storage-v$version" ] || [ "$algo" != blake3 ] \
+        || [ "$version" != "$(sql "PRAGMA user_version;")" ]; then
+        echo refused
+        return
+    fi
+    case "$profile" in
+        reader) [ "$read" -le "$own" ] ;;
+        producer) [ "$read" -le "$own" ] && [ "$produce" -le "$own" ] ;;
+        owner) [ "$version" -le "$own" ] ;;
+    esac && echo opened || echo refused
+}
+# judged <own version>: the three profiles' judgements, in order.
+judged() {
+    echo "$(released reader "$1") $(released producer "$1") $(released owner "$1")"
+}
+
+# A synthetic version 2 store: a table, an index, a column, a trigger and a
+# view version 1 does not know, stamped as its migration states.
+fresh
+collection INBOX
+item INBOX a 1
+sql "UPDATE store_meta SET format_version = 'storage-draft-10';"
+expect "released: a released program refuses a draft's store, whatever its profile" "$(judged 1)" "refused refused refused"
+sql "CREATE TABLE x_later (id INTEGER PRIMARY KEY, note TEXT);
+     CREATE INDEX x_items_by_level ON items(level);
+     ALTER TABLE collections ADD COLUMN x_icon TEXT;
+     CREATE TRIGGER x_later_counts AFTER INSERT ON x_later BEGIN UPDATE x_later SET note = 'seen' WHERE id = NEW.id; END;
+     CREATE VIEW x_live AS SELECT collection, link_id FROM items WHERE deleted = 0;
+     PRAGMA user_version = 2;"
+run owner/set_store_version ":version=2" ":read_version=1" ":produce_version=1"
+expect "released: a version 2 store raising neither opens for a version 1 reader and producer, and no version 1 owner" \
+    "$(judged 1)" "opened opened refused"
+expect "released: what version 2 added is no damage, a version 1 reader's statements answering the rows they answered" \
+    "$(run read/list_collections | cut -d'|' -f1)|$(run read/count_items ":collection='INBOX'")|$(run read/load_change_cursor | awk -F'|' '{ print NF }')" "INBOX|1|4"
+run owner/set_store_version ":version=2" ":read_version=2" ":produce_version=1"
+expect "released: one raising read_version is refused by every version 1 program" "$(judged 1)" "refused refused refused"
+run owner/set_store_version ":version=2" ":read_version=1" ":produce_version=2"
+expect "released: one raising produce_version opens for a version 1 reader alone" "$(judged 1)" "opened refused refused"
+run owner/set_store_version ":version=2" ":read_version=2" ":produce_version=2"
+expect "released: a version 2 program opens it under every profile" "$(judged 2)" "opened opened opened"
+sql "PRAGMA user_version = 3;"
+expect "released: a store whose version disagrees with user_version is corrupt, and refused" "$(judged 3)" "refused refused refused"
+sql "PRAGMA user_version = 2; UPDATE store_meta SET format_version = 'storage-draft-10';"
+expect "released: a draft's name over a later version is refused all the same" "$(judged 2)" "refused refused refused"
+
+# --- A migration keeps every row; one rebuilding a table owes more (§6) ----
+
+# The rehearsal migrations of checks/rehearsal/, which never ship: an
+# additive one, a rebuild of collections and of queue with foreign keys off
+# before the transaction, the edit of a CHECK under writable_schema, and the
+# rebuild as step 3 runs any other migration, which loses every referencing
+# row and is forbidden. checks/floor.sh runs the same on SQLite 3.18.2.
+if ! bash "$rehearsal/run.sh" "$root" sqlite3; then
+    failures=$((failures + 1))
+fi
+
 # --- A derivation stands at the revision that last wrote it (§6) ------------
 
 fresh
@@ -1755,7 +1844,7 @@ expect "sync: a store no engine wrote names no sync version, load_store_meta ans
     "$(run read/load_store_meta | cut -d'|' -f14)|$(run read/load_store_meta | awk -F'|' '{ print NF }')" "|14"
 run owner/set_sync_version ":sync_version='sync-draft-10'"
 expect "sync: set_sync_version records the engine's version, and nothing else moves" \
-    "$(run read/load_store_meta | cut -d'|' -f9,14)" "storage-draft-10|sync-draft-10"
+    "$(run read/load_store_meta | cut -d'|' -f9,14)" "$own_format|sync-draft-10"
 expect "sync: the version is text or nothing" \
     "$(sql "UPDATE store_meta SET sync_version = x'07';" 2>&1 | grep -c CHECK)" "1"
 
@@ -2514,6 +2603,114 @@ expect "attempts: a retried row counts its attempts and stays pending in its col
 expect "parked: a parked row is listed store-wide with its error, never as pending" \
     "$(run owner/load_parked_actions | cut -d'|' -f1,4,5,9 | tr '\n' ' ')" "3|INBOX|remove|unknown seq: 3 "
 
+# --- An intent whose outcome is unknown is parked apart (§15.2, §15.5) ------
+# A submission cut once the message was handed over is parked under the one
+# reserved prefix of queue.error. No drain lists a parked row, so nothing
+# retries it; a producer tells it from any other parked row by the prefix. It
+# leaves that state confirmed (acknowledged with its receipt), retried on
+# request (retry_action) or withdrawn.
+
+fresh
+collection Sent
+object "$m1"
+for subject in first second; do
+    run queue/pin_object ":hash='$m1'"
+    run queue/enqueue_action ":producer='p'" ":collection='Sent'" ":action='submit'" ":payload='{\"v\":1,\"source\":\"smtp\",\"from\":\"alice@example.org\",\"rcpts\":[\"bob@example.org\"],\"subject\":\"$subject\"}'" ":target_collection=NULL" ":object_hash='$m1'"
+done
+run queue/enqueue_action ":producer='p'" ":collection='Sent'" ":action='remove'" ":payload='{\"v\":1,\"seq\":9}'" ":target_collection=NULL" ":object_hash=NULL"
+run owner/park_action ":id=1" ":error='unconfirmed: the connection dropped after the message was handed over'"
+run owner/park_action ":id=2" ":error='unconfirmed: no answer to the final dot'"
+run owner/park_action ":id=3" ":error='unknown seq: 9'"
+expect "unconfirmed: no drain lists it, so nothing performs it again unasked" "$(run owner/list_pending_actions | wc -l)" "0"
+expect "unconfirmed: a producer reading its row tells it by the reserved prefix, from any other parked row" \
+    "$(for id in 1 2 3; do run read/load_action ":id=$id" | cut -d'|' -f9 | grep -c '^unconfirmed: ' || true; done | tr '\n' ' ')" "1 1 0 "
+expect "retry: retry_action answers the row it put back, pending again, its error cleared, its id and attempts kept" \
+    "$(run owner/retry_action ":id=1")|$(run read/load_action ":id=1" ".nullvalue=NULL" | cut -d'|' -f1,8,9)|$(run owner/list_pending_actions | cut -d'|' -f1,9 | tr '\n' ' ')" \
+    "1|1|1|NULL|1|1 "
+expect "retry: a pending row and a row that is gone answer nothing, and nothing moves" \
+    "$(run owner/retry_action ":id=1")$(run owner/retry_action ":id=7")|$(sql "SELECT group_concat(id || ':' || attempts || ':' || (error IS NULL), ' ') FROM queue;")" "|1:1:1 2:1:0 3:1:0"
+expect "retry: any parked row is put back the same way, in its place in the append order" \
+    "$(run owner/retry_action ":id=3")|$(run owner/list_pending_actions | cut -d'|' -f1 | tr '\n' ' ')" "3|1 3 "
+# Confirmed: the performer learns the message went, and acknowledges the row
+# with its receipt, as any performed intent (§15.5).
+pin="$(run owner/cancel_action ":id=2")"
+run owner/record_receipt ":id=2" ":collection='Sent'" ":seq=NULL"
+run owner/release_pins ":hashes='[\"$pin\"]'"
+expect "unconfirmed: confirmed by its performer, it reads as performed, its pin released" \
+    "$(run read/load_action ":id=2")$(run read/load_receipt ":id=2" | cut -d'|' -f2)|$(sql "SELECT refcount FROM objects WHERE hash = '$m1';")" "Sent|1"
+# Withdrawn: no receipt, which is how a producer tells it from a confirmation.
+run owner/park_action ":id=1" ":error='unconfirmed: again'"
+run owner/release_pins ":hashes='[\"$(run owner/cancel_action ":id=1")\"]'"
+expect "unconfirmed: withdrawn, it leaves no receipt and no pin" \
+    "$(run read/load_action ":id=1")$(run read/load_receipt ":id=1")|$(sql "SELECT refcount FROM objects WHERE hash = '$m1';")" "|0"
+
+# --- Several actions in one transaction, enqueued or applied (§15.1, §15.2) -
+# A producer's enqueue of several actions lands all of them or none. An
+# owner's run applies each action under a savepoint of its own: a failed
+# apply rolls back to its savepoint, which restores the claimed row and
+# undoes what the apply wrote, the park is recorded outside it, and the
+# actions around it stand; a run that does not commit applies none.
+
+# session <line...>: one connection running the lines in order, stopping at
+# the first error, so a transaction left open is rolled back by the close.
+session() {
+    { prelude; echo "PRAGMA foreign_keys = ON;"; echo ".bail on"; printf '%s\n' "$@"; } | sqlite3 "$dir/pimdir.db" 2>/dev/null || true
+}
+# bound <part/profile/name> [:param=literal...]: a statement and its bindings,
+# as lines for a session.
+bound() {
+    local file="$1"; shift
+    takes "$file" "$@"
+    for binding in "$@"; do echo ".parameter set ${binding%%=*} ${binding#*=}"; done
+    statement "$file"
+}
+
+fresh
+collection INBOX
+item INBOX a 1
+item INBOX b 2
+item INBOX c 3
+object "$h1"
+first="$(bound storage/queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='remove'" ":payload='{\"v\":1,\"seq\":1}'" ":target_collection=NULL" ":object_hash=NULL")"
+second="$(bound storage/queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='remove'" ":payload='{\"v\":1,\"seq\":2}'" ":target_collection=NULL" ":object_hash=NULL")"
+third="$(bound storage/queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='remove'" ":payload='{\"v\":1,\"seq\":3}'" ":target_collection=NULL" ":object_hash=NULL")"
+# The second names a body no row holds, which the schema refuses.
+session "BEGIN;" "$first" "${second/:object_hash NULL/:object_hash \'$h2\'}" "$third" "COMMIT;"
+expect "enqueue: several actions in one transaction, one refused (a body no row names): none is appended" \
+    "$(sql "SELECT count(*) FROM queue;")" "0"
+session "BEGIN;" "$first" "$second" "$third" "COMMIT;"
+expect "enqueue: several actions in one transaction are appended together, their ids in the order enqueued" \
+    "$(run owner/list_pending_actions | cut -d'|' -f1,6 | tr '\n' ' ')" "1|{\"v\":1,\"seq\":1} 2|{\"v\":1,\"seq\":2} 3|{\"v\":1,\"seq\":3} "
+# apply <id> <link id> <outcome>: one action of a run under its savepoint,
+# claim first; the apply tombstones the item, then either records its receipt
+# and releases, or fails, rolls back to the savepoint and parks outside it.
+apply() {
+    echo "SAVEPOINT action;"
+    bound storage/owner/claim_action ":id=$1"
+    echo "UPDATE items SET deleted = 1 WHERE collection = 'INBOX' AND link_id = '$2';"
+    if [ "$3" = applied ]; then
+        bound storage/owner/record_receipt ":id=$1" ":collection='INBOX'" ":seq=NULL"
+        echo "RELEASE action;"
+    else
+        echo "ROLLBACK TO action;"
+        echo "RELEASE action;"
+        bound storage/owner/park_action ":id=$1" ":error='refused'"
+    fi
+}
+state() {
+    sql "SELECT (SELECT group_concat(id || ':' || attempts || ':' || coalesce(error, '-'), ' ') FROM queue) || '|'
+              || (SELECT coalesce(group_concat(id, ' '), '') FROM receipts) || '|'
+              || (SELECT group_concat(link_id || deleted, ' ') FROM items);"
+}
+before="$(state)"
+session "BEGIN;" "$(apply 1 a applied)" "$(apply 2 b failed)" "$(apply 3 c applied)" "ROLLBACK;" > /dev/null
+expect "run: a run that does not commit applies none of its actions, each claimed row restored" "$(state)" "$before"
+session "BEGIN;" "$(apply 1 a applied)" "$(apply 2 b failed)" "$(apply 3 c applied)" "COMMIT;" > /dev/null
+expect "run: the actions around a failed one stand, each applied once with its receipt; the failed one is restored by its savepoint, what it wrote undone, and parked outside it" \
+    "$(state)" "2:1:refused|1 3|a1 b0 c1"
+expect "run: the next drain lists none of the three, the parked one read apart" \
+    "$(run owner/list_pending_actions | wc -l)|$(run owner/load_parked_actions | cut -d'|' -f1)" "0|2"
+
 # --- Placements by key, body and domain; what waits on a decision (§14.1) --
 
 fresh
@@ -3164,13 +3361,38 @@ sql "UPDATE items SET flags_known = 0, marks = 0 WHERE link_id = 'unknown';
      UPDATE bindings SET base_present = 0, base_flags_known = 0, base_marks = 0 WHERE item IN (SELECT id FROM items WHERE link_id = 'created');
      UPDATE items SET object_hash = '$h1', level = 2 WHERE link_id = 'edited';
      INSERT INTO bindings(item, collection, source, handle, base_present) VALUES((SELECT id FROM items WHERE link_id = 'seen'), 'INBOX', 'graph', 'g20', 1);"
+# The delivered creates (SYNC.md §2): based under a provisional handle, the
+# base naming nothing. One holding no body projects Clean and owes nothing;
+# one holding the staged body is named, a base naming no body differing from
+# every body, the projection then deriving nothing for it (SYNC.md §5); one
+# tombstoned since is named as every tombstone is, its Remove held.
+for key in dbare dbody dgone; do
+    sql "INSERT INTO items(collection, link_id, seq, flags_known, marks, level) VALUES('INBOX', '$key', (SELECT max(seq) + 1 FROM items), 1, 1, 1);
+         INSERT INTO bindings(item, collection, source, handle, base_present) VALUES((SELECT id FROM items WHERE link_id = '$key'), 'INBOX', 'imap', char(1) || '$key', 1);"
+done
+sql "UPDATE items SET object_hash = '$h1', level = 2 WHERE link_id = 'dbody';
+     UPDATE items SET deleted = 1 WHERE link_id = 'dgone';"
 run owner/recompute_refcounts
-expect "owing: every binding of the source not Clean, a keyword on the item alone or on the base alone included, and no other, an unknown set holding no opinion" \
-    "$(run owner/list_owing_bindings ":collection='INBOX'" ":source='imap'" | tr '\n' ' ')|$(run owner/list_owing_bindings ":collection='INBOX'" ":source='graph'" | tr '\n' ' ')" \
-    "20 30 50 60 70 80 90 91 93 |"
+# owing: the handles the statement names, U+0001 written ^A whether the shell
+# prints a control character so or raw.
+owing() {
+    run owner/list_owing_bindings ":collection='INBOX'" ":source='imap'" | sed 's/\x01/^A/g'
+}
+# Every projected status (SYNC.md §3), by link id: Clean (clean, kept, the
+# unknown set, dbare) is never named; Dirty by a system flag (seen), by a
+# keyword either way (label, removed, swapped) and by a body (edited),
+# Conflict by the binding (bound) and by the item (diverged), Tombstone
+# (deleted, dgone), Created (created) and the delivered create holding a body
+# (dbody) are, and nothing else.
+expect "owing: every projected status, the binding named when its placement is Dirty, Conflict, Tombstone or Created, a delivered create when it holds a body or a tombstone, never when Clean" \
+    "$(sql "SELECT group_concat(link_id, ' ') FROM (SELECT i.link_id FROM items i JOIN bindings b ON b.item = i.id
+            WHERE b.source = 'imap' AND replace(b.handle, char(1), '^A') IN ($(owing | sed "s/.*/'&'/" | paste -sd,)) ORDER BY i.link_id);")|$(run owner/list_owing_bindings ":collection='INBOX'" ":source='graph'" | tr '\n' ' ')" \
+    "bound created dbody deleted dgone diverged edited label removed seen swapped|"
+expect "owing: the handles in byte order, a provisional one before every member's" \
+    "$(owing | tr '\n' ' ')" "^Adbody ^Adgone 20 30 50 60 70 80 90 91 93 "
 expect "lacking: the live items holding a body a source binds not" \
     "$(run owner/list_lacking_items ":collection='INBOX'" ":source='graph'" | tr '\n' ' ')|$(run owner/list_lacking_items ":collection='INBOX'" ":source='imap'" | tr '\n' ' ')" \
-    "edited |"
+    "dbody edited |"
 expect "owing: the source's bindings seek bindings_by_handle, never the whole store" \
     "$(plan owner/list_owing_bindings ":collection='INBOX'" ":source='imap'" | grep -c 'bindings_by_handle (collection=? AND source=?)' || true)" "1"
 # The two flag sets are compared by a seek each way on the other's key, in

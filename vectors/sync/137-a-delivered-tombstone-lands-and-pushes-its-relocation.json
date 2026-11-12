@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "a move staged on a delivered create is held until its arrival lands it, then pushed against the listed handle",
   "note": "a relocation into Trash was accepted before Trash was listed, so its create there is a delivered one, and a restore to INBOX was staged on it: a Move tombstoning it beside a pending create in INBOX, the destination its relocation offers. The delta naming the member under 7 lands the tombstone, its destination kept, and the run pushes the relocation against 7; accepted, the Trash binding goes, the row is purged since INBOX holds the identity live, and the INBOX create is delivered in turn (SYNC.md §4, §5, §6, §7)",
   "store": {

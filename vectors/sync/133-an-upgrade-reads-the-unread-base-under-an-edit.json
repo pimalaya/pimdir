@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "a full upgrade of a local edit over a base naming a revision and no body reads that body into the base",
   "note": "the store of 132. The placement is Full, holding c2, yet its base names r2 and no body, which its push waits for, so the upgrade fetches it. The fetch answers r2, the base's revision: the server body c1 lands as base_object, and the local edit c2 stays the item's body, now an edit over a body read, which the next sync pushes gated on r2 (SYNC.md §5, §6)",
   "store": {

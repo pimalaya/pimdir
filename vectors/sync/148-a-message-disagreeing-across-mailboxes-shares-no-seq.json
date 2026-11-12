@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "a message shares the seq of the row holding its Message-ID in another mailbox only when it agrees with it",
   "note": "Archive holds two messages at Meta, seq 1 and 2. A delta of INBOX names two members. 20 states the Message-ID of Archive's first under another subject, sender and date: another message reusing the id. The key is free in INBOX, so 20 takes it bare, but it disagrees with the row holding it in Archive and draws a seq of its own, 3: sharing 1 would make the two one hit in a merged view and one address for a reader. 21 is Archive's second message filed twice: it agrees and shares seq 2. The handles are named in byte order, so 20 draws before 21 shares (STORAGE §9, §9.1; SYNC.md §6)",
   "store": {

@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "a person's edit through the source agreeing with the item settles an item conflict keeping the item's body",
   "note": "the store of 102 with no overrule. A person keeps c3 through a, whose base already holds it: the edit stages no push for a and still settles the item, its conflict cleared and c2 released from the item, kept by nothing but b's base (SYNC.md §7). a's shared_object stays c3; b's stays c1, the ancestor it last agreed, and its base c2 at s2, so b owes c3",
   "store": {

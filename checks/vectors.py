@@ -1421,13 +1421,21 @@ payload_cases = json.loads((root / "payloads.json").read_text())["cases"] if (ro
 require("payloads.json: the queue's payload cases", bool(payload_cases))
 
 
+known_actions = {action_version.rsplit(".v", 1)[0] for action_version in payload_schemas}
+
+
 def payload_outcome(action, payload):
     """A payload's outcome for an owner and a producer of this version
     (STORAGE.md sections 15.2 and 15.3): one whose action and v name a schema
     under payloads/ is valid when that schema accepts it and malformed
     otherwise; one whose action, or whose v for a known action, names none is
-    unknown, whatever else it holds."""
-    schema = payload_schemas.get(f"{action}.v{payload.get('v')}")
+    unknown, whatever else it holds. A payload of a known action stating no
+    v, or one that is no integer, states no version to wait for, and is
+    malformed."""
+    version = payload.get("v")
+    if action in known_actions and (isinstance(version, bool) or not isinstance(version, int)):
+        return "malformed"
+    schema = payload_schemas.get(f"{action}.v{version}")
     if schema is None:
         return "unknown"
     return "malformed" if list(Draft202012Validator(schema).iter_errors(payload)) else "valid"
@@ -1440,9 +1448,18 @@ for action_version in payload_schemas:
     require(f"payloads.json: a valid and a malformed {action_version}",
             {case["outcome"] for case in payload_cases
              if f"{case['action']}.v{case['payload'].get('v')}" == action_version} == {"valid", "malformed"})
+# A known action stating no v, and one stating a v that is no integer, are
+# malformed, while an action no schema defines stays unknown without one.
+versionless = [case for case in payload_cases if "v" not in case["payload"]]
+require("payloads.json: a known action stating no v, malformed",
+        any(case["action"] in known_actions and case["outcome"] == "malformed" for case in versionless))
+require("payloads.json: an action no schema defines stating no v, unknown",
+        any(case["action"] not in known_actions and case["outcome"] == "unknown" for case in versionless))
+require("payloads.json: a known action stating a v that is no integer, as a string, a fraction, a boolean and null",
+        {type(case["payload"]["v"]) for case in payload_cases
+         if case["action"] in known_actions and "v" in case["payload"]} >= {int, str, float, bool, type(None)})
 # The three ways a payload is unknown: a known action at a v no schema
 # defines, an action no schema defines, and an application's own, x-.
-known_actions = {action_version.rsplit(".v", 1)[0] for action_version in payload_schemas}
 unknown_cases = [case for case in payload_cases if case["outcome"] == "unknown"]
 require("payloads.json: an unknown payload of a known action at another v",
         any(case["action"] in known_actions for case in unknown_cases))
@@ -1775,6 +1792,18 @@ for path in sync_cases:
     }
     if case["run"].get("verb") == "mutate" and case["run"]["mutation"].get("kind") == "Remove":
         staged |= {binding["handle"] for binding in store.get("bindings", [])}
+    # An Abandon (SYNC.md section 7) drops, on request, the binding of the
+    # delivered create it names, of the run's source.
+    if case["run"].get("verb") == "mutate" and case["run"]["mutation"].get("kind") == "Abandon":
+        staged |= {
+            binding["handle"]
+            for binding in store.get("bindings", [])
+            for item in store.get("items", [])
+            if binding["collection"] == case["run"]["collection"] and binding["source"] == case["run"]["source"]
+            and item["collection"] == binding["collection"] and item["link_id"] == binding["link_id"]
+            and item["seq"] == case["run"]["mutation"].get("seq")
+            and binding["handle"].startswith("\u0001") and binding.get("base_present", 0) == 1
+        }
     # A delivered create tombstoned since (SYNC.md sections 5 and 6) holds its
     # Remove until a page lands it, then pushes it against the listed handle.
     delivered = {
@@ -2094,6 +2123,66 @@ for path in sync_cases:
             left = flags if base is None else (set(item["flags"]) | (flags - set(base))) - (set(base) - flags)
             staged = next((i for i in after["items"] if i["collection"] == run["collection"] and i["seq"] == mutation["seq"]), {})
             check(f"{label}: the set a SetFlags leaves", sorted(staged.get("flags") or []), sorted(left))
+    # A tombstoned delivered create of a mutable kind landing on an arrival
+    # that carries no body (SYNC.md sections 5 and 6): the listed revision is
+    # one its base does not name, a remote edit over the tombstone, which
+    # revives it. It lands live and conflicted at that revision, the base
+    # naming no body and no diverging body read yet, reported Created then
+    # Conflicted, and its staged Remove is not pushed.
+    if run.get("verb") == "sync" and kinds.get(run["collection"]) in ("text/vcard", "text/calendar") \
+            and not case["expect"].get("failed"):
+        for page in pages:
+            for member in page["items"]:
+                if member.get("carries") is True or member.get("revision") is None:
+                    continue
+                link = links_of_fixtures.get((member.get("meta") or {}).get("body"))
+                if link not in delivered:
+                    continue
+                require(f"{label}: member {member['handle']} landing a tombstoned delivered create without its body pushes no Remove",
+                        all(push["handle"] != member["handle"] for push in case["expect"].get("pushes", [])))
+                landed = after_items.get((run["collection"], link), {})
+                bound = next((b for b in after.get("bindings", []) if b["collection"] == run["collection"]
+                              and b["link_id"] == link and b["source"] == run["source"]), {})
+                require(f"{label}: member {member['handle']} revives the tombstoned delivered create it lands, a remote edit over it",
+                        landed.get("deleted") == 0)
+                check(f"{label}: member {member['handle']} lands it conflicted at the listed revision, no body read",
+                      (bound.get("handle"), bound.get("conflicted"), bound.get("conflict_revision"), bound.get("conflict_object"),
+                       bound.get("base_revision"), bound.get("base_object")),
+                      (member["handle"], 1, member["revision"], None, member["revision"], None))
+                check(f"{label}: member {member['handle']} is reported Created, then Conflicted",
+                      [event["kind"] for event in case["expect"].get("events", []) if event.get("handle") == member["handle"]],
+                      ["Created", "Conflicted"])
+    # An Abandon (SYNC.md section 7) gives up a delivered create of the run's
+    # source and nothing else: its binding leaves, the item is marked deleted
+    # and, no binding of it left, retained holding what it held, nothing is
+    # pushed, and the run reports the provisional handle. On any other
+    # placement it is refused, the rows as they were. No other run reports
+    # that event.
+    if mutation.get("kind") == "Abandon":
+        item = next((i for i in store.get("items", []) if i["collection"] == run["collection"] and i["seq"] == mutation["seq"]), {})
+        binding = next((b for b in store.get("bindings", []) if b["collection"] == run["collection"]
+                        and b["link_id"] == item.get("link_id") and b["source"] == run["source"]), {})
+        if not (binding.get("handle", "").startswith("\u0001") and binding.get("base_present", 0) == 1):
+            require(f"{label}: an Abandon on anything but a delivered create fails", case["expect"].get("failed") is True)
+            for table in ("items", "bindings"):
+                check(f"{label}: a refused Abandon leaves the {table} as they were", after.get(table, store.get(table)), store.get(table))
+        else:
+            require(f"{label}: an Abandon of a delivered create does not fail", case["expect"].get("failed") is not True)
+            check(f"{label}: an Abandon pushes nothing", case["expect"].get("pushes"), [])
+            check(f"{label}: an Abandon reports the provisional handle it gave up", case["expect"].get("events"),
+                  [{"kind": "Abandoned", "handle": binding["handle"]}])
+            require(f"{label}: an Abandon states the rows it leaves", "items" in after and "bindings" in after)
+            left = [b for b in after.get("bindings", []) if b["collection"] == run["collection"] and b["link_id"] == item["link_id"]]
+            require(f"{label}: an Abandon drops the create's binding", all(b["source"] != run["source"] for b in left))
+            given = next((i for i in after.get("items", []) if i["collection"] == run["collection"] and i["seq"] == mutation["seq"]), {})
+            require(f"{label}: an Abandon marks the item deleted, retained once no source binds it",
+                    given.get("deleted") == 1 and (given.get("retained") is True) == (not left)
+                    and (left or given.get("retained_by") == run["source"]))
+            check(f"{label}: an abandoned item keeps its body and the flags staged on it",
+                  (given.get("object"), given.get("flags")), (item.get("object"), item.get("flags")))
+    else:
+        require(f"{label}: only an Abandon reports Abandoned",
+                all(event.get("kind") != "Abandoned" for event in case["expect"].get("events", [])))
     # The agreement of STORAGE.md section 9 across collections (SYNC.md
     # section 6). A member a page names under a bare key another mail
     # collection holds shares the lowest seq of the rows there it agrees
@@ -2171,6 +2260,32 @@ for path in sync_cases:
             else:
                 require(f"{label}: bodiless {item['link_id']}, held elsewhere only by another message, is retained, never purged",
                         after_items.get(key, {}).get("retained") is True)
+    # The same rule read from its other end: a bodiless mail row the store
+    # held and the run leaves no row of was purged as held elsewhere, so a
+    # live row of another mail collection of its account holds its key under
+    # a stated summary agreeing with its own, the store's or the one its
+    # member's meta gives. A holder stating no summary agrees with no message
+    # (STORAGE.md sections 9 and 11.1), so a case purging for one states it.
+    if "items" in after and run["collection"] in mail and not files:
+        metas = {}
+        for page in pages:
+            for member in page["items"]:
+                fixture = (member.get("meta") or {}).get("body", "")
+                if fixture.endswith(".eml") and (root / fixture).is_file():
+                    metas[member["handle"]] = mail_columns((root / fixture).read_bytes())
+        for item in store.get("items", []):
+            key = (item["collection"], item["link_id"])
+            if item["collection"] != run["collection"] or item.get("object") is not None or key in after_items:
+                continue
+            own = every_row.get(key) or next((metas[b["handle"]] for b in store.get("bindings", [])
+                                              if (b["collection"], b["link_id"]) == key and b["handle"] in metas), None)
+            holders = [every_row.get((i["collection"], i["link_id"])) for i in store.get("items", [])
+                       if i["collection"] in mail and i["collection"] != item["collection"] and i["link_id"] == item["link_id"]
+                       and accounts.get(i["collection"]) == accounts.get(item["collection"]) and i.get("deleted") == 0
+                       and after_items.get((i["collection"], i["link_id"]), i).get("deleted") == 0]
+            require(f"{label}: bodiless {item['link_id']}, purged, is held elsewhere by a live row stating a summary that agrees with its own",
+                    any(row is not None and (own is None or all(row.get(column) == own.get(column) for column in ("subject", "date", "sender")))
+                        for row in holders))
     # A member minted apart from a pending or a delivered create of the run's
     # source holding its hint, their summaries disagreeing, is reported
     # Disagreed, naming that create (SYNC.md sections 5 and 6), and no other

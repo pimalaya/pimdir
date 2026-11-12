@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "a rekey whose listing lacks more than half of at least 20 bound members parks",
   "note": "the source renumbered its handles and the connector named a rekey, but the listing it answers holds 2 of the 20 based bindings, as a truncated listing would. Carried out, the rekey would drop the other 18 Deleted, which every other source would then push as removes. It parks as a sync round does: nothing is written, no Rekeyed or Deleted drop, no upsert, the checkpoint and the generation unmoved, and the run reports the absent and the bound counts. The old checkpoint still names the old handle space, so the connector names the rekey again on the next run, and a run carrying accept_absences carries it out (SYNC.md §5, §8)",
   "store": {

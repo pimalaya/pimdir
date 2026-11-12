@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "a remove naming the conflict it meets is the decision, and the tombstone pushes against the observed revision",
   "note": "the binding diverged from its remote at r2 (vector 13) and the upgrade read the diverging body, c3; shown both, the user deletes the contact, and the queued remove states the body it deletes and names c3 in resolves. The conflict clears and the base adopts r2 with c3, together, so the Remove the next sync derives is gated on what the remote holds; without the settle the delete would project Conflict for ever and never push. A remove stating no resolves is refused (vector 143), as is one over a diverging body nobody read (vector 144) (SYNC.md §7, §3; STORAGE §15.3)",
   "store": {

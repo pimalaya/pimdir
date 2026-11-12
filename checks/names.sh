@@ -11,8 +11,12 @@
 # index records is its part's own, and README's Status names each part's; a
 # backticked word of one part is a schema name, a statement, a vector field or
 # a word of the list below; the tokenizer the index and the scenarios state is
-# SEARCH.md's. Needs sqlite3 alone, to read the tables and columns off the
-# schemas.
+# SEARCH.md's. One key word marks one level: no part writes SHALL outside the
+# sentence naming the key words. A reader's and a producer's statements are
+# each named in a section its profile's row of STORAGE.md §17 lists, and the
+# paragraphs the guide's reading paths quote are STORAGE.md's. A version of a
+# vector format a document states is the one its schema holds. Needs sqlite3
+# alone, to read the tables and columns off the schemas.
 set -euo pipefail
 
 root="${1:-$PWD}"
@@ -37,7 +41,7 @@ known="$(
     # Pragmas, SQLite features, vector fields, result columns, JSON keys and
     # platform calls (STORAGE.md §5) the documents write.
     printf '%s\n' user_version data_version foreign_keys journal_mode locking_mode integrity_check \
-        table_list contentless_delete json_each json_valid \
+        table_list contentless_delete json_each json_valid writable_schema sqlite_sequence \
         sqlite_schema sqlite_master core_autocrlf recurrence_id base32 body_hex body_len input_hex input_utf8 digest_hex \
         name_chars digest_bytes if_match set_flags no_uid_conflict collect_garbage \
         meta_attachment round_open cursor_rejected interrupted_after scope_bound horizon_left \
@@ -61,9 +65,20 @@ mentioned="$(
 
 # The format version init_store_meta writes is STORAGE.md's own (§4.2), so a
 # store names the draft that created it and no other.
-status="$(sed -n 's/^Status: \(storage-[a-z0-9-]*\),.*/\1/p' "$root/STORAGE.md")"
+# released <version>: the name a store or an index records for a part's
+# version (§4.2): a draft's own name, and for a release `<part>-vN`, its major
+# alone, so storage-v1.0.0 and storage-v1.2.0 both write storage-v1.
+released() {
+    sed 's/^\([a-z]*-v[0-9][0-9]*\)\.[0-9][0-9]*\.[0-9][0-9]*$/\1/' <<< "$1"
+}
+
+status="$(sed -n 's/^Status: \(storage-[a-z0-9.-]*\),.*/\1/p' "$root/STORAGE.md")"
 marker="$(grep -o "'storage-[a-z0-9-]*'" "$root/queries/storage/owner/init_store_meta.sql" | tr -d "'" || true)"
-if [ -z "$status" ] || [ "$marker" != "$status" ]; then
+if ! grep -qxE 'storage-(draft-[0-9]+|v[0-9]+\.[0-9]+\.[0-9]+)' <<< "$status"; then
+    echo "STORAGE.md's Status line names [$status], neither a draft nor a release" >&2
+    failures=$((failures + 1))
+fi
+if [ -z "$status" ] || [ "$marker" != "$(released "$status")" ]; then
     echo "init_store_meta writes [$marker] as the format version, STORAGE.md is [$status]" >&2
     failures=$((failures + 1))
 fi
@@ -71,9 +86,9 @@ fi
 # The format version init_index_meta writes is SEARCH.md's own (§2), so an
 # index names the draft that built it and an indexer of another draft rebuilds
 # or refuses it rather than reading it as its own.
-search_status="$(sed -n 's/^Status: \(search-[a-z0-9-]*\),.*/\1/p' "$root/SEARCH.md")"
+search_status="$(sed -n 's/^Status: \(search-[a-z0-9.-]*\),.*/\1/p' "$root/SEARCH.md")"
 search_marker="$(grep -o "'search-[a-z0-9-]*'" "$root/queries/search/init_index_meta.sql" | tr -d "'" || true)"
-if [ -z "$search_status" ] || [ "$search_marker" != "$search_status" ]; then
+if [ -z "$search_status" ] || [ "$search_marker" != "$(released "$search_status")" ]; then
     echo "init_index_meta writes [$search_marker] as the format version, SEARCH.md is [$search_status]" >&2
     failures=$((failures + 1))
 fi
@@ -91,6 +106,30 @@ if [ "$(sed -n '/^## Status$/,/^## /p' "$root/README.md" | grep -o '\*\*[a-z]*-\
     echo "README.md's Status names another number of part versions than the three parts" >&2
     failures=$((failures + 1))
 fi
+
+# A document names a part's version as the one its Status line states, as
+# the first release, which the drafts name before it exists, or as one of the
+# past versions listed here for the fact they record (the first draft whose
+# store names its draft, the first whose index does). So a draft's name left
+# in the prose after a bump, or after the release, fails, and the commit that
+# moves a Status line moves every sentence naming the version with it.
+past="storage-draft-08 search-draft-08"
+versioned=("${documents[@]}")
+[ ! -f "$root/AGENTS.md" ] || versioned+=(AGENTS.md)
+while read -r name; do
+    [ -n "$name" ] || continue
+    part="${name%%-*}"
+    case "$part" in
+        storage) current="$status" ;;
+        search) current="$search_status" ;;
+        sync) current="$(sed -n 's/^Status: \(sync-[a-z0-9.-]*\),.*/\1/p' "$root/SYNC.md")" ;;
+        gtd) current="$(sed -n 's/^Status: \(gtd-[a-z0-9.-]*\),.*/\1/p' "$root/conventions/gtd.md")" ;;
+    esac
+    if [ "$name" != "$current" ] && [ "$name" != "$part-v1.0.0" ] && ! grep -qw -- "$name" <<< "$past"; then
+        echo "$name: named in $(grep -lF -- "$name" "${versioned[@]/#/$root/}" | sed "s|^$root/||" | paste -sd' '), neither $part's version [$current] nor a past one this check lists" >&2
+        failures=$((failures + 1))
+    fi
+done < <(grep -ohE '\b(storage|sync|search|gtd)-(draft-[0-9]+|v[0-9]+\.[0-9]+\.[0-9]+)\b' "${versioned[@]/#/$root/}" | sort -u)
 
 # The tokenizer SEARCH.md §5 states is the one every full-text table of the
 # canonical index declares, with its prefix indexes, and the one the scenarios
@@ -132,6 +171,13 @@ for part in STORAGE.md SYNC.md SEARCH.md; do
     fi
     if grep -n '^\*Note:\*' "$root/$part" | grep -E '\b(MUST|SHALL|SHOULD|REQUIRED|RECOMMENDED|MAY|OPTIONAL)\b' >&2; then
         echo "$part: a note above carries a key word" >&2
+        failures=$((failures + 1))
+    fi
+    # One level, one word: MUST and MUST NOT, never SHALL and SHALL NOT, which
+    # BCP 14 makes their synonyms and a reader takes for another level. The
+    # sentence naming the key words is the one place the word stands.
+    if grep -n '\bSHALL\b' "$root/$part" | grep -v '^[0-9]*:The key words "MUST"' >&2; then
+        echo "$part: a line above writes SHALL where the parts write MUST" >&2
         failures=$((failures + 1))
     fi
 done
@@ -235,6 +281,104 @@ for file in $(cd "$root/vectors" && ls -d *.json sync search/*.json | grep -vx m
     fi
 done
 
+# section <document> <number>: the text of one numbered section, a top-level
+# one with its subsections, a subsection alone.
+section() {
+    awk -v number="$2" '
+        /^##+ / {
+            inside = 0
+            if (number ~ /\./) { if ($1 == "###" && $2 == number) inside = 1 }
+            else if ($1 == "##" && $2 == number ".") { inside = 1; top = 1 }
+            else if ($1 == "###" && top && index($2, number ".") == 1) inside = 1
+            else top = 0
+        }
+        inside' "$root/$1"
+}
+
+# owed <profile>: the text of every section the profile's row of STORAGE.md
+# §17 lists under Owes, a range `§a.b to §a.c` taken whole.
+owed() {
+    local row token first last minor
+    row="$(grep "^| $1 | " "$root/STORAGE.md" | cut -d'|' -f4)"
+    while read -r token; do
+        [ -n "$token" ] || continue
+        if [[ "$token" == *" to "* ]]; then
+            first="${token%% to *}"; last="${token##* to }"
+            for minor in $(seq "${first##*.}" "${last##*.}"); do
+                section STORAGE.md "${first%.*}.$minor"
+            done
+        else
+            section STORAGE.md "$token"
+        fi
+    done < <(grep -oE '§[0-9]+(\.[0-9]+)?( to §[0-9]+(\.[0-9]+)?)?' <<< "$row" | tr -d '§')
+}
+
+# A reader's and a producer's statements are each named in a section their
+# profile owes (STORAGE.md §17), so a profile reading its row's sections meets
+# every statement of its directories, and a row that forgets a section fails.
+owed reader > "$dir/owed.read"
+{ cat "$dir/owed.read"; owed producer; } > "$dir/owed.queue"
+for profile in read queue; do
+    [ -s "$dir/owed.$profile" ] || {
+        echo "STORAGE.md §17: no row, or no section, for the profile running queries/storage/$profile/" >&2
+        failures=$((failures + 1))
+    }
+    for file in "$root"/queries/storage/$profile/*.sql; do
+        statement="$(basename "$file" .sql)"
+        if ! grep -q "\`$statement[\`(]" "$dir/owed.$profile"; then
+            echo "$statement: under queries/storage/$profile/ and named in no section its profile's row of STORAGE.md §17 lists" >&2
+            failures=$((failures + 1))
+        fi
+    done
+done
+
+# The reading paths of GUIDE.md §1 quote the paragraphs a reader, then a
+# producer, reads, by their bold lead-ins: each one quoted opens a paragraph
+# of STORAGE.md, so a lead-in reworded there fails here.
+paths="$(grep -E "^\*\*A (reader|producer)'s path" "$root/GUIDE.md" || true)"
+if [ "$(grep -c . <<< "$paths")" != 2 ]; then
+    echo "GUIDE.md §1: no reading path for a reader and for a producer" >&2
+    failures=$((failures + 1))
+fi
+while read -r lead; do
+    [ -n "$lead" ] || continue
+    if ! grep -qF "**$lead.**" "$root/STORAGE.md"; then
+        echo "GUIDE.md §1: a reading path quotes \"$lead\", which opens no paragraph of STORAGE.md" >&2
+        failures=$((failures + 1))
+    fi
+done < <(grep -o '"[^"]*"' <<< "$paths" | tr -d '"')
+
+# A version of a vector format a document states is the one its schema holds
+# (vectors/schema/, the `const` of `v`): vectors/README.md lists every
+# format's, SYNC.md §11 the sync cases', SEARCH.md §11 the search files'.
+const() {
+    grep -o '"v": { "const": [0-9]* }' "$root/vectors/schema/$1.schema.json" | grep -o '[0-9]*'
+}
+listed="$(grep -o 'The current versions: [^.]*\(\.json[^.]*\)*\.' "$root/vectors/README.md" | sed 's/^The current versions: //; s/\.$//' | tr ',' '\n' | sed 's/^ *//')"
+for schema in "$root"/vectors/schema/*.schema.json; do
+    format="$(basename "$schema" .schema.json)"
+    case "$format" in
+        sync) file="sync/" ;;
+        search-*) file="search/${format#search-}.json" ;;
+        *) file="$format.json" ;;
+    esac
+    stated="$(sed -n "s|^$file \([0-9]*\)$|\1|p" <<< "$listed")"
+    if [ "$stated" != "$(const "$format")" ]; then
+        echo "vectors/README.md states version [$stated] for $file, its schema holds [$(const "$format")]" >&2
+        failures=$((failures + 1))
+    fi
+done
+stated="$(grep -o 'one JSON file each, stating `v` [0-9]*' "$root/SYNC.md" | grep -o '[0-9]*$' || true)"
+if [ "$stated" != "$(const sync)" ]; then
+    echo "SYNC.md §11 states \`v\` [$stated] for vectors/sync/, its schema holds [$(const sync)]" >&2
+    failures=$((failures + 1))
+fi
+stated="$(sed -n 's/.*`v` \([0-9]*\) for queries.json and `v` \([0-9]*\) for the other two.*/\1 \2 \2/p' "$root/SEARCH.md")"
+if [ "$stated" != "$(const search-queries) $(const search-store) $(const search-chunks)" ]; then
+    echo "SEARCH.md §11 states \`v\` [$stated] for queries.json and the other two, their schemas hold [$(const search-queries) $(const search-store) $(const search-chunks)]" >&2
+    failures=$((failures + 1))
+fi
+
 # The informative documents add no requirement (AGENTS.md §1): each says it is
 # informative on its Status line and writes no key word.
 for document in OVERVIEW.md GUIDE.md vectors/README.md conventions/gtd.md; do
@@ -276,7 +420,7 @@ words="
     manual none partial full auto user default inbox archive drafts sent trash
     junk important individual group answered seen unread known unknown held
     encrypted unparseable cancelled refused unchanged destroyed draft all
-    canonical related waiting someday high medium low null updated addr
+    canonical related waiting someday high medium low null updated addr ok
     $(: kinds, parts, verbs and procedures the documents name in backticks)
     mail contact contacts calendar journal task file search pimdir vtodo read
     write load mutate upgrade drain enqueue submit cancel purge rename move
@@ -284,7 +428,7 @@ words="
     $(: the query language of SEARCH.md §8 and its examples)
     and or not before after today yesterday relevance simple sep
     $(: platform calls, protocol words and libraries)
-    fcntl flock fsync lockf lstat mmap openat renameat2 unlink synchronous
+    fcntl flock fstat fsync lockf lstat mmap openat renameat2 stat unlink synchronous
     getetag multiget multipart inline charset bm25 unicode61 base64 zoneinfo
     client importance
     $(: the parts of a time a document spells, and example values)

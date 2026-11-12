@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "the tombstone an absence on one source left is pushed to the other",
   "note": "the store 75 left: basic-1 deleted by imap's closed round, still bound by jmap. jmap's round still lists Mb, but the item is a tombstone, so jmap pushes the Remove, and the item, bound by nobody once it is accepted, is retained. jmap holds no coverage, so its run opens its first round and stamps Ma with its id, as vector 75 stamps imap's 12. A Remove derived from a tombstone the store holds, whichever source's delete left it (SYNC.md §5, §9)",
   "store": {

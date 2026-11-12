@@ -152,6 +152,7 @@
 {"name": "storage/owner/retain_flags", "parameters": ["collection", "link_id"], "slots": ["flags"], "columns": []},
 {"name": "storage/owner/retain_item", "parameters": ["source", "collection", "link_id"], "slots": [], "columns": []},
 {"name": "storage/owner/retained_item", "parameters": ["collection", "link_id"], "slots": [], "columns": ["seq", "object_hash", "conflict_object"]},
+{"name": "storage/owner/retry_action", "parameters": ["id"], "slots": [], "columns": ["id"]},
 {"name": "storage/owner/revive_item", "parameters": ["collection", "link_id"], "slots": [], "columns": []},
 {"name": "storage/owner/seq_for_link_any", "parameters": ["collection", "link_id", "subject", "date", "sender"], "slots": [], "columns": ["seq"]},
 {"name": "storage/owner/set_capability", "parameters": ["account", "source", "collection", "capability", "support", "detail"], "slots": [], "columns": []},

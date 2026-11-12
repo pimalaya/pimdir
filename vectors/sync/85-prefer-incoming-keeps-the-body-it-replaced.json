@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "label": "prefer-incoming adopts a diverging body and keeps the one it replaced as a retained item",
   "note": "vector 28 under prefer-incoming: b settles its conflict by taking c2 while a had folded c3 into the item. The divergence goes to the policy, which adopts c2; c3, the body it replaced, is kept as a retained item under the key minted over b's handle, with a seq of its own, in the trash until a purge, and reported Overruled. b agreed to the body the item settled on, so its shared_object moves to c2 (SYNC.md §9; STORAGE §11)",
   "store": {
