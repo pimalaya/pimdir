@@ -1682,6 +1682,18 @@ for path in sync_cases:
     }
     if case["run"].get("verb") == "mutate" and case["run"]["mutation"].get("kind") == "Remove":
         staged |= {binding["handle"] for binding in store.get("bindings", [])}
+    # A delivered create tombstoned since (SYNC.md sections 5 and 6) holds its
+    # Remove until a page lands it, then pushes it against the listed handle.
+    delivered = {
+        binding["link_id"]
+        for binding in store.get("bindings", [])
+        for item in store.get("items", [])
+        if binding["collection"] == case["run"]["collection"] and binding["handle"].startswith("\u0001")
+        and binding.get("base_present", 0) == 1
+        and item["collection"] == binding["collection"] and item["link_id"] == binding["link_id"] and item.get("deleted") == 1
+    }
+    staged |= {member["handle"] for page in pages for member in page["items"]
+               if links_of_fixtures.get((member.get("meta") or {}).get("body")) in delivered}
     for push in case["expect"].get("pushes", []):
         if push.get("kind") == "Remove":
             require(f"{label}: Remove {push['handle']} was staged by the consumer", push["handle"] in staged)
@@ -1870,9 +1882,12 @@ for path in sync_cases:
         return enumerated is not None and binding["handle"] not in enumerated
 
     held = {(item["collection"], item["link_id"]) for item in store.get("items", []) if item.get("deleted") == 1}
+    # A delivered create, based under its provisional handle, is no member a
+    # listing names: never absent, never counted (SYNC.md sections 2 and 5).
     bound = [binding for binding in store.get("bindings", [])
              if binding["collection"] == run["collection"] and binding["source"] == run["source"]
-             and binding.get("base_present", 0) == 1 and in_scope(binding["link_id"])]
+             and binding.get("base_present", 0) == 1 and not binding["handle"].startswith("\u0001")
+             and in_scope(binding["link_id"])]
     absent = [binding for binding in bound if binding["handle"] not in listed | vanished
               and (binding["collection"], binding["link_id"]) not in held and provable(binding)]
     # A round that named no member, none of its pages, heads nor earlier runs
@@ -1892,7 +1907,7 @@ for path in sync_cases:
         resolved = {links_of_fixtures.get(member.get("meta", {}).get("body")) for page in pages for member in page["items"]}
         bound = [binding for binding in store.get("bindings", [])
                  if binding["collection"] == run["collection"] and binding["source"] == run["source"]
-                 and binding.get("base_present", 0) == 1]
+                 and binding.get("base_present", 0) == 1 and not binding["handle"].startswith("\u0001")]
         absent = [binding for binding in bound if binding["link_id"] not in resolved
                   and (binding["collection"], binding["link_id"]) not in held]
         mass = ((len(bound) >= 20 and 2 * len(absent) > len(bound)) or (not listed and absent)) \
@@ -1921,7 +1936,12 @@ for path in sync_cases:
             require(f"{label}: binding {binding['handle']} leaves only for a stated removal or a closed round's absence in scope", stated or inferred)
     for binding in store.get("bindings", []) + case["expect"].get("store", {}).get("bindings", []):
         provisional = binding["handle"].startswith("\u0001")
-        require(f"{label}: binding {binding['handle']!r} is provisional iff it has no base", provisional == (binding.get("base_present", 0) == 0))
+        based = binding.get("base_present", 0) == 1
+        require(f"{label}: binding {binding['handle']!r} has a base unless provisional", provisional or based)
+        # A delivered create holds a base naming nothing (SYNC.md section 2).
+        if provisional and based:
+            require(f"{label}: delivered binding {binding['handle']!r} holds a base naming nothing",
+                    all(binding.get(column) is None for column in ("base_flags", "base_object", "base_revision")))
         if provisional:
             check(f"{label}: provisional handle of {binding['link_id']}", binding["handle"], "\u0001" + binding["link_id"])
 
@@ -1972,6 +1992,13 @@ for path in sync_cases:
         check(f"{label}: push {push.get('handle')} key", push.get("key"), change_key(case["run"]["collection"], resolved))
     for outcome in case["expect"].get("outcomes", []):
         require(f"{label}: outcome {outcome.get('handle')} is Accepted or Rejected", outcome.get("outcome") in {"Accepted", "Rejected"})
+        # A connector states whether an accepted Remove carrying `to` relocated
+        # the member or deleted it (SYNC.md section 4): only a relocation
+        # delivers the destination's create.
+        relocating = any(push.get("kind") == "Remove" and push.get("to") is not None and push.get("handle") == outcome.get("handle")
+                         for push in case["expect"].get("pushes", []))
+        if outcome.get("outcome") == "Accepted" and relocating:
+            require(f"{label}: outcome {outcome.get('handle')} states whether it relocated", isinstance(outcome.get("relocated"), bool))
         # An add accepted with no handle (SYNC.md section 4) names no member:
         # its create stays pending under the provisional handle until a page
         # lands it.

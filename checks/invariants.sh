@@ -1591,9 +1591,9 @@ done
 fresh
 expect "sync: a store no engine wrote names no sync version, load_store_meta answering it last" \
     "$(run read/load_store_meta | cut -d'|' -f14)|$(run read/load_store_meta | awk -F'|' '{ print NF }')" "|14"
-run owner/set_sync_version ":sync_version='sync-draft-08'"
+run owner/set_sync_version ":sync_version='sync-draft-09'"
 expect "sync: set_sync_version records the engine's version, and nothing else moves" \
-    "$(run read/load_store_meta | cut -d'|' -f9,14)" "storage-draft-09|sync-draft-08"
+    "$(run read/load_store_meta | cut -d'|' -f9,14)" "storage-draft-09|sync-draft-09"
 expect "sync: the version is text or nothing" \
     "$(sql "UPDATE store_meta SET sync_version = x'07';" 2>&1 | grep -c CHECK)" "1"
 
@@ -1808,6 +1808,52 @@ for statement in origin_for_link destination_for_link; do
     expect "placement: $statement seeks items_by_link, then the binding's key, never every binding" \
         "$(plan "owner/$statement" ":link_id='$minted'" ":source='imap'" ":collection='INBOX'" ":object=NULL" | grep -cE 'items_by_link \(link_id=\?\)|bindings_1 \(item=\? AND source=\?\)' || true)" "2"
 done
+
+# --- A delivered create is no member a listing names (SYNC.md §2, §4, §5) ---
+
+fresh
+collection INBOX
+collection Trash
+p="$(printf '\001')"
+mail INBOX kept 1 10 "'2026-10-06T08:00:00Z'"
+seq=1
+for key in moved landed; do
+    seq=$((seq + 1))
+    run owner/insert_item ":collection='Trash'" ":link_id='$key'" ":seq=$seq" ":flags='[]'" \
+        ":object_hash=NULL" ":sort_key=''" ":level=1" ":deleted=0" ":conflicted=0" ":conflict_object=NULL"
+    run owner/upsert_mail_summary ":collection='Trash'" ":link_id='$key'" ":message_id='$key'" \
+        ":in_reply_to='[]'" ":subject='s $key'" ":sender='alice@example.org'" ":sender_name='Alice'" \
+        ":date='2026-10-06T08:00:00Z'" ":size=1" ":attachment=0"
+done
+run owner/insert_binding ":collection='Trash'" ":link_id='moved'" ":source='imap'" ":handle='${p}moved'" \
+    ":base_flags=NULL" ":base_object=NULL" ":base_revision=NULL" ":base_present=0" \
+    ":conflicted=0" ":conflict_revision=NULL" ":conflict_object=NULL" ":shared_object=NULL"
+run owner/insert_binding ":collection='Trash'" ":link_id='landed'" ":source='imap'" ":handle='7'" \
+    ":base_flags=NULL" ":base_object=NULL" ":base_revision=NULL" ":base_present=0" \
+    ":conflicted=0" ":conflict_revision=NULL" ":conflict_object=NULL" ":shared_object=NULL"
+base() {
+    sql "SELECT group_concat(state, ' ') FROM (SELECT i.link_id || ':' || b.base_present || b.base_flags_known || b.base_marks
+         || coalesce(b.base_object, '-') || coalesce(b.base_revision, '-') AS state
+         FROM bindings b JOIN items i ON i.id = b.item WHERE b.collection = 'Trash' ORDER BY i.link_id);"
+}
+run owner/deliver_binding ":collection='Trash'" ":source='imap'" ":handle='${p}moved'"
+run owner/deliver_binding ":collection='Trash'" ":source='imap'" ":handle='7'"
+run owner/deliver_binding ":collection='Trash'" ":source='imap'" ":handle='${p}gone'"
+expect "delivered: a pending create gains a base naming nothing, a member's handle and an unbound one stay as they are" \
+    "$(base)" "landed:000-- moved:100--"
+run owner/deliver_binding ":collection='Trash'" ":source='graph'" ":handle='${p}moved'"
+expect "delivered: delivering twice, or for another source, moves nothing" "$(base)" "landed:000-- moved:100--"
+expect "delivered: a delivered create is no origin a copy comes from" \
+    "$(run owner/origin_for_link ":link_id='moved'" ":source='imap'" ":collection='INBOX'" ":object=NULL")|$(run owner/origin_for_link ":link_id='kept'" ":source='imap'" ":collection='Trash'" ":object=NULL")" \
+    "|INBOX|10"
+expect "delivered: a delivered create stays the destination a tombstone of its identity relocates into" \
+    "$(run owner/destination_for_link ":link_id='moved'" ":source='imap'" ":collection='INBOX'" | cut -d'|' -f1)" "Trash"
+run owner/open_round ":collection='Trash'" ":source='imap'" ":since=NULL" ":until=NULL" ":band=0"
+run owner/update_binding ":collection='Trash'" ":link_id='landed'" ":source='imap'" ":base_flags_known=0" ":base_marks=0" \
+    ":base_object=NULL" ":base_revision=NULL" ":base_present=1" ":conflicted=0" ":conflict_revision=NULL" \
+    ":conflict_object=NULL" ":shared_object=NULL"
+expect "delivered: a round's last page finds a based member absent, never a delivered create" \
+    "$(run owner/list_unstamped_bindings ":collection='Trash'" ":source='imap'" ":narrowed=0" ":enumerated=0" | tr '\n' ' ')" "7|landed "
 
 # --- A write batch reads its own link ids (§14) ------------------------------
 

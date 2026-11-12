@@ -226,8 +226,8 @@ Placements are derived, never stored. For a collection and a source, emit:
 
 - one placement per item the source binds;
 - one `Created` placement per live item the source does not bind and the store holds a body for;
-- on every `Created` placement, bound or not, the origin `origin_for_link` gives: the same source binding the same link id in another collection with a base present and, when the placement has a body, that body as its base;
-- on every `Tombstone` placement, the destination `destination_for_link` gives: the same source holding a pending create of the same link id in another collection, named by that create's handle;
+- on every `Created` placement, bound or not, the origin `origin_for_link` gives: the same source binding the same link id in another collection with a base present, under a handle that is not provisional, and, when the placement has a body, that body as its base;
+- on every `Tombstone` placement, the destination `destination_for_link` gives: the same source holding a pending create, or a delivered one, of the same link id in another collection, named by that create's handle;
 - the tombstones whose remove is held, `list_superseded_pending`: an add superseded them and the item it created is still a pending create of a source syncing its collection;
 - on every `Created` placement whose item superseded one of its own identity elsewhere, the binding it may be moved from, `list_superseded_bindings`: this source binding the superseded item with a base, its collection, handle and revision;
 - for both, the same link id is the key itself or the key minted over the provisional handle it derives, `dup:<key>#` then `U+0001` and the key, which a `Copy` or a `Move` gives its create beside a live holder (§11); the bare key wins;
@@ -287,15 +287,16 @@ The level is `Full` only when a body is present, whatever the row claims. An unk
      - one whose fetched diverging body equals its own adopts the revision and clears;
    - held: a tombstone `list_superseded_pending` named derives nothing, no `Remove` and no `Update` riding ahead of one, and keeps its binding; a remote edit over it still revives it, and once the superseding create is accepted, withdrawn or gone it derives a plain `Remove` on a later run;
    - deletes:
-     - a `Tombstone` derives `Remove`, with `to` set to its destination when the same source holds a pending create of the identity elsewhere (the connector relocates or rejects it, never deletes), and `link_id` left out when that create's key is minted;
+     - a `Tombstone` derives `Remove`, with `to` set to its destination when the same source holds a pending create of the identity elsewhere (the connector relocates or rejects it, never deletes), and `link_id` left out when that create's key is minted; a `Remove` with no `to` takes the member out of that collection alone, so a connector to Gmail or JMAP, where one id names a message in every mailbox, removes the label or the mailbox while the account holds it in another and deletes it for good only where it is held nowhere else;
      - a tombstone with no base derives nothing and its binding is dropped;
+     - a delivered create, a binding under its provisional handle holding a base, derives nothing, no `Add`, `SetFlags`, `Update` nor `Remove`, is never absent and never dropped: a tombstone staged on it is held for the page that lands it, whatever a round lists, and is reported while it waits;
      - a member a round found absent, or listed vanished, is a `Deleted` drop, unless its placement holds a body its base does not: then it is re-staged as a pending create under a provisional handle;
      - a remote edit over a local tombstone revives and pulls, or follows the policy when the tombstone holds a local edit too. A revision the tombstone's base does not name is such an edit, so a move whose push record was lost is abandoned with the member live in the source;
    - creates: a `Created` derives `Add`, by server-side copy from its origin when it has one, naming the binding it may be moved from when it has one, which a connector able to move delivers by a `MOVE` then a write of the body, and one unable to by an upload;
    - never a `Remove` but from a tombstone the store holds, the consumer's or one an absence or a removal on another source left: no scope, interruption, restart, widening, collection, nor an absence other than a closed round's in its scope derives one; and never a collection deleted on a server because another source stopped listing it, unless the configuration enables it and the collection is empty or fully reconciled in the run;
    - rights: with `push` off nothing is pushed and everything is pulled; a forbidden kind keeps its change pending; a delete the rights forbid is held beside another source of the collection, one holding a binding or a checkpoint there, and reverted when this source is alone; a rejected push is pending like any other.
 7. **Push in bounded chunks.** Every change carries the idempotency key SYNC §4 derives, which a connector forgets once the checkpoint after the chunk lands. After each chunk, write (§5) the outcomes:
-   - `Accepted` rebases the placement as the flag axis left it; an `Add` assigned a handle supersedes the provisional handle in the same batch; an `Add` accepted with none stays a pending create for the next listing to land, not pushed again this run;
+   - `Accepted` rebases the placement as the flag axis left it; an `Add` assigned a handle supersedes the provisional handle in the same batch; an `Add` accepted with none is delivered (`DeliverPlacement`: `deliver_binding` gives its binding a base naming nothing, while it holds none), for the next listing to land, never pushed again; an accepted `Remove` relocating into a destination delivers that create the same way;
    - `Rejected` or unreported leaves it pending.
 
    Do not collect between chunks.
@@ -309,7 +310,7 @@ The level is `Full` only when a body is present, whatever the row claims. An unk
 
    An accepted flag, body or delete push reports nothing. Report a parked round with its counts.
 
-A move is two halves derived by two collections' syncs in either order: `Add` by copy in the target, `Remove` with a destination in the source. Neither half is dropped for the other. A relocated member lands the target's pending create when the page listing it names it (§11), the create waiting for that page until then.
+A move is two halves derived by two collections' syncs in either order: `Add` by copy in the target, `Remove` with a destination in the source. Neither half is dropped for the other. A relocated member lands the target's pending create when the page listing it names it (§11), the create waiting for that page until then. Delivered by the accepted relocation, the create derives nothing meanwhile, and a delete or a move staged on it is held, never withdrawn, then pushed against the handle it lands on.
 
 **Connector notes.** SYNC §4 and §5 state what a connector owes in protocol-neutral terms; what each provider needs to meet it is measured, dated and revised here, never in the part.
 
@@ -353,8 +354,8 @@ These sizes are safe on a slow network and under every provider's limits; raise 
 3. Fetch the rest by handle; results are keyed by handle and carry the hint, the summary inputs, and at `Full` the body and its revision. A body may be streamed to its blob path, through a temporary and the move of §4, and referenced by a byteless `StoreObject`.
 4. Assign the key once, at the first meta carrying a hint (a page's or a fetch's), after a `Links` load of every hint it carries. The key `k` is the hint, prefixed `esc:` when it begins with `alt:`, `hash:`, `dup:`, `part:`, `file:` or `esc:`, or the kind's fallback for content stating none; for mail, the hint's fields read by STORAGE Annex A.1's parses. Then take the first row of STORAGE §9's table that matches what holds `k` in the collection, a row of `items` holding it whatever its state (`seq_by_link` answers for it):
    - nothing: `k`;
-   - a pending create of this source, under `k` or under `k` minted over the provisional handle it derives (the bare key first): land it, below;
-   - a binding of this source with a base under another handle: `dup:k#<handle>`;
+   - a pending create of this source, delivered or not, the item live or, delivered, a tombstone, under `k` or under `k` minted over the provisional handle it derives (the bare key first): land it, below;
+   - a binding of this source with a base under another handle, not a provisional one: `dup:k#<handle>`;
    - a live item other sources bind, or none: `k`, joining it;
    - a tombstone other sources still bind: `k`, joining and reviving it;
    - a retained row: `k`, reviving it (§5 step 7);
@@ -362,7 +363,7 @@ These sizes are safe on a slow network and under every provider's limits; raise 
 
    Where a row mints, a minted key held by any row, a retained one included, is minted again over the same handle until free (`dup:dup:k#<handle>#<handle>`): minting never lands, joins nor revives what holds the key it would take.
 
-   Landing a pending create is a `Superseded` drop of the provisional handle, the binding moved to the fetched one, the base set to the fetched flags and, for an immutable kind, the staged body; the staged flags and body kept.
+   Landing a pending create is a `Superseded` drop of the provisional handle, the binding moved to the fetched one, the base set to the fetched flags and, for an immutable kind, the staged body; the staged flags and body kept. A delivered tombstone lands as a tombstone, and the run pushes its `Remove` against the fetched handle, relocating into the destination `destination_for_link` gives then, if any.
 
    For a mutable kind the base takes the listed revision, and the body when one was carried. With none carried, mark the binding conflicted at that revision with no `conflict_object`, whatever the policy; report `Conflicted` beside `Created`; push nothing; let the upgrade fetch the body, which clears the conflict when it equals the staged one.
 
@@ -382,7 +383,7 @@ These sizes are safe on a slow network and under every provider's limits; raise 
 | Verb | Effect |
 | --- | --- |
 | `SetFlags` | replace the flags; status `Dirty` unless `Created`, `Conflict` or `Tombstone` |
-| `Remove` | status `Tombstone`; binding and base kept; on a conflicted binding the base adopts the conflict's revision and body (unknown when not fetched yet) and the conflict clears, on a conflicted item the item's clears, so the remove pushes against what the remote holds; on a pending create the binding is dropped and the item retained |
+| `Remove` | status `Tombstone`; binding and base kept; on a conflicted binding the base adopts the conflict's revision and body (unknown when not fetched yet) and the conflict clears, on a conflicted item the item's clears, so the remove pushes against what the remote holds; on a pending create the binding is dropped and the item retained; on a delivered create the tombstone is kept, its `Remove` held until the create lands |
 | `Edit` | new body stored and pointed at, base kept; no push staged when the base holds it; refused, staging nothing, when it carries `if_match` and the item holds another body; without `overrule`, refused, staging nothing, when it meets the item's or its binding's conflict and its `resolves` does not name each one's `conflict_object` (a person's resolution, naming the diverging bodies it was decided over), or states `resolves` and meets none; with `resolves`, resolves a binding's conflict by adopting its revision and body into the base, and settles an item's conflict through any binding, the item taking the edit's body whatever it is, `conflicted` cleared and `conflict_object` released, the editing binding's `shared_object` moved to the body, even when that binding's base already holds it; with `overrule` (stated by an engine settling by a rule of its own, never by a person), keeps the binding's then the item's diverging body it does not adopt as §12 step 3 keeps a policy's loser, keyed over the edited handle and reported `Overruled`, and is refused, staging nothing, while that body is not fetched; revives a tombstone |
 | `Copy`, `Move` | a `Created` placement in the target under a provisional handle with the source's origin; `Move` tombstones the source; a live holder of the identity in the target gives the create the identity minted over the provisional handle it derives, minted again over a held key, and a tombstoned or retained one is revived under the identity, or minted beside when it holds a message that does not agree (STORAGE §9's table); refused, staging nothing, for a placement holding no body unless its binding is based and its source syncs the target (`collection_sources`) |
 | `Add` | a new item at `Full` under a provisional handle, no base; fails, staging nothing, when its body cannot be read; fails on a live holder, revives a retained one or a tombstone still propagating, minting beside one holding a message that does not agree (STORAGE §9's table) |
@@ -395,7 +396,7 @@ A provisional handle is `U+0001` followed by the link id (SYNC §2).
 
 1. List the new handle space in full, whatever the scope, every page read before anything is written; every member carries its meta, which identifies it.
 2. Match each member to its old placement by link id; where one hint had several old copies, by the base naming its fetched revision first, then by body hash, then handle order.
-   - A member resolving to an identity already handed out takes the minted key an old copy carried, else a mint over its own handle. Pending creates count as taken and are carried untouched.
+   - A member resolving to an identity already handed out takes the minted key an old copy carried, else a mint over its own handle. Pending creates count as taken and are carried untouched. A delivered create is carried onto the member resolving to its link id, and otherwise left untouched and uncounted.
    - A mutable member whose fetched revision is not its old base's is carried as a pull, or as a `Conflict` at that revision when it holds a local edit.
    - When more than half of the source's based bindings, and at least 20 of them, would match no member, park unless the run carries `accept_absences`: write nothing, leave the checkpoint and the generation alone, and report the counts. The old checkpoint makes the connector name the rekey again next run.
 3. In one batch, never cut, every drop before every upsert:

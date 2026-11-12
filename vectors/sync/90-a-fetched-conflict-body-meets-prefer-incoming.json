@@ -1,5 +1,5 @@
 {
-  "v": 3,
+  "v": 4,
   "label": "an item conflict recorded only for want of its body is settled by the policy once the upgrade fetches it",
   "note": "the store 84 starts from, under prefer-incoming: the divergence was recorded as manual records one only because the incoming body was not carried (vector 83). a's upgrade fetches c2, and the policy now applies as it would have to a carried body: the item adopts c2 and its conflict clears, c3, the body it replaced, is kept as a retained item under the key minted over a's handle and reported Overruled. a's base takes c2 at r2 and its shared_object moves to c2, the body the item settled on; b still agrees c3, so it owes c2 and pushes it on its next sync (SYNC.md §6, §9; STORAGE §11)",
   "store": {

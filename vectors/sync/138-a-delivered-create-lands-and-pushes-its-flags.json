@@ -1,0 +1,50 @@
+{
+  "v": 4,
+  "label": "a delivered create lands on its arrival keeping the flags staged on it, pushed against the listed handle",
+  "note": "a relocation into Trash was accepted before Trash was listed, and \\Seen was staged on its create there since, which derived no SetFlags while its handle named no member. The delta naming the member under 7, unread, lands it rather than minting: the base takes the listed flags and the staged body, the staged \\Seen stays, and the flag axis pushes it against 7 (SYNC.md §5, §6)",
+  "store": {
+    "collections": [{ "id": "Trash", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {
+      "m1": { "body": "fixtures/mail-basic.eml" }
+    },
+    "items": [
+      { "collection": "Trash", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" }
+    ],
+    "bindings": [
+      { "collection": "Trash", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 1 }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "Trash", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [{ "collection": "Trash", "source": "imap", "checkpoint": "t0" }]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "Trash",
+    "source": "imap",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual"
+    }
+  },
+  "remote": {
+    "snapshot": {
+      "items": [{ "handle": "7", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-basic.eml" } }],
+      "vanished": [],
+      "complete": false,
+      "checkpoint": "t1"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [{ "kind": "SetFlags", "handle": "7", "add": ["\\Seen"], "remove": [], "key": "5c29df9364f06426" }],
+    "outcomes": [{ "handle": "7", "outcome": "Accepted" }],
+    "events": [{ "kind": "Created", "handle": "7" }],
+    "store": {
+      "items": [{ "collection": "Trash", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+      "bindings": [{ "collection": "Trash", "link_id": "basic-1@example.org", "source": "imap", "handle": "7", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }],
+      "sources": [{ "collection": "Trash", "source": "imap", "checkpoint": "t1" }]
+    }
+  }
+}

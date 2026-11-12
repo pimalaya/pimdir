@@ -1,5 +1,5 @@
 {
-  "v": 3,
+  "v": 4,
   "label": "an edit resolving another conflict than the one standing is refused",
   "note": "the store of 118 to 123, the item conflicted over c2. A person resolved an earlier conflict of the item, whose diverging body was c4, keeping c3, and the resolution was queued; that conflict has since been settled and another arose, over c2. The update's resolves names c4, not the conflict_object the item holds, so it is no decision over c2: refused, staging nothing, parked by the drain, the conflict and both bodies kept (SYNC.md §7; STORAGE §15.3)",
   "store": {

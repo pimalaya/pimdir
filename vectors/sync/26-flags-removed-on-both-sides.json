@@ -1,5 +1,5 @@
 {
-  "v": 3,
+  "v": 4,
   "label": "a flag removed on either side is removed, and both removals survive the merge",
   "note": "the base held both flags; local removed \\Flagged and remote removed \\Seen, so the merge is empty, the push removes the \\Flagged the server still holds and the base follows (SYNC.md §4, §5)",
   "store": {

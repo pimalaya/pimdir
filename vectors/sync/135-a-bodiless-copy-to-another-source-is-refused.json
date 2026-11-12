@@ -1,5 +1,5 @@
 {
-  "v": 3,
+  "v": 4,
   "label": "a copy of a placement holding no body into a collection its source does not sync is refused",
   "note": "a's card is at Meta, its body never fetched, and the person copies it into Work, which only b syncs. A create holding no body is delivered only by a server-side copy from its origin, which a alone holds and which a's sync of Work would push; but a syncs no Work, and b is offered the create only once the store holds its body. Staged, it would wait for ever, so the copy is refused, staging nothing, for the upgrade to fetch the body first (SYNC.md §7)",
   "store": {

@@ -1,5 +1,5 @@
 {
-  "v": 3,
+  "v": 4,
   "label": "a round that would drop more than half of at least 20 bound members parks",
   "note": "the connector answers the round with one empty last page, as one reading a moved handle space as an empty mailbox would. All 20 based bindings in scope are absent, more than half of a scope of at least 20: the round does not close, nothing is dropped, the page lands as one before the last with its checkpoint and no cursor, and the run reports the park. The next run lists the round again from its first page (SYNC.md §5)",
   "store": {

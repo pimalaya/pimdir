@@ -1,0 +1,62 @@
+{
+  "v": 4,
+  "label": "a delivered create derives nothing until a page lands it",
+  "note": "two creates of Trash were delivered before any listing named them, a relocation into one and an add accepted with no handle for the other: each binding keeps its provisional handle and holds a base naming nothing. The one staged \\Seen since owes no SetFlags and the one deleted since no Remove, its handle naming no member to push to, and a delta naming another member drops neither: both wait, as staged, for the page naming their member (SYNC.md §2, §5)",
+  "store": {
+    "collections": [{ "id": "Trash", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {
+      "m1": { "body": "fixtures/mail-basic.eml" },
+      "m2": { "body": "fixtures/mail-recent.eml" }
+    },
+    "items": [
+      { "collection": "Trash", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" },
+      { "collection": "Trash", "link_id": "recent-1@example.org", "seq": 2, "flags": [], "object": "m2", "level": 2, "deleted": 1, "sort_key": "2026-10-06T08:30:00Z" }
+    ],
+    "bindings": [
+      { "collection": "Trash", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 1 },
+      { "collection": "Trash", "link_id": "recent-1@example.org", "source": "imap", "handle": "\u0001recent-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 1 }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "Trash", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "Trash", "link_id": "recent-1@example.org", "row": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 241, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [{ "collection": "Trash", "source": "imap", "checkpoint": "t0" }]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "Trash",
+    "source": "imap",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual"
+    }
+  },
+  "remote": {
+    "snapshot": {
+      "items": [{ "handle": "9", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-attachment.eml" } }],
+      "vanished": [],
+      "complete": false,
+      "checkpoint": "t1"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [{ "kind": "Added", "handle": "9" }],
+    "store": {
+      "items": [
+        { "collection": "Trash", "link_id": "attach-1@example.org", "seq": 3, "flags": [], "object": null, "level": 1, "deleted": 0 },
+        { "collection": "Trash", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 },
+        { "collection": "Trash", "link_id": "recent-1@example.org", "seq": 2, "flags": [], "object": "m2", "level": 2, "deleted": 1 }
+      ],
+      "bindings": [
+        { "collection": "Trash", "link_id": "attach-1@example.org", "source": "imap", "handle": "9", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1 },
+        { "collection": "Trash", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 1 },
+        { "collection": "Trash", "link_id": "recent-1@example.org", "source": "imap", "handle": "\u0001recent-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 1 }
+      ],
+      "sources": [{ "collection": "Trash", "source": "imap", "checkpoint": "t1" }]
+    }
+  }
+}

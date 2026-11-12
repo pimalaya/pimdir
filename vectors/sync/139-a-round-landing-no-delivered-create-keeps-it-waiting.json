@@ -1,0 +1,63 @@
+{
+  "v": 4,
+  "label": "a round closing without landing a delivered create keeps it waiting, live or tombstoned",
+  "note": "two creates of Trash were delivered, one holding no body and one deleted since. A round over Trash names another member and lands neither: a member may arrive after a round's first pages, or under another binding when the source deleted rather than relocated, so a round proves nothing of a delivered create. Both wait as they were, never found absent nor counted, so nothing is dropped and the round closes; the engine reports them waiting (SYNC.md §2, §5)",
+  "store": {
+    "collections": [{ "id": "Trash", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {
+      "m2": { "body": "fixtures/mail-recent.eml" }
+    },
+    "items": [
+      { "collection": "Trash", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" },
+      { "collection": "Trash", "link_id": "recent-1@example.org", "seq": 2, "flags": [], "object": "m2", "level": 2, "deleted": 1, "sort_key": "2026-10-06T08:30:00Z" }
+    ],
+    "bindings": [
+      { "collection": "Trash", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 1, "round": null },
+      { "collection": "Trash", "link_id": "recent-1@example.org", "source": "imap", "handle": "\u0001recent-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 1, "round": null }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "Trash", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "Trash", "link_id": "recent-1@example.org", "row": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 241, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [{ "collection": "Trash", "source": "imap", "checkpoint": "t0" }]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "Trash",
+    "source": "imap",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual"
+    }
+  },
+  "remote": {
+    "snapshot": {
+      "items": [{ "handle": "9", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-attachment.eml" } }],
+      "vanished": [],
+      "complete": true,
+      "checkpoint": "t1"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [{ "kind": "Added", "handle": "9" }],
+    "store": {
+      "items": [
+        { "collection": "Trash", "link_id": "attach-1@example.org", "seq": 3, "flags": [], "object": null, "level": 1, "deleted": 0 },
+        { "collection": "Trash", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": null, "level": 1, "deleted": 0 },
+        { "collection": "Trash", "link_id": "recent-1@example.org", "seq": 2, "flags": [], "object": "m2", "level": 2, "deleted": 1 }
+      ],
+      "bindings": [
+        { "collection": "Trash", "link_id": "attach-1@example.org", "source": "imap", "handle": "9", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 },
+        { "collection": "Trash", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 1, "round": null },
+        { "collection": "Trash", "link_id": "recent-1@example.org", "source": "imap", "handle": "\u0001recent-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 1, "round": null }
+      ],
+      "sources": [
+        { "collection": "Trash", "source": "imap", "checkpoint": "t1", "round": 1, "round_open": false, "round_since": null, "round_until": null, "round_cursor": null, "round_checkpoint": null, "covered": true, "covered_since": null, "covered_until": null }
+      ]
+    }
+  }
+}

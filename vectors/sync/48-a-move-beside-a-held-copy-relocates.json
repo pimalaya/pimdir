@@ -1,7 +1,7 @@
 {
-  "v": 3,
+  "v": 4,
   "label": "the source half of a move into a collection already holding the identity relocates, never deletes",
-  "note": "Trash held the message under 3 before the move, so the move's create there is keyed by the identity minted over its provisional handle; the tombstone pairs with that create all the same, so the Remove relocates into Trash and carries no link_id, the copy Trash already held proving no delivery; INBOX holds no body, so nothing else could deliver the create, and a plain delete would take the only copy of the move (SYNC.md §3, §4, §5)",
+  "note": "Trash held the message under 3 before the move, so the move's create there is keyed by the identity minted over its provisional handle; the tombstone pairs with that create all the same, so the Remove relocates into Trash and carries no link_id, the copy Trash already held proving no delivery; INBOX holds no body, so nothing else could deliver the create, and a plain delete would take the only copy of the move. Accepted, the relocation delivers that create, keyed by the identity minted over its own provisional handle, which the Trash listing can land: its binding keeps the handle and gains a base naming nothing (SYNC.md §2, §3, §4, §5)",
   "store": {
     "collections": [
       { "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" },
@@ -44,7 +44,7 @@
   },
   "expect": {
     "pushes": [{ "kind": "Remove", "handle": "10", "to": "Trash", "link_id": null, "if_match": null, "key": "de5f13f5a240cc23" }],
-    "outcomes": [{ "handle": "10", "outcome": "Accepted" }],
+    "outcomes": [{ "handle": "10", "outcome": "Accepted", "relocated": true }],
     "events": [],
     "store": {
       "items": [
@@ -53,7 +53,7 @@
       ],
       "bindings": [
         { "collection": "Trash", "link_id": "basic-1@example.org", "source": "imap", "handle": "3", "base_flags": ["\\Seen"], "base_object": null, "base_revision": null, "base_present": 1 },
-        { "collection": "Trash", "link_id": "dup:basic-1@example.org#\u0001basic-1@example.org", "source": "imap", "handle": "\u0001dup:basic-1@example.org#\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }
+        { "collection": "Trash", "link_id": "dup:basic-1@example.org#\u0001basic-1@example.org", "source": "imap", "handle": "\u0001dup:basic-1@example.org#\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 1 }
       ],
       "sources": [
         { "collection": "INBOX", "source": "imap", "checkpoint": "c1" },

@@ -1,5 +1,5 @@
 {
-  "v": 3,
+  "v": 4,
   "label": "a local delete is pushed, and the accepted remove retains the row",
   "note": "a tombstone derives a Remove against the bound handle; once accepted the binding goes, and with no binding left the item is retained rather than erased (SYNC.md §5, STORAGE §11)",
   "store": {

@@ -1,5 +1,5 @@
 {
-  "v": 3,
+  "v": 4,
   "label": "a server edit landing while the item is conflicted marks the binding conflicted, whatever the source's policy",
   "note": "the item diverged between a and b under manual (vector 28) and every binding projects Conflict with no revision. b's server then edits the member, and a delta lists it once at r3, past b's base r2. The item's conflict is still open, so prefer-remote neither pulls nor drops anything: the binding records r3 and asks for the diverging body, beside the item's conflict and not into it; without this the edit is skipped and never listed again (SYNC.md §5, §9)",
   "store": {

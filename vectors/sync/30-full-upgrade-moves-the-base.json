@@ -1,5 +1,5 @@
 {
-  "v": 3,
+  "v": 4,
   "label": "a Full fetch over a placement with no local edit becomes its base",
   "note": "after a pull the item has no body and the base names r2 with no object, at Meta; the fetch brings the body at r2, which lands as object_hash and as base_object with base_revision r2, so the next sync reads it as agreed rather than as an edit to push, and the level is written 2 (SYNC.md §6)",
   "store": {

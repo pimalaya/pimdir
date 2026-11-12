@@ -1,5 +1,5 @@
 {
-  "v": 3,
+  "v": 4,
   "label": "a read-only source reverts a local delete it can never push",
   "note": "with push false the tombstone is undone and the row lands clean, keeping its body; holding it would hide a member an incremental source never lists again (SYNC.md §5)",
   "store": {

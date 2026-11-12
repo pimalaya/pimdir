@@ -1,5 +1,5 @@
 {
-  "v": 3,
+  "v": 4,
   "label": "an absence a closed round finds tombstones the item for every other source",
   "note": "the same store as 74, and this time the round's one page is its last: 10 is a based binding of imap the closed round did not list, the item has no Date outside the round's open scope, so it is absent and dropped Deleted. The item is marked deleted and kept, not retained, since jmap still binds it: jmap now projects a Tombstone and its next sync pushes the Remove (vector 76). The round closes with its checkpoint and the coverage of its scope (SYNC.md §5, §9)",
   "store": {

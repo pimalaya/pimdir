@@ -9,9 +9,10 @@
 -- absent there only when the connector enumerated the collection's handles
 -- unfiltered (:enumerated 1, the enumeration in the `handles` slot) and that
 -- enumeration lacks its handle. A pending create is no member of the remote
--- and is never listed here; a placement out of scope is not either, absence
--- meaning deleted only in scope. Read after the last page's own stamps, in
--- its write.
+-- and is never listed here, nor is a delivered one (SYNC.md §2), based under a
+-- provisional handle no listing names; a placement out of scope is not either,
+-- absence meaning deleted only in scope. Read after the last page's own
+-- stamps, in its write.
 SELECT b.handle, i.link_id
 FROM bindings b
 JOIN items i ON i.id = b.item
@@ -20,6 +21,7 @@ LEFT JOIN mail_summary s ON s.item = b.item
 WHERE b.collection = :collection AND b.source = :source
   AND r.round_started_at IS NOT NULL
   AND b.round IS NOT r.round
+  AND substr(b.handle, 1, 1) != char(1)
   AND (b.base_present = 1 OR b.base_flags_known = 1
        OR b.base_object IS NOT NULL OR b.base_revision IS NOT NULL)
   AND CASE WHEN s.date IS NULL THEN r.round_band = 0

@@ -1,5 +1,5 @@
 {
-  "v": 3,
+  "v": 4,
   "label": "a rekey whose new handles restart at 1 drops the gone member's binding before any upsert reuses its handle",
   "note": "the server bumped UIDVALIDITY and numbered from 1 again: the stand-up notes, which held 1, are gone, and the agenda and the attachment message, which held 2 and 3, now hold 1 and 2. Absence is by link id, not by handle: basic-1@example.org resolves to no member, so its binding is dropped Deleted although the new space reuses its handle, and the drop precedes every upsert, else the agenda's upsert under 1 would fold into the stand-up notes' item. The two others carry their flags onto their new handles, the gone item is retained, and the generation moves (SYNC.md §8, §10; STORAGE §12)",
   "store": {

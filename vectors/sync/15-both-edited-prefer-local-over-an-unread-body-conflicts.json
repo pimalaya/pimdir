@@ -1,5 +1,5 @@
 {
-  "v": 3,
+  "v": 4,
   "label": "both sides edited under prefer-local, the member carrying no body, is recorded as Manual records it and pushes nothing",
   "note": "the server moved to r2 and the listing carries no body: an Update gated on r2 would replace a body nobody has read, which no policy may do. So the binding is marked conflicted at r2 with no conflict_object, as Manual marks it, reported Conflicted, and nothing is pushed; the upgrade fetches the body and settles it by prefer-local then (vector 116). The base stays c1 at r1 (SYNC.md §5, §6)",
   "store": {

@@ -1,5 +1,5 @@
 {
-  "v": 3,
+  "v": 4,
   "label": "a person's edit through the source agreeing with the item settles an item conflict taking the diverging body",
   "note": "the store of 102 with no overrule. A person takes c2 through a: the item takes c2, its conflict cleared, c3 kept by nothing but a's base (SYNC.md §7). a's shared_object moves to c2 and its base stays c3 at r2, so a owes c2; b's base already holds c2 and its shared_object stays c1",
   "store": {

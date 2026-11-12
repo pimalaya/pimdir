@@ -1,0 +1,58 @@
+{
+  "v": 4,
+  "label": "a relocation the connector carried out as a delete leaves the destination's create pending",
+  "note": "the tombstone carries its destination in Archive, so the Remove relocates; the connector deletes the member instead, Archive already holding the identity on the server (SYNC.md §4), and states it did not relocate. Only a relocation delivers: the create in Archive stays pending, its binding with no base, the member it stood for being gone, and the source binding goes with the row purged as for a relocation (SYNC.md §2, §4)",
+  "store": {
+    "collections": [
+      { "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" },
+      { "id": "Archive", "account": null, "kind": "message/rfc822", "conflict": "manual" }
+    ],
+    "objects": {
+      "m1": { "body": "fixtures/mail-basic.eml" }
+    },
+    "items": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 1 },
+      { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }
+    ],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 },
+      { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }
+    ],
+    "sources": [
+      { "collection": "INBOX", "source": "imap", "checkpoint": "c0" },
+      { "collection": "Archive", "source": "imap", "checkpoint": "a0" }
+    ]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "INBOX",
+    "source": "imap",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual"
+    }
+  },
+  "remote": {
+    "snapshot": {
+      "items": [{ "handle": "10", "flags": ["\\Seen"], "revision": null, "meta": { "body": "fixtures/mail-basic.eml" } }],
+      "vanished": [],
+      "complete": true,
+      "checkpoint": "c1"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [{ "kind": "Remove", "handle": "10", "to": "Archive", "link_id": "basic-1@example.org", "if_match": null, "key": "6dc3500bff3aa6fb" }],
+    "outcomes": [{ "handle": "10", "outcome": "Accepted", "relocated": false }],
+    "events": [],
+    "store": {
+      "items": [{ "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+      "bindings": [{ "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }],
+      "sources": [
+        { "collection": "Archive", "source": "imap", "checkpoint": "a0" },
+        { "collection": "INBOX", "source": "imap", "checkpoint": "c1" }
+      ]
+    }
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "v": 3,
+  "v": 4,
   "label": "an add whose body cannot be read fails and stages nothing",
   "note": "a producer's add names m1, whose row is held and whose blob file is not. The add cannot derive its summary nor push anything, so it fails, staging no item, and the drain retries the row, then parks it, never applying it without its body (SYNC.md §7; STORAGE §15.2)",
   "store": {

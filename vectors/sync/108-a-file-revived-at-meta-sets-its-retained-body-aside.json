@@ -1,5 +1,5 @@
 {
-  "v": 3,
+  "v": 4,
   "label": "a file restored on its server and listed at Meta revives holding no body, its retained body kept apart and never pushed",
   "note": "the store vector 61 left: Notes.txt retained with its body n1 after its server deleted it. The server restores it, or another client puts it back, and the next round lists it under its id at a new revision e2, a file listing carrying no body. The row revives under its key and seq, but the body it held is the one of e1, which e2 may have replaced: kept as the item's, it would differ from a base naming no body, project Dirty and be pushed as an Update gated on e2 over a body nobody read. So the revived item holds none, at Meta, for the upgrade to fetch, and n1 is kept as a retained item of its own under the key minted over the handle, reported Overruled after the member's Added; nothing is pushed (STORAGE §11.1, SYNC.md §6)",
   "store": {

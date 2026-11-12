@@ -7,7 +7,7 @@
   "required": ["v", "label", "note", "store", "run", "remote", "expect"],
   "additionalProperties": false,
   "properties": {
-    "v": { "const": 3 },
+    "v": { "const": 4 },
     "label": { "type": "string" },
     "note": { "type": "string" },
     "store": { "$ref": "#/$defs/store" },
@@ -459,7 +459,8 @@
         "handle": { "type": "string" },
         "outcome": { "enum": ["Accepted", "Rejected"] },
         "assigned": { "$ref": "#/$defs/maybe" },
-        "revision": { "$ref": "#/$defs/maybe" }
+        "revision": { "$ref": "#/$defs/maybe" },
+        "relocated": { "type": "boolean" }
       }
     },
     "event": {
