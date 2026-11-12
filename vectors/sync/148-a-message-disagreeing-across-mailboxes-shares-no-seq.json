@@ -1,0 +1,64 @@
+{
+  "v": 5,
+  "label": "a message shares the seq of the row holding its Message-ID in another mailbox only when it agrees with it",
+  "note": "Archive holds two messages at Meta, seq 1 and 2. A delta of INBOX names two members. 20 states the Message-ID of Archive's first under another subject, sender and date: another message reusing the id. The key is free in INBOX, so 20 takes it bare, but it disagrees with the row holding it in Archive and draws a seq of its own, 3: sharing 1 would make the two one hit in a merged view and one address for a reader. 21 is Archive's second message filed twice: it agrees and shares seq 2. The handles are named in byte order, so 20 draws before 21 shares (STORAGE §9, §9.1; SYNC.md §6)",
+  "store": {
+    "collections": [
+      { "id": "Archive", "account": null, "kind": "message/rfc822", "conflict": "manual" },
+      { "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }
+    ],
+    "objects": {},
+    "items": [
+      { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" },
+      { "collection": "Archive", "link_id": "recent-1@example.org", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z" }
+    ],
+    "bindings": [
+      { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "5", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1 },
+      { "collection": "Archive", "link_id": "recent-1@example.org", "source": "imap", "handle": "6", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1 }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "Archive", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "Archive", "link_id": "recent-1@example.org", "row": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 241, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [{ "collection": "Archive", "source": "imap", "checkpoint": "a1" }, { "collection": "INBOX", "source": "imap", "checkpoint": "c0" }]
+  },
+  "run": { "verb": "sync", "collection": "INBOX", "source": "imap", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual" } },
+  "remote": {
+    "snapshot": {
+      "items": [
+        { "handle": "20", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-reused-message-id.eml" } },
+        { "handle": "21", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-recent.eml" } }
+      ],
+      "vanished": [],
+      "complete": false,
+      "checkpoint": "c1"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [{ "kind": "Added", "handle": "20" }, { "kind": "Added", "handle": "21" }],
+    "store": {
+      "items": [
+        { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" },
+        { "collection": "Archive", "link_id": "recent-1@example.org", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z" },
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 3, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-03T09:00:00Z" },
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z" }
+      ],
+      "bindings": [
+        { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "5", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1 },
+        { "collection": "Archive", "link_id": "recent-1@example.org", "source": "imap", "handle": "6", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1 },
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "20", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1 },
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "imap", "handle": "21", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1 }
+      ],
+      "summaries": [
+        { "table": "mail_summary", "collection": "Archive", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } },
+        { "table": "mail_summary", "collection": "Archive", "link_id": "recent-1@example.org", "row": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 241, "attachment": 0, "invitation": null } },
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": [], "subject": "Budget review", "sender": "dan@example.net", "sender_name": "Dan Example", "date": "2026-08-03T09:00:00Z", "size": 266, "attachment": 0, "invitation": null } },
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "recent-1@example.org", "row": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 241, "attachment": 0, "invitation": null } }
+      ],
+      "sources": [{ "collection": "Archive", "source": "imap", "checkpoint": "a1" }, { "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+    }
+  }
+}

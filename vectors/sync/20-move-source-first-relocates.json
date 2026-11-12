@@ -1,5 +1,5 @@
 {
-  "v": 4,
+  "v": 5,
   "label": "the source half of a move carries its destination, and the accepted remove purges the moved row and delivers the destination's create",
   "note": "the tombstone's destination is derived from the pending create the same source holds in Archive, so the Remove relocates; accepted, the source binding goes and the row is purged at once since the account holds the identity live in Archive, and the create there is delivered: its binding keeps the provisional handle and holds a base naming nothing until the Archive listing lands it (SYNC.md §2, §3, §4, §5; STORAGE §11)",
   "store": {

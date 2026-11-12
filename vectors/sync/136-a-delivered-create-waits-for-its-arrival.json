@@ -1,5 +1,5 @@
 {
-  "v": 4,
+  "v": 5,
   "label": "a delivered create derives nothing until a page lands it",
   "note": "two creates of Trash were delivered before any listing named them, a relocation into one and an add accepted with no handle for the other: each binding keeps its provisional handle and holds a base naming nothing. The one staged \\Seen since owes no SetFlags and the one deleted since no Remove, its handle naming no member to push to, and a delta naming another member drops neither: both wait, as staged, for the page naming their member (SYNC.md §2, §5)",
   "store": {

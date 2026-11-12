@@ -1,7 +1,7 @@
 {
-  "v": 4,
+  "v": 5,
   "label": "a member stating a pending create's Message-ID with another subject and date is minted, the create left to push",
-  "note": "the stand-up notes were filed here and their add waits under the provisional handle. The round lists a member stating the same Message-ID whose summary names another message: another subject, sender and date. It is no arrival of that create, which would agree, but another message reusing the id, so it is named under the key minted over its handle, never landing the create: landing would bind 77 to the stand-up notes and drop the add, losing them on the server. The round's last page having landed, the create's Add is pushed, unreported here, so it stays pending (STORAGE §9; SYNC.md §6)",
+  "note": "the stand-up notes were filed here and their add waits under the provisional handle. The round lists a member stating the same Message-ID whose summary names another message: another subject, sender and date. It is no arrival of that create, which would agree, but another message reusing the id, so it is named under the key minted over its handle, never landing the create: landing would bind 77 to the stand-up notes and drop the add, losing them on the server. The round's last page having landed, the create's Add is pushed, unreported here, so it stays pending. The member is reported Disagreed beside its Added, naming the create it was minted apart from: were 77 the stand-up notes themselves, named from a subject its server decoded otherwise, this is where a caller learns the create is about to be uploaded beside it (STORAGE §9; SYNC.md §4, §5, §6)",
   "store": {
     "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
     "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },
@@ -15,7 +15,7 @@
   "expect": {
     "pushes": [{ "kind": "Add", "handle": "\u0001basic-1@example.org", "link_id": "basic-1@example.org", "flags": ["\\Seen"], "origin": null, "object": "m1", "key": "8fb3856ec86e0cec" }],
     "outcomes": [],
-    "events": [{ "kind": "Added", "handle": "77" }],
+    "events": [{ "kind": "Added", "handle": "77" }, { "kind": "Disagreed", "handle": "77", "link_id": "basic-1@example.org" }],
     "store": {
       "items": [
         { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 },

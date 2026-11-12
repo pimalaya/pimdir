@@ -1,0 +1,25 @@
+{
+  "v": 5,
+  "label": "a remove stating no resolution over a conflicted binding is refused, keeping the conflict and both bodies",
+  "note": "the store of vector 32: the binding diverged at r2 and the upgrade read the server's body, c3. A frontend queued a delete of the card before the conflict arose, stating the body it read and no resolves. Meeting the conflict, the remove is refused and stages nothing, which the drain parks naming the conflict: applied, it would adopt r2 and c3 as the base and push a delete of the server's edit, which nobody saw. The item keeps c2 live and the binding its conflict; a remove naming c3 settles it (vector 32) (SYNC.md §7; STORAGE §15.2, §15.3)",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
+    "objects": { "c1": { "body": "fixtures/card-basic.vcf" }, "c2": { "body": "fixtures/card-basic-edited.vcf" }, "c3": { "body": "fixtures/card-basic-renamed.vcf" } },
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c2", "level": 2, "deleted": 0 }],
+    "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1, "conflicted": 1, "conflict_revision": "r2", "conflict_object": "c3" }],
+    "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d1" }]
+  },
+  "run": { "verb": "mutate", "collection": "Contacts", "source": "dav", "mutation": { "kind": "Remove", "seq": 1, "if_match": "c2" } },
+  "remote": { "snapshot": null, "fetch": {} },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "failed": true,
+    "store": {
+      "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c2", "level": 2, "deleted": 0 }],
+      "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1, "conflicted": 1, "conflict_revision": "r2", "conflict_object": "c3" }],
+      "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d1" }]
+    }
+  }
+}

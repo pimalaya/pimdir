@@ -1,0 +1,7 @@
+Message-ID : <spaced-name@example.org>
+Subject	: Spaced out
+From : Alice Example <alice@example.org>
+To: bob@example.org
+Date  : Sat, 01 Aug 2026 10:00:00 +0000
+
+Whitespace between a field's name and its colon, as the obsolete syntax allows.

@@ -354,8 +354,49 @@ expect "move: a holder with another body is not" \
 sql "UPDATE items SET object_hash = NULL WHERE collection = 'Archive';"
 expect "move: a bodiless holder does not take the only body" \
     "$(run owner/held_elsewhere ":collection='INBOX'" ":link_id='a'" ":hash='$h1'")" ""
-expect "move: a bodiless retiring row is held by any holder" \
-    "$(run owner/held_elsewhere ":collection='INBOX'" ":link_id='a'" ":hash=NULL")" "1"
+# A bodiless retiring message is held elsewhere only by a row that agrees with
+# it (§9, §11.1): the same subject, date and sender, NULL matching NULL. A
+# holder stating another, or either row holding no summary, is another message
+# reusing the Message-ID, and the row is retained. Another kind agrees with
+# anything.
+said() {
+    run owner/upsert_mail_summary ":collection='$1'" ":link_id='a'" ":message_id='a'" ":subject=$2" \
+        ":sender=$3" ":sender_name=NULL" ":date=$4" ":size=$5" ":attachment=NULL" ":invitation=NULL"
+}
+bodiless() {
+    run owner/held_elsewhere ":collection='INBOX'" ":link_id='a'" ":hash=NULL"
+}
+expect "move: a bodiless retiring message is held by no row while neither states a summary" "$(bodiless)" ""
+said INBOX "'Notice'" "'cron@x'" "'2026-08-01T10:00:00Z'" 10
+expect "move: nor by a holder stating no summary" "$(bodiless)" ""
+said Archive "'Notice'" "'cron@x'" "'2026-08-01T10:00:00Z'" NULL
+expect "move: a bodiless retiring message is held by a holder agreeing on subject, date and sender, whatever its size" \
+    "$(bodiless)" "1"
+said Archive "'Notice'" "'cron@x'" "'2026-08-02T10:00:00Z'" 10
+expect "move: a holder stating another date is another message" "$(bodiless)" ""
+said Archive "'notice'" "'cron@x'" "'2026-08-01T10:00:00Z'" 10
+expect "move: a holder stating another subject, compared byte for byte, is another message" "$(bodiless)" ""
+said Archive "'Notice'" "NULL" "'2026-08-01T10:00:00Z'" 10
+expect "move: a holder stating no sender beside one is another message" "$(bodiless)" ""
+said INBOX "'Notice'" "NULL" "NULL" 10
+said Archive "'Notice'" "NULL" "NULL" 20
+expect "move: an unknown date and sender match unknown ones" "$(bodiless)" "1"
+sql "UPDATE items SET object_hash = '$h1' WHERE collection = 'Archive';"
+said Archive "'Other'" "'dan@x'" "'2026-08-03T09:00:00Z'" 1
+expect "move: a holder carrying the retiring body is the same message whatever its row states, and no holder of another body is" \
+    "$(run owner/held_elsewhere ":collection='INBOX'" ":link_id='a'" ":hash='$h1'")|$(run owner/held_elsewhere ":collection='INBOX'" ":link_id='a'" ":hash='$h2'")" "1|"
+sql "UPDATE items SET deleted = 1 WHERE collection = 'Archive';"
+said Archive "'Notice'" "NULL" "NULL" 10
+expect "move: a tombstone holds nothing" "$(bodiless)" ""
+run owner/set_collection_kind ":collection='Cards'" ":account=NULL" ":kind='text/vcard'"
+run owner/set_collection_kind ":collection='Cards2'" ":account=NULL" ":kind='text/vcard'"
+run owner/insert_item ":collection='Cards'" ":link_id='u'" ":seq=5" ":flags='[]'" ":object_hash=NULL" ":sort_key=''" ":level=1" ":deleted=0" ":conflicted=0" ":conflict_object=NULL"
+run owner/insert_item ":collection='Cards2'" ":link_id='u'" ":seq=5" ":flags='[]'" ":object_hash=NULL" ":sort_key=''" ":level=1" ":deleted=0" ":conflicted=0" ":conflict_object=NULL"
+expect "move: a bodiless retiring row of another kind is held by any live holder" \
+    "$(run owner/held_elsewhere ":collection='Cards'" ":link_id='u'" ":hash=NULL")" "1"
+steps="$(plan owner/held_elsewhere ":collection='INBOX'" ":link_id='a'" ":hash=NULL")"
+expect "move: held_elsewhere seeks the holders on items_by_link and each summary by its key, scanning nothing" \
+    "$(grep -c 'SEARCH held USING INDEX items_by_link (link_id=?)' <<<"$steps" || true)$(grep -c 'SCAN' <<<"$steps" || true)" "10"
 
 # --- The producer's pin and the collector (§5, §15) --------------------------
 
@@ -696,6 +737,45 @@ run queue/enqueue_action ":producer='p'" ":collection='Inbox'" ":action='add'" "
 expect "receipt: a queue id is never reused, so an old receipt names no new row" \
     "$(run read/load_action ":id=3" | cut -d'|' -f1)" "3"
 
+# --- A row the owner does not know stays pending, untouched (§15.2, §15.4) ---
+# Skipping is not parking: a known action at a v the owner does not know, an
+# action it does not know and an application's own are left as they were
+# enqueued, error NULL and attempts 0, while the rows behind them apply; the
+# drain lists them again in append order, and a reader overlaying the
+# collection still lists them.
+
+fresh
+collection INBOX
+item INBOX mid:a 1
+item INBOX mid:b 2
+# An unknown payload: a known action at a v this draft does not define.
+run queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='remove'" ":payload='{\"v\":2,\"seq\":1}'" ":target_collection=NULL" ":object_hash=NULL"
+# An unknown payload: an action this draft does not define.
+run queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='snooze'" ":payload='{\"v\":1,\"seq\":1,\"until\":\"2026-12-01T09:00:00Z\"}'" ":target_collection=NULL" ":object_hash=NULL"
+# An unknown payload: an application's own action.
+run queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='x-archive'" ":payload='{\"v\":1,\"seq\":1}'" ":target_collection=NULL" ":object_hash=NULL"
+run queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='set-flags'" ":payload='{\"v\":1,\"seq\":2,\"flags\":[\"\\\\Seen\"],\"base\":[]}'" ":target_collection=NULL" ":object_hash=NULL"
+run queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='remove'" ":payload='{\"v\":1,\"seq\":2}'" ":target_collection=NULL" ":object_hash=NULL"
+unknown_before="$(sql "SELECT id, action, payload, attempts, error IS NULL, created_at FROM queue WHERE id <= 3 ORDER BY id;")"
+expect "skip: the drain lists the three rows it does not know before the two it does, in append order" \
+    "$(run owner/list_pending_actions | cut -d'|' -f1,5,9 | tr '\n' ' ')" "1|remove|0 2|snooze|0 3|x-archive|0 4|set-flags|0 5|remove|0 "
+for id in 4 5; do
+    run owner/claim_action ":id=$id" >/dev/null
+    run owner/record_receipt ":id=$id" ":collection='INBOX'" ":seq=NULL"
+done
+expect "skip: the rows behind a skipped one apply, each leaving its receipt" \
+    "$(run read/load_receipt ":id=4" | cut -d'|' -f2)$(run read/load_receipt ":id=5" | cut -d'|' -f2)$(run read/load_action ":id=4")$(run read/load_action ":id=5")" "INBOXINBOX"
+expect "skip: a skipped row is as it was enqueued, its payload, attempts and error untouched" \
+    "$(sql "SELECT id, action, payload, attempts, error IS NULL, created_at FROM queue WHERE id <= 3 ORDER BY id;")" "$unknown_before"
+expect "skip: each stays pending and unparked, a v 2 of a known action, an unknown action and an x- one alike" \
+    "$(for id in 1 2 3; do run read/load_action ":id=$id" | cut -d'|' -f1,5,8,9; done | tr '\n' ' ')$(run owner/load_parked_actions | wc -l)" \
+    "1|remove|0| 2|snooze|0| 3|x-archive|0| 0"
+expect "skip: the next drain lists them again, and nothing else" \
+    "$(run owner/list_pending_actions | cut -d'|' -f1,5,9 | tr '\n' ' ')" "1|remove|0 2|snooze|0 3|x-archive|0 "
+expect "skip: a reader overlaying the collection still lists them, with the payload it cannot fold" \
+    "$(run read/load_pending_actions ":collection='INBOX'" | cut -d'|' -f1,4,5,8 | tr '\n' ' ')" \
+    "1|remove|{\"v\":2,\"seq\":1}|0 2|snooze|{\"v\":1,\"seq\":1,\"until\":\"2026-12-01T09:00:00Z\"}|0 3|x-archive|{\"v\":1,\"seq\":1}|0 "
+
 # --- A performed intent leaves a receipt, a withdrawn one none (§15.5) ------
 
 fresh
@@ -746,12 +826,42 @@ item Cal 'x@example.org' 1
 item INBOX 'm@example.org' 2
 item Files 'part:m@example.org#2' 3
 run owner/retain_item ":collection='INBOX'" ":link_id='m@example.org'" ":source='s'"
+run owner/upsert_mail_summary ":collection='INBOX'" ":link_id='m@example.org'" ":message_id='m@example.org'" ":subject='Notice'" \
+    ":sender='cron@x'" ":sender_name=NULL" ":date='2026-08-01T10:00:00Z'" ":size=10" ":attachment=NULL" ":invitation=NULL"
+# shares <collection> <link_id> [subject sender date]: the seq a member being
+# named there shares, its summary's subject, sender and date NULL when unstated.
+shares() {
+    run owner/seq_for_link_any ":collection='$1'" ":link_id='$2'" ":subject=${3:-NULL}" ":sender=${4:-NULL}" ":date=${5:-NULL}"
+}
 expect "seq: a Message-ID spelling an event's UID is another item, drawing its own seq" \
-    "$(run owner/seq_for_link_any ":collection='INBOX'" ":link_id='x@example.org'")" ""
+    "$(shares INBOX 'x@example.org' "''" NULL NULL)" ""
 expect "seq: a message filed twice shares one, retained or not, and so does a part's file in two folders" \
-    "$(run owner/seq_for_link_any ":collection='Archive'" ":link_id='m@example.org'")|$(run owner/seq_for_link_any ":collection='Folder'" ":link_id='part:m@example.org#2'")|$(run owner/seq_for_link_any ":collection='Cal'" ":link_id='part:m@example.org#2'")" \
+    "$(shares Archive 'm@example.org' "'Notice'" "'cron@x'" "'2026-08-01T10:00:00Z'")|$(shares Folder 'part:m@example.org#2')|$(shares Cal 'part:m@example.org#2')" \
     "2|3|"
-steps="$(plan owner/seq_for_link_any ":collection='INBOX'" ":link_id='x@example.org'")"
+# The agreement of §9 guards the shared seq across collections: a message
+# stating another subject, date or sender under the Message-ID is another one,
+# and draws its own, as one meeting a row with no summary does. The three are
+# read for mail alone.
+expect "seq: a message disagreeing with the row holding its Message-ID elsewhere, on its subject, its date or its sender, shares no seq" \
+    "$(shares Archive 'm@example.org' "'notice'" "'cron@x'" "'2026-08-01T10:00:00Z'")|$(shares Archive 'm@example.org' "'Notice'" "'cron@x'" "'2026-08-02T10:00:00Z'")|$(shares Archive 'm@example.org' "'Notice'" "'dan@x'" "'2026-08-01T10:00:00Z'")|$(shares Archive 'm@example.org' "'Notice'" NULL "'2026-08-01T10:00:00Z'")" \
+    "|||"
+item Archive 'bare@example.org' 4
+expect "seq: a message meeting a row that states no summary shares none, another kind's row needing none" \
+    "$(shares INBOX 'bare@example.org' "''" NULL NULL)|$(shares Folder 'part:m@example.org#2' "'x'" "'y'" "'z'")" "|3"
+run owner/upsert_mail_summary ":collection='Archive'" ":link_id='bare@example.org'" ":message_id='bare@example.org'" ":subject=''" \
+    ":sender=NULL" ":sender_name=NULL" ":date=NULL" ":size=NULL" ":attachment=NULL" ":invitation=NULL"
+expect "seq: an unknown date and sender match unknown ones, a NULL size playing no part" \
+    "$(shares INBOX 'bare@example.org' "''" NULL NULL)" "4"
+# Rows that agree with the member may hold several seqs once a summary was
+# restated after its seq was drawn: the lowest is shared, whatever the order
+# the rows are read in.
+item Archive 'm@example.org' 9
+run owner/upsert_mail_summary ":collection='Archive'" ":link_id='m@example.org'" ":message_id='m@example.org'" ":subject='Notice'" \
+    ":sender='cron@x'" ":sender_name=NULL" ":date='2026-08-01T10:00:00Z'" ":size=NULL" ":attachment=NULL" ":invitation=NULL"
+run owner/set_collection_kind ":collection='Sent'" ":account=NULL" ":kind='message/rfc822'"
+expect "seq: of several rows that agree, the lowest seq is shared" \
+    "$(shares Sent 'm@example.org' "'Notice'" "'cron@x'" "'2026-08-01T10:00:00Z'")" "2"
+steps="$(plan owner/seq_for_link_any ":collection='INBOX'" ":link_id='x@example.org'" ":subject=''" ":sender=NULL" ":date=NULL")"
 expect "seq: seq_for_link_any seeks the link id on items_by_link and each collection by its key, scanning nothing" \
     "$(grep -c 'SEARCH held USING INDEX items_by_link (link_id=?)' <<<"$steps" || true)$(grep -c 'SCAN' <<<"$steps" || true)" "10"
 
@@ -2125,7 +2235,23 @@ item Work 'ALT:y' 7 "'$h5'"
 links=":links='[\"k@x\",\"alt:s|d|f\",\"hash:0123456789abcdef\",\"dup:k@x#7\",\"meta@x\",\"Hash:x\",\"ALT:y\"]'"
 expect "lookup: an account's body for a stated key, with its size, one spelling a reserved prefix in another case included, never another account's, a derived or a minted key's, nor a bodiless row's" \
     "$(run owner/lookup_objects ":account='work'" "$links" | LC_ALL=C sort -u | tr '\n' ' ')|$(run owner/lookup_objects ":account='home'" "$links" | tr '\n' ' ')|$(run owner/lookup_objects ":account=NULL" "$links" | tr '\n' ' ')" \
-    "ALT:y|$h5|1 Hash:x|$h4|1 k@x|$h1|1 |k@x|$h2|1 |k@x|$h3|1 "
+    "ALT:y|$h5|1||| Hash:x|$h4|1||| k@x|$h1|1||| |k@x|$h2|1||| |k@x|$h3|1||| "
+# The agreement of §9 guards a link across collections (SYNC.md §6): each
+# holder answers the subject, date and sender its summary states beside its
+# body, one row per holder, so a caller adopts a body only from a row agreeing
+# with its member, and fetches when a message reusing the Message-ID in
+# another collection is all the account holds. A row with no summary states
+# the three as NULL, which no message agrees with: its subject is never NULL.
+run owner/upsert_mail_summary ":collection='Work'" ":link_id='k@x'" ":message_id='k@x'" ":subject='Notice'" \
+    ":sender='cron@x'" ":sender_name=NULL" ":date='2026-08-01T10:00:00Z'" ":size=1" ":attachment=NULL" ":invitation=NULL"
+sql "UPDATE items SET object_hash = '$h2' WHERE collection = 'Work2' AND link_id = 'k@x';"
+run owner/upsert_mail_summary ":collection='Work2'" ":link_id='k@x'" ":message_id='k@x'" ":subject='Notice'" \
+    ":sender=NULL" ":sender_name=NULL" ":date=NULL" ":size=1" ":attachment=NULL" ":invitation=NULL"
+expect "lookup: each holder of a key answers its body with the subject, date and sender its row states, two messages under one Message-ID as two rows" \
+    "$(run owner/lookup_objects ":account='work'" ":links='[\"k@x\"]'" | LC_ALL=C sort | tr '\n' ' ')" \
+    "k@x|$h2|1|Notice|| k@x|$h1|1|Notice|2026-08-01T10:00:00Z|cron@x "
+sql "UPDATE items SET object_hash = '$h1' WHERE collection = 'Work2' AND link_id = 'k@x';
+     DELETE FROM mail_summary WHERE item IN (SELECT id FROM items WHERE link_id = 'k@x');"
 # summary <collection> <link_id> <attachment> <invitation>: a mail summary
 # stating the two columns a body gives.
 summary() {

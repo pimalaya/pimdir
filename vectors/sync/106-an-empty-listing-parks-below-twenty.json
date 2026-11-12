@@ -1,5 +1,5 @@
 {
-  "v": 4,
+  "v": 5,
   "label": "a complete listing naming no member parks while based bindings exist, below the mass-absence threshold",
   "note": "an address book of 19 cards, one short of the mass-absence guard's 20, answered by a round whose one page lists nothing, as a server answering an expired session with an empty collection would. A listing naming no member is an emptied collection or a failing connector alike, so the round does not close whatever the count: nothing is dropped, the page lands as one before the last with its checkpoint and no cursor, and the run reports the park; a run carrying accept_absences closes it (SYNC.md §5, an empty listing)",
   "store": {

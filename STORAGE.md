@@ -332,7 +332,7 @@ Four identifiers, kept distinct:
 - **hash**: content state and blob key.
 - **seq**: the store-global public id (§9.1).
 
-Annex A derives the **hint**; this section assigns the key. A hint is usable when it is non-empty once trimmed of whitespace; content stating none takes the kind's fallback in its place (`alt:` for a message, `hash:` for a DAV resource). The hint or the fallback, escaped as below, is the key `k` a writer assigns from.
+Annex A derives the **hint**; this section assigns the key. A hint is usable when it is not empty once trimmed of the space (U+0020) and the tab (U+0009), no other character counting as whitespace here; content stating none, or one that is not usable (an empty `UID`, one of spaces alone), takes the kind's fallback in its place (`alt:` for a message, `hash:` for a DAV resource). A usable hint is the key verbatim, the trim judging it and never changing it. The hint or the fallback, escaped as below, is the key `k` a writer assigns from.
 
 **Reserved prefixes.** `alt:`, `hash:`, `dup:`, `part:` and `file:` begin the keys a writer derives (below, Annex A.7), and `esc:` the escape. A hint beginning with any of the six, compared byte for byte, MUST be escaped before the table below: the key is `esc:` followed by the hint (`esc:hash:0123`).
 
@@ -345,6 +345,16 @@ The escaped key is the item's link id like any other, minted over as any other (
 **Assigning the key.** A writer naming a member a source lists or fetches (SYNC.md §6), or staging a create (SYNC.md §7), SHALL take its `link_id` from the first row of this table that matches what holds `k` in the collection. A member is minted over its handle, a create over the provisional handle it derives (§2). A handle the source already binds is no member to name: its key was resolved once (SYNC.md §6), and a `hash:` key changing under it retires its binding (§10).
 
 **Agreeing.** A row holding a message **agrees** with the member, the `Add` or the create being keyed when their summaries agree on `subject`, `date` and `sender` (Annex A.1), compared byte for byte, `NULL` matching `NULL`, and, for a retained row, on `size` too where both state one: no source holds a retained message any more, and reviving it makes its body the member's unread, as linking does (SYNC.md §6). A row of another kind agrees with anything. A message that does not agree is another one reusing the `Message-ID`, and is never joined, landed nor revived: one body would stand for two messages.
+
+The three are compared as they stand in the two summaries, whatever read them. Annex A.1 derives each from the raw field, and two derivations of one message agree; a value a source decoded by rules of its own may differ from it, so a connector reads the three raw wherever its source serves them (Annex A.1; SYNC.md §4), and a member named from a decoded value that differs is kept apart from its own message, a missed dedup, never a wrong merge.
+
+**Across collections.** The same agreement guards a hint between the collections of an account, where the table below assigns nothing: a `Message-ID` two mailboxes hold names one message only where the two rows agree. Three rules read it, each for a message alone, a row of another kind agreeing with anything:
+
+- a body is linked from a row of another collection only when that row agrees with the placement, and on `size` too where the placement states one (`lookup_objects`, SYNC.md §6);
+- a message shares the `seq` of a row holding its key in another collection only when it agrees with that row, and draws its own otherwise (§9.1);
+- a retiring row holding no body is held elsewhere, and purged for it, only by a row that agrees with it (§11.1).
+
+The last two compare `subject`, `date` and `sender` alone, no body being adopted, so a `size` the row or the message leaves `NULL`, or states as an estimate, plays no part. A row holding no summary agrees with no message. A message disagreeing with the row another collection holds keeps the bare key in its own collection, where the key is free, fetches its own body and shows as an item of its own.
 
 | What holds `k` | A member a source names | `Add` | `Copy`, `Move` |
 | --- | --- | --- | --- |
@@ -373,11 +383,13 @@ All four are store-wide, accounts included (§9.2). An identity or a body in mor
 
 ### 9.1 The public id (`seq`)
 
-`items.seq` is a small integer a consumer shows and accepts wherever it would take a link id. One `link_id` keeps one `seq` in every collection and account of one kind it is filed in, drawn from `store_meta.next_seq` (`seq_for_link_any`, else `bump_next_seq`). It is assigned once, only increases, and is never reused. A consumer reads and edits by `(collection, seq)`, which is unique.
+`items.seq` is a small integer a consumer shows and accepts wherever it would take a link id. One `link_id` keeps one `seq` in every collection and account of one kind it is filed in, a message's only among the rows that agree with it (§9), drawn from `store_meta.next_seq` (`seq_for_link_any`, else `bump_next_seq`). It is assigned once, only increases, and is never reused. A consumer reads and edits by `(collection, seq)`, which is unique.
 
-The kind is part of the identity, as for a reference (§14.2): a message whose `Message-ID` spells an event's `UID` is another item, and draws its own `seq`. `seq_for_link_any(collection, link_id)` answers the `seq` of a row holding the link id in a collection of the kind of `collection`, whatever its state, so a retained row's `seq` is shared too.
+The kind is part of the identity, as for a reference (§14.2): a message whose `Message-ID` spells an event's `UID` is another item, and draws its own `seq`. `seq_for_link_any(collection, link_id, subject, date, sender)` answers the `seq` of a row holding the link id in a collection of the kind of `collection`, whatever its state, so a retained row's `seq` is shared too.
 
-A minted key, an `alt:` key and a `hash:` key each draw their own `seq`: a derived key restates nothing the content carries. The item holding the bare hint keeps the shared one, so one message in two mailboxes shows once and two resources one collection holds show twice.
+For a message it answers only a row agreeing with the `subject`, `date` and `sender` of the summary being written, `NULL` matching `NULL`, the lowest `seq` when rows that agree hold several: a message reusing a `Message-ID` another mailbox holds is another message there too, and one hit apart in a merged view. A row holding no summary agrees with none. The three are read for mail alone and bound `NULL` for another kind. A `seq` is drawn when the item is named and never moves, so a row whose summary is restated later keeps the one it drew.
+
+A minted key, an `alt:` key and a `hash:` key each draw their own `seq`: a derived key restates nothing the content carries, and `seq_for_link_any` is run for none. The item holding the bare hint keeps the shared one, so one message in two mailboxes shows once and two resources one collection holds show twice.
 
 A file's `part:` or `file:` key (Annex A.7) is a name the store gives, not a guess at one, and shares its `seq` as a hint does, so a file in two folders shows once. A `part:` key is only ever built over a message's identity, never over a derived key (§14.3).
 
@@ -454,7 +466,7 @@ The unique index on `(collection, source, handle)` refuses a write that does not
 
 When an item's last binding vanishes the store MUST retain the row rather than delete it. Only an explicit purge removes it, or the owner's manual eviction of what lies below a date (§11.3), so a remote expunge never destroys the local copy.
 
-The one exception is an identity another collection of the same account holds live with the same body: the item moved, or was filed twice, and nothing is lost by purging the row in the same transaction, the holder pinning the body. A holder carrying another body, or none, is not that case and the row is retained.
+The one exception is an identity another collection of the same account holds live with the same body: the item moved, or was filed twice, and nothing is lost by purging the row in the same transaction, the holder pinning the body. A holder carrying another body, or none, is not that case and the row is retained. A retiring row holding no body loses none, and is purged for any live holder, a message only for a holder that agrees with it (§9): another message reusing its `Message-ID` in another mailbox holds nothing of it, and the row is retained.
 
 Retention is the terminal state of `deleted`: a retained row carries `deleted = 1`, no bindings, and a non-`NULL` `retained_at`, which the schema holds. It is unconditional; how long to keep and when to sweep is the owner's schedule.
 
@@ -471,7 +483,7 @@ It has no binding, so no source is offered it. The trash view lists it, and a pu
 ### 11.1 Requirements
 
 - **Retire, do not delete** (`retain_item`): a writer MUST stamp `retained_at` and `retained_by` and keep `object_hash`, so the body stays pinned.
-- **A held identity is not kept twice**: when another collection of the same account holds the link id live with the retiring body, or the retiring row has none (`held_elsewhere`, bound to the retiring `object_hash`), `retain_item` is followed by `purge_item` on the seq `retained_item` gives and `release_pins`, in the same transaction, and the purge counts (§4.5).
+- **A held identity is not kept twice**: when another collection of the same account holds the link id live with the retiring body, or the retiring row has none and, for a message, the holder agrees with it on `subject`, `date` and `sender` (§9; `held_elsewhere`, bound to the retiring `object_hash`, which reads both rows' summaries itself), `retain_item` is followed by `purge_item` on the seq `retained_item` gives and `release_pins`, in the same transaction, and the purge counts (§4.5).
 - **Stamped by SQLite**: `retained_at` is written by the statement, in the shape the schema holds (§13); the cutoff of a purge is the caller's parameter.
 - **Hidden from the sync seam**: `load_items` MUST filter on `retained_at IS NULL`, or the next run re-uploads every retained row.
 - **Hidden from the reads**: a deleted row MUST be read as a tombstone under §14.1's live-only rule; `list_retained_page` and `count_retained` are the trash view and list every deleted row, `retained_at` saying whether a source still binds it.
@@ -606,7 +618,7 @@ A store is opened as one source. `load` reads the shared items and that source's
   The **selection** names what the caller needs and is a floor: `All` reads the collection; `Links` reads `load_items_by_link` and `load_bindings_by_link` for the link ids named, and answers who holds each key, never offering a create for an item the source lacks; `Handles` resolves each handle with `link_for_handle` and reads the same two, a handle nothing binds being a member to name. What owes a push is named by two statements, so a delta reads it without `All` (SYNC.md §10): `list_owing_bindings` the handles of this source's bindings whose placement may not be `Clean` (a binding or its item conflicted, the item deleted, no base, a known flag set differing from a known base, an object other than the base's), `list_lacking_items` the link ids of the live items holding a body this source binds not. Each names a superset, the projection deciding every status from the rows it loads. A store MAY return more than the selection names and MUST NOT return less.
 
   A `Created` placement's origin is `origin_for_link`, never a binding under a provisional handle, and a `Tombstone` placement's destination `destination_for_link`, a pending create or a delivered one (SYNC.md §3), each a seek on `items_by_link` for the key and for the key a minted form names, then on the binding's own key, so a projection reads them per placement, never every binding of the store. `list_superseded_pending` names the tombstones whose remove is held (§15.3, SYNC.md §5). `list_superseded_bindings` names, for each pending create superseding an item of its own identity, the member it may be moved from: the superseded item's binding of this source in its collection (SYNC.md §4).
-- **`lookup_objects(account, links)`**: the link ids in the `links` slot (§4.4), `account` the caller's own (§9.2): across collections a link id is one body downloaded once, across accounts it is not a fact. It answers the body's hash and size, the size being the witness a link is checked against (SYNC.md §6). A writer-derived key never matches (§9).
+- **`lookup_objects(account, links)`**: the link ids in the `links` slot (§4.4), `account` the caller's own (§9.2): across collections a link id is one body downloaded once where the rows agree (§9), across accounts it is not a fact. It answers, for each row of the account holding a body under one of the keys, the body's hash and size and the `subject`, `date` and `sender` the row's mail summary states, the three `NULL` for a row holding none: the witnesses a link is checked against (SYNC.md §6), one row per holder so the caller adopts from one that agrees. A writer-derived key never matches (§9).
 - **`held_mail_summary(account, link_id, hash)`**: the mark and the invitation a row of `account` holding the body `hash` under `link_id` states, a row stating its mark first, for a placement linked to it (Annex A.1). A writer-derived key never matches (§9).
 - **`write(ops)`** applies one batch (below) as one transaction:
   1. A `StoreObject` carries the index row and optionally the bytes. With bytes, write the blob first (§5), then `store_object`; without, the body is already at its path, streamed there by the consumer through §5's write. The blob write MAY precede `BEGIN` and SHOULD for a body of any size; the writer's lock (§8), not the file's age, keeps a collector out of the window.
@@ -618,7 +630,7 @@ A store is opened as one source. `load` reads the shared items and that source's
      - read `load_items_by_link`, `load_bindings_by_link`, the kind's `load_<kind>_summaries_by_link`, `load_addresses_by_link`, and for mail and tasks `load_in_reply_to_by_link` and `load_categories_by_link`, bound to the batch's link ids, each a seek per id however large the collection; a write merging a whole collection reads `load_items`, `load_bindings`, `load_<kind>_summaries`, `load_addresses_by_collection`, `load_in_reply_to` and `load_categories` instead;
      - resolve each dropped handle, and each upserted handle likewise, with `link_for_handle`, a handle bound to another link id retiring that binding first (§10);
      - then `insert_item`, `insert_binding`, `update_item`, `update_binding`, and `delete_binding` for a binding a `Deleted` drop removes, each row write carrying its set's system flags (`marks`, `base_marks`, `0` for an unknown set) and followed by its other flags' (§4.4): `retain_flags` and `add_flags` after the item's, `retain_base_flags` and `add_base_flags` after the binding's, the `flags` slot holding those flags (empty for an unknown set), both skipped where the set holds none and the row holds none;
-     - and `delete_item_bindings` with `retain_item` for an item the result no longer holds, purged at once when `held_elsewhere` says the identity moved (§11).
+     - and `delete_item_bindings` with `retain_item` for an item the result no longer holds, purged at once when `held_elsewhere` says the identity moved (§11, §11.1).
 
      `update_binding` carries no handle: a rebind is refused (§10) except through §12's rebuild.
 
@@ -640,7 +652,7 @@ A store is opened as one source. `load` reads the shared items and that source's
 - `DeliverPlacement { collection, handle }`: the source's create under the provisional `handle` was delivered (SYNC.md §2, §4): its binding gains a base naming nothing, no flag set, revision nor body (`deliver_binding`), while it holds none. A binding holding a base, or no binding under that handle, is left as it is, the create having been landed, withdrawn or delivered since. A relocation's names its destination's collection, which the batch holds apart from its own (SYNC.md §5).
 - `StoreObject { hash, size, bytes? }`: an object row, with its bytes, or naming a body a consumer already streamed to its path through §5's write.
 - `Overrule { handle }`: the next upsert of `handle` in the batch settles its conflicts by an engine's or a connector's rule (SYNC.md §7), so each diverging body it does not adopt, the binding's `conflict_object` then the item's, is kept as a retained item (§11, SYNC.md §9). It MUST be refused when a conflict it settles holds no diverging body. With no conflict standing it keeps nothing.
-- `Settle { handle }`: the next upsert of `handle` in the batch is a person's resolution of the item's conflict (SYNC.md §7): the item takes the upsert's body, `items.conflicted` cleared and its `conflict_object` released, nothing kept. An item in no conflict ignores it.
+- `Settle { handle }`: the next upsert of `handle` in the batch is a person's resolution of the item's conflict (SYNC.md §7): the item takes the upsert's body, or keeps its own when that upsert is a tombstone's, which adopts none, `items.conflicted` cleared and its `conflict_object` released, nothing kept. An item in no conflict ignores it.
 
   Both precede the upsert they qualify, and only they tell it from a sync's upsert, which leaves an item's conflict standing and keeps what a policy discards (SYNC.md §9).
 - `SetCheckpoint { checkpoint }` and `SetCoverage { since, until }`: the source's checkpoint, and a narrower coverage it serves (§10).
@@ -809,7 +821,7 @@ The owner drains the pending actions store-wide in ascending `id` (`list_pending
 
 An action is applied and its row deleted in one transaction, which spans no network I/O. That transaction records the row's receipt (`record_receipt`): its `id`, its collection and, for an `add`, the `seq` of the item it created, read back by `seq_by_link` on the key it staged.
 
-The handle draining is not the source an action is for. An action against an existing item runs as a source binding it, an `update` stating `resolves` (§15.3) as one whose conflict it names when a binding of the item is conflicted; an `add` runs as a source syncing the collection, a binding or a checkpoint (`collection_sources`), the owner's own source where it is among them. A store-wide drain thus never binds a source to a collection it does not sync.
+The handle draining is not the source an action is for. An action against an existing item runs as a source binding it, an `update` or a `remove` stating `resolves` (§15.3) as one whose conflict it names when a binding of the item is conflicted; an `add` runs as a source syncing the collection, a binding or a checkpoint (`collection_sources`), the owner's own source where it is among them. A store-wide drain thus never binds a source to a collection it does not sync.
 
 `claim_action` runs **first** in the transaction. The pending list is read outside any transaction, so a row it names may be gone by the time its turn comes, cancelled (§15.5) or applied by another handle of the owning process. A claim that deletes nothing means the row is not this transaction's to apply.
 
@@ -821,9 +833,11 @@ A failure of the store itself (a refused rebind, a constraint, a target collecti
 
 An `add` or an `update` whose body cannot be read (its blob missing, failing to read or failing its name, §7) MUST be retried, then parked once the owner's bound on attempts is reached. It MUST NOT be applied without its body.
 
-An `update` meeting a conflict, the item's or that of the binding it runs through, MUST be parked naming the conflict unless it is a resolution naming it, and one stating `resolves` and meeting none MUST be parked too (§15.3): applying either would settle a conflict nobody decided, or one decided over another body.
+An `update` or a `remove` meeting a conflict, the item's or that of the binding it runs through, MUST be parked naming the conflict unless it is a resolution naming it, and one stating `resolves` and meeting none MUST be parked too (§15.3): applying either would settle a conflict nobody decided, or one decided over another body.
 
-**Skipping is not parking.** An owner that does not recognise an action, does not know the payload version `v` a row states for an action it knows, or does not run the source an intent names, SHALL leave the row pending and untouched (`error` `NULL`, `attempts` unbumped) and SHALL NOT block later actions on it.
+A `set-flags` stating `base` and meeting an item whose flag set is unknown MUST be parked (§15.3): there is no set to change.
+
+**Skipping is not parking.** An owner that does not recognise an action, does not know the payload version `v` a row states for an action it knows, or does not run the source an intent names, SHALL leave the row pending and untouched (`error` `NULL`, `attempts` unbumped) and SHALL NOT block later actions on it. A payload it does not know is read no further: whether its other members would be valid at a version the owner knows decides nothing, and it is never parked as malformed.
 
 A capability a declared source does not support is not a skip: the row is parked (§15.6). A drain has three outcomes per row: applied, parked, skipped.
 
@@ -831,7 +845,7 @@ A capability a declared source does not support is not a skip: the row is parked
 
 Existing items are addressed by `seq`. A payload is a JSON object, typed by the JSON Schema (2020-12) of its action and version, payloads/<action>.v<v>.schema.json, which binds. The shapes below and in Annex B.2 restate them: `n` an integer from 1, `hash` an object name (§5), `key`, `id`, `collection`, `addr` and `label` a non-empty string, `text` any string, `[…]` a flag set as distinct flags (§13), `[addr…]` a non-empty array of `addr`, `[hash…]` a non-empty array of distinct `hash`, a quoted value the member's one value and quoted values joined by `|` its choices, `?` an optional member, and `( a | b )` exactly one of two members.
 
-**A payload is valid whole or malformed.** One missing a member its schema requires, stating one of another type, or holding a member its version does not define is malformed: a producer MUST NOT enqueue it, and an owner knowing its action and version MUST park it, an intent's performer likewise, never applying it in part nor ignoring a member. A payload changing shape, a member added included, takes the next `v`, which an owner not knowing it skips (§15.2). While this part is a draft, a payload's shape at its `v` is edited in place, as version 1 of the schema is (§4.2), a draft's store opening under that draft alone. vectors/payloads.json holds valid and malformed payloads of every action. At `v: 1`:
+**A payload is valid whole, malformed or unknown.** A payload whose action and `v` an implementation knows is typed by their schema: one missing a member its schema requires, stating one of another type, or holding a member its version does not define is malformed: a producer MUST NOT enqueue it, and an owner knowing its action and version MUST park it, an intent's performer likewise, never applying it in part nor ignoring a member. One whose action it does not know, an application's own (`x-`) included, or whose `v` it does not know for an action it knows, is **unknown** to it, neither valid nor malformed: an owner skips it (§15.2) and a reader lists it (§15.4). A payload changing shape, a member added included, takes the next `v`, which an owner not knowing it skips. While this part is a draft, a payload's shape at its `v` is edited in place, as version 1 of the schema is (§4.2), a draft's store opening under that draft alone. vectors/payloads.json holds valid and malformed payloads of every action, and unknown ones. At `v: 1`:
 
 - **`add`**: `{ "v": 1, "link_id": key?, "flags": […], "object": hash, "supersedes": { "collection": collection, "seq": n }? }`. Creates an item staged as a local creation to push under its provisional handle (§2); the owner derives its summary and addresses from `object` (Annex A).
 
@@ -844,8 +858,18 @@ Existing items are addressed by `seq`. A payload is a JSON object, typed by the 
   The tombstone's remove is **held** while the item the add created is live and a pending create of a source syncing its collection (`list_superseded_pending`): no source pushes the delete (SYNC.md §5), so a create its server refuses leaves the superseded item where it stood on every server. Once each such create is accepted, or the created item is withdrawn or gone, the delete is pushed as any other.
 
   A superseding item keeping the superseded item's identity (a task filed elsewhere with its `UID` kept) names the binding it may be moved from (`list_superseded_bindings`). A connector moving members server-side delivers the create by moving that member, so a server keeping one `UID` per account never holds the identity twice, and the delete pushed after it finds the member gone.
-- **`set-flags`**: `{ "v": 1, "seq": n, "flags": […] }`. Replaces the set, absolutely.
-- **`remove`**: `{ "v": 1, "seq": n }`. Tombstones the shared item, every source that binds it pushing the delete (SYNC.md §9); already absent is success, and bound by nobody it is retained at once (below).
+- **`set-flags`**: `{ "v": 1, "seq": n, "flags": […], "base": […]? }`. Sets the item's flags.
+
+  Without `base` it replaces the set, absolutely, by `flags`. A producer writing a set it never read (a set stated whole by the user, over an item whose flags are unknown) states none.
+
+  `base` is the set the producer read and changed into `flags`. The owner then applies the change alone, to the set the item holds when the row is applied: the result is that set, plus each flag `flags` holds and `base` lacks, less each flag `base` holds and `flags` lacks, every other flag left as it stands. A flag a sync landed on the item, or removed from it, after the producer read so survives the row, and the push derived from it (SYNC.md §4) names only what the producer changed. A producer changing a set it read SHOULD state it.
+
+  A row stating `base` and meeting an item whose flag set is unknown MUST be parked: there is no set to add to nor remove from, and replacing would write the unread flags as removed.
+- **`remove`**: `{ "v": 1, "seq": n, "if_match": hash?, "resolves": [hash…]? }`. Tombstones the shared item, every source that binds it pushing the delete (SYNC.md §9); already absent is success, and bound by nobody it is retained at once (below).
+
+  `if_match` and `resolves` read as an `update`'s do (below), on the same rules. `if_match` is the body the producer read and deletes: when the item's current body is another, the owner MUST park the row, naming both, the delete having been decided over a body since replaced. A producer deleting a mutable item it read SHOULD state it; a row without it removes whatever the item holds.
+
+  `resolves` makes the remove a person's resolution of a conflict by deleting, naming the `conflict_object` of each conflict the producer showed. A remove meeting a conflict, the item's or that of the binding it runs through, MUST be parked, naming the conflict, unless `resolves` names the `conflict_object` of each conflict it meets; one stating `resolves` and meeting none MUST be parked. So a remove queued before a conflict arose, or without it in view, never deletes a diverging body nobody saw, and one whose diverging body nobody has read is named by no resolution. A producer MUST NOT state `resolves` on any other remove.
 - **`move`**, **`copy`**: `{ "v": 1, "seq": n, "to": collection }`, a `copy` being a `move` without the removal. The producer writes `to` as `target_collection` too, as it writes an `add`'s `supersedes.collection`, and the owner reads the target from the column, which a rename follows (§14). A target the store does not declare, or of another kind, parks the action rather than ensuring a collection nothing configured.
 - **`update`**: `{ "v": 1, "seq": n, "object": hash, "if_match": hash?, "resolves": [hash…]? }`. Repoints a mutable item's body; the owner re-derives its summary and addresses.
 
@@ -860,8 +884,8 @@ Existing items are addressed by `seq`. A payload is a JSON object, typed by the 
 
 **An item no source binds** is the store's alone to settle: an owner MUST apply or park an action naming it, never skip it, since nothing would ever bind it for the row's sake.
 
-- A `remove` retains it (`retain_item`, §11), nothing having a delete to push.
-- In a collection no source syncs (`collection_sources` answering none, as for a local collection, §14.3), a `set-flags` and an `update` apply to the item directly: an `update` on the terms above, `if_match` and `resolves` included, its summary and addresses derived again, and a body deriving none, or deriving another key, parking the row.
+- A `remove` retains it (`retain_item`, §11), nothing having a delete to push, on the terms above, `if_match` and `resolves` included.
+- In a collection no source syncs (`collection_sources` answering none, as for a local collection, §14.3), a `set-flags` and an `update` apply to the item directly: a `set-flags` on the terms above, its `base` included, an `update` on the terms above, `if_match` and `resolves` included, its summary and addresses derived again, and a body deriving none, or deriving another key, parking the row.
 - There a `move` or a `copy` parks, there being no binding to carry; a producer filing such an item elsewhere writes it there with an `add` superseding it (above).
 - In a collection a source syncs, any other action parks naming the item: it awaits its first push as every syncing source's `Created` placement (SYNC.md §3), and an action on an existing item runs as a source binding it (§15.2), which none does. The producer queues it again once a push has bound the item.
 
@@ -869,7 +893,9 @@ The intents of Annex B.2 are actions of their own, versioned the same way. An ap
 
 ### 15.4 Reading the queue
 
-A reader MAY overlay a collection's pending actions (`load_pending_actions`) for read-your-writes.
+A reader MAY overlay a collection's pending actions (`load_pending_actions`) for read-your-writes. An overlay SHOULD fold a row as the owner would apply it to the rows the reader sees: a `set-flags` stating `base` as the change it is, over the set the item shows; and nothing for a row the owner would park, a `set-flags` stating `base` over an unknown set, an `update` or a `remove` whose `if_match` names another body than the item shows, or one meeting a conflict its `resolves` does not name.
+
+A row whose action, or whose `v`, the reader does not know (§15.3) is folded into nothing and still listed as pending, with its action and its `created_at`: it is somebody's write the reader cannot show, never one it may hide.
 
 A producer follows one row by the `id` its enqueue answered, under the store id and incarnation it recorded with it (§4.5). `load_action` reads the row while it is pending (`error` `NULL`) or parked. Once it is gone, `load_receipt` says it was applied and, for an `add`, which item it created, so a producer learns the `seq` of what it staged without matching the body. A receipt outlives the collection its row was queued on: once that collection is deleted, by the `collection-delete` the receipt answers or otherwise, its `collection` reads `NULL`, the row applied all the same.
 
@@ -939,8 +965,8 @@ Otherwise the producer MUST NOT choose: it refuses, listing the candidates, and 
 A schema mismatch fails a query; a body named differently, a summary derived differently or a key sorted differently fails nowhere. vectors/ is therefore part of the format:
 
 - **vectors/objects.json**: bodies to their BLAKE3 digests, names and paths (§5), and the RFC 4648 §10 base32 vectors.
-- **vectors/summaries.json** and **vectors/fixtures/**: bodies to the `link_id`, summary row, address rows and `sort_key` Annex A produces, the attachment mark read without the body, a message's attachments as its stand-ins name them (Annex A.7), the hedged cases, the encodings that split earlier writers, the header parses and the line ends of Annex A.1 and the zone resolution of A.3, and the `alt:`, `hash:`, escaped and minted keys of §9.
-- **vectors/payloads.json**: queue payloads of every action, valid and malformed, against the schemas under payloads/ (§15.3).
+- **vectors/summaries.json** and **vectors/fixtures/**: bodies to the `link_id`, summary row, address rows and `sort_key` Annex A produces, the attachment mark read without the body, a message's attachments as its stand-ins name them (Annex A.7), the hedged cases, the encodings that split earlier writers, the charset tables an encoded word is decoded through, the header parses and the line ends of Annex A.1, a field stated twice, the zone resolution of A.3, a resource of overrides alone, the fold and the trim of A.2, and the `alt:`, `hash:`, escaped and minted keys of §9, the fallback of an unusable `UID` among them.
+- **vectors/payloads.json**: queue payloads of every action, each with its outcome, valid or malformed against the schemas under payloads/, or unknown where its action or its `v` names no schema, a known action at `v` 2, an action this part does not define and an application's own among them (§15.2, §15.3).
 - vectors/sync/ and vectors/search/ belong to the other parts.
 
 These are the **model vectors**, which §17 binds by profile: objects.json every implementation, since two stores naming bodies differently cannot share a blob directory; payloads.json every producer and owner; summaries.json an owner, for each summary kind it writes, the minted, `alt:` and `hash:` keys they give included. A summary vector states a row as the model holds it, its lists (`in_reply_to`, `categories`) as arrays though the store keeps them as rows, and a consumer MUST compare parsed structures, never JSON text. The values are authored from the prose, never from an implementation.
@@ -986,6 +1012,8 @@ Revision 3 fixed how a message's header and the lines of a message are read (A.1
 
 A derivation is made from the body, or from a server-side summary (an IMAP `ENVELOPE`, a Graph `$select`, Gmail's metadata, a JMAP `Email/get`) where the kind has a cheap tier. A value such a summary serves raw, as the content carries it, is derived by this annex's rules and MUST then agree with the body's derivation byte for byte, the attachment mark, the size and the invitation aside. A value a server decodes or parses by rules of its own is no derivation of this annex: it stands until the body is read, which replaces it (A.1).
 
+A message's `subject`, `date` and `sender` are the exception a store cannot wait for the body on: §9 compares them, byte for byte, before any body is read, to tell a message from another reusing its `Message-ID`. They are therefore read raw wherever the source serves them raw (A.1 names each protocol's read, SYNC.md §4 binds a connector to it), and a member named from a decoded value where it serves none may be kept apart from its own message, a missed dedup (§9).
+
 ### A.0 Common rules
 
 - **Decoded**: RFC 2047 words and RFC 2231 parameters decoded, vCard and iCalendar text unescaped (RFC 6350 §3.4, RFC 5545 §3.3.11), lines unfolded; a message's header fields as A.1 reads them. A property splits on the first unquoted colon (RFC 6350 §3.3).
@@ -1006,7 +1034,7 @@ A derivation is made from the body, or from a server-side summary (an IMAP `ENVE
 | `date` | `Date` as an instant, read as below; `NULL` when absent or unparseable. From a server-side summary, the `Date` field the server states (IMAP `ENVELOPE`'s, Graph's `sentDateTime`, JMAP's `sentAt`), never a received date |
 | `size` | with the body, its octets; without it, the size the source states (IMAP's `RFC822.SIZE`, Graph's `PidTagMessageSize`, Gmail's `sizeEstimate`, JMAP's `size`), which may be an estimate, `NULL` when it states none |
 | `attachment` | with the body, `1` when a part the walk reads makes the attachment mark (below), `0` when none does; without it, the source's own flag where it states one (Graph's `hasAttachments`, JMAP's `hasAttachment`), else `1` when the top-level `Content-Type` is `multipart/mixed` and `0` otherwise |
-| `invitation` | with the body, the first `UID` of the first `text/calendar` part in document order (an iMIP message, RFC 6047), its transfer encoding undone and its lines unfolded, the value verbatim; `NULL` when no part is one, and without the body |
+| `invitation` | with the body, the first `UID` of the first `text/calendar` part in document order (an iMIP message, RFC 6047), its transfer encoding undone and its lines unfolded, the value verbatim; `NULL` when no part is one, when that `UID`'s line is longer than 65,536 octets once unfolded, which no writer reads, and without the body |
 
 The size and the mark read without the body are replaced by the body's own once it is read, and a writer holding the body MUST NOT write either read without it over it. A row whose body was released (§11.4) holds it no more, and the next meta restates both.
 
@@ -1028,13 +1056,13 @@ The mark misses both ways, each corrected when the body is read: a `multipart/mi
 
 **Reading the header.** The identity and the `alt:` key are built from these parses, so every writer MUST read a header as follows.
 
-- The header block ends at the first empty line, its lines ending as **Lines** says (above). A field is unfolded by removing every line break followed by a space or a tab, the whitespace kept (RFC 5322 §2.2.3). Its name is matched without regard to ASCII case, and a field present twice is read from its first occurrence. Its value, the bytes after the colon, is read as UTF-8 (RFC 6532), replaced as A.0 says.
+- The header block ends at the first empty line, its lines ending as **Lines** says (above). A field is unfolded by removing every line break followed by a space or a tab, the whitespace kept (RFC 5322 §2.2.3). An unfolded line splits at its first colon into a name and a value: the name is the bytes before it, trimmed of trailing whitespace, which RFC 5322 §4.5's obsolete syntax allows between a name and its colon (`Message-ID :` is `Message-ID`), and a line holding no colon is no field. A name is matched without regard to ASCII case, and a field present twice is read from its first occurrence, in document order, whichever column reads it. Its value, the bytes after the colon, is read as UTF-8 (RFC 6532), replaced as A.0 says.
 - A **comment** is text in parentheses, nested, in which a backslash quotes the next character; a **quoted-string** is text in double quotes, holding no comment, in which a backslash quotes the next character (RFC 5322 §3.2). Where a rule below removes comments, each reads as one space.
 - Whitespace is the space and the tab.
 
 **An unstructured value**, `Subject` and a display name, is decoded in three steps:
 
-1. Every RFC 2047 encoded word, wherever it stands, is replaced by its text: `=?`, a charset (an RFC 2047 token, a `*` and an RFC 2231 language dropped from it), `?`, `B` or `Q` in either case, `?`, one or more printable ASCII characters other than `?`, and `?=`. `B` is base64 (RFC 4648 §4), its trailing `=` optional; `Q` is RFC 2047 §4.2's, `_` a space and `=` with two hexadecimal digits of either case one octet. The octets are decoded in the charset when its name, matched without regard to ASCII case, is a label of the WHATWG Encoding Standard naming an encoding other than its replacement encoding, by that encoding's decoder, with no byte order mark sniffed. A word whose charset is no such label, a `B` word holding a character outside the alphabet, an `=` anywhere but in a trailing padding of at most two, or a length, padding aside, leaving one character beyond whole groups of four, and a `Q` word holding an `=` not followed by two hexadecimal digits are malformed, and each stays as its literal text.
+1. Every RFC 2047 encoded word, wherever it stands, is replaced by its text: `=?`, a charset (an RFC 2047 token, a `*` and an RFC 2231 language dropped from it), `?`, `B` or `Q` in either case, `?`, one or more printable ASCII characters other than `?`, and `?=`. `B` is base64 (RFC 4648 §4), its trailing `=` optional; `Q` is RFC 2047 §4.2's, `_` a space and `=` with two hexadecimal digits of either case one octet. The octets are decoded in the charset when its name, matched without regard to ASCII case, is a label of the WHATWG Encoding Standard naming an encoding other than its replacement encoding, by that encoding's decoder, with no byte order mark sniffed: `iso-8859-1` and `us-ascii` so name windows-1252, where the octet `80` is the euro sign, and a legacy charset is read through its index (ISO-8859-2, KOI8-R, ISO-2022-JP, GBK and the rest), which a writer therefore carries. The labels, the indexes and the decoders are those of the Encoding Standard as last updated on 19 October 2026, its commit snapshot be17ac5c49881336538acfc7b40dba3c8009144b; a writer on a later one reads every label and octet sequence that snapshot defines as it does. A word whose charset is no such label, a `B` word holding a character outside the alphabet, an `=` anywhere but in a trailing padding of at most two, or a length, padding aside, leaving one character beyond whole groups of four, and a `Q` word holding an `=` not followed by two hexadecimal digits are malformed, and each stays as its literal text.
 2. Whitespace standing between two decoded words, and nothing else, is removed (RFC 2047 §6.2); all other whitespace stays.
 3. Whitespace is trimmed from both ends; whitespace inside, a tab included, stays as it is.
 
@@ -1051,7 +1079,11 @@ The mark misses both ways, each corrected when the body is read: a `multipart/mi
 - The day exists in its month and year (29 February in a Gregorian leap year alone), the hour is 00 to 23, the minute 00 to 59 and the second 00 to 60, a leap second's 60 read as 59. Anything out of range, `30 Feb` and `24:00` among it, is unparseable, never carried into the next day or month.
 - The instant is the stated time less the zone's offset, written as A.0 writes one; one past the year 9999 is unparseable.
 
-**A server-side summary** agrees with the body (above) where it serves the field raw: a header field fetched as such (IMAP's `BODY.PEEK[HEADER.FIELDS (…)]`, Gmail's metadata headers, JMAP's `header:…:asRaw`, Graph's `internetMessageHeaders`), and the date, subject and message-id strings of an IMAP `ENVELOPE`, each read by the rules above. A value the server decodes or parses itself (JMAP's `subject`, `sentAt` and `from`, Graph's `subject`, `sentDateTime` and `from`, an `ENVELOPE` address's name) need not agree. A writer holding the body MUST NOT write such a value over the body's, as for the size and the mark. A link id derived from one is kept once resolved (SYNC.md §6) and may differ from the key a raw reading gives, a missed dedup (§9), so a writer SHOULD read the fields of the hint raw.
+**A server-side summary** agrees with the body (above) where it serves the field raw: a header field fetched as such (IMAP's `BODY.PEEK[HEADER.FIELDS (…)]`, Gmail's metadata headers, JMAP's `header:…:asRaw:all`, Graph's `internetMessageHeaders`), and the date, subject and message-id strings of an IMAP `ENVELOPE`, each read by the rules above. A source listing every occurrence of a field is read from the first, as the body is: JMAP's `header:Subject:asRaw:all`, first element, never `header:Subject:asRaw`, which answers the last occurrence; the first entry of that name in Gmail's metadata headers and in Graph's `internetMessageHeaders`. A value the server decodes or parses itself (JMAP's `subject`, `sentAt` and `from`, Graph's `subject`, `sentDateTime` and `from`, an `ENVELOPE` address's name) need not agree. A writer holding the body MUST NOT write such a value over the body's, as for the size and the mark. A link id derived from one is kept once resolved (SYNC.md §6) and may differ from the key a raw reading gives, a missed dedup (§9), so a writer SHOULD read the fields of the hint raw.
+
+**The fields §9 compares are read raw.** `subject`, `date` and `sender` decide whether a member lands a create, joins an item, revives a row, links a body, shares a `seq` (§9, SYNC.md §6), so they are derived by the rules above from the raw `Subject`, `Date` and `From` wherever the source serves them (SYNC.md §4): on IMAP the `ENVELOPE`'s subject and date strings and the `From` field fetched as a header field, an `ENVELOPE` address being the server's parse; on Gmail the metadata headers; on JMAP `header:Subject:asRaw:all`, `header:Date:asRaw:all` and `header:From:asRaw:all`, first element; on Graph `internetMessageHeaders`. A source serves nothing raw where it states the field decoded alone: Graph serves `internetMessageHeaders` for a message it received and for no other (a draft, a message it sent), and such a member is named from `subject`, `sentDateTime` and `from`, values of the server's own making. A summary so named agrees with a row another reading wrote only where the two happen to coincide: elsewhere the member is kept apart from its own message, a missed dedup (§9), until its body is read, which restates its row and never its key.
+
+A raw field carried inside JSON (JMAP, Gmail, Graph) holds text, never octets: the agreement above is owed for a field whose bytes are well-formed UTF-8, and one holding other octets reads as its server rendered them, a value of the server's own making.
 
 ### A.2 `text/vcard`
 
@@ -1064,7 +1096,7 @@ The mark misses both ways, each corrected when the body is read: a `multipart/mi
 
 **Hint**: `uid`, else `hash:` followed by the sixteen lowercase hexadecimal digits of the FNV-1a 64 digest of the bytes. A card resolves at `Full` only, carries no flags (a known-empty set), and is mutable: its revision moves while its key does not. **Addresses**: every `EMAIL` under `email`, canonical, with no name. **`sort_key`**:
 
-`fn` lowercased by the default full lowercase mapping of Unicode 15.0.0 (UnicodeData.txt and the unconditional mappings of SpecialCasing.txt; Rust's `str::to_lowercase`, Java's `toLowerCase(Locale.ROOT)`), locale-independent, then trimmed; read ascending, a nameless card first.
+`fn` lowercased by the default full lowercase mapping of Unicode 15.0.0 (UnicodeData.txt and the unconditional mappings of SpecialCasing.txt; Rust's `str::to_lowercase`, Java's `toLowerCase(Locale.ROOT)`), locale-independent, then trimmed; read ascending, a nameless card first. Of SpecialCasing.txt's conditional mappings Final_Sigma applies and no other, the language-sensitive ones included: a capital sigma ending a word (U+03A3, in the context Unicode §3.13 defines) maps to the final form U+03C2, as both runtimes map it, and to U+03C3 elsewhere. The trim removes, from both ends, the characters of the White_Space property of Unicode 15.0.0 (U+0009 to U+000D, U+0020, U+0085, U+00A0, U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F and U+3000), a no-break space among them, and nothing inside.
 
 A writer on a later Unicode version maps every character 15.0.0 assigns as 15.0.0 does, the case pairs being stable across versions. A character assigned later, which no vector holds, MAY map as the writer's version says, a missed seek or a mis-sort being the cost.
 
@@ -1076,13 +1108,15 @@ A writer on a later Unicode version maps every character 15.0.0 assigns as 15.0.
 
 | Column | Derivation |
 | --- | --- |
-| `uid` | `UID` verbatim |
+| `uid` | `UID` verbatim, of the component the row is read from (below) |
 | `summary` | `SUMMARY` of the master (no `RECURRENCE-ID`), decoded; `''` when absent |
 | `location` | `LOCATION`, decoded |
 | `dtstart`, `dtstart_tzid`, `dtstart_value` | `DTSTART` verbatim, its `TZID`, and `date-time` or `date` |
 | `dtend` | `DTEND` verbatim; a `DURATION` is not resolved |
 | `recurring` | `1` with an `RRULE` or `RDATE` on the master, `0` when looked and none, `NULL` when not looked |
 | `until` | the `RRULE`'s `UNTIL` verbatim |
+
+**The component the row is read from** is the master: the first component of the resource's type carrying no `RECURRENCE-ID`, in document order. A resource holding overrides and no master, as an attendee invited to one instance of a series stores it, is read from the first component carrying a `RECURRENCE-ID`, in document order, which stands for the master in every rule of this section and of A.4 and A.5: it states the `uid`, the summary, the location, the times, the addresses and the `sort_key`. `recurring` and `until` read it too, so an override stating no `RRULE` and no `RDATE`, as RFC 5545 has it state none, gives `recurring` `0` and `until` `NULL`: the row says what the resource holds, one instance, and the series is the search part's to place (SEARCH.md §7).
 
 Times are verbatim with their parameters, never resolved: a reader with a time zone database re-derives an instant, one without displays the wall time. The one resolved projection is the `sort_key`. **Hint**: `uid`, else `hash:` on A.2's terms; mutable, no flags. **Addresses**: `ORGANIZER` and every `ATTENDEE` under their roles, `mailto:` stripped, canonical, the `CN` parameter as the name.
 
@@ -1132,7 +1166,7 @@ A file's bytes say nothing about it, so its summary is what its source or its wr
 
 | Column | Derivation |
 | --- | --- |
-| `name` | the file's name in this collection, as its folder or source states it, or an attachment's `filename` (`Content-Disposition`, else the `Content-Type` `name`, RFC 2231 and RFC 2047 decoded); `''` when none |
+| `name` | the file's name in this collection, as its folder or source states it, or an attachment's `filename` (`Content-Disposition`, else the `Content-Type` `name`, RFC 2231 and RFC 2047 decoded, an RFC 2231 value whose charset is no label A.1 decodes read as UTF-8, replaced as A.0 says); `''` when none |
 | `media_type` | the type and subtype as stated (an attachment's `Content-Type`), lowercased, parameters dropped; `NULL` when unstated |
 | `size` | with the body, its octets; without it, as stated: an attachment's decoded octets (its body with its `Content-Transfer-Encoding` undone, the line break before the next delimiter belonging to the delimiter, RFC 2046 §5.1.1; `NULL` for a `multipart` part), or the source's figure |
 | `part` | for an attachment, its section in the message's body (RFC 3501 §6.4.5, `1`, `2.1`), counted on the body as stored; `NULL` otherwise |
@@ -1192,7 +1226,7 @@ The table names every capability this part defines. Each forms the **base set** 
 
 What a source pushes when the owner applies a §15.3 action, read by the owner's backstop and the producer's gate (§15.6) against the sources concerned.
 
-A **flag change** is a flag a `set-flags` adds or removes against the item's current set, or one an `add` or `copy` carries into the collection, whose set starts empty there: a `set-flags` restating a flag needs nothing for it, a draft added with `\Draft` needs `mail.flags.draft`.
+A **flag change** is a flag a `set-flags` adds or removes against the item's current set, or one an `add` or `copy` carries into the collection, whose set starts empty there: a `set-flags` restating a flag needs nothing for it, a draft added with `\Draft` needs `mail.flags.draft`. A `set-flags` stating `base` is read the same way, against the current set and never against `base`: what it changes is what the set §15.3 has it leave holds and the current set lacks, or the reverse, so a flag it adds that a sync landed meanwhile needs nothing.
 
 A flag names its capability compared without regard to ASCII case, as IMAP compares flags and keywords (RFC 9051 §2.3.2), so `$important` is `$Important`. A change on `$Important` or `$Junk` needs `mail.flags.important` or `mail.flags.junk` from a source stating a row for it, `none` included, and `mail.flags.keywords` from one stating none: a source carrying these two as fields of its own while taking no arbitrary keyword (Gmail's `IMPORTANT` and `SPAM` labels, Graph's `importance`) supports them without `mail.flags.keywords`, and a declaration written before them reads as it did.
 

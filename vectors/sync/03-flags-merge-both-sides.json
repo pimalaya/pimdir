@@ -1,5 +1,5 @@
 {
-  "v": 4,
+  "v": 5,
   "label": "flags changed on both sides merge element-wise and never conflict",
   "note": "local added \\Flagged, remote added $label1; both survive, the push adds what the server lacks of the union, \\Flagged, and the base is the union (SYNC.md §4, §5)",
   "store": {

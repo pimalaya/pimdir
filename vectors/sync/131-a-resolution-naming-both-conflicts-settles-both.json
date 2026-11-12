@@ -1,5 +1,5 @@
 {
-  "v": 4,
+  "v": 5,
   "label": "an edit through a binding in conflict, over an item in conflict, resolving both settles both in one write",
   "note": "the store of 129, whose resolves now names c2 and c4: the person decided over both diverging bodies. The item takes c3, its conflict cleared and c2 released; b's base adopts its conflict's revision and body (s3, c4) and its conflict clears, so b owes c3 gated on s3; b's shared_object moves to c3, a's stays. Nothing is retained nor reported, a person's resolution keeping nothing it discards (SYNC.md §7, §9; STORAGE.md §14, Settle)",
   "store": {

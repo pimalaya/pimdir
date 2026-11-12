@@ -1,5 +1,5 @@
 {
-  "v": 4,
+  "v": 5,
   "label": "a file deleted on its server is retained with its body, never erased",
   "note": "a round listing Plan.txt alone finds Notes.txt absent; the single source drops its binding and the item is retained, its bytes kept (STORAGE §11). The listing names a member, so it is no empty one, which would park (SYNC.md §5)",
   "store": {

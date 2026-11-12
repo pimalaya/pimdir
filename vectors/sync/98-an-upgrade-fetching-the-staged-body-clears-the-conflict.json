@@ -1,5 +1,5 @@
 {
-  "v": 4,
+  "v": 5,
   "label": "the upgrade fetching a conflicted binding's body equal to the placement's own clears the conflict",
   "note": "the state vector 97 leaves: a.vcf conflicted at r1 with no conflict_object, its base at r1 naming no body. The upgrade fetches r1's body, which is the card the store holds: no divergence, the add whose record was lost having landed, so the binding adopts r1 and the body as its base and the conflict clears, nothing landing in conflict_object (SYNC.md §5, §6)",
   "store": {

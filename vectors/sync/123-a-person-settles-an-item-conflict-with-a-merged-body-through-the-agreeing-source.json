@@ -1,5 +1,5 @@
 {
-  "v": 4,
+  "v": 5,
   "label": "a person's edit through the source agreeing with the item settles an item conflict with a body of neither side",
   "note": "the store of 102 with no overrule, c4 standing for a merge of c3 and c2. A person writes c4 through a: the item takes c4, its conflict clears and c2 is released from the item, kept by nothing but b's base (SYNC.md §7). a's shared_object moves to c4 and b's stays c1; a's base stays c3 at r2 and b's c2 at s2, so both owe c4",
   "store": {

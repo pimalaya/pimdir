@@ -7,7 +7,7 @@
     { "id": "home/Calendar", "account": "home", "kind": "text/calendar" },
     { "id": "home/Tasks", "account": "home", "kind": "text/calendar" },
     { "id": "home/Agenda", "account": "home", "kind": "text/calendar" },
-    { "id": "work/INBOX", "account": "work", "kind": "message/rfc822", "sources": [{ "source": "imap", "covered_since": "2026-08-01T00:00:00Z", "covered_until": null, "covered_at": "2026-08-15T00:00:00Z" }] },
+    { "id": "work/INBOX", "account": "work", "kind": "message/rfc822", "sources": [{ "source": "imap", "covered_since": "2026-08-01T00:00:00Z", "covered_until": null, "covered_at": "2026-08-15T00:00:00.000Z" }] },
     { "id": "work/Archive", "account": "work", "kind": "message/rfc822", "sources": [{ "source": "imap", "covered_since": null, "covered_until": null, "covered_at": null }] },
     { "id": "home/Files", "account": "home", "kind": "application/octet-stream" },
     { "id": "home/\u0001attachments", "account": "home", "kind": "application/octet-stream", "role": "attachments" }

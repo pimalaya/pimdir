@@ -1,5 +1,5 @@
 {
-  "v": 4,
+  "v": 5,
   "label": "a rekey matches copies of one hint by revision first, then in handle order among copies at one revision",
   "note": "the server holds three resources under one UID: a.vcf at r1 (the bare key), b.vcf at r1 and c.vcf at r2 (each minted over its handle), and renumbered them x, y and z. The revision tells z's old copy apart: x lists r2 and takes c.vcf's key, though handle order alone would give it the bare one. y and z both list r1, which a.vcf's and b.vcf's bases both name, and no carried body tells them apart, so they are matched in handle order, y to a.vcf and z to b.vcf: every copy keeps its item, its seq and its base, none is minted afresh and none is dropped (SYNC.md §8)",
   "store": {

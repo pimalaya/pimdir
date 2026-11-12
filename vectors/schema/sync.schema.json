@@ -7,7 +7,7 @@
   "required": ["v", "label", "note", "store", "run", "remote", "expect"],
   "additionalProperties": false,
   "properties": {
-    "v": { "const": 4 },
+    "v": { "const": 5 },
     "label": { "type": "string" },
     "note": { "type": "string" },
     "store": { "$ref": "#/$defs/store" },
@@ -281,10 +281,13 @@
                                     "resolves": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/label" } } } } },
         { "if": { "properties": { "kind": { "const": "Remove" } } },
           "then": { "required": ["seq"], "additionalProperties": false,
-                    "properties": { "kind": true, "seq": { "type": "integer", "minimum": 1 } } } },
+                    "properties": { "kind": true, "seq": { "type": "integer", "minimum": 1 },
+                                    "if_match": { "$ref": "#/$defs/label" },
+                                    "resolves": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/label" } } } } },
         { "if": { "properties": { "kind": { "const": "SetFlags" } } },
           "then": { "required": ["seq", "flags"], "additionalProperties": false,
-                    "properties": { "kind": true, "seq": { "type": "integer", "minimum": 1 }, "flags": { "$ref": "#/$defs/flags" } } } },
+                    "properties": { "kind": true, "seq": { "type": "integer", "minimum": 1 }, "flags": { "$ref": "#/$defs/flags" },
+                                    "base": { "$ref": "#/$defs/flags" } } } },
         { "if": { "properties": { "kind": { "enum": ["Copy", "Move"] } } },
           "then": { "required": ["seq", "to"], "additionalProperties": false,
                     "properties": { "kind": true, "seq": { "type": "integer", "minimum": 1 }, "to": { "type": "string" } } } }
@@ -468,7 +471,7 @@
       "required": ["kind", "handle"],
       "additionalProperties": false,
       "properties": {
-        "kind": { "enum": ["Added", "FlagsChanged", "ContentChanged", "Vanished", "Conflicted", "Overruled", "Created"] },
+        "kind": { "enum": ["Added", "Disagreed", "FlagsChanged", "ContentChanged", "Vanished", "Conflicted", "Overruled", "Created"] },
         "handle": { "type": "string" },
         "link_id": { "type": "string" }
       }

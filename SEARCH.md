@@ -188,6 +188,8 @@ A card's row also records whether it holds a `TEL`, an `ADR`, a `BDAY` and a `PH
 
 Mail extraction MUST walk the MIME tree as STORAGE Annex A.1 bounds the walk, reading no part it leaves unread, decode transfer encodings, decode each text part by its `charset`, decode RFC 2047 and RFC 2231, prefer `text/plain` and reduce `text/html` to text. The reduction is the implementation's own, which this part does not pin, and text so reduced is outside the hit-set guarantee (§2).
 
+A header field the extraction reads, `Subject` and the address fields here and `In-Reply-To` and `References` in §9, MUST be read as STORAGE Annex A.1 reads one: its line split into name and value and its name matched as A.1 says, and a field present twice read from its first occurrence, so the index holds the subject and the people the summary row states, never those of a later occurrence.
+
 A text part SHOULD be decoded as STORAGE Annex A.1 decodes an encoded word's octets, by the WHATWG Encoding Standard's decoder for the encoding its `charset` labels, no byte order mark sniffed, `us-ascii` when it states none (RFC 2046 §4.1.2), and as UTF-8 replaced as Annex A.0 says when no label names one. Its text beyond seven-bit ASCII in a charset other than UTF-8 is outside the hit-set guarantee (§2). Attachment content is out of scope.
 
 A `multipart/encrypted` or `application/pkcs7-mime` body is recorded `encrypted`, headers indexed and body not. Decrypted content is indexed only when the user asks for it, never by default: it writes the plaintext into index.db (STORAGE §18).

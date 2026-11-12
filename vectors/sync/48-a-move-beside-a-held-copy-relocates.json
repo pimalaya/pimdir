@@ -1,5 +1,5 @@
 {
-  "v": 4,
+  "v": 5,
   "label": "the source half of a move into a collection already holding the identity relocates, never deletes",
   "note": "Trash held the message under 3 before the move, so the move's create there is keyed by the identity minted over its provisional handle; the tombstone pairs with that create all the same, so the Remove relocates into Trash and carries no link_id, the copy Trash already held proving no delivery; INBOX holds no body, so nothing else could deliver the create, and a plain delete would take the only copy of the move. Accepted, the relocation delivers that create, keyed by the identity minted over its own provisional handle, which the Trash listing can land: its binding keeps the handle and gains a base naming nothing (SYNC.md §2, §3, §4, §5)",
   "store": {

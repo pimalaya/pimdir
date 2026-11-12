@@ -1,0 +1,24 @@
+{
+  "v": 5,
+  "label": "a flag change stating the set its producer read keeps a flag a sync landed since, and one it removed",
+  "note": "a frontend read the message at $todo and \\Seen and queued a set-flags answering it: flags \\Answered and \\Seen, base $todo and \\Seen, so the change is \\Answered added and $todo removed. Before the drain a sync pulled \\Flagged, set on another device, into the item and the base. Applied as a change to the set the placement holds then, the mutation leaves \\Answered, \\Flagged and \\Seen: \\Flagged survives, where replacing the set by the payload's flags would erase it and the next sync push the erasure. The placement reads Dirty against its base, and the SetFlags the next sync derives adds \\Answered and removes $todo, nothing else (SYNC.md §7, §4; STORAGE §15.3)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },
+    "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["$todo", "\\Flagged", "\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+    "bindings": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["$todo", "\\Flagged", "\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1, "shared_object": "m1" }],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+  },
+  "run": { "verb": "mutate", "collection": "INBOX", "source": "imap", "mutation": { "kind": "SetFlags", "seq": 1, "flags": ["\\Answered", "\\Seen"], "base": ["$todo", "\\Seen"] } },
+  "remote": { "snapshot": null, "fetch": {} },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Answered", "\\Flagged", "\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+      "bindings": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["$todo", "\\Flagged", "\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1, "shared_object": "m1" }],
+      "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+    }
+  }
+}

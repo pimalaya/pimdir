@@ -9,6 +9,7 @@
   "properties": {
     "v": { "const": 1 },
     "seq": { "type": "integer", "minimum": 1 },
-    "flags": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[!-~]+$" } }
+    "flags": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[!-~]+$" } },
+    "base": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[!-~]+$" } }
   }
 }

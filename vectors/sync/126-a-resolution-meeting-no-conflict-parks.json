@@ -1,5 +1,5 @@
 {
-  "v": 4,
+  "v": 5,
   "label": "an edit stating a resolution over an item in no conflict is refused, the conflict it decided being settled already",
   "note": "the item holds c2 and nothing is conflicted: the conflict a person resolved, over c1, was settled by another write before the drain reached the resolution. Its resolves names a conflict that no longer stands, so it is refused, staging nothing, and parked rather than applied as an ordinary edit over a state nobody decided against (SYNC.md §7; STORAGE §15.3)",
   "store": {

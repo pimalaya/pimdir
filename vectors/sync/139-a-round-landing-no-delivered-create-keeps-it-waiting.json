@@ -1,5 +1,5 @@
 {
-  "v": 4,
+  "v": 5,
   "label": "a round closing without landing a delivered create keeps it waiting, live or tombstoned",
   "note": "two creates of Trash were delivered, one holding no body and one deleted since. A round over Trash names another member and lands neither: a member may arrive after a round's first pages, or under another binding when the source deleted rather than relocated, so a round proves nothing of a delivered create. Both wait as they were, never found absent nor counted, so nothing is dropped and the round closes; the engine reports them waiting (SYNC.md §2, §5)",
   "store": {

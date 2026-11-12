@@ -1,5 +1,5 @@
 {
-  "v": 4,
+  "v": 5,
   "label": "an edit through a binding in conflict, over an item in conflict, resolving only the item's is refused",
   "note": "the store of 105: the item conflicted over c2 and b conflicted with its remote over c4. An edit through b meets both, and its resolves names c2 alone, so the person decided nothing over c4, which the edit would adopt into b's base and push over. Refused, staging nothing, and parked; a resolution naming both c2 and c4 settles both (SYNC.md §7; STORAGE §15.3)",
   "store": {

@@ -1,5 +1,5 @@
 {
-  "v": 4,
+  "v": 5,
   "label": "a member stating a retained message's Message-ID with another subject and date is minted, never reviving it",
   "note": "basic-1@example.org, the stand-up notes, was deleted on its server and retained with its body. The next round lists a member stating the same Message-ID whose summary names another message: another subject, sender and date. Reviving the row would make the retained body stand for that message, unread, with no source left holding the first; so it is named under the key minted over its handle, an item of its own with a seq of its own, and the retained row stays in the trash as it was (STORAGE §9, §11.1; SYNC.md §6)",
   "store": {

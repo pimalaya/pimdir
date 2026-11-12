@@ -1,5 +1,5 @@
 {
-  "v": 4,
+  "v": 5,
   "label": "a second body one binding loses to a policy is kept beside the first, under the key minted again over the one the first holds",
   "note": "vector 85 once more on its own end state: the retained dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#b.vcf keeps c3, the body prefer-incoming replaced the first time, while a has since folded c4 into the item. b again settles a conflict with its own remote, now by taking c1, and the divergence goes to the policy, which adopts c1 and keeps c4, the shared body it replaced. The key minted over b's handle is held by the first loser's retained row, so it is minted again (STORAGE.md §9: held means any row, a retained one included) and c4 is kept as a third item with a seq of its own; the first loser is neither revived nor replaced, which would leave c3 pinned by nothing for the collector, and the insert does not fail on the key either. b agreed to the body the item settled on, so its shared_object moves to c1 (SYNC.md §9; STORAGE.md §11)",
   "store": {

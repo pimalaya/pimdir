@@ -540,7 +540,9 @@ def header_fields(bytes_):
     the block ends at the first empty line, a line ending at CRLF, a bare LF
     or the end of the message, one CR just before the end being the line
     break's and any other CR the line's content, and a line break before a
-    space or a tab is removed, the whitespace kept."""
+    space or a tab is removed, the whitespace kept. A field line splits at
+    its first colon, its name the bytes before it trimmed of trailing spaces
+    and tabs, and a line holding no colon is no field."""
     if bytes_.endswith(b"\r"):
         bytes_ += b"\n"
     block = re.split(rb"\r?\n\r?\n", bytes_, maxsplit=1)[0]
@@ -549,7 +551,7 @@ def header_fields(bytes_):
     for line in re.split(rb"\r?\n", unfolded):
         name, colon, value = line.partition(b":")
         if colon:
-            fields.append((name.strip().decode("ascii", "replace").lower(), value))
+            fields.append((name.rstrip(b" \t").decode("ascii", "replace").lower(), value))
     return fields
 
 
@@ -608,6 +610,36 @@ WINDOWS_1252_LABELS = {
     "x-cp1252",
 }
 REPLACEMENT_LABELS = {"csiso2022kr", "hz-gb-2312", "iso-2022-cn", "iso-2022-cn-ext", "iso-2022-kr", "replacement"}
+ISO_8859_2_LABELS = {"csisolatin2", "iso-8859-2", "iso-ir-101", "iso8859-2", "iso88592", "iso_8859-2", "iso_8859-2:1987", "l2", "latin2"}
+ISO_2022_JP_LABELS = {"csiso2022jp", "iso-2022-jp"}
+GBK_LABELS = {"chinese", "csgb2312", "csiso58gb231280", "gb2312", "gb_2312", "gb_2312-80", "gbk", "iso-ir-58", "x-gbk"}
+
+
+# The standard library's codecs are not the Encoding Standard's decoders, so
+# each is used only over the octets where the two provably agree, and octets
+# outside them fail the run rather than read as either:
+# - iso8859_2 holds the standard's index-iso-8859-2 above 7F whole, the C1
+#   controls at 80 to 9F included, and ASCII below.
+# - iso2022_jp is read between ESC $ B and ESC ( B alone, over JIS X 0208
+#   rows 4 and 5, the kana, and 16 to 84, the kanji: never ESC ( J, whose 5C
+#   and 7E the standard reads as the yen sign and the overline, ESC ( I, the
+#   katakana the codec refuses, ESC $ @, rows 1 and 2, where the standard's
+#   index maps five symbols to their fullwidth forms, nor row 13 and those
+#   from 89 up, the extensions its index adds.
+# - gbk is read over ASCII and the pairs of GB 2312's rows of characters, a
+#   lead of B0 to F7 before a trail of A1 to FE: never the octet 80, the
+#   standard's euro sign, a four-octet sequence, which its gbk decoder reads
+#   as gb18030 does, nor a pair the gb18030 index maps apart (A2E3, A6D9 to
+#   A6F3, A8BC, A8BF, FE50 to FEA0).
+def agreed_octets(codec, octets):
+    if codec == "iso8859_2":
+        return True
+    if codec == "iso2022_jp":
+        runs = re.fullmatch(rb"(?:[\x00-\x1a\x1c-\x7f]|\x1b\$B(?:[\x24\x25\x30-\x74][\x21-\x7e])*\x1b\(B)*", octets)
+        return runs is not None
+    if codec == "gbk":
+        return re.fullmatch(rb"(?:[\x00-\x7f]|[\xb0-\xf7][\xa1-\xfe])*", octets) is not None
+    return False
 
 
 def charset_text(label, octets):
@@ -622,6 +654,12 @@ def charset_text(label, octets):
         return "".join(chr(b) if b in (0x81, 0x8D, 0x8F, 0x90, 0x9D) else bytes([b]).decode("cp1252") for b in octets)
     if label in REPLACEMENT_LABELS:
         return None
+    for labels, codec in ((ISO_8859_2_LABELS, "iso8859_2"), (ISO_2022_JP_LABELS, "iso2022_jp"), (GBK_LABELS, "gbk")):
+        if label in labels:
+            if not agreed_octets(codec, octets):
+                failures.append(f"charset {label}: octets {octets.hex()} outside those checks/vectors.py decodes as the Encoding Standard does")
+                return None
+            return octets.decode(codec)
     try:
         codecs.lookup(label)
     except LookupError:
@@ -936,13 +974,23 @@ def calendar_instant(params, value, vtimezones):
     return wall.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def summarized(calendar_):
+    """The component a resource's row is read from (Annex A.3): the master,
+    the first VEVENT, VTODO or VJOURNAL carrying no RECURRENCE-ID, else, in a
+    resource holding overrides alone, the first carrying one, in document
+    order; None when it holds none of the three."""
+    found = [c for c in calendar_[2] if c[0] in ("VEVENT", "VTODO", "VJOURNAL")]
+    masters = [c for c in found if calendar_property(c, "RECURRENCE-ID") is None]
+    return (masters or found or [None])[0]
+
+
 def calendar_sort_key(bytes_):
-    """Annex A.3 to A.5's sort key: the master's DTSTART, a task's DUE before
-    it, as an instant, '' when none reads as one."""
+    """Annex A.3 to A.5's sort key: the DTSTART of the component the row is
+    read from, a task's DUE before it, as an instant, '' when none reads as
+    one."""
     calendar_ = components(bytes_)[2][0]
     vtimezones = {calendar_property(c, "TZID")[1]: c for c in calendar_[2] if c[0] == "VTIMEZONE"}
-    master = next((c for c in calendar_[2] if c[0] in ("VEVENT", "VTODO", "VJOURNAL")
-                   and calendar_property(c, "RECURRENCE-ID") is None), None)
+    master = summarized(calendar_)
     if master is None:
         return ""
     for name in ("DUE", "DTSTART") if master[0] == "VTODO" else ("DTSTART",):
@@ -958,6 +1006,26 @@ def text_value(value):
     5545 section 3.3.11): a backslash before a comma, a semicolon or itself
     is dropped, and one before n or N is a line break."""
     return re.sub(r"\\([\\;,nN])", lambda m: "\n" if m.group(1) in "nN" else m.group(1), value)
+
+
+# The characters of the White_Space property of Unicode 15.0.0 (PropList.txt),
+# the set Annex A.2 trims a sort key of. str.strip() with no argument would
+# also take U+001C to U+001F, which the property does not hold.
+WHITE_SPACE = "".join(map(chr, [*range(0x09, 0x0E), 0x20, 0x85, 0xA0, 0x1680, *range(0x2000, 0x200B),
+                                0x2028, 0x2029, 0x202F, 0x205F, 0x3000]))
+
+
+def folded(text):
+    """Annex A.2's lowercase: the default full mapping with Final_Sigma and
+    no other conditional mapping, which is str.lower(). The interpreter's
+    Unicode version may be later than 15.0.0, whose case pairs are stable."""
+    return text.lower()
+
+
+def usable(hint):
+    """Whether a hint is usable (STORAGE section 9): stated, and not empty
+    once trimmed of the space and the tab."""
+    return hint is not None and hint.strip(" \t") != ""
 
 
 def card_rows(bytes_):
@@ -980,18 +1048,18 @@ def card_rows(bytes_):
         "kind": kind.lower() if kind is not None else None,
         "org": text_value(re.split(r"(?<!\\);", org)[0]) if org is not None else None,
     }
-    addresses = [("email", position, value.lower(), None)
+    addresses = [("email", position, folded(value), None)
                  for position, value in enumerate(value for prop, value in props if prop == "EMAIL")]
-    return columns, addresses, columns["fn"].lower().strip()
+    return columns, addresses, folded(columns["fn"]).strip(WHITE_SPACE)
 
 
 def calendar_rows(bytes_):
-    """Annex A.3 to A.5's columns read from the master component verbatim or
-    decoded, and its ORGANIZER and ATTENDEE rows (A.3, A.6), by the reader
-    above; the task columns task_columns() derives are left to it."""
+    """Annex A.3 to A.5's columns read from the master component, else from
+    the first override, verbatim or decoded, and its ORGANIZER and ATTENDEE
+    rows (A.3, A.6), by the reader above; the task columns task_columns()
+    derives are left to it."""
     calendar_ = components(bytes_)[2][0]
-    master = next(c for c in calendar_[2] if c[0] in ("VEVENT", "VTODO", "VJOURNAL")
-                  and calendar_property(c, "RECURRENCE-ID") is None)
+    master = summarized(calendar_)
 
     def value(name):
         found = calendar_property(master, name)
@@ -1233,9 +1301,10 @@ for path in sorted((root / "schema").glob("*.schema.json")):
 # payloads/ is one action's at one version, and the prose writes its shape
 # once: the same members, optional where the schema requires none, typed as
 # the shape's placeholder says, two members joined in `( a | b )` the schema's
-# one of two. Every case of payloads.json validates against its action's
-# schema exactly when it says it does, so a schema loosened or a malformed
-# payload fails here.
+# one of two. Every case of payloads.json states the outcome its action's
+# schema gives it, valid or malformed, or unknown where its action and v name
+# no schema, so a schema loosened, a malformed payload or a version read as
+# another fails here.
 NONEMPTY = {"type": "string", "minLength": 1}
 PLACEHOLDERS = {
     "n": {"type": "integer", "minimum": 1},
@@ -1350,17 +1419,37 @@ for action_version in sorted(set(shapes) & set(payload_schemas)):
     require(f"payloads/{action_version}.schema.json: a JSON Schema", payload_schemas[action_version].get("$schema", "").endswith("2020-12/schema"))
 payload_cases = json.loads((root / "payloads.json").read_text())["cases"] if (root / "payloads.json").exists() else []
 require("payloads.json: the queue's payload cases", bool(payload_cases))
+
+
+def payload_outcome(action, payload):
+    """A payload's outcome for an owner and a producer of this version
+    (STORAGE.md sections 15.2 and 15.3): one whose action and v name a schema
+    under payloads/ is valid when that schema accepts it and malformed
+    otherwise; one whose action, or whose v for a known action, names none is
+    unknown, whatever else it holds."""
+    schema = payload_schemas.get(f"{action}.v{payload.get('v')}")
+    if schema is None:
+        return "unknown"
+    return "malformed" if list(Draft202012Validator(schema).iter_errors(payload)) else "valid"
+
+
 for index, case in enumerate(payload_cases):
-    action_version = f"{case['action']}.v{case['payload'].get('v')}"
-    if action_version not in payload_schemas:
-        failures.append(f"payloads.json case {index}: no schema {action_version}")
-        continue
-    errors = [error.message for error in Draft202012Validator(payload_schemas[action_version]).iter_errors(case["payload"])]
-    check(f"payloads.json case {index} ({case['action']}, {case.get('note', 'valid')}) valid", not errors, case["valid"])
+    check(f"payloads.json case {index} ({case['action']}, {case.get('note', 'valid')}) outcome",
+          case["outcome"], payload_outcome(case["action"], case["payload"]))
 for action_version in payload_schemas:
     require(f"payloads.json: a valid and a malformed {action_version}",
-            {case["valid"] for case in payload_cases
-             if f"{case['action']}.v{case['payload'].get('v')}" == action_version} == {True, False})
+            {case["outcome"] for case in payload_cases
+             if f"{case['action']}.v{case['payload'].get('v')}" == action_version} == {"valid", "malformed"})
+# The three ways a payload is unknown: a known action at a v no schema
+# defines, an action no schema defines, and an application's own, x-.
+known_actions = {action_version.rsplit(".v", 1)[0] for action_version in payload_schemas}
+unknown_cases = [case for case in payload_cases if case["outcome"] == "unknown"]
+require("payloads.json: an unknown payload of a known action at another v",
+        any(case["action"] in known_actions for case in unknown_cases))
+require("payloads.json: an unknown payload of an action no schema defines",
+        any(case["action"] not in known_actions and not case["action"].startswith("x-") for case in unknown_cases))
+require("payloads.json: an unknown payload of an application's own action",
+        any(case["action"].startswith("x-") for case in unknown_cases))
 
 
 def shell_word(text):
@@ -1385,7 +1474,8 @@ def shell_word(text):
 # The scenarios enqueue well-formed payloads (STORAGE.md section 15.3), the
 # store reading none: each payload checks/invariants.sh writes is valid against
 # its action's schema, but one whose call a comment opening `# A malformed
-# payload` heads, which must be invalid.
+# payload` heads, which must be malformed, and one a comment opening `# An
+# unknown payload` heads, whose action and v must name no schema.
 harness = (root.parent / "checks" / "invariants.sh").read_text().replace("\\\n", " ")
 enqueued = 0
 for number, line in enumerate(harness.splitlines()):
@@ -1399,11 +1489,12 @@ for number, line in enumerate(harness.splitlines()):
     above = number - 1
     while above >= 0 and harness.splitlines()[above].lstrip().startswith("#"):
         above -= 1
-    malformed = harness.splitlines()[above + 1].lstrip().startswith("# A malformed payload")
+    heading = harness.splitlines()[above + 1].lstrip()
+    stated = "malformed" if heading.startswith("# A malformed payload") else \
+        "unknown" if heading.startswith("# An unknown payload") else "valid"
     document = json.loads(shell_word(payload.group(1)))
-    schema = payload_schemas.get(f"{action.group(1)}.v{document.get('v')}")
-    valid = schema is not None and not list(Draft202012Validator(schema).iter_errors(document))
-    check(f"checks/invariants.sh: the {action.group(1)} payload {json.dumps(document)[:60]} valid", valid, not malformed)
+    check(f"checks/invariants.sh: the {action.group(1)} payload {json.dumps(document)[:60]} outcome",
+          payload_outcome(action.group(1), document), stated)
     enqueued += 1
 require("checks/invariants.sh: enqueues payloads", enqueued > 0)
 
@@ -1518,14 +1609,16 @@ for case in summaries["cases"]:
         minted = f"dup:{case['hint']}#{case['handle']}"
         check(f"{case['label']} minted link_id", minted, case["link_id"])
 
-    if case["summary"].get("uid") is None and case["table"] != "mail_summary":
+    # A resource stating no usable UID, none, an empty one or one of spaces
+    # and tabs alone, takes the hash: fallback over its bytes (section 9).
+    if not usable(case["summary"].get("uid")) and case["table"] != "mail_summary":
         check(f"{case['label']} hash: link_id", case["link_id"], "hash:" + fnv1a(bytes_))
 
     # A stated identity is the link id verbatim, escaped when it begins with a
     # prefix the writer derives keys under (STORAGE section 9), so a UID
     # stating hash: never reads as a key derived from the bytes.
     stated = case["summary"].get("message_id" if case["table"] == "mail_summary" else "uid")
-    if stated is not None and "hint" not in case:
+    if usable(stated) and "hint" not in case:
         escaped = "esc:" + stated if stated.startswith(RESERVED_PREFIXES) else stated
         check(f"{case['label']} link_id of a stated identity", case["link_id"], escaped)
 
@@ -1956,20 +2049,152 @@ for path in sync_cases:
         require(f"{label}: push {push.get('handle')} carries no body it could not verify", push.get("object") not in unread)
     # A conflict is settled by an overrule or by a person's resolution naming
     # it (SYNC.md section 7, STORAGE.md section 15.3): an Edit stating no
-    # overrule that meets the item's conflict or its binding's, unless its
-    # resolves names each one's diverging body, or that states resolves and
-    # meets none, is refused, the rows as they were.
+    # overrule, or a Remove, that meets the item's conflict or its binding's,
+    # unless its resolves names each one's diverging body, or that states
+    # resolves and meets none, is refused, the rows as they were. So is one
+    # stating an if_match the item does not hold. A Remove that settles leaves
+    # neither conflict standing, the base adopting the binding's.
     mutation = run.get("mutation", {}) if run.get("verb") == "mutate" else {}
-    if mutation.get("kind") == "Edit" and not mutation.get("overrule"):
+    if mutation.get("kind") in ("Edit", "Remove") and not mutation.get("overrule"):
+        kind = mutation["kind"]
         item = next((i for i in store.get("items", []) if i["collection"] == run["collection"] and i["seq"] == mutation["seq"]), {})
         binding = next((b for b in store.get("bindings", []) if b["collection"] == run["collection"]
                         and b["link_id"] == item.get("link_id") and b["source"] == run["source"]), {})
         met = [row.get("conflict_object") for row in (item, binding) if row.get("conflicted") == 1]
         resolves = mutation.get("resolves")
-        if (met and any(body is None or body not in (resolves or []) for body in met)) or (resolves is not None and not met):
-            require(f"{label}: an Edit settling a conflict nobody resolved, or resolving one that does not stand, fails", case["expect"].get("failed") is True)
+        unresolved = (met and any(body is None or body not in (resolves or []) for body in met)) or (resolves is not None and not met)
+        replaced = "if_match" in mutation and item.get("object") != mutation["if_match"]
+        if unresolved or replaced:
+            require(f"{label}: {kind} settling a conflict nobody resolved, resolving one that does not stand, or made over a body since replaced, fails", case["expect"].get("failed") is True)
             for table in ("items", "bindings"):
-                check(f"{label}: a refused resolution leaves the {table} as they were", after.get(table, store.get(table)), store.get(table))
+                check(f"{label}: a refused {kind} leaves the {table} as they were", after.get(table, store.get(table)), store.get(table))
+        elif kind == "Remove" and met and "items" in after and "bindings" in after:
+            settled = next((i for i in after["items"] if i["collection"] == run["collection"] and i["seq"] == mutation["seq"]), {})
+            bound = next((b for b in after["bindings"] if b["collection"] == run["collection"]
+                          and b["link_id"] == item.get("link_id") and b["source"] == run["source"]), {})
+            require(f"{label}: a Remove naming the conflicts it meets tombstones the item and leaves none standing",
+                    settled.get("deleted") == 1 and settled.get("conflicted", 0) == 0 and settled.get("conflict_object") is None
+                    and bound.get("conflicted", 0) == 0 and bound.get("conflict_object") is None and bound.get("conflict_revision") is None)
+            check(f"{label}: a Remove settling a conflict keeps the item's body under the tombstone", settled.get("object"), item.get("object"))
+            if binding.get("conflicted") == 1:
+                check(f"{label}: a Remove settling its binding's conflict adopts its revision and body as the base, together",
+                      (bound.get("base_revision"), bound.get("base_object")), (binding.get("conflict_revision"), binding.get("conflict_object")))
+    # A SetFlags (SYNC.md section 7, STORAGE.md section 15.3) carrying no base
+    # replaces the set; carrying one it changes the set the placement holds,
+    # adding what its flags hold and its base lacks and removing what its base
+    # holds and its flags lack, and is refused over an unknown set.
+    if mutation.get("kind") == "SetFlags":
+        item = next((i for i in store.get("items", []) if i["collection"] == run["collection"] and i["seq"] == mutation["seq"]), {})
+        flags, base = set(mutation["flags"]), mutation.get("base")
+        if base is not None and item.get("flags") is None:
+            require(f"{label}: a SetFlags stating a base over an unknown set fails", case["expect"].get("failed") is True)
+            for table in ("items", "bindings"):
+                check(f"{label}: a refused SetFlags leaves the {table} as they were", after.get(table, store.get(table)), store.get(table))
+        elif "items" in after:
+            left = flags if base is None else (set(item["flags"]) | (flags - set(base))) - (set(base) - flags)
+            staged = next((i for i in after["items"] if i["collection"] == run["collection"] and i["seq"] == mutation["seq"]), {})
+            check(f"{label}: the set a SetFlags leaves", sorted(staged.get("flags") or []), sorted(left))
+    # The agreement of STORAGE.md section 9 across collections (SYNC.md
+    # section 6). A member a page names under a bare key another mail
+    # collection holds shares the lowest seq of the rows there it agrees
+    # with, on subject, date and sender, and draws one no row held when it
+    # agrees with none.
+    mail = {c["id"] for c in declared if c["kind"] == "message/rfc822"}
+    every_row = {(s["collection"], s["link_id"]): s["row"] for s in store.get("summaries", []) if s["table"] == "mail_summary"}
+
+    def agrees(columns, row):
+        return all(columns[column] == row.get(column, columns[column]) for column in ("subject", "date", "sender"))
+
+    if run.get("verb") == "sync" and run["collection"] in mail and "items" in after and not files:
+        before = {i["link_id"] for i in store.get("items", []) if i["collection"] == run["collection"]}
+        for page in pages:
+            for member in page["items"]:
+                meta = member.get("meta") or {}
+                if not (root / meta.get("body", "")).is_file() or not meta["body"].endswith(".eml"):
+                    continue
+                columns = mail_columns((root / meta["body"]).read_bytes())
+                key = columns["message_id"]
+                named = after_items.get((run["collection"], key))
+                if key is None or key in before or named is None or key.startswith(RESERVED_PREFIXES):
+                    continue
+                if not any(b["handle"] == member["handle"] and b["link_id"] == key and b["source"] == run["source"] for b in after.get("bindings", [])):
+                    continue
+                holders = [(i, every_row[(i["collection"], key)]) for i in store.get("items", [])
+                           if i["collection"] in mail and i["collection"] != run["collection"] and i["link_id"] == key
+                           and (i["collection"], key) in every_row]
+                if not holders:
+                    continue
+                shared = [i["seq"] for i, row in holders if agrees(columns, row)]
+                if shared:
+                    check(f"{label}: member {member['handle']} shares the seq of the row it agrees with in another collection", named["seq"], min(shared))
+                else:
+                    require(f"{label}: member {member['handle']}, disagreeing with every row holding {key} elsewhere, draws a seq of its own",
+                            named["seq"] not in {i["seq"] for i in store.get("items", [])})
+    # An upgrade leaves no mail placement holding a body its summary disagreed
+    # with: a body is linked only from a row that agrees, else fetched.
+    bodies = fixtures_of | {object_label: spec["body"] for object_label, spec in expected.get("objects", {}).items()}
+    if run.get("verb") == "upgrade" and run["collection"] in mail:
+        for handle in run.get("handles", []):
+            bound = next((b for b in store.get("bindings", []) if b["collection"] == run["collection"]
+                          and b["source"] == run["source"] and b["handle"] == handle), None)
+            row = every_row.get((run["collection"], bound["link_id"])) if bound else None
+            held_item = after_items.get((run["collection"], bound["link_id"]), {}) if bound else {}
+            was = next((i for i in store.get("items", []) if bound and i["collection"] == run["collection"] and i["link_id"] == bound["link_id"]), {})
+            if row is None or held_item.get("object") is None or was.get("object") is not None or held_item["object"] not in bodies:
+                continue
+            columns = mail_columns((root / bodies[held_item["object"]]).read_bytes())
+            require(f"{label}: upgraded {handle} holds a body agreeing with the summary it was named by, never another message's linked on its key",
+                    agrees(columns, row))
+    # A bodiless mail row losing its last binding is purged for a live row of
+    # another collection of its account that agrees with it, and retained
+    # when every holder states another message (STORAGE.md section 11.1).
+    accounts = {c["id"]: c.get("account") for c in declared}
+    if "items" in after and "bindings" in after and run["collection"] in mail:
+        for item in store.get("items", []):
+            key = (item["collection"], item["link_id"])
+            if item["collection"] != run["collection"] or item.get("object") is not None or item.get("deleted") == 1 or key not in every_row:
+                continue
+            if not any((b["collection"], b["link_id"]) == key for b in store.get("bindings", [])) \
+                    or any((b["collection"], b["link_id"]) == key for b in after["bindings"]):
+                continue
+            holders = [every_row[(i["collection"], i["link_id"])] for i in store.get("items", [])
+                       if i["collection"] in mail and i["collection"] != item["collection"] and i["link_id"] == item["link_id"]
+                       and accounts.get(i["collection"]) == accounts.get(item["collection"]) and i.get("deleted") == 0
+                       and (i["collection"], i["link_id"]) in every_row
+                       and after_items.get((i["collection"], i["link_id"]), i).get("deleted") == 0]
+            if not holders:
+                continue
+            mine = every_row[key]
+            own = {column: mine.get(column) for column in ("subject", "date", "sender")}
+            if any(all(column not in row or row[column] == own[column] for column in own) for row in holders):
+                require(f"{label}: bodiless {item['link_id']}, held elsewhere by a row that agrees, is purged", key not in after_items)
+            else:
+                require(f"{label}: bodiless {item['link_id']}, held elsewhere only by another message, is retained, never purged",
+                        after_items.get(key, {}).get("retained") is True)
+    # A member minted apart from a pending or a delivered create of the run's
+    # source holding its hint, their summaries disagreeing, is reported
+    # Disagreed, naming that create (SYNC.md sections 5 and 6), and no other
+    # member is.
+    if run.get("verb") == "sync" and not files:
+        creates = {b["link_id"] for b in store.get("bindings", []) if b["collection"] == run["collection"]
+                   and b["source"] == run["source"] and b["handle"].startswith("\u0001")}
+        known = {b["handle"] for b in store.get("bindings", []) if b["collection"] == run["collection"] and b["source"] == run["source"]}
+        disagreed = []
+        for page in pages:
+            for member in page["items"]:
+                meta = member.get("meta") or {}
+                if member["handle"] in known or not (root / meta.get("body", "")).is_file() or not meta["body"].endswith(".eml"):
+                    continue
+                columns = mail_columns((root / meta["body"]).read_bytes())
+                hint = columns["message_id"]
+                for key in (hint, f"dup:{hint}#\u0001{hint}"):
+                    row = every_row.get((run["collection"], key))
+                    if key in creates and row is not None:
+                        if not agrees(columns, row) and {"kind": "Disagreed", "handle": member["handle"], "link_id": key} not in disagreed:
+                            disagreed.append({"kind": "Disagreed", "handle": member["handle"], "link_id": key})
+                        break
+        if not case["expect"].get("failed"):
+            check(f"{label}: the Disagreed events", [event for event in case["expect"].get("events", []) if event.get("kind") == "Disagreed"], disagreed)
     # A bodiless Copy or Move needs its source to sync the target (SYNC.md
     # section 7).
     if mutation.get("kind") in ("Copy", "Move"):

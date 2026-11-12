@@ -1,0 +1,25 @@
+{
+  "v": 5,
+  "label": "a remove stating the body it deletes is refused once another write replaced that body",
+  "note": "a frontend showed the card at c1 and queued its delete stating if_match c1; before the drain another producer's update applied and the item holds c2 (the store of vector 87). The remove is refused and stages nothing, which the drain parks naming both bodies, rather than delete an edit its user never saw (SYNC.md §7; STORAGE §15.3)",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
+    "objects": { "c1": { "body": "fixtures/card-basic.vcf" }, "c2": { "body": "fixtures/card-basic-edited.vcf" } },
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c2", "level": 2, "deleted": 0 }],
+    "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": "c2", "base_revision": "r2", "base_present": 1, "shared_object": "c2" }],
+    "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d1" }]
+  },
+  "run": { "verb": "mutate", "collection": "Contacts", "source": "dav", "mutation": { "kind": "Remove", "seq": 1, "if_match": "c1" } },
+  "remote": { "snapshot": null, "fetch": {} },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "failed": true,
+    "store": {
+      "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c2", "level": 2, "deleted": 0 }],
+      "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": "c2", "base_revision": "r2", "base_present": 1, "shared_object": "c2" }],
+      "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d1" }]
+    }
+  }
+}

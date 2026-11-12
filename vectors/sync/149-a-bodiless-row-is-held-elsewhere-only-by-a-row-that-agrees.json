@@ -1,0 +1,42 @@
+{
+  "v": 5,
+  "label": "a bodiless message losing its last binding is retained while the row holding its Message-ID elsewhere is another message",
+  "note": "Archive holds basic-1@example.org live, the stand-up notes. INBOX holds another message reusing that Message-ID at Meta, no body read (the store vector 148 leaves, its seq its own). A delta states INBOX's member removed. A retiring row with no body is purged at once when another collection of the account holds its identity live, the item having moved; but Archive's row disagrees on subject, date and sender, so it holds nothing of this message: the row is retained, listed in the trash and revived should the member return, never purged for a message it is not (STORAGE §9, §11, §11.1; SYNC.md §5)",
+  "store": {
+    "collections": [
+      { "id": "Archive", "account": null, "kind": "message/rfc822", "conflict": "manual" },
+      { "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }
+    ],
+    "objects": {},
+    "items": [
+      { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" },
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 3, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-03T09:00:00Z" }
+    ],
+    "bindings": [
+      { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "5", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1 },
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "20", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1 }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "Archive", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": [], "subject": "Budget review", "sender": "dan@example.net", "sender_name": "Dan Example", "date": "2026-08-03T09:00:00Z", "size": 266, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [{ "collection": "Archive", "source": "imap", "checkpoint": "a1" }, { "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+  },
+  "run": { "verb": "sync", "collection": "INBOX", "source": "imap", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual" } },
+  "remote": { "snapshot": { "items": [], "vanished": ["20"], "complete": false, "checkpoint": "c2" }, "fetch": {} },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [{ "kind": "Vanished", "handle": "20" }],
+    "store": {
+      "items": [
+        { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" },
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 3, "flags": [], "object": null, "level": 1, "deleted": 1, "retained": true, "retained_by": "imap", "sort_key": "2026-08-03T09:00:00Z" }
+      ],
+      "bindings": [
+        { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "5", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1 }
+      ],
+      "sources": [{ "collection": "Archive", "source": "imap", "checkpoint": "a1" }, { "collection": "INBOX", "source": "imap", "checkpoint": "c2" }]
+    }
+  }
+}

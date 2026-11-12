@@ -1,0 +1,50 @@
+{
+  "v": 5,
+  "label": "an upgrade fetches, never links, a message whose Message-ID another mailbox holds under another subject, though the sizes agree",
+  "note": "Archive holds basic-1@example.org, the stand-up notes, with its body, 299 octets. INBOX lists another message reusing that Message-ID, a templated notice sent again: another subject, sender and date, and by chance 299 octets too. The key is free in INBOX, so the member took it bare at Meta, with a seq of its own. Its Full upgrade asks lookup_objects, which answers Archive's body with its size and the subject, date and sender of its row: the size agrees, the three do not, so the body is not adopted and the upgrade fetches. Linked on its size alone, the notice would show the stand-up notes as its body for ever, an immutable kind never fetching again (SYNC.md §6; STORAGE §9, §14)",
+  "store": {
+    "collections": [
+      { "id": "Archive", "account": null, "kind": "message/rfc822", "conflict": "manual" },
+      { "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }
+    ],
+    "objects": {
+      "b1": { "body": "fixtures/mail-basic.eml" },
+      "n1": { "body": "fixtures/mail-reused-id-same-size.eml" }
+    },
+    "items": [
+      { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": "b1", "level": 2, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" },
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-03T09:00:00Z" }
+    ],
+    "bindings": [
+      { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "5", "base_flags": [], "base_object": "b1", "base_revision": null, "base_present": 1 },
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "77", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1 }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "Archive", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": [], "subject": "Quarterly plan", "sender": "dan@example.net", "sender_name": "Dan Example", "date": "2026-08-03T09:00:00Z", "size": 299, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [{ "collection": "Archive", "source": "imap", "checkpoint": "a1" }, { "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+  },
+  "run": { "verb": "upgrade", "collection": "INBOX", "source": "imap", "tier": "Full", "handles": ["77"] },
+  "remote": { "snapshot": null, "fetch": { "77": { "Full": { "body": "fixtures/mail-reused-id-same-size.eml", "revision": null } } } },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [
+        { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": "b1", "level": 2, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" },
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 2, "flags": [], "object": "n1", "level": 2, "deleted": 0, "sort_key": "2026-08-03T09:00:00Z" }
+      ],
+      "bindings": [
+        { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "5", "base_flags": [], "base_object": "b1", "base_revision": null, "base_present": 1 },
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "77", "base_flags": [], "base_object": "n1", "base_revision": null, "base_present": 1 }
+      ],
+      "summaries": [
+        { "table": "mail_summary", "collection": "Archive", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } },
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": [], "subject": "Quarterly plan", "sender": "dan@example.net", "sender_name": "Dan Example", "date": "2026-08-03T09:00:00Z", "size": 299, "attachment": 0, "invitation": null } }
+      ],
+      "sources": [{ "collection": "Archive", "source": "imap", "checkpoint": "a1" }, { "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+    }
+  }
+}

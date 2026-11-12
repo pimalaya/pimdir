@@ -1,5 +1,5 @@
 {
-  "v": 4,
+  "v": 5,
   "label": "a relocation the connector carried out as a delete leaves the destination's create pending",
   "note": "the tombstone carries its destination in Archive, so the Remove relocates; the connector deletes the member instead, Archive already holding the identity on the server (SYNC.md §4), and states it did not relocate. Only a relocation delivers: the create in Archive stays pending, its binding with no base, the member it stood for being gone, and the source binding goes with the row purged as for a relocation (SYNC.md §2, §4)",
   "store": {

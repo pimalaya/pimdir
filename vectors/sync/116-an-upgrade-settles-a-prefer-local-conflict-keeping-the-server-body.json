@@ -1,5 +1,5 @@
 {
-  "v": 4,
+  "v": 5,
   "label": "the upgrade fetching the body a prefer-local divergence waited for keeps it and moves the base onto it",
   "note": "the store vector 15 left: a local edit c2 over c1, the server at r2 unread, the binding conflicted at r2 with no conflict_object. The upgrade fetches c3 at r2, which differs from c2, and settles it by prefer-local as a carried body: c3 is kept as a retained item under the key minted over the handle and reported Overruled, the base adopts c3 at r2 and the conflict clears. The upgrade pushes nothing: the binding now projects Dirty, c2 over a base it agreed, and the next sync pushes c2 gated on r2, over a body the trash keeps (SYNC.md §5, §6, §9)",
   "store": {

@@ -82,7 +82,9 @@ Normative: STORAGE §2, §4.3, §14.2, Annex A.
 
 The **handle** is the source's id for an item in a collection: an IMAP UID, a DAV resource name. It belongs to one source and can be renumbered, so it never identifies an item across collections or sources.
 
-The **link id** is the item's key in its collection, taken from what the content declares about itself: a Message-ID, a vCard or iCalendar UID. It is the same in every collection and on every source, which is how the store knows that a message in the inbox and the same message in the archive are one item. Every program reads a message's header by the same rules, its identity, date and subject included, so two programs give one message one key.
+The **link id** is the item's key in its collection, taken from what the content declares about itself: a Message-ID, a vCard or iCalendar UID. It is the same in every collection and on every source, which is how the store knows that a message in the inbox and the same message in the archive are one item. Every program reads a message's header by the same rules, its identity, date and subject included, so two programs give one message one key. A connector reads those fields as the message carries them wherever its server offers them so, since a server's own decoding of a subject or a date need not match.
+
+Two messages may declare one identity: a notice sent again under the id of the last. The store tells them apart by subject, date and sender, within a collection and between the collections of an account: the second never borrows the first's body, its public id, or its place when one of the two is removed.
 
 Content that declares nothing gets a derived key, which asserts no identity: two such items are never assumed equal. A collection holding one identity twice (a double delivery, or a server that let two resources share a UID) keeps both: the second copy gets a minted key and the store judges neither.
 
@@ -90,7 +92,7 @@ When a key arrives that the collection already holds, in whatever state, one dec
 
 The **hash** is the content. It is the deduplication key and the body's file name.
 
-The **seq** is the public id: a small integer, the same wherever the item is filed among items of its kind, that a client shows and accepts in place of the link id. A message and an event declaring one identity are two items with two ids. It is assigned once and never reused, so a stale id never addresses a different item.
+The **seq** is the public id: a small integer, the same wherever the item is filed among items of its kind, another message reusing its identity aside, that a client shows and accepts in place of the link id. A message and an event declaring one identity are two items with two ids. It is assigned once and never reused, so a stale id never addresses a different item.
 
 Normative: STORAGE §9, Annex A.1.
 
@@ -190,7 +192,9 @@ A process that does not own the store still originates changes: a client filing 
 
 The owner applies actions in append order, each in one transaction with the deletion of its row, so application is exactly once.
 
-Seven actions change the store: add, set flags, remove, move, copy, update, and choosing a verb's performer (below). Six intents ask a source to act outside it: sending a message, answering an invitation, cancelling one, creating, renaming and deleting a collection. The standard ships a schema for each payload, and one it refuses (a field missing, of another type, or unknown to its version) is parked whole, never half applied. The name is an open string, so an application carries actions of its own. An owner that does not recognise a kind, or lacks the means to perform it, skips the row and leaves it for the process that can.
+Seven actions change the store: add, set flags, remove, move, copy, update, and choosing a verb's performer (below). Six intents ask a source to act outside it: sending a message, answering an invitation, cancelling one, creating, renaming and deleting a collection. The standard ships a schema for each payload, and one it refuses (a field missing, of another type, or unknown to its version) is parked whole, never half applied. The name is an open string, so an application carries actions of its own. An owner that does not recognise a kind, or the version of a payload, or lacks the means to perform it, skips the row and leaves it untouched for the process that can.
+
+A queued change says what its author saw, so that it never undoes what arrived since. A flag change may carry the flags its author read: the owner then adds and removes only what the author changed, and a flag another device set in between survives. An update or a removal may name the body it was decided over, and waits for a person when the item holds another; and neither settles a conflict unless it names the body the conflict is over.
 
 A reader may overlay pending actions on what it shows, so a queued change appears before it is applied. A producer keeps the number of the row it appended and asks later whether it still waits, failed, or was applied, and for an addition which item it became, without matching the body against the store.
 

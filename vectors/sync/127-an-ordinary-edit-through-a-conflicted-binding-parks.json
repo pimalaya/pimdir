@@ -1,5 +1,5 @@
 {
-  "v": 4,
+  "v": 5,
   "label": "an edit stating no resolution through a binding in conflict with its remote is refused",
   "note": "the store of 100 and 103: b's remote edited the card to c3 at w2 while the store edited it to c2. An ordinary update through b, c2 over c2, states no resolves, so it would adopt w2 and c3 into b's base and push c2 over c3, which nobody chose to lose. It is refused, staging nothing, and parked: b's conflict stands, its conflict_object c3 kept (SYNC.md §7; STORAGE §15.2, §15.3)",
   "store": {

@@ -7,17 +7,17 @@
   "required": ["v", "cases"],
   "additionalProperties": false,
   "properties": {
-    "v": { "const": 1 },
+    "v": { "const": 2 },
     "note": { "type": "string" },
     "cases": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["action", "valid", "payload"],
+        "required": ["action", "outcome", "payload"],
         "additionalProperties": false,
         "properties": {
-          "action": { "enum": ["add", "set-flags", "remove", "move", "copy", "update", "set-performer", "submit", "calendar-reply", "calendar-cancel", "collection-create", "collection-rename", "collection-delete"] },
-          "valid": { "type": "boolean" },
+          "action": { "type": "string", "minLength": 1 },
+          "outcome": { "enum": ["valid", "malformed", "unknown"] },
           "payload": { "type": "object" },
           "note": { "type": "string" }
         }

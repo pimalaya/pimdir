@@ -1926,6 +1926,192 @@
       "summary": { "uid": "journal-basic@example.org", "summary": "Notes, day one", "dtstart": "20261020", "dtstart_tzid": null, "dtstart_value": "date" },
       "addresses": [],
       "sort_key": "2026-10-20T00:00:00Z"
+    },
+    {
+      "label": "mail, an iso-8859-1 word read as windows-1252",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-charset-windows-1252.eml",
+      "note": "the label iso-8859-1 names windows-1252 in the Encoding Standard, so the Q word's =80 is the euro sign, U+20AC, never the C1 control ISO 8859-1 holds there, and =FB is û in both; stating no Message-ID, the message carries the decoded subject into its alt: key, where a writer linking no charset table would file the literal word (Annex A.1)",
+      "body": { "len": 282, "blake3": "iyq53we4d4yf7uiqtpsbyfdtvn3zwkn6v5iml6mrlu4qemgtf4oa" },
+      "link_id": "alt:Coût 10 €|2026-08-01T10:00:00Z|alice@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": null, "in_reply_to": [], "subject": "Coût 10 €", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 282, "attachment": 0, "invitation": null },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "alice@example.org", "name": "Alice Example" },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sort_key": "2026-08-01T10:00:00Z",
+      "meta_attachment": 0,
+      "attachments": []
+    },
+    {
+      "label": "mail, words in a single-byte table charset",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-charset-iso-8859-2.eml",
+      "note": "ISO-8859-2, in the Subject as a Q word and in the display name as a B word: each octet above 7F is read through that encoding's index, BF as ż and A3 as Ł, where windows-1252 would read ¿ and £ (Annex A.1). The fixture holds octets from A1 up alone",
+      "body": { "len": 373, "blake3": "zswgjkf6tv5ikcvm5ysx3t37t3gdb3mup52ijolaironjaqnq77a" },
+      "link_id": "charset-latin2@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": "charset-latin2@example.org", "in_reply_to": [], "subject": "Zażółć gęślą jaźń", "sender": "lukasz@example.org", "sender_name": "Łukasz Żak", "date": "2026-08-01T10:00:00Z", "size": 373, "attachment": 0, "invitation": null },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "lukasz@example.org", "name": "Łukasz Żak" },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sort_key": "2026-08-01T10:00:00Z",
+      "meta_attachment": 0,
+      "attachments": []
+    },
+    {
+      "label": "mail, a word in iso-2022-jp",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-charset-iso-2022-jp.eml",
+      "note": "a stateful encoding: ESC $ B switches to JIS X 0208, five hiragana of its row 4 follow, two octets each, and ESC ( B returns to ASCII before the word ends (Annex A.1). The fixture holds no other escape, no JIS X 0201 and no row where the indexes in use differ",
+      "body": { "len": 346, "blake3": "yjs6z7of6alkkhgdycd4va66fyrz2byknu3ou6az2dasna6sxika" },
+      "link_id": "charset-jis@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": "charset-jis@example.org", "in_reply_to": [], "subject": "こんにちは", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 346, "attachment": 0, "invitation": null },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "alice@example.org", "name": "Alice Example" },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sort_key": "2026-08-01T10:00:00Z",
+      "meta_attachment": 0,
+      "attachments": []
+    },
+    {
+      "label": "mail, a word in gbk",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-charset-gbk.eml",
+      "note": "a double-byte table: four characters of GB 2312's first level, two octets each, C4E3 BAC3 CAC0 BDE7 (Annex A.1). The fixture holds no octet 80, no four-octet sequence and no pair outside GB 2312's rows of characters",
+      "body": { "len": 316, "blake3": "dkemqquus5vmbni6vxnletntwsn45jrpnuzy5ym3fnfnquzs2jxa" },
+      "link_id": "charset-gbk@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": "charset-gbk@example.org", "in_reply_to": [], "subject": "你好世界", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 316, "attachment": 0, "invitation": null },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "alice@example.org", "name": "Alice Example" },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sort_key": "2026-08-01T10:00:00Z",
+      "meta_attachment": 0,
+      "attachments": []
+    },
+    {
+      "label": "mail, a word under a label of the replacement encoding",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-charset-replacement.eml",
+      "note": "iso-2022-kr is a label of the Encoding Standard, but of its replacement encoding, which decodes nothing: the word is malformed and stays as its literal text, the whitespace and the text after it kept, as a word in a charset no label names does (Annex A.1)",
+      "body": { "len": 343, "blake3": "yvnz7einyyyzq4euj4gyh6qvmrh3psuno4xklzznmz75iqjbe3qa" },
+      "link_id": "charset-replacement@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": "charset-replacement@example.org", "in_reply_to": [], "subject": "=?ISO-2022-KR?B?GyQpQw5HUQ8=?= kept", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 343, "attachment": 0, "invitation": null },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "alice@example.org", "name": "Alice Example" },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sort_key": "2026-08-01T10:00:00Z",
+      "meta_attachment": 0,
+      "attachments": []
+    },
+    {
+      "label": "mail, four fields stated twice",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-repeated-fields.eml",
+      "note": "Message-ID, Subject, From and Date each stand twice: a field present twice is read from its first occurrence, so the key, the subject, the sender, its one address row and the date are the first's, and the second From files no row (Annex A.1). A source serving the last occurrence of a field is read for all of them, first element",
+      "body": { "len": 435, "blake3": "m2bu5wwc7c53kkdgwvkz2rhu5dswjhkrkd2uhpcpajbv5p2mcsmq" },
+      "link_id": "repeated-1@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": "repeated-1@example.org", "in_reply_to": [], "subject": "First subject", "sender": "first@example.org", "sender_name": "First Sender", "date": "2026-08-01T10:00:00Z", "size": 435, "attachment": 0, "invitation": null },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "first@example.org", "name": "First Sender" },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sort_key": "2026-08-01T10:00:00Z",
+      "meta_attachment": 0,
+      "attachments": []
+    },
+    {
+      "label": "mail, whitespace between a field's name and its colon",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-spaced-field-name.eml",
+      "note": "`Message-ID :`, a Subject before a tab, `From :` and a Date before two spaces: a field's name is the bytes before its first colon trimmed of trailing whitespace, as RFC 5322's obsolete syntax writes one, so each field is found and the message is keyed by its Message-ID, never by an alt: key (Annex A.1)",
+      "body": { "len": 249, "blake3": "a4m3zhvbsxnye7e6ftywbg3qw32j35yde6kdxzg5xi4iuphkng4a" },
+      "link_id": "spaced-name@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": "spaced-name@example.org", "in_reply_to": [], "subject": "Spaced out", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 249, "attachment": 0, "invitation": null },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "alice@example.org", "name": "Alice Example" },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sort_key": "2026-08-01T10:00:00Z",
+      "meta_attachment": 0,
+      "attachments": []
+    },
+    {
+      "label": "card, an empty UID",
+      "kind": "text/vcard",
+      "fixture": "fixtures/card-empty-uid.vcf",
+      "note": "a UID present and empty is no usable hint (STORAGE.md section 9): the card takes the hash: fallback over its bytes, never the empty key every such card would share, and the uid column keeps the value verbatim, the empty string",
+      "body": { "len": 86, "blake3": "7i4dde2fwcqreipqwhikf3w4alcdva63tfb24ggnf3yb4d5agr6a" },
+      "link_id": "hash:6978bdefb73bfcc5",
+      "table": "contact_summary",
+      "summary": { "uid": "", "fn": "Empty Uid", "kind": null, "org": null },
+      "addresses": [
+        { "role": "email", "position": 0, "address": "empty.uid@example.org", "name": null }
+      ],
+      "sort_key": "empty uid"
+    },
+    {
+      "label": "event, a UID of whitespace",
+      "kind": "text/calendar",
+      "fixture": "fixtures/event-blank-uid.ics",
+      "note": "a UID holding a space and a tab alone is empty once trimmed of the two, so no usable hint (STORAGE.md section 9): the resource takes the hash: fallback, and the uid column keeps the value verbatim",
+      "body": { "len": 200, "blake3": "q74swl6hlk6d2vb3gzqk2l5oir2yqnmbpp74mwp25wldsaggxr2q" },
+      "link_id": "hash:e3c803b659a35321",
+      "table": "event_summary",
+      "summary": { "uid": " \t", "summary": "A UID of whitespace", "location": null, "dtstart": "20260815T090000Z", "dtstart_tzid": null, "dtstart_value": "date-time", "dtend": null, "recurring": 0, "until": null },
+      "addresses": [],
+      "sort_key": "2026-08-15T09:00:00Z"
+    },
+    {
+      "label": "card, a capital sigma ending a word",
+      "kind": "text/vcard",
+      "fixture": "fixtures/card-final-sigma.vcf",
+      "note": "the full lowercase mapping applies Final_Sigma: a capital sigma ending a word, before a space, the end of the name or the @ of an address, folds to the final form U+03C2, and one inside a word to U+03C3, in the sort key (Annex A.2) and in the address (A.6)",
+      "body": { "len": 166, "blake3": "wkn6oojuivnt2x63hiekyh3575prkh4pi5iofrruo2nfcp52itoq" },
+      "link_id": "urn:uuid:5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d",
+      "table": "contact_summary",
+      "summary": { "uid": "urn:uuid:5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d", "fn": "ΟΔΥΣΣΕΥΣ ΛΑΕΡΤΙΑΔΗΣ", "kind": null, "org": null },
+      "addresses": [
+        { "role": "email", "position": 0, "address": "οδυσσευς@example.org", "name": null }
+      ],
+      "sort_key": "οδυσσευς λαερτιαδης"
+    },
+    {
+      "label": "card, a no-break space at each end of the name",
+      "kind": "text/vcard",
+      "fixture": "fixtures/card-nbsp-name.vcf",
+      "note": "the sort key is trimmed of the characters of the White_Space property, a no-break space U+00A0 among them, which a trim of the space and the tab alone, or of the code points up to U+0020, leaves in place; the fn column keeps both (Annex A.2)",
+      "body": { "len": 106, "blake3": "xz2kgy2ze3vc47iwos6gqifek6edtnnebfqht7tgoyfhvaepsunq" },
+      "link_id": "urn:uuid:6b7c8d9e-0f1a-4b2c-9d3e-4f5a6b7c8d9e",
+      "table": "contact_summary",
+      "summary": { "uid": "urn:uuid:6b7c8d9e-0f1a-4b2c-9d3e-4f5a6b7c8d9e", "fn": " Jane Trim ", "kind": null, "org": null },
+      "addresses": [],
+      "sort_key": "jane trim"
+    },
+    {
+      "label": "event, an override and no master",
+      "kind": "text/calendar",
+      "fixture": "fixtures/event-override-only.ics",
+      "note": "a resource holding one component, which carries a RECURRENCE-ID: with no master, the first such component in document order gives the uid, the summary, the times, the people and the sort key, as an attendee invited to one instance of a series stores it; it states no rule, so recurring is 0 and until null (Annex A.3)",
+      "body": { "len": 359, "blake3": "nzpqtok47maywxa2slykuqa64dusgzgc7qbghre3bri55fancc7q" },
+      "link_id": "override-only@example.org",
+      "table": "event_summary",
+      "summary": { "uid": "override-only@example.org", "summary": "Moved review", "location": null, "dtstart": "20260903T160000Z", "dtstart_tzid": null, "dtstart_value": "date-time", "dtend": "20260903T170000Z", "recurring": 0, "until": null },
+      "addresses": [
+        { "role": "organizer", "position": 0, "address": "erin@example.com", "name": "Erin" },
+        { "role": "attendee", "position": 0, "address": "frank@example.com", "name": "Frank" }
+      ],
+      "sort_key": "2026-09-03T16:00:00Z"
     }
   ]
 }

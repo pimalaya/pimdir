@@ -1,5 +1,5 @@
 {
-  "v": 4,
+  "v": 5,
   "label": "a round narrowed by received date keeps the undated and the future-dated members it could not list",
   "note": "Graph lists the scope [2026-09-01, open) by receivedDateTime from two days below since, and says so (narrowed). The draft 11 states no usable Date and was saved in May, before the filter's window; 13 is dated 2035 by a sender's clock but arrived in May too; neither is listed, and Graph hands no unfiltered enumeration of ids here. The last page finds 14 absent, dated 5 October, inside what the filter lists, and drops it; 11 and 13 are left as they stand, neither dropped nor pushed, a filter's silence proving nothing of what it cannot list. A stated removal, an unnarrowed round or a later enumeration decides them (SYNC.md §4, §5)",
   "store": {
