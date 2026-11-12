@@ -22,8 +22,7 @@ WHERE b.collection = :collection AND b.source = :source
   AND r.round_started_at IS NOT NULL
   AND b.round IS NOT r.round
   AND substr(b.handle, 1, 1) != char(1)
-  AND (b.base_present = 1 OR b.base_flags_known = 1
-       OR b.base_object IS NOT NULL OR b.base_revision IS NOT NULL)
+  AND b.base_present = 1
   AND CASE WHEN s.date IS NULL THEN r.round_band = 0
            ELSE (r.round_since IS NULL OR s.date >= r.round_since)
                 AND (r.round_until IS NULL OR s.date < r.round_until) END

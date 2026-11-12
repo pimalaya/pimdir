@@ -1,2 +1,2 @@
--- The counterpart of count_items, riding the items_retained partial index.
-SELECT count(*) FROM items WHERE collection = :collection AND deleted = 1;
+-- The counterpart of count_items, riding the items_deleted partial index.
+SELECT count(*) AS count FROM items WHERE collection = :collection AND deleted = 1;

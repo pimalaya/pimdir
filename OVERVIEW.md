@@ -174,7 +174,7 @@ Normative: SYNC §9; STORAGE §10.
 
 Removal from every source is not removal from the store. When an item's last binding goes, the row and its body are kept, hidden from sync and from the live reads, and listed in a trash view. Only an explicit purge deletes the row; the body then falls to the collector. A purge deletes the row, not every trace of it: erasing an item, on the user's request, also collects its body, clears it from the search index and leaves nothing of it in the free space of the database files. An identity that comes back revives the retained row, keeping its public id and, for a message, its body, so a restore costs no network. A contact, an event or a file revived without its body comes back to be fetched, its old body kept apart in the trash, since its server may hold another version now. A message revives only when it is the same message, its subject, date, sender and size agreeing; another message reusing the identifier is filed beside it.
 
-Mail older than a sync's window is not removed either. It stays stored and readable until the owner, on the user's request, collects what lies below a date, which frees the space and tells no server anything. Widening the window later lists it again.
+Mail older than a sync's window is not removed either. It stays stored and readable until the owner, on the user's request, evicts what lies below a date, which frees the space and tells no server anything. Widening the window later lists it again.
 
 The owner may instead release the bodies below a date and keep the headers: the mail stays listed and searchable, and a message opened later is fetched again. A message whose body is still needed (a conflict, an unsent message, a copy owed to another source) keeps it.
 
@@ -206,7 +206,7 @@ Normative: STORAGE §15, Annex B.
 
 Every item and collection carries a stamp drawn from one counter that only increases, taken when the row last changed in a way a reader can see, and no two rows share one. A consumer that derives anything from the store (the search index, a window listing a mailbox) remembers the last stamp drawn when it last looked and asks for what moved above it.
 
-A deleted row cannot carry a stamp, so purged items, collected bodies and renamed collections are counted separately, and a consumer reconciles its keys only when that count moved.
+A deleted row cannot carry a stamp, so purged items, collected bodies and renamed or deleted collections are counted separately, and a consumer reconciles its keys only when that count moved.
 
 Normative: STORAGE §4.5.
 

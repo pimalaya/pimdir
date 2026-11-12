@@ -1,6 +1,6 @@
 # Pimdir storage specification
 
-Status: storage-draft-09, the base, requiring no other part
+Status: storage-draft-10, the base, requiring no other part
 
 The storage part of the pimdir standard, and its base: a **SQLite database** (the index and the mutable state) plus a **content-addressed blob directory** (the bodies). The two layers over it are [SYNC.md](./SYNC.md), how sources reconcile through the store, and [SEARCH.md](./SEARCH.md), the index and query language over it.
 
@@ -24,7 +24,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 8. [Concurrency and ownership](#8-concurrency-and-ownership)
 9. [Identity and dedup](#9-identity-and-dedup): [the public id](#91-the-public-id-seq), [accounts](#92-accounts), [the sort key](#93-the-sort-key)
 10. [Sync model](#10-sync-model)
-11. [Retention](#11-retention): [requirements](#111-requirements), [purging](#112-purging), [collecting below a date](#113-collecting-below-a-date), [releasing bodies below a date](#114-releasing-bodies-below-a-date), [erasing](#115-erasing)
+11. [Retention](#11-retention): [requirements](#111-requirements), [purging](#112-purging), [evicting below a date](#113-evicting-below-a-date), [releasing bodies below a date](#114-releasing-bodies-below-a-date), [erasing](#115-erasing)
 12. [Collection generation](#12-collection-generation)
 13. [Encodings](#13-encodings)
 14. [Operations](#14-operations): [reading the store](#141-reading-the-store), [references](#142-references), [files](#143-files)
@@ -70,6 +70,7 @@ Any language with a SQLite binding can implement this.
 - **Pending create**: a binding with no base, a source's create waiting for its add to be accepted, under a **provisional handle**: `U+0001` followed by the link id, a name no server hands out (SYNC.md §2). A **delivered create** is one its source took before any listing named it: its binding keeps the provisional handle and holds a base naming nothing (SYNC.md §2).
 - **Held**: a key is held in a collection when a row of `items` there has it, live, tombstoned or retained, and free otherwise (§9).
 - **Hash**: the content hash of an object's bytes, BLAKE3 in base32 (§5): its integrity value, dedup key and blob name, never a path.
+- **Source**: one remote the store syncs a collection with or performs an intent through, a server account over one protocol or another device, under an owner-chosen id, never empty, naming one remote store-wide (§4.3): the `source` of `sources`, `bindings`, `capabilities` and `performers`. An item's sources are those binding it.
 - **Checkpoint**: an opaque per-source cursor (QRESYNC state, JMAP state, DAV sync-token).
 - **Batch**: the operations a writer folds into the store in one transaction, in order (§14); an operation cut into several batches writes them as its **chunks**.
 - **Sync state**: the rows an engine writes for its sources, bindings, sources and the cross-source columns of items, which `store_meta.sync_version` says the version of (§14).
@@ -77,6 +78,7 @@ Any language with a SQLite binding can implement this.
 - **Round**: one complete listing of a scope by one source, in pages, under an id; it stamps the bindings it lists (SYNC.md §5).
 - **Coverage**: the scope of a source's last round that closed and when it closed: the store holds every member of the collection the source has in that scope, and the checkpoint serves it.
 - **Retained item**: an item no source holds any more, kept and hidden until purged (§11).
+- **Eviction**: the owner's removal, on request, of the mail of a collection below a date that owes nothing (§11.3): no delete, no purge and nothing pushed, the remote keeping every member.
 - **Writer**: whoever writes rows of the store: the owner, an engine through it (§14), a producer enqueuing (§15).
 - **Consumer**: a program deriving state from the store and following its change feed (§4.5): the search index, a reader's window.
 - **Engine**: an owner's program reconciling the store with its sources by SYNC.md's verbs, reading each source through a **connector**, which answers for one source over one protocol (SYNC.md §4).
@@ -115,12 +117,12 @@ The index is derived and droppable. No other file belongs in the directory; an i
 - The statements under queries/storage/ are RECOMMENDED verbatim and need **SQLite 3.37** or later, for `RETURNING`, upserts, `UPDATE … FROM` and the `STRICT` temporary table of the list parameters (§4.4); they call no JSON function and no extension. An implementation MAY run statement text of its own, on any SQLite the schema loads on, keeping what §4.4 binds.
 - `PRAGMA foreign_keys = ON` MUST be set per connection, and so MUST `PRAGMA synchronous = FULL` or `EXTRA`: a commit a power loss undid would hand out again a queue id, a `seq` or a change stamp a producer or a consumer already recorded (§4.5, §9.1, §15). A connection that writes also sets `PRAGMA secure_delete = ON` (§11.5).
 - `PRAGMA journal_mode = WAL` is RECOMMENDED for a local store, with a `PRAGMA journal_size_limit`, so a WAL one large write grew is truncated once checkpointed; see §8 for a network filesystem.
-- pimdir.db is created with `PRAGMA auto_vacuum = INCREMENTAL`, which a database takes only while it holds no table: 0001_init.sql sets it before its first. An owner MAY run `PRAGMA incremental_vacuum` after a collection, a purge or a release (§5, §11) to give the freed pages back to the filesystem.
+- pimdir.db is created with `PRAGMA auto_vacuum = INCREMENTAL`, which a database takes only while it holds no table: 0001_init.sql sets it before its first. An owner MAY run `PRAGMA incremental_vacuum` after the collector's run, a purge, an eviction or a release (§5, §11) to give the freed pages back to the filesystem.
 - A reader and a producer SHOULD set a busy timeout (`PRAGMA busy_timeout`, or its driver's), so the owner's write transaction delays a read or an enqueue rather than failing it.
 
 ### 4.2 Schema version
 
-`store_meta.format_version` names the version of this part whose schema the store holds: this draft's name, `storage-draft-09`, while this part is a draft, and `storage-vN` once released, N its major alone. `init_store_meta` writes it when the store is created, and `set_store_version` with every migration (§6).
+`store_meta.format_version` names the version of this part whose schema the store holds: this draft's name, `storage-draft-10`, while this part is a draft, and `storage-vN` once released, N its major alone. `init_store_meta` writes it when the store is created, and `set_store_version` with every migration (§6).
 
 **A draft's store opens under that draft alone.** While this part is a draft, a program of any profile MUST refuse a store whose `format_version` is not its own draft's name, naming both, and a store lacking the column, which a draft before storage-draft-08 wrote. A released program refuses every draft store the same way, so no draft store is carried into a release. A refused store is never reconciled, migrated, rebuilt nor written, and never deleted.
 
@@ -145,7 +147,7 @@ The canonical schema is migrations/storage/0001_init.sql, which is normative. Th
 - **`store_meta`** (one row): `format`, `format_version` and the schema versions `version`, `read_version` and `produce_version` (§4.2), the store's identity `store_id` and `incarnation` (§4.5, §8), `hash_algo` (`blake3`, the one algorithm of §5), `created_at`, `derivation` (the Annex A revision the rows stand under, §6), `sync_version` (the sync part the sync state follows, §14), and the counters `next_seq` (§9.1), `next_change` and `purges` (§4.5).
 - **`collections`**: `id`, `account` (§9.2), `kind` (the media type every item shares, one of the four of §13 or `''` until declared; `x-` names capabilities, reference roles and queue actions, never a kind), `name`, `parent` (hierarchy by reference), the presentation columns `color`, `description`, `sort_order`, the `role` a source states (§14), the cross-source `conflict` policy, `generation` (§12) and `changed` (§4.5).
 
-  Every foreign key onto `id` is `ON UPDATE CASCADE`, so a rename keeps its contents (§14); `ON DELETE` is `CASCADE`, `SET NULL` for `parent`.
+  Every foreign key onto `id` is `ON UPDATE CASCADE`, so a rename keeps its contents (§14); `ON DELETE` is `CASCADE`, `SET NULL` for `parent` and for a receipt's `collection` (§15.4).
 - **`sources`**: one row per source syncing a collection, keyed `(collection, source)`, carrying its `checkpoint`, its coverage and its round (§10).
 
   Its **coverage**: `covered_since` and `covered_until`, the scope of its last round that closed, and `covered_at`, when it closed, `NULL` for never.
@@ -166,9 +168,9 @@ The canonical schema is migrations/storage/0001_init.sql, which is normative. Th
   A handle is bound once, never repointed, and names one item per source (§10): `bindings_by_handle` is unique.
 - **`supersessions`**: what an `add` carrying `supersedes` replaced (§15.3), keyed by the `item` it tombstoned, with `by_item` the item it created; each end cascades with its item.
 - **`queue`**: the action queue (§15): `id`, `created_at`, `producer`, `collection`, `action`, `payload`, `target_collection` (the collection a payload names, §15.3), `object_hash`, `attempts`, `error`.
-- **`receipts`**: what an applied queue row or a performed intent became, keyed by its `id`: `applied_at`, the `collection` it was queued on and, for an `add`, the `seq` of the item it created (§15.2, §15.4, §15.5).
+- **`receipts`**: what an applied queue row or a performed intent became, keyed by its `id`: `applied_at`, the `collection` it was queued on, `NULL` once that collection is gone, and, for an `add`, the `seq` of the item it created (§15.2, §15.4, §15.5).
 
-**Rows and indexes.** A table whose rows are a few short columns keeps no rowid: `placement_flag`, `binding_base_flag`, `item_address`, `mail_in_reply_to`, `task_category`, `item_reference` and `supersessions` are `WITHOUT ROWID`, a row stored once, in its key's order. An index on a pointer at an object holds the rows whose pointer is set (`items_by_object`, `bindings_by_object`, `bindings_by_shared_object`, `bindings_by_conflict_object`, `items_by_conflict_object`, `queue_by_object`), which an equality implies, so an object's delete checks its foreign keys there; `items_bodiless` holds the other side, each collection's live rows holding no body, which the search part's `coverage` counts per collection (SEARCH.md §8.2). `items_unread` holds each collection's live unread mail in its order (§13, §14.1), `items_by_retained` the retained rows by the instant they were retired (§11.2). No index orders the items of several collections together: a page over a set merges each collection's order (§9.3).
+**Rows and indexes.** A table whose rows are a few short columns keeps no rowid: `placement_flag`, `binding_base_flag`, `item_address`, `mail_in_reply_to`, `task_category`, `item_reference` and `supersessions` are `WITHOUT ROWID`, a row stored once, in its key's order. An index on a pointer at an object holds the rows whose pointer is set (`items_by_object`, `bindings_by_object`, `bindings_by_shared_object`, `bindings_by_conflict_object`, `items_by_conflict_object`, `queue_by_object`), which an equality implies, so an object's delete checks its foreign keys there; `items_bodiless` holds the other side, each collection's live rows holding no body, which the search part's `coverage` counts per collection (SEARCH.md §8.2). `items_unread` holds each collection's live unread mail in its order, which `count_unread` reads (§13, §14.1), `items_deleted` every deleted row of a collection by `seq`, the trash view's (§11.1), `items_by_retained` the retained rows by the instant they were retired (§11.2), and `items_by_seq_global` a public id whatever its collection, which a search hit names without one (SEARCH.md §8.2). No index orders the items of several collections together: a page over a set merges each collection's order (§9.3).
 
 An item plus one binding per source is the whole model. Single-source is the N=1 case; N≥2 adds only `deleted`, a removal that lingers until every source has dropped it.
 
@@ -177,6 +179,8 @@ An item plus one binding per source is the whole model. Single-source is the N=1
 The named, parameterised statements servicing §14 live under [queries/storage/](./queries/storage/), one file per statement named after it, sorted by the profile that runs it: read/ is the reader's (§14.1), queue/ the producer's (§15.1), owner/ the rest, an owner running all three. An implementation reads them by listing its directories. A file's leading comment says what the statement alone cannot; the rules are this document's.
 
 A statement's name, its named parameters and the columns it answers, in order, bind every implementation; its text is a reference, RECOMMENDED verbatim (§4.1). One running text of its own MUST keep all three and the statement's effect, the rules this document states and §7's invariants. Its text for one name MAY be several statements, run in order in one transaction, the caller's or one it opens, so long as it keeps the three and the effect: no other connection's write comes between them, and the name answers the rows the one statement answers. A fix to the text keeping the three is a patch of this part; a change to any of them is a minor version at least. The search index's statements are under queries/search/ on the same terms.
+
+queries/signatures.json states the three for every statement of both directories: its name, its parameters in order of first appearance, the list slots it reads and the columns it answers, in order, each under a name of its own. It is generated from the statements (checks/signatures.py) and held to them, so a change to a statement that moves any of the three shows in that file, and one that moves none is a change of text alone.
 
 **A statement names its columns.** No statement, canonical or an implementation's own, reads `*` or inserts without a column list, so a column a later version adds changes no statement's rows nor its effect, which is what lets a migration adding one raise no compatibility version (§6). The one exception is a program judging whether it opens a store at all (§4.2, §6 step 2): its own text MAY read `store_meta` with `*`, taking each column it knows by name, since the row it judges may be another draft's, lacking a column this draft names or holding one it does not know.
 
@@ -194,7 +198,7 @@ Triggers in the canonical DDL draw the stamps, so no writer plumbs one. An inser
 
 A summary, address, `mail_in_reply_to` or `task_category` row has no stamp: a writer changing one under an unchanged item MUST run `stamp_item` in the same transaction, which requests a stamp the trigger then draws. A renamed collection restamps every item under its new id. A source's coverage moving restamps its collection, which a reader lists with it (§14.1).
 
-A deleted row cannot carry a stamp, so a purged item and a collected object count in `store_meta.purges`. So does a renamed collection (`rename_collection`): its items' keys under the old id are gone as a purged row's, and the restamp above names them under the new one alone. `load_change_cursor` answers the last stamp drawn, that count and the store's identity, `store_id` and `incarnation` (§8).
+A deleted row cannot carry a stamp, so a purged item, an evicted one (§11.3), a collected object and a deleted collection, an empty one included, count in `store_meta.purges`. So does a renamed collection (`rename_collection`): its items' keys under the old id are gone as a purged row's, and the restamp above names them under the new one alone. `load_change_cursor` answers the last stamp drawn, that count and the store's identity, `store_id` and `incarnation` (§8).
 
 A consumer records all four, folds `list_items_changed_since` and `list_collections_changed_since` above the recorded stamp on its next look, and reconciles its keys against the store only when `purges` moved. A cursor is read before a pass and recorded after it, so a crash between the two replays and skips nothing.
 
@@ -315,7 +319,7 @@ On a network filesystem neither SQLite's locking nor advisory locks are reliable
 
 **Copies.** A backup MUST copy pimdir.db consistently, through SQLite's online backup API or `VACUUM INTO`, never as a file under a running owner, and then objects/ and quarantine/, whose files may be the only copy of a body (§7), holding the staging lock shared across the copies, though it writes nothing, so no collector unlinks a body the copied database names (§5).
 
-A restore puts them back before any program opens the store, then runs `raise_incarnation` on the copy, given the replaced store's `incarnation` when that store can still be read. The restored store keeps its `store_id` and answers an incarnation no consumer of it recorded (§4.5).
+A restore puts them back before any program opens the store, then runs `raise_incarnation` on the copy, given the replaced store's `incarnation` when that store can still be read. The restored store keeps its `store_id` and answers an incarnation no consumer of it recorded (§4.5). The statement raises it by a random stride above both, so two restores of one backup answer two incarnations even when neither could read the store it replaced; an incarnation is compared for equality, and its size says nothing.
 
 A live store MUST NOT be replicated by a file-synchronisation tool: each host would hold an owner lock of its own over its own copy, and the tool would copy the database and its WAL mid-write. Several devices share what a store holds through sources (SYNC.md), each with a store of its own.
 
@@ -398,7 +402,7 @@ The store records nothing else about an account: no credentials (§18), no endpo
 - `seq` breaks ties, so a page over `(sort_key, seq)` is total.
 - `set_sort_key` restates a key without refetching; a `write` MUST leave an existing key alone unless it carries a new one.
 
-Paging is a seek on `items_by_sort`, not a scan, and costs the same at any depth. A keyset statement bounds the index by its cursor itself: a `NULL` cursor, the first page, is coalesced to a bound beyond every key (the empty blob, which sorts above every text, newest first; the empty text and `seq` 0 oldest first) and never tested apart, since `:after_key IS NULL OR …` keeps the cursor out of the index and walks every row above it.
+Paging is a seek on `items_by_sort`, not a scan, and costs the same at any depth. A keyset statement bounds the index by its cursor itself: a `NULL` cursor, the first page in every paged read (§14.1), is coalesced to a bound beyond every key (the empty blob, which sorts above every text, newest first; the empty text and `seq` 0 oldest first) and never tested apart, since `:after_key IS NULL OR …` keeps the cursor out of the index and walks every row above it.
 
 A page over a set of collections (`list_mail_page_filtered`, `search_mail`, `search_contacts`, `search_calendar`, `search_files`) is a **merge**: each collection of the set seeks its own `items_by_sort` beyond the cursor and answers at most the page under the page's filters, and their union, at most the set's size times the page, is ordered on `(sort_key, seq, collection)` and cut. A page never reads another collection's rows nor another kind's, and a collection named twice in the set is read once. A filter one collection matches seldom reads that collection down to the rows it matches, or whole. A substituted statement SHOULD keep both plans.
 
@@ -448,7 +452,7 @@ The unique index on `(collection, source, handle)` refuses a write that does not
 
 ## 11. Retention
 
-When an item's last binding vanishes the store MUST retain the row rather than delete it. Only an explicit purge removes it, or the owner's manual collection of what lies below a date (§11.3), so a remote expunge never destroys the local copy.
+When an item's last binding vanishes the store MUST retain the row rather than delete it. Only an explicit purge removes it, or the owner's manual eviction of what lies below a date (§11.3), so a remote expunge never destroys the local copy.
 
 The one exception is an identity another collection of the same account holds live with the same body: the item moved, or was filed twice, and nothing is lost by purging the row in the same transaction, the holder pinning the body. A holder carrying another body, or none, is not that case and the row is retained.
 
@@ -468,10 +472,10 @@ It has no binding, so no source is offered it. The trash view lists it, and a pu
 
 - **Retire, do not delete** (`retain_item`): a writer MUST stamp `retained_at` and `retained_by` and keep `object_hash`, so the body stays pinned.
 - **A held identity is not kept twice**: when another collection of the same account holds the link id live with the retiring body, or the retiring row has none (`held_elsewhere`, bound to the retiring `object_hash`), `retain_item` is followed by `purge_item` on the seq `retained_item` gives and `release_pins`, in the same transaction, and the purge counts (§4.5).
-- **Stamped by SQLite**: `retained_at` is written by the statement; the cutoff of a purge is the caller's parameter.
+- **Stamped by SQLite**: `retained_at` is written by the statement, in the shape the schema holds (§13); the cutoff of a purge is the caller's parameter.
 - **Hidden from the sync seam**: `load_items` MUST filter on `retained_at IS NULL`, or the next run re-uploads every retained row.
 - **Hidden from the reads**: a deleted row MUST be read as a tombstone under §14.1's live-only rule; `list_retained_page` and `count_retained` are the trash view and list every deleted row, `retained_at` saying whether a source still binds it.
-- **Purge is the only true delete** of a retained row, as the owner's collection is of a live one (§11.3), and §11.5 erases what it leaves in the files: `purge_item` and `purge_retained_before`, both guarded on `retained_at IS NOT NULL`, both `RETURN` the pinned hashes for `release_pins` in the same transaction. The bodies fall to the collector. A tombstone a source still binds is not purgeable: its source has not agreed.
+- **Purge is the only true delete** of a retained row, as the owner's eviction is of a live one (§11.3), and §11.5 erases what it leaves in the files: `purge_item` and `purge_retained_before`, both guarded on `retained_at IS NOT NULL`, both `RETURN` the pinned hashes for `release_pins` in the same transaction. The bodies fall to the collector. A tombstone a source still binds is not purgeable: its source has not agreed.
 - **A reappearing link id revives** (`retained_item` then `revive_item`), as §9's table says: stamps cleared, `deleted` back to 0, `seq` kept. One branch serves a source-side resurrection and a queued `add`. Minting never revives a row (§9).
 - **A revive adopts the incoming body when there is one.** When the incoming placement carries none (a `Meta` listing or fetch, a `Copy` or `Move` with no body):
   - for an immutable kind the retained body stays and becomes the binding's base, so a restore costs no network, the row agreeing with the member on its size as §9 requires;
@@ -482,36 +486,36 @@ It has no binding, so no source is offered it. The trash view lists it, and a pu
 
 ### 11.2 Purging
 
-`purge_item(collection, seq)` empties one item; `purge_retained_before(cutoff)` every item retired before an RFC 3339 instant, store-wide, the owner computing the cutoff from its own policy. A cutoff of now reproduces terminal deletion. `retained_bytes()` reports what retention holds. `purge_retained_before` and `retained_bytes` read the retained rows alone, on `items_by_retained`, so a sweep reads what it purges however large the store. Either purge counts in `store_meta.purges` through the delete trigger (§4.5).
+`purge_item(collection, seq)` empties one item; `purge_retained_before(before)` every item retired before an RFC 3339 instant, its cutoff `before`, store-wide, the owner computing the cutoff from its own policy. A cutoff of now reproduces terminal deletion. `retained_bytes()` reports what retention holds. `purge_retained_before` and `retained_bytes` read the retained rows alone, on `items_by_retained`, so a sweep reads what it purges however large the store. Either purge counts in `store_meta.purges` through the delete trigger (§4.5).
 
 The comparison is textual, so a cutoff MUST be written as the stamps are, with milliseconds and the `Z` designator (`%Y-%m-%dT%H:%M:%fZ`). A cutoff without milliseconds sorts after every stamp of its own second and purges up to a second more than asked.
 
-### 11.3 Collecting below a date
+### 11.3 Evicting below a date
 
 Nothing in pimdir is deleted by inference, and a scope is no exception: mail older than a source's scope stays stored and readable, and a sync neither drops it nor pushes anything for it (SYNC.md §5).
 
-Freeing that space is the owner's, on the user's request, by **`collect_before(collection, before)`**: every live mail item of the collection whose `date` is older than the RFC 3339 instant `before` and that owes nothing is removed with its bindings, summary and addresses. An item with no `date` is never older.
+Freeing that space is the owner's, on the user's request, by an **eviction**, **`evict_before(collection, before)`**: every live mail item of the collection whose `date` is older than the RFC 3339 instant `before` and that owes nothing is removed with its bindings, summary and addresses. An item with no `date` is never older.
 
 An item owes something, and stays, while:
 
 - it has no binding: no source holds it, so no relisting restores it (a copy kept on the device);
 - it is conflicted, or a binding of it is conflicted or has no base;
-- its flags differ from a binding's base flags, both known;
+- its flags differ from a binding's base flags, both known, by a system flag or by a flag either set holds and the other lacks;
 - a person's reference names it (§14.2), which no relisting restores.
 
-A collection is not a delete: it stamps no tombstone, queues nothing and derives no push, and the remote keeps every member, which a later widening lists and names again.
+An eviction is not a delete: it stamps no tombstone, queues nothing and derives no push, and the remote keeps every member, which a later widening lists and names again.
 
 It MUST run in one transaction with `recompute_refcounts`, the cascade dropping pins no statement returns; the bodies fall to the collector, and each row counts in `store_meta.purges` (§4.5). It MUST NOT run between two chunks of a verb (§5).
 
-An owner SHOULD drain the queue first, an action addressing a collected item by `seq` being parked. An owner narrowing a scope and collecting below it records the narrower coverage with the next sync (SYNC.md §5), not before.
+An owner SHOULD drain the queue first, an action addressing an evicted item by `seq` being parked. An owner narrowing a scope and evicting below it records the narrower coverage with the next sync (SYNC.md §5), not before.
 
 ### 11.4 Releasing bodies below a date
 
-An owner keeping the headers of a mail collection and only some of its bodies frees the others by **`release_before(collections, until)`**. Every live mail item of a set of collections whose `sort_key` lies below `until` (an RFC 3339 instant, or `NULL` for none, the undated below any) and that holds a body it does not need goes back to `Meta`:
+An owner keeping the headers of a mail collection and only some of its bodies frees the others by **`release_before(collections, before)`**. Every live mail item of a set of collections whose `sort_key` lies below `before` (an RFC 3339 instant, or `NULL` for no ceiling, the undated below any) and that holds a body it does not need goes back to `Meta`:
 
 - `object_hash` is cleared and `level` set to `1`;
 - the summary, the addresses, the flags, the bindings and `seq` stay, so the item is still listed, counted and searched;
-- a binding whose `base_object` is the item's body releases it too (`release_bases_before`) and stays based, `base_present` set: one identity is one message, so the base an immutable kind keeps is that body and nothing else.
+- a binding whose `base_object` is the item's body releases it too (`release_bases_before`) and stays based, `base_present` saying so alone (§13): one identity is one message, so the base an immutable kind keeps is that body and nothing else.
 
 An item needs its body, and keeps it, while:
 
@@ -520,11 +524,11 @@ An item needs its body, and keeps it, while:
 - it has no binding;
 - a source of the collection (`sources`) binds it not, the body being what propagation offers that source (SYNC.md §9).
 
-An unpushed flag needs no body and does not hold one back. A source declared for the account but not synced on the collection yet holds nothing back, having no `sources` row there: an owner adding a mirror syncs it once before a release. Undated mail lies below any `until` and is released with the rest.
+An unpushed flag needs no body and does not hold one back. A source declared for the account but not synced on the collection yet holds nothing back, having no `sources` row there: an owner adding a mirror syncs it once before a release. Undated mail lies below any ceiling and is released with the rest.
 
 A released body is fetched again by the next `Full` upgrade, linked from another collection holding it when it can be (SYNC.md §6). A released row is no claim: a sync names it at `Meta` and fetches nothing.
 
-A release is no delete and no collection: it stamps no tombstone, queues nothing, derives no push, and the remote keeps every body.
+A release is no delete and no eviction: it stamps no tombstone, queues nothing, derives no push, and the remote keeps every body.
 
 `release_bases_before` then `release_before` MUST run in one transaction with `recompute_refcounts`, in that order, the first leaving true what the second selects. Each released item is restamped (§4.5). The bodies fall to the collector, unless another collection or a queued action still pins them. It MUST NOT run between two chunks of a verb (§5).
 
@@ -562,28 +566,31 @@ Closed: `kind`, `level`, `marks` and `base_marks`, `deleted` and `conflicted`, `
 - **`flag`** (TEXT, on `placement_flag` and `binding_base_flag`): one raw flag, compared by its bytes, non-empty and printable ASCII without a space (`\Seen`, `$label`), as IMAP flags and JMAP keywords are. A set holds each flag once and has no order, and is read as §4.4 joins it. **`marks`**, **`base_marks`** (INTEGER, on `items` and `bindings`): the set's system flags, each by its exact bytes, as the sum of its bits: `\Seen` 1, `\Answered` 2, `\Flagged` 4, `\Draft` 8, `\Deleted` 16, `0` to `31` by constraint. Every other flag, `\seen` and `$Important` among them, is a row. **`flags_known`**, **`base_flags_known`** (INTEGER): `1` the bits and the rows are the set, none being known-empty; `0` unknown, holding no bit by constraint and no row by trigger.
 - **`hash`** (TEXT, on `objects`): a name of §5, 52 characters of `a` to `z` and `2` to `7`, held by a `CHECK`. **`object_hash`, `base_object`, `conflict_object`** (TEXT): such a name, held by the foreign key onto `objects`, or `NULL`. **`hash_algo`** (TEXT, on `store_meta`): `'blake3'`, closed.
 - **`refcount`** (INTEGER): the pointer count of §5, `>= 0` by constraint; `0` is a meaningful, collectable count.
-- **`link_id`** (TEXT): the hint verbatim, `esc:` and the hint when it begins with a reserved prefix (§9), a kind fallback, or a minted `dup:<key>#<handle>`, nested when minted again over a held key (§9); opaque.
+- **`link_id`** (TEXT): never empty, by constraint; the hint verbatim, `esc:` and the hint when it begins with a reserved prefix (§9), a kind fallback, or a minted `dup:<key>#<handle>`, nested when minted again over a held key (§9); opaque.
 - **`sort_key`** (TEXT): §9.3; `''` unknown; a timestamp as `2026-08-01T10:00:00Z`. The one column exempt from byte-identity: a zoned time resolves through a time zone database two writers may hold at different versions, and a wrong key loses nothing.
-- **`changed`** (INTEGER, on `items` and `collections`): the stamp of §4.5, `-1` only inside the statement requesting one; `next_change` and `purges` (INTEGER, on `store_meta`) its counters, the second counting every item purged, every object collected and every collection renamed.
+- **`changed`** (INTEGER, on `items` and `collections`): the stamp of §4.5, `-1` only inside the statement requesting one; `next_change` and `purges` (INTEGER, on `store_meta`) its counters, the second counting every item purged or evicted, every object collected and every collection renamed or deleted.
 - **The summary columns**: Annex A's, decoded or verbatim as it says, an instant with the `Z` designator, `NULL` for absent and unknown unless it says otherwise.
 - **`role`, `address`, `position`** (on `item_address`): a role of Annex A.6, the canonical addr-spec, and the 0-based document order within the role.
 - **`from_kind`, `to_kind`, `role`, `origin`** (on `item_reference`): a collection kind as `collections.kind` holds it; `attachment`, `invitation`, `sender`, `parent`, `source`, `related` or `x-` and a name; `auto` or `user` (§14.2).
 - **`base_revision`** (TEXT): an opaque etag or modseq, or `NULL`.
 - **`conflict_revision`, `conflict_object`** (on a binding): the remote revision and body observed when the binding was marked conflicted. A binding that is not conflicted MUST NOT carry either.
 - **`shared_object`** (TEXT, on a binding): the shared body last reconciled against (§10), `NULL` until the source has folded once; counted (§5).
-- **`created_at`, `retained_at`, `applied_at`** (TEXT): `strftime('%Y-%m-%dT%H:%M:%fZ','now')`, stamped by SQLite (`init_store_meta`, `enqueue_action`, `retain_item`, `record_receipt`, `add_reference`, and `covered_at`, `round_started_at` by `close_round`, `open_round`). Every instant the format fixes is UTC with the **`Z` designator**, never `+00:00`, which sorts apart from it.
-- **`retained_by`** (TEXT): the source whose removal retired the item, diagnostic.
+- **`created_at`, `retained_at`, `applied_at`** (TEXT): `strftime('%Y-%m-%dT%H:%M:%fZ','now')`, stamped by SQLite (`init_store_meta`, `enqueue_action`, `retain_item`, `record_receipt`, `add_reference`, and `covered_at`, `round_started_at` by `close_round`, `open_round`). Every instant the format fixes is UTC with the **`Z` designator**, never `+00:00`, which sorts apart from it. The shape of each is held by constraint, wherever a table holds one: four digits, two and two for the date, `T`, two, two and two for the time, a period, three digits and `Z` (`2026-08-01T10:00:00.000Z`), and no other text is taken.
+- **`retained_by`** (TEXT): the source whose removal retired the item, diagnostic; `NULL` on a row that is not retained, by constraint.
+- **`seq`** (INTEGER, on `items`): the public id of §9.1, at least 1 by constraint.
+- **`id`, `account`** (TEXT, on `collections`), **`source`**, **`handle`** (TEXT, on `sources`, `bindings`, `capabilities` and `performers`): never empty, by constraint, `account` `NULL` or not empty; an empty text would read as `NULL` does in the keys folding the two (`capabilities_key`, `collections_by_role`, `performers_key`).
+- **`size`** (INTEGER, on `objects`, `mail_summary` and `file_summary`), **`attempts`** (INTEGER, on `queue`): at least 0 by constraint. **`attachment`** (on `mail_summary`), **`recurring`** (on `event_summary` and `task_summary`): `0`, `1` or `NULL`, by constraint.
 - **`checkpoint`**, **`round_cursor`**, **`round_checkpoint`** (BLOB): opaque cursor bytes, or `NULL`.
-- **`covered_since`**, **`covered_until`**, **`round_since`**, **`round_until`** (TEXT): a scope's bounds, RFC 3339 UTC at seconds precision with the `Z` designator, as Annex A writes `date`; `NULL` an open bound. A message is in a scope when `since <= date < until`, or when its `date` is `NULL`.
+- **`covered_since`**, **`covered_until`**, **`round_since`**, **`round_until`** (TEXT): a scope's bounds, RFC 3339 UTC at seconds precision with the `Z` designator, as Annex A writes `date` (`2026-08-01T10:00:00Z`), that shape held by constraint; `NULL` an open bound. A message is in a scope when `since <= date < until`, or when its `date` is `NULL`.
 - **`covered_at`**, **`round_started_at`** (TEXT): stamped by SQLite as `created_at` is (`close_round`, `open_round`); `NULL` no coverage, no round open.
 - **`round`** (INTEGER): on a source, the last round id drawn, `0` before any; on a binding, the round that last listed its handle, `NULL` before one did.
 - **`round_band`** (INTEGER, on a source): `1` while the open round lists only the band its coverage lacks, else `0`, and `0` with no round open by constraint.
-- **`base_present`** (INTEGER, on a binding): whether a base exists. A base is present iff `base_present` is 1, `base_flags_known` is 1 or any other base column is non-`NULL`; a writer MUST set the column and a reader MUST accept either witness.
+- **`base_present`** (INTEGER, on a binding): whether a base exists. A base is present iff `base_present` is 1, the one witness every statement reads. A binding with no base holds no base flag set, no `base_object` and no `base_revision`, by constraint, so no other column states a base without it; a base naming nothing, a delivered create's, is `base_present` 1 with the three empty.
 - **`action`** (TEXT): `'add'`, `'set-flags'`, `'remove'`, `'move'`, `'copy'`, `'update'`, `'set-performer'` (§15.3), an intent of Annex B.2, or an application's own action, skipped by an owner that does not know it.
 - **`capability`** (TEXT, on `capabilities` and `performers`): a name of Annex B, or an application's own starting with `x-`. **`collection`** (TEXT, on `capabilities`): `NULL` for the source-wide row, a collection id for an override there. **`account`** (TEXT, on `capabilities` and `performers`): the account of §9.2, `NULL` in a single-account store.
 - **`support`** (TEXT): `'full'`, `'partial'` or `'none'`, closed. **`detail`** (TEXT): what a human reads about it, or `NULL`.
 - **`payload`** (TEXT): versioned JSON with a leading integer `v`, the payload's version for its `action`, typed by the action's schema under payloads/ and parked when malformed (§15.3), a row whose `v` the owner does not know being skipped (§15.2), never read as a version it knows. **`target_collection`** (TEXT): the collection a `move` or a `copy` names as `to`, or the one an `add` names in `supersedes`, `NULL` for any other action; written by the producer with the payload, followed by a rename (§14), and read by the owner in place of the payload's own. **`object_hash`** (TEXT, on `queue`): the body the action carries, pinned (§15.1), read by the owner in place of the payload's `object` (§15.3), or `NULL`. **`error`** (TEXT): `NULL` while pending; set when parked.
-- **`seq`** (INTEGER, on `receipts`): the public id (§9.1) of the item an applied `add` created, or of the item a performed intent left in the store when its performer knows it; `NULL` otherwise.
+- **`seq`** (INTEGER, on `receipts`): the public id (§9.1) of the item an applied `add` created, or of the item a performed intent left in the store when its performer knows it; `NULL` otherwise. **`collection`** (TEXT, on `receipts`): the collection the row was queued on, following its rename; `NULL` reads "its collection is gone", the row applied and the collection deleted since.
 - **`generation`** (INTEGER): the epoch of §12, starting at 1.
 - **`derivation`** (INTEGER, on `store_meta`): the Annex A revision of §6.
 - **`sync_version`** (TEXT, on `store_meta`): `sync-draft-NN` or `sync-vN`, the version of the sync part whose engine wrote the sync state (§14), `NULL` before any did.
@@ -600,7 +607,7 @@ A store is opened as one source. `load` reads the shared items and that source's
 
   A `Created` placement's origin is `origin_for_link`, never a binding under a provisional handle, and a `Tombstone` placement's destination `destination_for_link`, a pending create or a delivered one (SYNC.md §3), each a seek on `items_by_link` for the key and for the key a minted form names, then on the binding's own key, so a projection reads them per placement, never every binding of the store. `list_superseded_pending` names the tombstones whose remove is held (§15.3, SYNC.md §5). `list_superseded_bindings` names, for each pending create superseding an item of its own identity, the member it may be moved from: the superseded item's binding of this source in its collection (SYNC.md §4).
 - **`lookup_objects(account, links)`**: the link ids in the `links` slot (§4.4), `account` the caller's own (§9.2): across collections a link id is one body downloaded once, across accounts it is not a fact. It answers the body's hash and size, the size being the witness a link is checked against (SYNC.md §6). A writer-derived key never matches (§9).
-- **`held_mail_summary(account, link_id, object)`**: the mark and the invitation a row of `account` holding `object` under `link_id` states, a row stating its mark first, for a placement linked to it (Annex A.1). A writer-derived key never matches (§9).
+- **`held_mail_summary(account, link_id, hash)`**: the mark and the invitation a row of `account` holding the body `hash` under `link_id` states, a row stating its mark first, for a placement linked to it (Annex A.1). A writer-derived key never matches (§9).
 - **`write(ops)`** applies one batch (below) as one transaction:
   1. A `StoreObject` carries the index row and optionally the bytes. With bytes, write the blob first (§5), then `store_object`; without, the body is already at its path, streamed there by the consumer through §5's write. The blob write MAY precede `BEGIN` and SHOULD for a body of any size; the writer's lock (§8), not the file's age, keeps a collector out of the window.
 
@@ -645,9 +652,9 @@ A store is opened as one source. `load` reads the shared items and that source's
 
 **Chunks.** A writer MAY cut one operation's writes into several batches, its **chunks**, each committed apart (an engine pushing in bounded chunks, SYNC.md §5). A body stored in one chunk may first be referenced by a later one, so the collector MUST NOT run between two chunks of one operation (§5), nor a collection or a release below a date (§11.3, §11.4).
 
-**The version of the sync state.** The rows an engine writes for its sources, **sync state** (`bindings` and their base flags, `sources`, and the cross-source columns `deleted`, `conflicted` and `conflict_object` of `items`), follow the sync part their engine implements. `store_meta.sync_version` names it: `NULL` until an engine writes, then its version (`sync-draft-09`, or `sync-vN` once released), written by `set_sync_version` in the transaction of the engine's first write and whenever another version takes the store over. What an engine does with a version it did not write is the sync part's (SYNC.md §10); a program writing no sync state never reads it.
+**The version of the sync state.** The rows an engine writes for its sources, **sync state** (`bindings` and their base flags, `sources`, and the cross-source columns `deleted`, `conflicted` and `conflict_object` of `items`), follow the sync part their engine implements. `store_meta.sync_version` names it: `NULL` until an engine writes, then its version (`sync-draft-10`, or `sync-vN` once released), written by `set_sync_version` in the transaction of the engine's first write and whenever another version takes the store over. What an engine does with a version it did not write is the sync part's (SYNC.md §10); a program writing no sync state never reads it.
 
-The queue adds **`enqueue`**, **`drain`**, **`cancel`** and **`prune_receipts`** (§15); retention adds **`purge`** and **`purge_retained_before`** (§11.2), the owner's manual **`collect_before`** (§11.3) and **`release_before`** (§11.4), each reporting rows and never bytes. **`collect_garbage()`** is §5's collector, reporting the rows, files and bytes it freed.
+The queue adds **`enqueue`**, **`drain`**, **`cancel`** and **`prune_receipts`** (§15); retention adds **`purge`** and **`purge_retained_before`** (§11.2), the owner's manual **`evict_before`** (§11.3) and **`release_before`** (§11.4), each reporting rows and never bytes. **`collect_garbage()`** is §5's collector, reporting the rows, files and bytes it freed.
 
 A collection's `kind` is declared, never derived: `set_collection_kind(collection, account, kind)` sets it, `load_kind` reads it, and `ensure_collection` inserts an empty kind it MUST NOT overwrite. The account binds the same way: `set_collection_account` re-accounts a collection, `load_account` reads it.
 
@@ -679,7 +686,7 @@ A pending `move` or `copy` names its target, and a pending `add` the collection 
 
 A bare `UPDATE` is refused under `NO ACTION`, and with `PRAGMA foreign_keys` off the rename cascades nothing. An account rename is one `rename_collection` per collection plus `set_collection_account`, in one transaction, the account's sources declared and its performers recorded again under the new id.
 
-**`delete_collection(collection)`** removes a collection the operator no longer wants, everything under it cascading and retention not applying. It is the only sanctioned `DELETE` on `collections`.
+**`delete_collection(collection)`** removes a collection the operator no longer wants, everything under it cascading and retention not applying. A receipt of a row queued on it stays and names no collection (§15.4), and the delete counts in `store_meta.purges`, an empty collection's too (§4.5). It is the only sanctioned `DELETE` on `collections`.
 
 It MUST NOT drop a queue row: a collection holding a pending or parked action is refused, which the schema holds (`collections_keep_queued`). The operator cancels each row (§15.5) or lets the drain apply it first, so an action, an intent included, never vanishes without a receipt or a report.
 
@@ -692,9 +699,10 @@ A **reader** (§8) opens read-only and projects the store as a local backend. Re
 - **`list_collections()`**, **`list_collections_by_account(account)`** (`NULL` selects a single-account store's), **`list_accounts()`** (accounts owning at least one collection, not a roster). **`list_coverage(collection)`** answers the coverage per source, with the round each has under way.
 
   A collection is listed with its coverage: the narrowest of its sources' (the latest `covered_since`, the earliest `covered_until`, the oldest `covered_at`), and none while one of them has never closed a round. A reader says "mail since" from it, and a search over the collection knows it is not exhaustive below it.
-- **`list_items_page(collection, after, limit)`**: a keyset page in link-id order, the sweep that sees every item once; `''` starts from the beginning.
-- **`list_items_page_asc`**, **`list_items_page_desc`** `(collection, after_key, after_seq, limit)`: the natural order (§9.3), cursor `(sort_key, seq)`; descending, a `NULL` cursor is the first page.
-- **`count_mail(collections, seen, attachment, since)`**, **`count_mail_by_day(collections, seen, attachment, shift, since)`**, **`count_unread(collections, attachment, since)`**: the live mail of a set of collections under the read and attachment filters, `seen` and `attachment` (`NULL` for either), in all, per day of the `Date` on the reader's clock, `shift` its offset from UTC in whole minutes (`120` east, `-300` west, `NULL` UTC), and unread per collection, so a list is sized by a count before it loads. A count reads `mail_summary` only for the attachment filter, and tests the read filter on the item's `marks` bit, so a count reads no flag row.
+- **A `NULL` cursor is the first page** in every paged read below, whatever its order, each statement coalescing it to the bound before its first row (§9.3); the value that bound is (`''`, `0`) is read the same.
+- **`list_items_page(collection, after, limit)`**: a keyset page in link-id order, the sweep that sees every item once.
+- **`list_items_page_asc`**, **`list_items_page_desc`** `(collection, after_key, after_seq, limit)`: the natural order (§9.3), cursor `(sort_key, seq)`.
+- **`count_mail(collections, seen, attachment, since)`**, **`count_mail_by_day(collections, seen, attachment, shift, since)`**, **`count_unread(collections, attachment, since)`**: the live mail of a set of collections under the read and attachment filters, `seen` and `attachment` (`NULL` for either), in all, per day of the `Date` on the reader's clock, `shift` its offset from UTC in whole minutes (`120` east, `-300` west, `NULL` UTC), and unread per collection, so a list is sized by a count before it loads. A count reads `mail_summary` only for the attachment filter, and tests the read filter on the item's `marks` bit, so a count reads no flag row; `count_unread` reads `items_unread`, the unread rows alone, so a mailbox mostly read is counted from what it has not read.
 - **`list_mail_page_filtered`**: the page under the same filters across the set, cursor `(sort_key, seq, collection)`, merged from each collection's (§9.3). **`search_mail`**: the same page over a `LIKE` pattern on the subject, the sender and its name, until the search part's index (SEARCH.md) answers the body; a pattern one collection of the set never matches reads that collection's summaries whole. The store keeps `LIKE` and requires no FTS5 (§4.1): text search, indexed, is the search part's.
 - `since` is a floor on the sort key (§9.3), an RFC 3339 instant: a row below it is left out, an undated one below any, and `NULL` sets none. It is a seek on the index, so a list cut at a date costs the rows above it, never the store's. `search_mail` takes no floor.
 
@@ -705,16 +713,16 @@ A **reader** (§8) opens read-only and projects the store as a local backend. Re
 - **`get_mail_row(collection, link_id)`**: one live mail row in `list_mail_page_filtered`'s columns.
 - **`search_contacts`**, **`search_calendar`**, **`search_files`** `(collections, pattern, after_key, after_seq, after_collection, limit)`: `search_mail`'s `LIKE` over a contact's name and addresses, a calendar item's summary (and an event's location), a file's name, A to Z across the set, merged as `list_mail_page_filtered` is, until the search part's index answers them.
 - **`describe_endpoint(kind, link_id)`**: a reference's end as a link shows it, its first live placement and a title from whichever summary it has (§14.2).
-- **`list_mail_page_desc`**, **`list_contacts_page_asc`**, **`list_events_page_asc`**, **`list_tasks_page_asc`**, **`list_journals_page_asc`**, **`list_files_page_asc`**: the same page joined with the kind's summary. A mixed calendar merges its three pages on `(sort_key, seq)`; `component_of` says which table holds an item.
+- **`list_mail_page_desc`**, **`list_contacts_page_asc`**, **`list_events_page_asc`**, **`list_tasks_page_asc`**, **`list_journals_page_asc`**, **`list_files_page_asc`**: the same page joined with the kind's summary. A mixed calendar merges its three pages on `(sort_key, seq)`, the page an item comes from saying which table holds it.
 - **`get_mail`**, **`get_contact`**, **`get_event`**, **`get_task`**, **`get_journal`**, **`get_file`**: one item. **`list_attachments(account, link_id)`**: the files a message attaches (§14.3).
 - **`get_item(collection, seq)`**, **`load_addresses(collection, link_id)`** (one item's people by role), **`count_items(collection)`**, **`seq_by_link(collection, link_id)`**.
 - **`load_in_reply_to(collection)`**, **`load_categories(collection)`**: a mail's `In-Reply-To` ids and a task's categories, in document order, for a whole collection; **`load_in_reply_to_by_link`** and **`load_categories_by_link`** `(collection, links)` for a page's link ids, the `links` slot, a seek per id. A mail or a task row carries neither, as it carries no address (§4.4).
 - **`list_link_placements(link_id)`**, **`list_object_placements(hash)`**: every live placement of one key, or one body, with collection and account. The first pairs by key, so a minted copy is paired with its twin by the body read alone.
 - **`references_from(kind, link_id)`**, **`references_to(kind, link_id)`**: the references an item makes and receives (§14.2), whatever their endpoints' state.
-- **`list_address_placements(address, role, after_key, after_seq, after_collection, after_role, limit)`**: every live placement naming one address, once per role it names it in, `role` `NULL` for any, newest first: the person axis, a keyset page on `(sort_key, seq, collection, role)`, `NULL` the first page, which reads the address's placements on `item_address_by_address` and holds the page alone. **`list_domain_placements(domain, role)`**: every live placement naming an address of one domain, newest first, by a scan, unpaged.
+- **`list_address_placements(address, role, after_key, after_seq, after_collection, after_role, limit)`**: every live placement naming one address, once per role it names it in, `role` `NULL` for any, newest first: the person axis, a keyset page on `(sort_key, seq, collection, role)`, `NULL` the first page, which reads the address's placements on `item_address_by_address` and holds the page alone. **`list_domain_placements(domain, role)`**: every live placement naming an address of one domain, newest first, by a scan, unpaged; the domain is compared as text, ASCII letters in either case, never matched as a pattern.
 - **`list_replied(ids)`**: which of the message ids the `ids` slot names, bare as Annex A.1 and A.4 store them, a live mail's `mail_in_reply_to` names, mail under the `sent` or `drafts` role aside, each once: which of the mails tasks came from were answered. A seek per id on `mail_in_reply_to_by_id`.
 - **`list_items_changed_since`**, **`list_collections_changed_since`**, **`load_change_cursor`**: the feed (§4.5).
-- **`list_retained_page(collection, after, limit)`** (cursor on `seq`, `0` starts), **`count_retained`**, **`retained_bytes()`**: the trash view (§11), every deleted row, `retained_at` `NULL` on one a source still binds.
+- **`list_retained_page(collection, after, limit)`** (cursor on `seq`), **`count_retained`**, **`retained_bytes()`**: the trash view (§11), every deleted row, `retained_at` `NULL` on one a source still binds.
 - **`load_capabilities(collection)`**, **`load_item_capabilities(collection, seq)`**: what every source syncing a collection, or binding one item, can do there, a row naming the collection winning over the source-wide one, an undeclared source listed once with no capability.
 - **`list_capability_sources(account, collection, capability)`**: the candidates to perform an intent anchored on a collection, or anywhere in the account when none is named. **`load_performer(account, capability)`**: the user's choice among them (§15.6).
 - **`load_action(id)`**, **`load_receipt(id)`**: one queue row by the id its enqueue answered, pending or parked, and what it became once applied (§15.4).
@@ -863,7 +871,7 @@ The intents of Annex B.2 are actions of their own, versioned the same way. An ap
 
 A reader MAY overlay a collection's pending actions (`load_pending_actions`) for read-your-writes.
 
-A producer follows one row by the `id` its enqueue answered, under the store id and incarnation it recorded with it (§4.5). `load_action` reads the row while it is pending (`error` `NULL`) or parked. Once it is gone, `load_receipt` says it was applied and, for an `add`, which item it created, so a producer learns the `seq` of what it staged without matching the body.
+A producer follows one row by the `id` its enqueue answered, under the store id and incarnation it recorded with it (§4.5). `load_action` reads the row while it is pending (`error` `NULL`) or parked. Once it is gone, `load_receipt` says it was applied and, for an `add`, which item it created, so a producer learns the `seq` of what it staged without matching the body. A receipt outlives the collection its row was queued on: once that collection is deleted, by the `collection-delete` the receipt answers or otherwise, its `collection` reads `NULL`, the row applied all the same.
 
 A performed intent leaves a receipt too, acknowledged or replaced (§15.5), so a producer tells a message sent or a collection created from a row withdrawn.
 
@@ -943,7 +951,7 @@ Every file under vectors/ states the version of its format as a top-level `v` an
 
 ## 17. Conformance
 
-An implementation conforms to this part by one profile, each holding the one before. It MUST meet every section its row names, run the statements of its directories on §4.4's terms and pass the vectors its row names, and MUST state its conformance as each part's version and the profile it meets there, the layers' by SYNC.md §12 and SEARCH.md §12: `storage-draft-09 owner, sync-draft-09 engine, search-draft-09 indexer (canonical)`. One running text of its own for any statement of its directories (§4.4) adds `(own statement text)` after its profile: `storage-draft-09 owner (own statement text), sync-draft-09 engine`.
+An implementation conforms to this part by one profile, each holding the one before. It MUST meet every section its row names, run the statements of its directories on §4.4's terms and pass the vectors its row names, and MUST state its conformance as each part's version and the profile it meets there, the layers' by SYNC.md §12 and SEARCH.md §12: `storage-draft-10 owner, sync-draft-10 engine, search-draft-10 indexer (canonical)`. One running text of its own for any statement of its directories (§4.4) adds `(own statement text)` after its profile: `storage-draft-10 owner (own statement text), sync-draft-10 engine`.
 
 | Profile | What it does | Owes | Statements | Vectors |
 | --- | --- | --- | --- | --- |

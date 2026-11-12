@@ -118,6 +118,12 @@
           ${python pkgs}/bin/python3 ${./checks/vectors.py} ${standard} | tee $out
         '';
 
+        # The parameters, slots and columns each statement states, against
+        # queries/signatures.json, so a change of signature shows in a diff.
+        signatures = pkgs.runCommand "pimdir-signatures" { } ''
+          ${python pkgs}/bin/python3 ${./checks/signatures.py} ${format} | tee $out
+        '';
+
         # Every markdown file outside cairn/, and every file a link names, so
         # the whole source rather than a fileset.
         references = pkgs.runCommand "pimdir-references" { nativeBuildInputs = [ pkgs.perl ]; } ''

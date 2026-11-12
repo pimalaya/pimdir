@@ -15,5 +15,5 @@ JOIN collections c ON c.id = i.collection
 JOIN objects o ON o.hash = i.object_hash
 WHERE i.object_hash IS NOT NULL
   AND i.link_id IN (SELECT value FROM temp.param WHERE slot = 'links')
-  AND i.link_id NOT LIKE 'alt:%' AND i.link_id NOT LIKE 'hash:%' AND i.link_id NOT LIKE 'dup:%'
+  AND NOT (i.link_id GLOB 'alt:*' OR i.link_id GLOB 'hash:*' OR i.link_id GLOB 'dup:*')
   AND c.account IS :account;

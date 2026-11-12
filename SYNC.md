@@ -1,6 +1,6 @@
 # Pimdir sync specification
 
-Status: sync-draft-09, requiring storage-draft-09
+Status: sync-draft-10, requiring storage-draft-10
 
 The sync part of the pimdir standard: how one or more sources reconcile through a store ([STORAGE.md](./STORAGE.md)), so the store is an offline replica of each source and every source sees every other's changes. It fixes what an engine derives from the store's rows and a source's answers, and what it writes back.
 
@@ -53,7 +53,7 @@ Nothing here requires a language or a coroutine form. A collection of a media ty
 - **Run**: one verb executed for one collection and one source: its load, the requests it makes, its batches (STORAGE §2) and the events it reports.
 - **Projected placement**: one source's view of one placement (STORAGE §2): the placement's flags, object, level, summary and sort key, the source's binding of it (handle, base and conflict columns) and the status the projection derives. Derived by the projection (§3), never stored, written back by the write (§10). This part writes it *placement* where no other is meant.
 - **Status**: what a placement owes: `Clean`, `Dirty` (a flag or content push), `Tombstone` (a delete), `Conflict` (a decision), `Created` (an append).
-- **Base**: what the source last agreed with its remote: flags, object, revision, and `base_present` (STORAGE §13).
+- **Base**: what the source last agreed with its remote: flags, object, revision, and `base_present`, which alone says whether there is one (STORAGE §13).
 - **Pending create**: a `Created` placement the source binds under a provisional handle, a binding with no base, waiting for its add to be accepted.
 - **Delivered create**: a create the source binds under a provisional handle holding a base naming nothing, no flag set, revision nor body: a pending create a listing can land (§6) whose `Add` was accepted with no handle, or into which a `Remove` relocating was accepted (§4), before any listing named the member. It derives no change until the page naming the member lands it (§5, §6).
 - **Provisional handle**: `U+0001` followed by the link id. No protocol hands out such a name, so it never collides with a member the next enumeration lists, and two engines derive one create's key alike (§4).
@@ -71,6 +71,19 @@ Nothing here requires a language or a coroutine form. A collection of a media ty
 - **Change**: what the engine asks a source to do, one of `Add`, `Remove`, `SetFlags` and `Update`, each with an idempotency key (§4). A **push** is a change sent, in a batch of them.
 - **Outcome**: `Accepted`, with the handle assigned to an `Add`, the revision a mutable kind reports and, for a `Remove` carrying `to`, whether it relocated the member, or `Rejected`.
 
+An edit has three names, one per place it stands in: the **action** a producer queues (STORAGE §15.3), the **mutation** the engine stages for it in the store (§7), and the **change** a source is then asked to make (§4, §5).
+
+| Queue action | Mutation | Change |
+| --- | --- | --- |
+| `add` | `Add` | `Add` |
+| `set-flags` | `SetFlags` | `SetFlags` |
+| `update` | `Edit` | `Update` |
+| `remove` | `Remove` | `Remove` |
+| `copy` | `Copy` | `Add`, carrying its origin where the source holds one (§3) |
+| `move` | `Move` | `Remove`, carrying its destination where the source holds one (§3), and `Add` for a create no relocation delivered |
+
+An intent and `set-performer` stage no mutation and derive no change (STORAGE §15.3, Annex B.2).
+
 ## 3. The projection
 
 Placements are read from the store, never stored. For a collection and a source, the projection MUST yield one placement per item the source binds, and one `Created` placement per item the source lacks and the store holds a body for. A retained item (STORAGE §11) MUST be projected for nobody.
@@ -79,7 +92,7 @@ Placements are read from the store, never stored. For a collection and a source,
 
 1. `Conflict` when `bindings.conflicted` is 1, carrying `conflict_revision` and `conflict_object`; or when `items.conflicted` is 1, two sources disagreeing on the body (§9), which every binding of the item projects until an `Edit` or a `Remove` settles it (§7). Neither is downgraded.
 2. `Tombstone` when `items.deleted` is 1 and the source binds the item; the content is kept so an edit still beats the delete (§5). A tombstone whose binding has no base is a create the consumer withdrew: it derives no `Remove`, the write drops the binding and the item is retained (STORAGE §11).
-3. `Created` when the binding has no base (STORAGE §13: `base_present` and `base_flags_known` 0, every other base column `NULL`), or when the source does not bind the item, `items.deleted` is 0 and `object_hash` is present.
+3. `Created` when the binding has no base, `base_present` 0 (a base is present iff the column is 1, STORAGE §13), or when the source does not bind the item, `items.deleted` is 0 and `object_hash` is present.
 4. `Dirty` when the flags differ from the base flags as sets, both known (STORAGE §13); or, for a mutable kind, when `object_hash` is present and differs from `base_object` (a base naming no body differs from every body). A placement holding no body owes no body, whatever its base names.
 5. `Clean` otherwise.
 
@@ -234,7 +247,7 @@ Nothing else is an absence: not a page before the last, an interrupted round, a 
 
 **A sync never deletes on the server on its own account.** A `Remove` MUST be derived from a tombstone and from nothing else: one the consumer staged (§7), or one a delete another source inferred or stated left on the shared item (§9).
 
-A scope, a narrowing, a widening, a collection (STORAGE §11.3) and whatever the paragraph above says is no absence derive none. What a sync infers from its own remote it applies to the store, never back to that remote.
+A scope, a narrowing, a widening, an eviction (STORAGE §11.3) and whatever the paragraph above says is no absence derive none. What a sync infers from its own remote it applies to the store, never back to that remote.
 
 **A collection is deleted on a server only when enabled.** An engine mirroring collections between sources MUST NOT delete a collection on one source's server because another source no longer lists it, unless its configuration enables it, and then only when that collection is empty or every member of it was reconciled in the same run.
 
@@ -558,7 +571,7 @@ A batch is cut between candidates, never inside one, and a rekey is never cut. T
 
 **The write keys another message apart.** A `Links` load answers this source's holders alone, so a page before the last, a head and an upgrade name a member without seeing an item another source binds under the same hint, and cannot apply §6's rule for another message reusing a `Message-ID`. The write applies it whichever step named the member (STORAGE §14), and an engine whose load showed the row mints the member the same way first, so both name it alike.
 
-**The version of the sync state.** An engine records its version, this part's (`sync-draft-09` now), in `store_meta.sync_version` with `set_sync_version` (STORAGE §14), in the transaction of its first write to a store naming none. A store naming none holds no sync state yet.
+**The version of the sync state.** An engine records its version, this part's (`sync-draft-10` now), in `store_meta.sync_version` with `set_sync_version` (STORAGE §14), in the transaction of its first write to a store naming none. A store naming none holds no sync state yet.
 
 While this part is a draft, an engine MUST refuse a store whose `sync_version` names another version than its own draft's, naming both, and run no verb on it: a draft's sync state is read under that draft alone, as a draft's store is (STORAGE §4.2). Once this part is released, an engine MUST refuse sync state a draft wrote, or a major above its own; sync state of a major below its own it reads as that major defines it, and records its own version only in the write converting what the majors between them changed.
 
@@ -588,7 +601,7 @@ Every case pins two rules: no `Remove` is pushed but for a tombstone the store h
 
 ## 12. Conformance
 
-An implementation offering sync conforms by one profile or both, stated as STORAGE §17 says (`sync-draft-09 engine`, `sync-draft-09 connector (IMAP)`), and MUST meet every section its row names and pass the vectors it names.
+An implementation offering sync conforms by one profile or both, stated as STORAGE §17 says (`sync-draft-10 engine`, `sync-draft-10 connector (IMAP)`), and MUST meet every section its row names and pass the vectors it names.
 
 | Profile | What it does | Owes | Vectors |
 | --- | --- | --- | --- |

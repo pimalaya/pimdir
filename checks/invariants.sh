@@ -133,9 +133,27 @@ bindings() {
     done
 }
 
+# takes <part/profile/name> [:param=literal...]: records each binding the
+# statement does not take, a parameter of its text or a list slot it reads
+# (§4.4): SQLite binds NULL to a parameter no binding names, so a scenario
+# still spelling a renamed parameter would run on NULL and prove nothing. The
+# gate at the end fails on any.
+takes() {
+    local file="$1" binding name text; shift
+    text="$(sed 's/--.*//' "$root/queries/$file.sql")"
+    for binding in "$@"; do
+        name="${binding%%=*}"
+        case "$name" in
+            .* | :flags | :base_flags) ;;
+            *) grep -qE "$name\b|slot = '${name#:}'" <<<"$text" || echo "$file binds $name" >> "$dir/stray" ;;
+        esac
+    done
+}
+
 run() {
     local file="$1"; shift
     local after=""
+    takes "storage/$file" "$@"
     case " $* " in
         *" :flags='["*) after=flags ;;
         *" :base_flags='["*) after=base_flags ;;
@@ -329,15 +347,15 @@ object "$h2"
 item INBOX a 1 "'$h1'"
 item Archive a 1 "'$h1'"
 expect "move: a holder with the same body is a move" \
-    "$(run owner/held_elsewhere ":collection='INBOX'" ":link_id='a'" ":object='$h1'")" "1"
+    "$(run owner/held_elsewhere ":collection='INBOX'" ":link_id='a'" ":hash='$h1'")" "1"
 sql "UPDATE items SET object_hash = '$h2' WHERE collection = 'Archive';"
 expect "move: a holder with another body is not" \
-    "$(run owner/held_elsewhere ":collection='INBOX'" ":link_id='a'" ":object='$h1'")" ""
+    "$(run owner/held_elsewhere ":collection='INBOX'" ":link_id='a'" ":hash='$h1'")" ""
 sql "UPDATE items SET object_hash = NULL WHERE collection = 'Archive';"
 expect "move: a bodiless holder does not take the only body" \
-    "$(run owner/held_elsewhere ":collection='INBOX'" ":link_id='a'" ":object='$h1'")" ""
+    "$(run owner/held_elsewhere ":collection='INBOX'" ":link_id='a'" ":hash='$h1'")" ""
 expect "move: a bodiless retiring row is held by any holder" \
-    "$(run owner/held_elsewhere ":collection='INBOX'" ":link_id='a'" ":object=NULL")" "1"
+    "$(run owner/held_elsewhere ":collection='INBOX'" ":link_id='a'" ":hash=NULL")" "1"
 
 # --- The producer's pin and the collector (§5, §15) --------------------------
 
@@ -454,7 +472,7 @@ run owner/delete_collection ":collection='INBOX'"
 run owner/recompute_refcounts
 expect "collection: the cascade's pins are settled by the recompute" \
     "$(sql "SELECT refcount FROM objects WHERE hash = '$h1';")" "0"
-expect "collection: the cascade counts its rows as purges" "$(sql "SELECT purges FROM store_meta;")" "1"
+expect "collection: the cascade counts its item as a purge, and the collection as one" "$(sql "SELECT purges FROM store_meta;")" "2"
 collection Outbox
 object "$m9"
 run queue/pin_object ":hash='$m9'"
@@ -464,8 +482,14 @@ expect "collection: a collection holding a parked action is not deleted" \
     "$(fails owner/delete_collection ":collection='Outbox'" && echo refused)|$(sql "SELECT count(*) FROM queue;")" "refused|1"
 pin="$(run owner/cancel_action ":id=1")"
 run owner/release_pins ":hashes='[\"$pin\"]'"
+cursor="$(run read/load_change_cursor | cut -d'|' -f1,2)"
 run owner/delete_collection ":collection='Outbox'"
 expect "collection: once its actions are cancelled it is" "$(sql "SELECT count(*) FROM collections WHERE id = 'Outbox';")" "0"
+# An empty collection takes no item whose purge would count, and a deleted
+# row cannot be stamped (§4.5): collections_count_delete counts it, so a
+# consumer of the feed reconciles its keys and learns the collection went.
+expect "collection: deleting an empty collection draws no stamp and counts in purges" \
+    "$(run read/load_change_cursor | cut -d'|' -f1,2)" "${cursor%|*}|$((${cursor#*|} + 1))"
 
 # --- A name is a label, not an address (§14) ---------------------------------
 
@@ -696,6 +720,12 @@ run owner/record_receipt ":id=3" ":collection='Sent'" ":seq=NULL"
 run owner/release_pins ":hashes='[\"$pin\"]'"
 expect "acknowledge: a replaced intent reads as applied, its change a row of its own" \
     "$(run read/load_receipt ":id=3" | cut -d'|' -f2)$(run read/load_action ":id=4" | cut -d'|' -f5)" "Sentadd"
+# A receipt outlives the collection its row was queued on (§15.4): the delete
+# a `collection-delete` asked for, or any other, leaves it naming no
+# collection, so the intent still reads as performed, never as withdrawn.
+run owner/delete_collection ":collection='INBOX'"
+expect "receipt: its collection deleted, a receipt stays and names none; another collection's is untouched" \
+    "$(run read/load_receipt ":id=1" ".nullvalue=NULL" | cut -d'|' -f2,3)|$(run read/load_receipt ":id=3" | cut -d'|' -f2)" "NULL|NULL|Sent"
 
 
 # --- Nothing reaches the store unnamed (§10, SYNC.md §4) ---------------------
@@ -750,7 +780,7 @@ mail() {
         ":base_flags='${7:-[]}'" ":base_object=NULL" ":base_revision=NULL" ":base_present=1" \
         ":conflicted=0" ":conflict_revision=NULL" ":conflict_object=NULL" ":shared_object=NULL"
     run owner/upsert_mail_summary ":collection='$1'" ":link_id='$2'" ":message_id='$2'" \
-        ":in_reply_to='[]'" ":subject='s $2'" ":sender='alice@example.org'" ":sender_name='Alice'" \
+        ":subject='s $2'" ":sender='alice@example.org'" ":sender_name='Alice'" \
         ":date=$5" ":size=1" ":attachment=0"
 }
 
@@ -847,7 +877,7 @@ expect "narrowed: a narrowed one, only a member dated before the round opened, n
 expect "narrowed: an unfiltered enumeration of handles finds absent the undated or future-dated member it lacks, alone" \
     "$(run owner/list_unstamped_bindings ":collection='INBOX'" ":source='imap'" ":narrowed=1" ":enumerated=1" ":handles='[\"20\"]'" | tr '\n' ' ')" "30|recent 40|future "
 
-# --- Collecting below a date is manual and pushes nothing (§11.3) -----------
+# --- Evicting below a date is manual and pushes nothing (§11.3) -------------
 
 fresh
 collection INBOX
@@ -859,22 +889,30 @@ mail INBOX dirty 2 11 "'2026-08-01T10:00:00Z'" '["\\Flagged"]' '[]'
 mail INBOX recent 3 12 "'2026-10-06T08:00:00Z'"
 mail INBOX nodate 4 13 NULL
 mail Archive old 1 10 "'2026-08-01T10:00:00Z'"
+# Both directions of the keyword comparison: an item holding a keyword its
+# base lacks, or lacking one its base holds, or naming another of the same
+# number, holds an unpushed flag change and stays; the same keyword on both
+# sides owes nothing.
+mail INBOX labelled 30 30 "'2026-08-01T10:00:00Z'" '["$todo"]' '[]'
+mail INBOX unlabelled 31 31 "'2026-08-01T10:00:00Z'" '[]' '["$todo"]'
+mail INBOX settled 32 32 "'2026-08-01T10:00:00Z'" '["$todo","\\Seen"]' '["\\Seen","$todo"]'
+mail INBOX relabelled 33 33 "'2026-08-01T10:00:00Z'" '["$todo"]' '["$done"]'
 sql "INSERT INTO items(collection, link_id, seq, flags_known, level) VALUES('INBOX', 'created', 5, 1, 2);
      INSERT INTO bindings(item, collection, source, handle) VALUES((SELECT id FROM items WHERE collection = 'INBOX' AND link_id = 'created'), 'INBOX', 'imap', char(1) || 'created');
      INSERT INTO mail_summary(item, subject, date) VALUES((SELECT id FROM items WHERE collection = 'INBOX' AND link_id = 'created'), '', '2026-08-01T10:00:00Z');"
 run owner/recompute_refcounts
 purges="$(sql "SELECT purges FROM store_meta;")"
-expect "collect: only what owes nothing, below the date, in the collection" \
-    "$(run owner/collect_before ":collection='INBOX'" ":before='2026-09-01T00:00:00Z'")" "1"
+expect "evict: only what owes nothing, below the date, in the collection" \
+    "$(run owner/evict_before ":collection='INBOX'" ":before='2026-09-01T00:00:00Z'" | sort -n | tr '\n' ' ')" "1 32 "
 run owner/recompute_refcounts
-expect "collect: an unpushed flag, a pending create, the undated and the newer stay" \
-    "$(sql "SELECT link_id FROM items WHERE collection = 'INBOX' ORDER BY link_id;" | tr '\n' ' ')" "created dirty nodate recent "
-expect "collect: bindings, summary and addresses go with the item" \
+expect "evict: an unpushed flag, a keyword on the item alone, on the base alone or exchanged for another, a pending create, the undated and the newer stay" \
+    "$(sql "SELECT link_id FROM items WHERE collection = 'INBOX' ORDER BY link_id;" | tr '\n' ' ')" "created dirty labelled nodate recent relabelled unlabelled "
+expect "evict: bindings, summary and addresses go with the item" \
     "$(sql "SELECT (SELECT count(*) FROM bindings WHERE collection = 'INBOX' AND item IN (SELECT id FROM items WHERE link_id = 'old')) + (SELECT count(*) FROM mail_summary WHERE item IN (SELECT id FROM items WHERE collection = 'INBOX' AND link_id = 'old'));")" "0"
-expect "collect: the body is released to the collector, the holder elsewhere untouched" \
+expect "evict: the body is released to the collector, the holder elsewhere untouched" \
     "$(sql "SELECT refcount FROM objects WHERE hash = '$h1';")$(sql "SELECT count(*) FROM items WHERE collection = 'Archive';")" "01"
-expect "collect: no tombstone, no queued push, and the feed counts a purge" \
-    "$(sql "SELECT count(*) FROM items WHERE deleted = 1;")$(sql "SELECT count(*) FROM queue;")$(sql "SELECT purges FROM store_meta;")" "00$((purges + 1))"
+expect "evict: no tombstone, no queued push, and the feed counts a purge" \
+    "$(sql "SELECT count(*) FROM items WHERE deleted = 1;")$(sql "SELECT count(*) FROM queue;")$(sql "SELECT purges FROM store_meta;")" "00$((purges + 2))"
 run owner/set_collection_kind ":collection='Cards'" ":account=NULL" ":kind='text/vcard'"
 item Cards card 20
 mail INBOX kept 6 14 "'2026-08-01T10:00:00Z'"
@@ -885,14 +923,14 @@ for pair in "kept|message/rfc822|card|text/vcard|related|user" "card|text/vcard|
     IFS='|' read -r fl fk tl tk role origin <<<"$pair"
     run owner/add_reference ":from_kind='$fk'" ":from_link_id='$fl'" ":to_kind='$tk'" ":to_link_id='$tl'" ":role='$role'" ":origin='$origin'" >/dev/null
 done
-expect "collect: a mail a person's reference names, from either end, stays; a rule's reference does not hold one" \
-    "$(run owner/collect_before ":collection='INBOX'" ":before='2026-09-01T00:00:00Z'")|$(sql "SELECT count(*) FROM item_reference WHERE origin = 'user';")" "7|2"
+expect "evict: a mail a person's reference names, from either end, stays; a rule's reference does not hold one" \
+    "$(run owner/evict_before ":collection='INBOX'" ":before='2026-09-01T00:00:00Z'")|$(sql "SELECT count(*) FROM item_reference WHERE origin = 'user';")" "7|2"
 # A mail no source binds is the store's alone (a copy kept on the device):
 # no relisting restores it, so it owes its own keeping (§11.3).
 sql "INSERT INTO items(collection, link_id, seq, flags_known, object_hash, level) VALUES('INBOX', 'local', 9, 1, '$h1', 2);
      INSERT INTO mail_summary(item, subject, date) VALUES((SELECT id FROM items WHERE collection = 'INBOX' AND link_id = 'local'), 'kept here', '2026-08-01T10:00:00Z');"
-expect "collect: a mail no source binds stays, no relisting restoring it" \
-    "$(run owner/collect_before ":collection='INBOX'" ":before='2026-09-01T00:00:00Z'")|$(sql "SELECT count(*) FROM items WHERE link_id = 'local';")" "|1"
+expect "evict: a mail no source binds stays, no relisting restoring it" \
+    "$(run owner/evict_before ":collection='INBOX'" ":before='2026-09-01T00:00:00Z'")|$(sql "SELECT count(*) FROM items WHERE link_id = 'local';")" "|1"
 
 # --- Releasing bodies below a date keeps the headers (§11.4) ----------------
 
@@ -923,7 +961,6 @@ sql "UPDATE items SET sort_key = coalesce((SELECT date FROM mail_summary s WHERE
      UPDATE items SET conflicted = 1, conflict_object = '$hc' WHERE link_id = 'conflicted';
      UPDATE bindings SET conflicted = 1 WHERE item IN (SELECT id FROM items WHERE link_id = 'diverged');
      UPDATE bindings SET base_object = '$h1' WHERE item IN (SELECT id FROM items WHERE link_id = 'edited');
-     UPDATE bindings SET base_present = 0, base_flags_known = 0 WHERE item IN (SELECT id FROM items WHERE link_id = 'witness');
      UPDATE items SET deleted = 1 WHERE link_id = 'gone';
      INSERT INTO items(collection, link_id, seq, flags_known, object_hash, sort_key, level) VALUES
          ('INBOX', 'created', 20, 1, '$h9', '2026-08-01T10:00:00Z', 2),
@@ -934,12 +971,19 @@ sql "UPDATE items SET sort_key = coalesce((SELECT date FROM mail_summary s WHERE
      INSERT INTO bindings(item, collection, source, handle, base_flags_known, base_object, base_present)
          VALUES((SELECT id FROM items WHERE collection = 'Both' AND link_id = 'full'), 'Both', 'graph', 'g20', 1, '$h9', 1);
      INSERT INTO sources(collection, source) VALUES('Both', 'imap'), ('Both', 'graph');"
+# A base is present iff base_present is 1 (§13): no other base column states
+# one without it, so `witness`, based like the rest, cannot be made a pending
+# create that still names a base body, a base revision or a known flag set.
+expect "base: a binding naming a base body, a revision or a known base flag set without base_present is refused" \
+    "$(for mixed in "base_flags_known = 0" "base_flags_known = 0, base_object = NULL, base_revision = 'r1'" "base_object = NULL"; do
+           sql "UPDATE bindings SET base_present = 0, $mixed WHERE item IN (SELECT id FROM items WHERE link_id = 'witness');" 2>&1 | grep -c 'CHECK constraint failed: base_present = 1' || true
+       done | tr -d '\n')" "111"
 run owner/recompute_refcounts
 cursor="$(run read/load_change_cursor | cut -d'|' -f1)"
 set=":collections='[\"INBOX\",\"Both\",\"Cards\"]'"
-run owner/release_bases_before "$set" ":until='2026-09-01T00:00:00Z'"
+run owner/release_bases_before "$set" ":before='2026-09-01T00:00:00Z'"
 expect "release: below the date, what needs no body, the undated included, two sources' bases alike" \
-    "$(run owner/release_before "$set" ":until='2026-09-01T00:00:00Z'" | sort -n | tr '\n' ' ')" "1 2 3 8 9 "
+    "$(run owner/release_before "$set" ":before='2026-09-01T00:00:00Z'" | sort -n | tr '\n' ' ')" "1 2 3 8 9 "
 run owner/recompute_refcounts
 expect "release: a conflict, a diverged binding, a local edit, a pending create, no binding, an unbound source, another kind, a tombstone, the newer and an unnamed collection keep theirs" \
     "$(sql "SELECT collection || ':' || link_id FROM items WHERE object_hash IS NOT NULL ORDER BY collection, link_id;" | tr '\n' ' ')" \
@@ -959,10 +1003,10 @@ expect "release: a body held elsewhere stays pinned, the rest fall to the collec
 expect "release: each released item moves in the feed" \
     "$(run read/list_items_changed_since ":since=$cursor" ":limit=10" | cut -d'|' -f3 | sort -n | tr '\n' ' ')" "1 2 3 8 9 "
 expect "release: a second run finds nothing" \
-    "$(run owner/release_bases_before "$set" ":until='2026-09-01T00:00:00Z'")$(run owner/release_before "$set" ":until='2026-09-01T00:00:00Z'")" ""
-run owner/release_bases_before "$set" ":until=NULL"
+    "$(run owner/release_bases_before "$set" ":before='2026-09-01T00:00:00Z'")$(run owner/release_before "$set" ":before='2026-09-01T00:00:00Z'")" ""
+run owner/release_bases_before "$set" ":before=NULL"
 expect "release: no ceiling reaches the newest" \
-    "$(run owner/release_before "$set" ":until=NULL")" "4"
+    "$(run owner/release_before "$set" ":before=NULL")" "4"
 
 # --- A reference joins two endpoints and goes with the last row of one (§14.2)
 
@@ -1023,7 +1067,7 @@ run owner/rename_collection ":collection='INBOX'" ":new_id='Inbox'"
 sql "DELETE FROM items WHERE collection = 'Inbox' AND link_id = 'm';"
 expect "reference: a rename keeps it, and a copy deleted elsewhere too" \
     "$(run read/references_from ":kind='$mail_kind'" ":link_id='m'" | cut -d'|' -f5 | tr '\n' ' ')" "sender invitation "
-sql "UPDATE items SET deleted = 1, retained_at = 'x' WHERE collection = 'Archive' AND link_id = 'm';"
+sql "UPDATE items SET deleted = 1, retained_at = '2026-10-01T00:00:00.000Z' WHERE collection = 'Archive' AND link_id = 'm';"
 expect "reference: a tombstoned or retained last row still holds it" \
     "$(run read/references_from ":kind='$mail_kind'" ":link_id='m'" | wc -l | tr -d ' ')" "2"
 run owner/purge_item ":collection='Archive'" ":seq=1" >/dev/null
@@ -1112,7 +1156,7 @@ item Cal ev2 15
 run owner/link_invitations_to ":link_id='ev2'"
 expect "auto: a calendar item synced after its invitation is tied to it, never to a deleted mail" \
     "$(refs)" "m4>ev1:invitation:user m5>ev2:invitation:auto "
-run owner/upsert_mail_summary ":collection='INBOX'" ":link_id='m4'" ":message_id='m4'" ":in_reply_to='[]'" \
+run owner/upsert_mail_summary ":collection='INBOX'" ":link_id='m4'" ":message_id='m4'" \
     ":subject='s m4'" ":sender='alice@example.org'" ":sender_name='Alice'" ":date=NULL" ":size=1" ":attachment=0" ":invitation=NULL"
 expect "auto: a write without the body keeps a known invitation" \
     "$(sql "SELECT invitation FROM mail_summary WHERE item IN (SELECT id FROM items WHERE link_id = 'm4');")" "ev1"
@@ -1135,7 +1179,7 @@ task() {
     run owner/upsert_task_summary ":collection='Cal'" ":link_id='$1'" ":uid='$1'" ":summary='t $1'" \
         ":dtstart=NULL" ":dtstart_tzid=NULL" ":dtstart_value=NULL" ":due=NULL" ":due_tzid=NULL" \
         ":due_value=NULL" ":status=NULL" ":completed=NULL" ":percent=NULL" ":recurring=0" \
-        ":until=NULL" ":priority=NULL" ":categories='[]'" ":parent=$3" ":mid=$4"
+        ":until=NULL" ":priority=NULL" ":parent=$3" ":mid=$4"
 }
 refs() {
     sql "SELECT from_link_id || '>' || to_link_id || ':' || role || ':' || origin FROM item_reference ORDER BY 1;" | tr '\n' ' '
@@ -1187,7 +1231,7 @@ expect "task: a priority out of RFC 5545's range is refused" \
     "$(fails owner/upsert_task_summary ":collection='Cal'" ":link_id='t1'" ":uid='t1'" ":summary='t'" \
         ":dtstart=NULL" ":dtstart_tzid=NULL" ":dtstart_value=NULL" ":due=NULL" ":due_tzid=NULL" \
         ":due_value=NULL" ":status=NULL" ":completed=NULL" ":percent=NULL" ":recurring=0" \
-        ":until=NULL" ":priority=10" ":categories='[]'" ":parent=NULL" ":mid=NULL" && echo refused)" "refused"
+        ":until=NULL" ":priority=10" ":parent=NULL" ":mid=NULL" && echo refused)" "refused"
 
 # --- A file stands for an attachment until no reference names it (§14.3) ----
 
@@ -1269,7 +1313,7 @@ for target in local synced; do
 done
 expect "file: a file holding a body, or bound by a source, is never collected for want of a reference" \
     "$(sql "SELECT link_id FROM items WHERE link_id IN ('local', 'synced') ORDER BY link_id;" | tr '\n' ' ')" "local synced "
-sql "UPDATE items SET deleted = 1, retained_at = 'x' WHERE link_id = 'm';"
+sql "UPDATE items SET deleted = 1, retained_at = '2026-10-01T00:00:00.000Z' WHERE link_id = 'm';"
 run owner/purge_item ":collection='work/INBOX'" ":seq=1" >/dev/null
 expect "file: the message's last row gone, its stand-in goes and the saved copy stays with its body" \
     "$(sql "SELECT collection || ':' || ifnull(object_hash, '') FROM items WHERE link_id = 'part:m#2';")|$(sql "SELECT count(*) FROM item_reference;")" \
@@ -1421,6 +1465,14 @@ sql "UPDATE items SET deleted = 1 WHERE collection = 'tasks-a' AND link_id = 't1
 sql "UPDATE bindings SET handle = 'a.ics', base_flags_known = 1, base_present = 1 WHERE collection = 'tasks-b' AND item IN (SELECT id FROM items WHERE link_id = 't1');"
 expect "supersedes: the create accepted has nothing left to move" \
     "$(run owner/list_superseded_bindings ":collection='tasks-b'" ":source='caldav'")" ""
+# Every engine load runs both reads (SYNC.md §10) and supersessions is nearly
+# always empty: each starts there and reaches its items by their key, never
+# through the collection's items.
+for statement in list_superseded_bindings list_superseded_pending; do
+    steps="$(plan "owner/$statement" ":collection='tasks-b'" ":source='caldav'")"
+    expect "supersedes: $statement starts from supersessions and seeks each item by its key, walking no collection" \
+        "$(grep -c 'SCAN s\b' <<<"$steps" || true)$(grep -cE 'SEARCH [nt] USING INTEGER PRIMARY KEY \(rowid=\?\)' <<<"$steps" || true)$(grep -cE '(SCAN|SEARCH) [nt] .*(collection|SCAN [nt]$)|SCAN [nt]$' <<<"$steps" || true)" "120"
+done
 
 fresh
 run owner/set_collection_kind ":collection='tasks-a'" ":account=NULL" ":kind='$cal_kind'"
@@ -1436,10 +1488,10 @@ expect "supersedes: a rename follows into a pending add's supersedes, and leaves
 
 # --- A task's source mail answered is a reply another mail names (§14.1) ----
 
-# reply <link_id> <position> <msg_id>: one In-Reply-To id of a mail.
+# reply <link_id> <position> <message_id>: one In-Reply-To id of a mail.
 reply() {
     run owner/insert_in_reply_to ":collection='$(sql "SELECT collection FROM items WHERE link_id = '$1';")'" \
-        ":link_id='$1'" ":position=$2" ":msg_id='$3'"
+        ":link_id='$1'" ":position=$2" ":message_id='$3'"
 }
 
 fresh
@@ -1482,7 +1534,7 @@ run owner/upsert_event_summary ":collection='Cal'" ":link_id='ev'" ":uid='ev'" "
 run owner/upsert_task_summary ":collection='Cal'" ":link_id='todo'" ":uid='todo'" ":summary='Send the plan'" ":dtstart=NULL" \
     ":dtstart_tzid=NULL" ":dtstart_value=NULL" ":due=NULL" ":due_tzid=NULL" ":due_value=NULL" ":status=NULL" \
     ":completed=NULL" ":percent=NULL" ":recurring=NULL" ":until=NULL" \
-    ":priority=NULL" ":categories='[]'" ":parent=NULL" ":mid=NULL"
+    ":priority=NULL" ":parent=NULL" ":mid=NULL"
 run owner/upsert_journal_summary ":collection='Cal'" ":link_id='note'" ":uid='note'" ":summary='Standup'" \
     ":dtstart=NULL" ":dtstart_tzid=NULL" ":dtstart_value=NULL"
 run owner/upsert_file_summary ":collection='Docs'" ":link_id='plan'" ":name='plan.pdf'" ":media_type=NULL" ":size=NULL" ":part=NULL"
@@ -1515,13 +1567,13 @@ opens() {
 
 fresh
 expect "format: init_store_meta stamps this draft, version 1 with both compatibility versions, BLAKE3 and the creator's revision" \
-    "$(run read/load_store_meta | cut -d'|' -f1,2,3,8,9,10,11)" "pimdir|1|blake3|3|storage-draft-09|1|1"
+    "$(run read/load_store_meta | cut -d'|' -f1,2,3,8,9,10,11)" "pimdir|1|blake3|3|storage-draft-10|1|1"
 expect "format: a draft's store opens under that draft alone, never under another nor a release" \
-    "$(opens storage-draft-09) $(opens storage-draft-08) $(opens storage-draft-10) $(opens storage-v1)" \
+    "$(opens storage-draft-10) $(opens storage-draft-09) $(opens storage-draft-11) $(opens storage-v1)" \
     "opened refused refused refused"
 sql "ALTER TABLE store_meta DROP COLUMN format_version;"
 expect "format: a store an earlier draft wrote lacks the marker, so load_store_meta fails and it is refused" \
-    "$(fails read/load_store_meta && echo failed) $(opens storage-draft-09)" "failed refused"
+    "$(fails read/load_store_meta && echo failed) $(opens storage-draft-10)" "failed refused"
 
 # --- A migration states what it raises; an added column is harmless (§6) ---
 
@@ -1591,9 +1643,9 @@ done
 fresh
 expect "sync: a store no engine wrote names no sync version, load_store_meta answering it last" \
     "$(run read/load_store_meta | cut -d'|' -f14)|$(run read/load_store_meta | awk -F'|' '{ print NF }')" "|14"
-run owner/set_sync_version ":sync_version='sync-draft-09'"
+run owner/set_sync_version ":sync_version='sync-draft-10'"
 expect "sync: set_sync_version records the engine's version, and nothing else moves" \
-    "$(run read/load_store_meta | cut -d'|' -f9,14)" "storage-draft-09|sync-draft-09"
+    "$(run read/load_store_meta | cut -d'|' -f9,14)" "storage-draft-10|sync-draft-10"
 expect "sync: the version is text or nothing" \
     "$(sql "UPDATE store_meta SET sync_version = x'07';" 2>&1 | grep -c CHECK)" "1"
 
@@ -1609,22 +1661,38 @@ expect "identity: a store draws 32 lowercase hex digits at creation, another sto
 collection INBOX
 item INBOX a 1
 sql "VACUUM INTO '$dir/backup.db';"
+cp "$dir/backup.db" "$dir/backup-again.db"
+cp "$dir/backup.db" "$dir/backup-once-more.db"
 item INBOX b 2
+# The store went on after the backup and is itself a restored copy by now, so
+# its incarnation is above the backup's own.
+run owner/raise_incarnation ":replaced=NULL"
 recorded="$(run read/load_change_cursor)"
 # The restore: the copy takes the store's place and is raised past both
 # incarnations before anything opens it.
 mv "$dir/backup.db" "$dir/pimdir.db"
+copied="$(run read/load_change_cursor | cut -d'|' -f4)"
 run owner/raise_incarnation ":replaced=$(cut -d'|' -f4 <<< "$recorded")"
 restored="$(run read/load_change_cursor)"
-expect "restore: the copy keeps the id, answers another incarnation and a stamp below the one a consumer recorded" \
-    "$([ "$(cut -d'|' -f3 <<< "$restored")" = "$id" ] && echo same)|$(cut -d'|' -f4 <<< "$restored")|$([ "$(cut -d'|' -f1 <<< "$restored")" -lt "$(cut -d'|' -f1 <<< "$recorded")" ] && echo below)" \
-    "same|2|below"
+expect "restore: the copy keeps the id, answers an incarnation above its own and the replaced store's, and a stamp below the one a consumer recorded" \
+    "$([ "$(cut -d'|' -f3 <<< "$restored")" = "$id" ] && echo same)|$copied|$([ "$(cut -d'|' -f4 <<< "$restored")" -gt "$(cut -d'|' -f4 <<< "$recorded")" ] && [ "$(cut -d'|' -f4 <<< "$recorded")" -gt "$copied" ] && echo above)|$([ "$(cut -d'|' -f1 <<< "$restored")" -lt "$(cut -d'|' -f1 <<< "$recorded")" ] && echo below)" \
+    "same|1|above|below"
+# The same backup restored twice more, the replaced store unreadable each
+# time: each copy is raised above its own incarnation, and by a random
+# stride, so the two answer different incarnations and a consumer of one
+# never takes the other for it.
+mv "$dir/backup-again.db" "$dir/pimdir.db"
 run owner/raise_incarnation ":replaced=NULL"
-expect "restore: with the replaced store unread, the copy's own incarnation is raised" \
-    "$(run read/load_change_cursor | cut -d'|' -f4)" "3"
+again="$(run read/load_change_cursor | cut -d'|' -f4)"
+mv "$dir/backup-once-more.db" "$dir/pimdir.db"
+run owner/raise_incarnation ":replaced=NULL"
+once_more="$(run read/load_change_cursor | cut -d'|' -f4)"
+expect "restore: two restores of one backup, the replaced store unread, are raised above the copy's own incarnation and answer different ones" \
+    "$([ "$again" -gt "$copied" ] && [ "$once_more" -gt "$copied" ] && echo above)|$([ "$again" != "$once_more" ] && [ "$again" != "$(cut -d'|' -f4 <<< "$restored")" ] && [ "$once_more" != "$(cut -d'|' -f4 <<< "$restored")" ] && echo different)" \
+    "above|different"
 expect "identity: the id never changes and the incarnation never goes down" \
-    "$(sql "UPDATE store_meta SET store_id = '00000000000000000000000000000000';" 2>&1 | grep -c 'store identity is fixed')$(sql "UPDATE store_meta SET incarnation = 2;" 2>&1 | grep -c 'store identity is fixed')|$(run read/load_change_cursor | cut -d'|' -f3,4)" \
-    "11|$id|3"
+    "$(sql "UPDATE store_meta SET store_id = '00000000000000000000000000000000';" 2>&1 | grep -c 'store identity is fixed')$(sql "UPDATE store_meta SET incarnation = $copied;" 2>&1 | grep -c 'store identity is fixed')|$(run read/load_change_cursor | cut -d'|' -f3,4)" \
+    "11|$id|$once_more"
 
 # --- Column types are held by the schema (§4.1) -----------------------------
 
@@ -1636,6 +1704,85 @@ expect "types: a value of another type is refused where STRICT refused it, a NUL
 expect "types: a value SQLite converts losslessly is kept, converted" \
     "$(sql "INSERT INTO objects(hash, size) VALUES('$h1', '7'); INSERT INTO items(collection, link_id, seq, level) VALUES('INBOX', 5, 1, 2.0);
             SELECT typeof(size) FROM objects; SELECT typeof(link_id) || typeof(level) FROM items;" | tr '\n' ' ')" "integer textinteger "
+
+# --- Shapes are held by the schema (§13) -------------------------------------
+
+# One row of each table whose shapes §13 fixes, written as the statements
+# write them, then one write per shape a statement of an implementation's own
+# could get wrong: each is refused by the CHECK naming its column, and the
+# rows stay as they were. checks/floor.sh runs the same writes on the floor.
+fresh
+collection INBOX
+object "$h1"
+item INBOX a 1
+run owner/insert_binding ":collection='INBOX'" ":link_id='a'" ":source='imap'" ":handle='10'" \
+    ":base_flags='[]'" ":base_object=NULL" ":base_revision=NULL" ":base_present=1" \
+    ":conflicted=0" ":conflict_revision=NULL" ":conflict_object=NULL" ":shared_object=NULL"
+run owner/upsert_mail_summary ":collection='INBOX'" ":link_id='a'" ":message_id='a'" ":subject='s'" \
+    ":sender=NULL" ":sender_name=NULL" ":date='2026-10-06T08:00:00Z'" ":size=1" ":attachment=0"
+run owner/open_round ":collection='INBOX'" ":source='imap'" ":since='2026-09-01T00:00:00Z'" ":until='2026-10-01T00:00:00Z'" ":band=0"
+run owner/close_round ":collection='INBOX'" ":source='imap'" ":checkpoint=NULL" ":since='2026-09-01T00:00:00Z'" ":until='2026-10-01T00:00:00Z'"
+run owner/open_round ":collection='INBOX'" ":source='imap'" ":since='2026-09-01T00:00:00Z'" ":until='2026-10-01T00:00:00Z'" ":band=0"
+run queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='remove'" ":payload='{\"v\":1,\"seq\":1}'" > /dev/null
+run owner/record_receipt ":id=9" ":collection='INBOX'" ":seq=1"
+run owner/set_capability ":account=NULL" ":source='imap'" ":collection=NULL" ":capability='mail.submit'" ":support='full'" ":detail=NULL"
+run owner/set_performer ":account=NULL" ":capability='mail.submit'" ":source='imap'"
+sql "INSERT INTO items(collection, link_id, seq, level, deleted, retained_at, retained_by) VALUES('INBOX', 'r', 2, 2, 1, '2026-10-01T00:00:00.000Z', 'imap');
+     INSERT INTO event_summary(item, summary, recurring) SELECT id, '', 0 FROM items WHERE link_id = 'a';
+     INSERT INTO task_summary(item, summary, recurring) SELECT id, '', 0 FROM items WHERE link_id = 'a';
+     INSERT INTO file_summary(item, name, size) SELECT id, '', 0 FROM items WHERE link_id = 'a';
+     INSERT INTO item_reference(from_kind, from_link_id, to_kind, to_link_id, role, origin, created_at)
+         VALUES('message/rfc822', 'a', 'message/rfc822', 'r', 'related', 'user', '2026-10-01T00:00:00.000Z');"
+shapes="$(sqlite3 "$dir/pimdir.db" .dump)"
+refusals=0
+while IFS='|' read -r column write; do
+    [ -n "$column" ] || continue
+    refusals=$((refusals + 1))
+    expect "shape: [$write] is refused by the CHECK on $column" \
+        "$(sql "$write;" 2>&1 | grep -c "CHECK constraint failed: $column" || true)" "1"
+done <<'SHAPES'
+retained_at GLOB|UPDATE items SET retained_at = 'yesterday' WHERE link_id = 'r'
+retained_at GLOB|UPDATE items SET retained_at = '2026-10-01T00:00:00Z' WHERE link_id = 'r'
+retained_at GLOB|UPDATE items SET retained_at = '2026-10-01T00:00:00.000+00:00' WHERE link_id = 'r'
+retained_at GLOB|UPDATE items SET retained_at = '2026-10-01 00:00:00.000Z' WHERE link_id = 'r'
+created_at GLOB|UPDATE store_meta SET created_at = '2026-10-01T00:00:00Z'
+created_at GLOB|UPDATE queue SET created_at = '1790000000'
+created_at GLOB|UPDATE item_reference SET created_at = '2026-10-01'
+applied_at GLOB|UPDATE receipts SET applied_at = '2026-10-01T00:00:00Z'
+covered_at GLOB|UPDATE sources SET covered_at = '2026-10-01T00:00:00Z'
+round_started_at GLOB|UPDATE sources SET round_started_at = '2026-10-01T00:00:00Z'
+covered_since GLOB|UPDATE sources SET covered_since = '2026-09-01'
+covered_until GLOB|UPDATE sources SET covered_until = '2026-10-01T00:00:00.000Z'
+round_since GLOB|UPDATE sources SET round_since = '2026-09-01T00:00:00'
+round_until GLOB|UPDATE sources SET round_until = ''
+seq >= 1|UPDATE items SET seq = 0 WHERE link_id = 'a'
+seq >= 1|INSERT INTO items(collection, link_id, seq, level) VALUES('INBOX', 'n', -3, 2)
+seq >= 1|UPDATE receipts SET seq = 0
+link_id != ''|INSERT INTO items(collection, link_id, seq, level) VALUES('INBOX', '', 3, 2)
+id != ''|INSERT INTO collections(id, kind, name) VALUES('', 'message/rfc822', '')
+account != ''|UPDATE collections SET account = ''
+account != ''|UPDATE capabilities SET account = ''
+account != ''|UPDATE performers SET account = ''
+source != ''|UPDATE sources SET source = ''
+source != ''|UPDATE bindings SET source = ''
+source != ''|UPDATE capabilities SET source = ''
+source != ''|UPDATE performers SET source = ''
+handle != ''|UPDATE bindings SET handle = ''
+size >= 0|UPDATE objects SET size = -5
+size >= 0|UPDATE mail_summary SET size = -1
+size >= 0|UPDATE file_summary SET size = -1
+attempts >= 0|UPDATE queue SET attempts = -1
+attachment IN (0, 1)|UPDATE mail_summary SET attachment = 7
+recurring IN (0, 1)|UPDATE event_summary SET recurring = 2
+recurring IN (0, 1)|UPDATE task_summary SET recurring = -1
+retained_by IS NULL OR retained_at IS NOT NULL|UPDATE items SET retained_by = 'imap' WHERE link_id = 'a'
+retained_by IS NULL OR retained_at IS NOT NULL|UPDATE items SET retained_at = NULL WHERE link_id = 'r'
+SHAPES
+expect "shape: 36 writes refused, no row moved, and what each column may also hold is taken" \
+    "$refusals|$([ "$(sqlite3 "$dir/pimdir.db" .dump)" = "$shapes" ] && echo unmoved)|$(sql "UPDATE mail_summary SET date = NULL, size = NULL, attachment = NULL; UPDATE event_summary SET recurring = NULL; UPDATE task_summary SET recurring = 1;
+        UPDATE sources SET covered_since = NULL, round_until = NULL; UPDATE receipts SET seq = NULL; UPDATE items SET retained_by = NULL WHERE link_id = 'r';
+        UPDATE objects SET size = 0; SELECT 'taken';")" \
+    "36|unmoved|taken"
 
 # --- Readers count and page under the chips (§14.1) --------------------------
 
@@ -1723,9 +1870,10 @@ expect "row: one mail row by key, in the page's shape" \
 # (key,seq,collection[,role]), the rows' first two columns joined.
 walk() {
     local statement="$1" fields="$2" rows last out="" k s c r
-    local cursor=(":after_key=NULL" ":after_seq=NULL" ":after_collection=NULL" ":after_role=NULL")
+    local cursor=(":after_key=NULL" ":after_seq=NULL" ":after_collection=NULL")
     shift 2
     IFS=, read -r k s c r <<<"$fields"
+    [ -z "$r" ] || cursor[3]=":after_role=NULL"
     while :; do
         rows="$(run "read/$statement" "$@" "${cursor[@]}" ":limit=2" || true)"
         [ -n "$rows" ] || break
@@ -1733,7 +1881,7 @@ walk() {
         [ "$(grep -c . <<<"$rows")" -eq 2 ] || break
         last="$(tail -1 <<<"$rows")"
         cursor=(":after_key='$(cut -d'|' -f"$k" <<<"$last")'" ":after_seq=$(cut -d'|' -f"$s" <<<"$last")"
-                ":after_collection='$(cut -d'|' -f"$c" <<<"$last")'" ":after_role=NULL")
+                ":after_collection='$(cut -d'|' -f"$c" <<<"$last")'")
         [ -z "$r" ] || cursor[3]=":after_role='$(cut -d'|' -f"$r" <<<"$last")'"
     done
     echo "$out"
@@ -1774,11 +1922,18 @@ done
 expect "since: the page seeks the floor on each collection's items_by_sort" \
     "$(plan read/list_mail_page_filtered "$both" ":since='2026-10-06T00:00:00Z'" | grep -c 'items_by_sort (collection=? AND sort_key>? AND' || true)" "1"
 for statement in count_mail count_mail_by_day count_unread; do
-    expect "since: $statement seeks the floor on items_by_sort" \
-        "$(plan "read/$statement" "$both" ":since='2026-10-06T00:00:00Z'" | grep -c 'items_by_sort (collection=? AND sort_key>?)' || true)" "1"
+    index=items_by_sort
+    [ "$statement" != count_unread ] || index=items_unread
+    expect "since: $statement seeks the floor on $index" \
+        "$(plan "read/$statement" "$both" ":since='2026-10-06T00:00:00Z'" | grep -c "$index (collection=? AND sort_key>?)" || true)" "1"
     expect "count: $statement joins no summary, reading it for the attachment chip alone" \
         "$(plan "read/$statement" "$both" ":seen=NULL" ":attachment=NULL" ":since=NULL" ":shift=NULL" | grep -c 'mail_summary.*LEFT-JOIN' || true)" "0"
 done
+# The unread count reads the partial index holding the unread rows alone
+# (§14.1), with no floor too, and never the order every live row is in: a
+# mailbox mostly read counts what it has not read.
+expect "count: count_unread seeks items_unread, never items_by_sort nor the whole table" \
+    "$(plan read/count_unread "$both" ":attachment=NULL" ":since=NULL" | grep -c 'SEARCH i USING INDEX items_unread (collection=? AND sort_key>?)' || true)$(plan read/count_unread "$both" ":attachment=NULL" ":since=NULL" | grep -cE 'items_by_sort|SCAN i\b' || true)" "10"
 for statement in count_mail count_mail_by_day count_unread sum_mail list_mail_page_filtered search_mail; do
     expect "count: $statement tests the read flag on the item's bit, seeking no flag row" \
         "$(plan "read/$statement" "$both" ":pattern='%a%'" ":seen=0" ":attachment=NULL" ":since=NULL" ":shift=NULL" \
@@ -1799,14 +1954,14 @@ minted="dup:k#$(printf '\001')k"
 sql "INSERT INTO items(collection, link_id, seq, flags_known, level) VALUES('INBOX', '$minted', 2, 1, 2);
      INSERT INTO bindings(item, collection, source, handle) VALUES((SELECT id FROM items WHERE collection = 'INBOX' AND link_id = '$minted'), 'INBOX', 'imap', char(1) || '$minted');"
 expect "origin: a create keyed by the key minted over its provisional handle pairs with the key's holder, of the body it intends" \
-    "$(run owner/origin_for_link ":link_id='$minted'" ":source='imap'" ":collection='INBOX'" ":object=NULL")|$(run owner/origin_for_link ":link_id='$minted'" ":source='imap'" ":collection='INBOX'" ":object='$h1'")|$(run owner/origin_for_link ":link_id='$minted'" ":source='imap'" ":collection='INBOX'" ":object='$h2'")|$(run owner/origin_for_link ":link_id='$minted'" ":source='graph'" ":collection='INBOX'" ":object=NULL")" \
+    "$(run owner/origin_for_link ":link_id='$minted'" ":source='imap'" ":collection='INBOX'" ":hash=NULL")|$(run owner/origin_for_link ":link_id='$minted'" ":source='imap'" ":collection='INBOX'" ":hash='$h1'")|$(run owner/origin_for_link ":link_id='$minted'" ":source='imap'" ":collection='INBOX'" ":hash='$h2'")|$(run owner/origin_for_link ":link_id='$minted'" ":source='graph'" ":collection='INBOX'" ":hash=NULL")" \
     "Archive|10|Archive|10||"
 expect "destination: a tombstone pairs with the pending create of its key minted elsewhere" \
     "$(run owner/destination_for_link ":link_id='k'" ":source='imap'" ":collection='Archive'" | cut -d'|' -f1)|$(run owner/destination_for_link ":link_id='k'" ":source='imap'" ":collection='INBOX'")" \
     "INBOX|"
 for statement in origin_for_link destination_for_link; do
     expect "placement: $statement seeks items_by_link, then the binding's key, never every binding" \
-        "$(plan "owner/$statement" ":link_id='$minted'" ":source='imap'" ":collection='INBOX'" ":object=NULL" | grep -cE 'items_by_link \(link_id=\?\)|bindings_1 \(item=\? AND source=\?\)' || true)" "2"
+        "$(plan "owner/$statement" ":link_id='$minted'" ":source='imap'" ":collection='INBOX'" ":hash=NULL" | grep -cE 'items_by_link \(link_id=\?\)|bindings_1 \(item=\? AND source=\?\)' || true)" "2"
 done
 
 # --- A delivered create is no member a listing names (SYNC.md §2, §4, §5) ---
@@ -1822,7 +1977,7 @@ for key in moved landed; do
     run owner/insert_item ":collection='Trash'" ":link_id='$key'" ":seq=$seq" ":flags='[]'" \
         ":object_hash=NULL" ":sort_key=''" ":level=1" ":deleted=0" ":conflicted=0" ":conflict_object=NULL"
     run owner/upsert_mail_summary ":collection='Trash'" ":link_id='$key'" ":message_id='$key'" \
-        ":in_reply_to='[]'" ":subject='s $key'" ":sender='alice@example.org'" ":sender_name='Alice'" \
+        ":subject='s $key'" ":sender='alice@example.org'" ":sender_name='Alice'" \
         ":date='2026-10-06T08:00:00Z'" ":size=1" ":attachment=0"
 done
 run owner/insert_binding ":collection='Trash'" ":link_id='moved'" ":source='imap'" ":handle='${p}moved'" \
@@ -1844,7 +1999,7 @@ expect "delivered: a pending create gains a base naming nothing, a member's hand
 run owner/deliver_binding ":collection='Trash'" ":source='graph'" ":handle='${p}moved'"
 expect "delivered: delivering twice, or for another source, moves nothing" "$(base)" "landed:000-- moved:100--"
 expect "delivered: a delivered create is no origin a copy comes from" \
-    "$(run owner/origin_for_link ":link_id='moved'" ":source='imap'" ":collection='INBOX'" ":object=NULL")|$(run owner/origin_for_link ":link_id='kept'" ":source='imap'" ":collection='Trash'" ":object=NULL")" \
+    "$(run owner/origin_for_link ":link_id='moved'" ":source='imap'" ":collection='INBOX'" ":hash=NULL")|$(run owner/origin_for_link ":link_id='kept'" ":source='imap'" ":collection='Trash'" ":hash=NULL")" \
     "|INBOX|10"
 expect "delivered: a delivered create stays the destination a tombstone of its identity relocates into" \
     "$(run owner/destination_for_link ":link_id='moved'" ":source='imap'" ":collection='INBOX'" | cut -d'|' -f1)" "Trash"
@@ -1866,7 +2021,7 @@ item Cal t 3
 item Cal u 4
 sql "INSERT INTO item_address(item, role, position, address) VALUES
          ((SELECT id FROM items WHERE collection = 'INBOX' AND link_id = 'a'), 'from', 0, 'x@example.org'), ((SELECT id FROM items WHERE collection = 'INBOX' AND link_id = 'b'), 'from', 0, 'y@example.org');
-     INSERT INTO mail_in_reply_to(item, position, msg_id) VALUES((SELECT id FROM items WHERE collection = 'INBOX' AND link_id = 'a'), 0, 'p'), ((SELECT id FROM items WHERE collection = 'INBOX' AND link_id = 'b'), 0, 'q');
+     INSERT INTO mail_in_reply_to(item, position, message_id) VALUES((SELECT id FROM items WHERE collection = 'INBOX' AND link_id = 'a'), 0, 'p'), ((SELECT id FROM items WHERE collection = 'INBOX' AND link_id = 'b'), 0, 'q');
      INSERT INTO task_summary(item, summary) VALUES((SELECT id FROM items WHERE collection = 'Cal' AND link_id = 't'), 't'), ((SELECT id FROM items WHERE collection = 'Cal' AND link_id = 'u'), 'u');
      INSERT INTO task_category(item, position, value) VALUES((SELECT id FROM items WHERE collection = 'Cal' AND link_id = 't'), 0, 'home'), ((SELECT id FROM items WHERE collection = 'Cal' AND link_id = 'u'), 0, 'work');"
 expect "batch: a summary, the addresses, the reply ids and the categories load for the slot's link ids alone" \
@@ -1896,11 +2051,11 @@ sql "UPDATE items SET deleted = 1, retained_at = CASE link_id WHEN 'new' THEN '2
 run owner/recompute_refcounts
 expect "purge: retained_bytes sums each retained body once" "$(run read/retained_bytes)" "2"
 expect "purge: a cutoff takes the rows retired before it, never one retired at it, a later or a live one, answering their pins" \
-    "$(run owner/purge_retained_before ":cutoff='2026-10-01T00:00:00.000Z'" | tr '\n' ' ')|$(sql "SELECT group_concat(link_id, ' ') FROM (SELECT link_id FROM items ORDER BY link_id);")" \
+    "$(run owner/purge_retained_before ":before='2026-10-01T00:00:00.000Z'" | tr '\n' ' ')|$(sql "SELECT group_concat(link_id, ' ') FROM (SELECT link_id FROM items ORDER BY link_id);")" \
     "$h1| $h1| |live new"
 for statement in owner/purge_retained_before read/retained_bytes; do
     expect "purge: ${statement#*/} reads items_by_retained, never every item" \
-        "$(plan "$statement" ":cutoff='2026-06-01T00:00:00.000Z'" | grep -c 'items_by_retained' || true)$(plan "$statement" ":cutoff='2026-06-01T00:00:00.000Z'" | grep -c 'SCAN items' || true)" "10"
+        "$(plan "$statement" ":before='2026-06-01T00:00:00.000Z'" | grep -c 'items_by_retained' || true)$(plan "$statement" ":before='2026-06-01T00:00:00.000Z'" | grep -c 'SCAN items' || true)" "10"
 done
 
 # --- Small rows carry no rowid, a pointer index the pointers set (§4.3) -----
@@ -1963,10 +2118,14 @@ item Work 'alt:s|d|f' 2 "'$h3'"
 item Work 'hash:0123456789abcdef' 3 "'$h4'"
 item Work 'dup:k@x#7' 4 "'$h5'"
 item Work 'meta@x' 5
-links=":links='[\"k@x\",\"alt:s|d|f\",\"hash:0123456789abcdef\",\"dup:k@x#7\",\"meta@x\"]'"
-expect "lookup: an account's body for a stated key, with its size, never another account's, a derived or a minted key's, nor a bodiless row's" \
-    "$(run owner/lookup_objects ":account='work'" "$links" | sort -u | tr '\n' ' ')|$(run owner/lookup_objects ":account='home'" "$links" | tr '\n' ' ')|$(run owner/lookup_objects ":account=NULL" "$links" | tr '\n' ' ')" \
-    "k@x|$h1|1 |k@x|$h2|1 |k@x|$h3|1 "
+# A reserved prefix is compared byte for byte (§9): a stated identity
+# spelling one in another case is a stated key like any other, and is linked.
+item Work 'Hash:x' 6 "'$h4'"
+item Work 'ALT:y' 7 "'$h5'"
+links=":links='[\"k@x\",\"alt:s|d|f\",\"hash:0123456789abcdef\",\"dup:k@x#7\",\"meta@x\",\"Hash:x\",\"ALT:y\"]'"
+expect "lookup: an account's body for a stated key, with its size, one spelling a reserved prefix in another case included, never another account's, a derived or a minted key's, nor a bodiless row's" \
+    "$(run owner/lookup_objects ":account='work'" "$links" | LC_ALL=C sort -u | tr '\n' ' ')|$(run owner/lookup_objects ":account='home'" "$links" | tr '\n' ' ')|$(run owner/lookup_objects ":account=NULL" "$links" | tr '\n' ' ')" \
+    "ALT:y|$h5|1 Hash:x|$h4|1 k@x|$h1|1 |k@x|$h2|1 |k@x|$h3|1 "
 # summary <collection> <link_id> <attachment> <invitation>: a mail summary
 # stating the two columns a body gives.
 summary() {
@@ -1977,10 +2136,13 @@ summary Work 'k@x' NULL NULL
 summary Work2 'k@x' 1 "'ev@x'"
 summary Home 'k@x' 0 NULL
 summary Work 'alt:s|d|f' 1 "'alt@x'"
+summary Work 'Hash:x' 1 "'cased@x'"
 sql "UPDATE items SET object_hash = '$h1' WHERE link_id = 'alt:s|d|f';"
 expect "held: a body's columns come from a row of the account holding it, one stating its mark first, never another account's nor a derived key's" \
-    "$(run owner/held_mail_summary ":account='work'" ":link_id='k@x'" ":object='$h1'")|$(run owner/held_mail_summary ":account='home'" ":link_id='k@x'" ":object='$h1'")|$(run owner/held_mail_summary ":account='home'" ":link_id='k@x'" ":object='$h2'")|$(run owner/held_mail_summary ":account='work'" ":link_id='alt:s|d|f'" ":object='$h1'")" \
+    "$(run owner/held_mail_summary ":account='work'" ":link_id='k@x'" ":hash='$h1'")|$(run owner/held_mail_summary ":account='home'" ":link_id='k@x'" ":hash='$h1'")|$(run owner/held_mail_summary ":account='home'" ":link_id='k@x'" ":hash='$h2'")|$(run owner/held_mail_summary ":account='work'" ":link_id='alt:s|d|f'" ":hash='$h1'")" \
     "1|ev@x||0||"
+expect "held: a stated key spelling a reserved prefix in another case is held like any other" \
+    "$(run owner/held_mail_summary ":account='work'" ":link_id='Hash:x'" ":hash='$h4'")" "1|cased@x"
 
 # --- A handle binds one item; a retained row revives under its seq (§9.1, §11)
 
@@ -2080,6 +2242,21 @@ expect "page: in link-id order from the empty string for a sweep, a tombstone ne
     "$(run read/list_items_page ":collection='C'" ":after=''" ":limit=3" | cut -d'|' -f2 | tr '\n' ' ')|$(run read/list_items_page ":collection='C'" ":after='c'" ":limit=3" | cut -d'|' -f2 | tr '\n' ' ')" \
     "a b c |d e "
 expect "count: count_items counts the live items alone" "$(run read/count_items ":collection='C'")" "5"
+# NULL is the first page in every paged read (§9.3, §14.1), the values that
+# were the first page before still accepted, and the cursor coalesced rather
+# than tested, so the page stays a seek on its index at any depth.
+for statement in list_items_page_asc list_contacts_page_asc list_events_page_asc list_tasks_page_asc list_journals_page_asc list_files_page_asc; do
+    expect "page: $statement reads a NULL cursor as the first page, as the empty key with seq 0" \
+        "$(pages "$statement" NULL NULL ":collection='C'")|$(run "read/$statement" ":collection='C'" ":after_key=NULL" ":after_seq=NULL" ":limit=9" | cut -d'|' -f1 | tr '\n' ' ')" \
+        "2 3 4 1 5 |2 3 4 1 5 "
+    expect "page: $statement seeks a NULL cursor on items_by_sort, sorting nothing" \
+        "$(plan "read/$statement" ":collection='C'" ":after_key=NULL" ":after_seq=NULL" ":limit=2" | grep -c 'items_by_sort (collection=? AND (sort_key,seq)>(?,?))' || true)$(plan "read/$statement" ":collection='C'" ":after_key=NULL" ":after_seq=NULL" ":limit=2" | grep -c 'TEMP B-TREE' || true)" "10"
+done
+expect "page: list_items_page and list_retained_page read a NULL cursor as the first page, as '' and 0" \
+    "$(run read/list_items_page ":collection='C'" ":after=NULL" ":limit=3" | cut -d'|' -f2 | tr '\n' ' ')|$(run read/list_retained_page ":collection='C'" ":after=NULL" ":limit=3" | cut -d'|' -f2)|$(run read/list_retained_page ":collection='C'" ":after=0" ":limit=3" | cut -d'|' -f2)|$(run read/list_retained_page ":collection='C'" ":after=6" ":limit=3" | cut -d'|' -f2)" \
+    "a b c |f|f|"
+expect "page: both seek a NULL cursor, the sweep on the item's key and the trash on items_deleted, sorting nothing" \
+    "$(plan read/list_items_page ":collection='C'" ":after=NULL" ":limit=3" | grep -c 'sqlite_autoindex_items_1 (collection=? AND link_id>?)' || true)$(plan read/list_retained_page ":collection='C'" ":after=NULL" ":limit=3" | grep -c 'items_deleted (collection=? AND seq>?)' || true)$({ plan read/list_items_page ":collection='C'" ":after=NULL" ":limit=3"; plan read/list_retained_page ":collection='C'" ":after=NULL" ":limit=3"; } | grep -c 'TEMP B-TREE' || true)" "110"
 
 # --- A load reads the live rows, a get one live item (§14, §14.1) ----------
 
@@ -2122,15 +2299,12 @@ expect "load: each kind's summaries over a collection, and over the slot's link 
 expect "get: one live item by seq with its kind's summary, an item with no summary row too, a tombstone never" \
     "$(run read/get_contact ":collection='Cards'" ":seq=1" | cut -d'|' -f1,2,8)|$(run read/get_contact ":collection='Cards'" ":seq=2" | cut -d'|' -f1,2,8)|$(run read/get_event ":collection='Cal'" ":seq=1" | cut -d'|' -f2,8)|$(run read/get_task ":collection='Cal'" ":seq=2" | cut -d'|' -f2,15)|$(run read/get_journal ":collection='Cal'" ":seq=3" | cut -d'|' -f2,11)|$(run read/get_mail ":collection='INBOX'" ":seq=1" | cut -d'|' -f2,4)|$(run read/get_mail ":collection='INBOX'" ":seq=3")" \
     "1|c|Carol|2|d||e|Review|t|NEEDS-ACTION|j|DATE|a|$h1|"
-expect "component: the calendar table holding an item, none for another kind" \
-    "$(for link in e t j; do run read/component_of ":collection='Cal'" ":link_id='$link'"; done | tr '\n' ' ')|$(run read/component_of ":collection='Cards'" ":link_id='c'")" \
-    "VEVENT VTODO VJOURNAL |"
 for kind in event task journal; do
     run "owner/delete_${kind}_summary" ":collection='Cal'" ":link_id='${kind:0:1}'"
 done
 expect "delete: a calendar summary goes alone, the item still read, through no table" \
-    "$(sql "SELECT count(*) FROM event_summary; SELECT count(*) FROM task_summary; SELECT count(*) FROM journal_summary; SELECT count(*) FROM items WHERE collection = 'Cal';" | tr '\n' ' ')|$(run read/component_of ":collection='Cal'" ":link_id='e'")|$(run read/get_event ":collection='Cal'" ":seq=1" | cut -d'|' -f2,8)" \
-    "0 0 0 3 ||e|"
+    "$(sql "SELECT count(*) FROM event_summary; SELECT count(*) FROM task_summary; SELECT count(*) FROM journal_summary; SELECT count(*) FROM items WHERE collection = 'Cal';" | tr '\n' ' ')|$(run read/get_event ":collection='Cal'" ":seq=1" | cut -d'|' -f2,8)" \
+    "0 0 0 3 |e|"
 
 # --- A derivation replaces a set whole (§14, Annex A) ----------------------
 
@@ -2154,10 +2328,10 @@ run owner/replace_addresses ":collection='INBOX'" ":link_id='m'"
 run owner/insert_address ":collection='INBOX'" ":link_id='m'" ":role='to'" ":position=0" ":address='c@x'" ":name=NULL"
 for spec in m:0:p@x m:1:q@x n:0:r@x; do
     IFS=: read -r link position id <<<"$spec"
-    run owner/insert_in_reply_to ":collection='INBOX'" ":link_id='$link'" ":position=$position" ":msg_id='$id'"
+    run owner/insert_in_reply_to ":collection='INBOX'" ":link_id='$link'" ":position=$position" ":message_id='$id'"
 done
 run owner/replace_in_reply_to ":collection='INBOX'" ":link_id='m'"
-run owner/insert_in_reply_to ":collection='INBOX'" ":link_id='m'" ":position=0" ":msg_id='s@x'"
+run owner/insert_in_reply_to ":collection='INBOX'" ":link_id='m'" ":position=0" ":message_id='s@x'"
 for link in t u; do
     run owner/upsert_task_summary ":collection='Cal'" ":link_id='$link'" ":uid='$link'" ":summary='$link'" ":dtstart=NULL" \
         ":dtstart_tzid=NULL" ":dtstart_value=NULL" ":due=NULL" ":due_tzid=NULL" ":due_value=NULL" ":status=NULL" \
@@ -2246,6 +2420,9 @@ done
 expect "domain: the live placements naming an address of the domain itself, newest first, under a role or any" \
     "$(run read/list_domain_placements ":domain='example.org'" ":role=NULL" | cut -d'|' -f1-3 | tr '\n' ' ')|$(run read/list_domain_placements ":domain='example.org'" ":role='to'" | cut -d'|' -f1)" \
     "bob@example.org|from|INBOX amy@example.org|to|Home |amy@example.org"
+expect "domain: the domain is compared, never a pattern, ASCII letters in either case" \
+    "$(run read/list_domain_placements ":domain='e_ample.org'" ":role=NULL")$(run read/list_domain_placements ":domain='%.org'" ":role=NULL")$(run read/list_domain_placements ":domain='%'" ":role=NULL")|$(run read/list_domain_placements ":domain='Example.ORG'" ":role=NULL" | cut -d'|' -f1 | tr '\n' ' ')" \
+    "|bob@example.org amy@example.org "
 bind INBOX k@x imap 10 1
 bind Home k@x imap 10 1
 bind Solo k@x graph g1 1
@@ -2256,6 +2433,17 @@ expect "conflicts: an account's conflicted bindings with base, local and remote,
     "$(run read/list_conflicted_bindings ":account='work'" | tr '\n' ' ')|$(run read/list_conflicted_items ":account='work'" | tr '\n' ' ')|$(run read/list_conflicted_bindings ":account='home'" | cut -d'|' -f1)|$(run read/list_conflicted_items ":account='home'")" \
     "INBOX|k@x|imap|10|r2||$h1|$h3 |INBOX|k@x|1|$h1|$h3 |Home|"
 expect "sources: every source holding a binding, once, sorted" "$(run read/list_sources | tr '\n' ' ')" "graph imap "
+run owner/upsert_checkpoint ":collection='INBOX'" ":source='imap'" ":checkpoint=NULL"
+run owner/upsert_checkpoint ":collection='INBOX'" ":source='jmap'" ":checkpoint=NULL"
+sql "INSERT INTO bindings(item, collection, source, handle) SELECT id, collection, 'graph', 'g2' FROM items WHERE collection = 'INBOX' AND link_id = 'k@x';"
+expect "sources: a collection's sources by a binding or a checkpoint, each once, sorted; a checkpoint alone names none store-wide" \
+    "$(run owner/collection_sources ":collection='INBOX'" | tr '\n' ' ')|$(run owner/collection_sources ":collection='Solo'")|$(run owner/collection_sources ":collection='Archive'")|$(run read/list_sources | tr '\n' ' ')" \
+    "graph imap jmap |graph||graph imap "
+# Both read the distinct sources by a loose scan of bindings_by_handle, a seek
+# per source (and per collection store-wide), never a binding each: a drain
+# asks once per add, move or copy (§15.2).
+expect "sources: collection_sources and list_sources seek the next source above the last, scanning no binding" \
+    "$(plan owner/collection_sources ":collection='INBOX'" | grep -c 'SEARCH b USING COVERING INDEX bindings_by_handle (collection=? AND source>?)' || true)$(plan read/list_sources | grep -c 'SEARCH b USING COVERING INDEX bindings_by_handle (collection=? AND source>?)' || true)$({ plan owner/collection_sources ":collection='INBOX'"; plan read/list_sources; } | grep -cE 'SCAN (b|bindings)\b|SEARCH bindings ' || true)" "110"
 expect "collector: object_exists answers a stored name, nothing for another" \
     "$(run owner/object_exists ":hash='$h1'")|$(run owner/object_exists ":hash='$h4'")" "1|"
 
@@ -2298,6 +2486,7 @@ index() {
 # on index.db with the store attached as `store` (SEARCH.md §3).
 isearch() {
     local file="$1"; shift
+    takes "search/$file" "$@"
     {
         prelude
         echo "PRAGMA foreign_keys = ON;"
@@ -2348,6 +2537,41 @@ isearch delete_object ":rowid=$object_id"
 isearch delete_object_row ":hash='$h1'"
 expect "chunk: the chunks go with their object" \
     "$(sqlite3 "$dir/index.db" "SELECT count(*) FROM chunk;")" "0"
+
+# --- A horizon that rolls re-expands what may gain an occurrence (SEARCH.md §7)
+
+fresh
+index
+collection INBOX
+item INBOX mail 1
+run owner/set_collection_kind ":collection='Cal'" ":account=NULL" ":kind='text/calendar'"
+for spec in past:2 series:3 ended:4 entering:5 diary:6 gone:7; do
+    item Cal "${spec%:*}" "${spec#*:}"
+done
+sql "UPDATE items SET sort_key = CASE WHEN link_id IN ('entering', 'mail') THEN '2028-09-01T10:00:00Z' ELSE '2020-01-01T10:00:00Z' END;"
+for spec in past:0:NULL series:1:NULL ended:1:"'20200601T000000Z'" entering:0:NULL; do
+    IFS=: read -r link recurring bound <<<"$spec"
+    run owner/upsert_event_summary ":collection='Cal'" ":link_id='$link'" ":uid='$link'" ":summary=''" ":location=NULL" \
+        ":dtstart=NULL" ":dtstart_tzid=NULL" ":dtstart_value=NULL" ":dtend=NULL" ":recurring=$recurring" ":until=$bound"
+done
+for link in diary gone; do
+    run owner/upsert_journal_summary ":collection='Cal'" ":link_id='$link'" ":uid='$link'" ":summary=''" \
+        ":dtstart=NULL" ":dtstart_tzid=NULL" ":dtstart_value=NULL"
+done
+sql "UPDATE items SET deleted = 1 WHERE link_id = 'gone';"
+isearch init_index_meta ":version=1" ":tokenizer='unicode61 remove_diacritics 0'"
+isearch set_horizon ":horizon_start='2025-08-20T12:00:00Z'" ":horizon_end='2028-08-20T12:00:00Z'"
+isearch set_tzdb_version ":tzdb_version='2026a'"
+old=(":old_start='2025-08-20T12:00:00Z'" ":old_end='2028-08-20T12:00:00Z'")
+same=(":tzdb_version='2026a'" ":floating_zone='UTC'")
+expect "roll: a series with no bound, a single item entering the window and every live journal, whose summary cannot say it recurs; never an ended series, a single item outside, a tombstone nor a mail" \
+    "$(isearch items_to_reexpand "${old[@]}" ":new_start='2025-09-20T12:00:00Z'" ":new_end='2028-09-20T12:00:00Z'" "${same[@]}" | sort | tr '\n' ' ')" \
+    "Cal|3 Cal|5 Cal|6 "
+expect "roll: a horizon that did not move answers no journal, only the series it had not reached the bound of" \
+    "$(isearch items_to_reexpand "${old[@]}" ":new_start='2025-08-20T12:00:00Z'" ":new_end='2028-08-20T12:00:00Z'" "${same[@]}")" "Cal|3"
+steps="$(isplan items_to_reexpand "${old[@]}" ":new_start='2025-09-20T12:00:00Z'" ":new_end='2028-09-20T12:00:00Z'" "${same[@]}")"
+expect "roll: items_to_reexpand reads the calendar collections, then their live items, never every item of the store" \
+    "$(grep -c 'SCAN c\b' <<<"$steps" || true)$(grep -cE 'SEARCH i USING (COVERING )?INDEX [a-z_0-9]+ \(collection=\?\)' <<<"$steps" || true)$(grep -c 'SCAN i\b' <<<"$steps" || true)" "110"
 
 fresh
 index
@@ -2495,12 +2719,12 @@ fresh
 index
 isearch init_index_meta ":version=1" ":tokenizer='unicode61 remove_diacritics 0'"
 expect "index: init_index_meta stamps this draft and the canonical shape, which load_index_meta answers" \
-    "$(isearch load_index_meta | cut -d'|' -f10,11)" "search-draft-09|canonical"
+    "$(isearch load_index_meta | cut -d'|' -f10,11)" "search-draft-10|canonical"
 expect "index: init_index_meta records the store and the incarnation it is built from" \
     "$(isearch load_index_meta | cut -d'|' -f8,9)" "$(run read/load_change_cursor | cut -d'|' -f3,4)"
 run owner/raise_incarnation ":replaced=NULL"
 expect "index: a restored store answers another incarnation than the one the index recorded" \
-    "$(isearch load_index_meta | cut -d'|' -f9)|$(run read/load_change_cursor | cut -d'|' -f4)" "1|2"
+    "$(isearch load_index_meta | cut -d'|' -f9)|$([ "$(run read/load_change_cursor | cut -d'|' -f4)" -gt 1 ] && echo raised)" "1|raised"
 
 # --- A body that cannot be read is tried again (SEARCH.md §4) ---------------
 
@@ -2544,7 +2768,7 @@ for spec in r@x:r@x: x@x:r@x:r@x y@x:r@x:x@x z@x:z@x:w@x w@x:z@x:; do
 done
 # r and z are purged from the store; the key reconciliation drops their
 # placements.
-sql "UPDATE items SET deleted = 1, retained_at = '2026-10-01T00:00:00Z' WHERE link_id IN ('r@x', 'z@x');"
+sql "UPDATE items SET deleted = 1, retained_at = '2026-10-01T00:00:00.000Z' WHERE link_id IN ('r@x', 'z@x');"
 run owner/purge_item ":collection='INBOX'" ":seq=1" > /dev/null
 run owner/purge_item ":collection='INBOX'" ":seq=4" > /dev/null
 gone="$(isearch placements_gone | tr '\n' ' ')"
@@ -2591,12 +2815,6 @@ done
 summary_id="$(isearch upsert_placement ":collection='INBOX'" ":seq=4" ":link_id='m4'" ":hash=NULL")"
 isearch insert_summary_text ":rowid=$summary_id" ":title='forecast'" ":people=''" ":from=''" ":to=''" ":cc=''" ":bcc=''" \
     ":email=''" ":organizer=''" ":attendee=''"
-expect "ranked: a page of the bodies a term matches best, best first, the next page after it" \
-    "$(isearch match_objects_ranked ":match='\"budget\"'" ":limit=1" ":offset=0" | cut -d'|' -f1,2)|$(isearch match_objects_ranked ":match='\"budget\"'" ":limit=1" ":offset=1" | cut -d'|' -f1,2)|$(isearch match_objects_ranked ":match='\"budget\"'" ":limit=5" ":offset=2")" \
-    "INBOX|1|INBOX|2|"
-steps="$(isplan match_objects_ranked ":match='\"budget\"'" ":limit=1" ":offset=0")"
-expect "ranked: FTS5 orders by rank and keeps the page, sorting nothing itself" \
-    "$(grep -c 'TEMP B-TREE FOR ORDER BY' <<<"$steps" || true)$(grep -c 'SCAN object_text VIRTUAL TABLE' <<<"$steps" || true)" "01"
 expect "probe: one body, or one summary, tested against a term" \
     "$(isearch match_object ":match='\"budget\"'" ":hash='$h2'")|$(isearch match_object ":match='\"budget\"'" ":hash='$h3'")|$(isearch match_summary ":match='{title} : \"fore\" *'" ":collection='INBOX'" ":seq=4")|$(isearch match_summary ":match='\"budget\"'" ":collection='INBOX'" ":seq=4")" \
     "1||1|"
@@ -2616,9 +2834,35 @@ item INBOX b 2
 item Archive a 1 "'$h1'"
 item INBOX s 3
 sql "UPDATE items SET deleted = 1 WHERE link_id = 'b';"
-expect "hit: a live placement's presentation row out of the store, a tombstone's none" \
-    "$(isearch hit ":collection='INBOX'" ":seq=1" | cut -d'|' -f1-5,7)|$(isearch hit ":collection='INBOX'" ":seq=2")" \
-    "INBOX|work|message/rfc822|1|a|$h1|"
+# A hit is `(account, seq)` and carries its placements (SEARCH.md §8.2): one
+# row per live placement of the public id in the account, in collection
+# order, with its collection's kind, the `kind:` value it answers to and its
+# title.
+collection Elsewhere "'home'"
+collection Solo
+item Elsewhere a 1
+item Solo a 1
+run owner/set_collection_kind ":collection='Cal'" ":account='work'" ":kind='text/calendar'"
+item Cal t 4
+item Cal bare 5
+item Cal old 6
+sql "INSERT INTO mail_summary(item, subject) SELECT id, 'Budget' FROM items WHERE collection = 'INBOX' AND link_id = 'a';
+     INSERT INTO task_summary(item, summary) SELECT id, 'Call Bob' FROM items WHERE link_id = 't';
+     UPDATE items SET deleted = 1, retained_at = '2026-10-01T00:00:00.000Z' WHERE link_id = 'old';"
+expect "hit: every live placement of the hit in its account, in collection order, with its kind, its kind value and its title" \
+    "$(isearch hit ":account='work'" ":seq=1" | tr '\n' ' ')" \
+    "Archive|a||$h1||2|message/rfc822|mail| INBOX|a||$h1||2|message/rfc822|mail|Budget "
+expect "hit: another account's placements and those of no account are other hits; a tombstone and a retained row are none" \
+    "$(isearch hit ":account='home'" ":seq=1" | cut -d'|' -f1)|$(isearch hit ":account=NULL" ":seq=1" | cut -d'|' -f1)|$(isearch hit ":account='work'" ":seq=2")$(isearch hit ":account='work'" ":seq=6")" \
+    "Elsewhere|Solo|"
+expect "hit: a calendar item answers the kind value of the table holding its summary, none when no table holds one" \
+    "$(isearch hit ":account='work'" ":seq=4" ".nullvalue=NULL" | cut -d'|' -f1,7-9)|$(isearch hit ":account='work'" ":seq=5" ".nullvalue=NULL" | cut -d'|' -f1,7-9)" \
+    "Cal|text/calendar|task|Call Bob|Cal|text/calendar|NULL|"
+# A hit names no collection, so the read seeks the public id store-wide: the
+# one canonical reader of items_by_seq_global, which io-pimdir's own reads of
+# a hit (its ends, its thread) share.
+expect "hit: the public id is sought on items_by_seq_global, never by a scan of the items" \
+    "$(isplan hit ":account='work'" ":seq=1" | grep -c 'SEARCH i USING INDEX items_by_seq_global (seq=?)' || true)$(isplan hit ":account='work'" ":seq=1" | grep -c 'SCAN i\b' || true)" "10"
 id="$(body "$h1")"
 text "$id" "quarterly" "alpha words"
 other="$(body "$h9")"
@@ -2771,15 +3015,22 @@ expect "bits: an unknown set holds no bit" \
 fresh
 collection INBOX
 object "$h1"
-mail INBOX clean 1 10 "''" '["\\Seen"]' '["\\Seen"]'
-mail INBOX seen 2 20 "''" '["\\Seen"]' '[]'
-mail INBOX label 3 30 "''" '["$x"]' '[]'
-mail INBOX unknown 4 40 "''" '["\\Seen"]' '[]'
-mail INBOX bound 5 50 "''"
-mail INBOX diverged 6 60 "''"
-mail INBOX deleted 7 70 "''"
-mail INBOX created 8 80 "''"
-mail INBOX edited 9 90 "''"
+mail INBOX clean 1 10 NULL '["\\Seen"]' '["\\Seen"]'
+mail INBOX seen 2 20 NULL '["\\Seen"]' '[]'
+mail INBOX label 3 30 NULL '["$x"]' '[]'
+mail INBOX unknown 4 40 NULL '["\\Seen"]' '[]'
+mail INBOX bound 5 50 NULL
+mail INBOX diverged 6 60 NULL
+mail INBOX deleted 7 70 NULL
+mail INBOX created 8 80 NULL
+mail INBOX edited 9 90 NULL
+# Both directions of the keyword comparison (SYNC.md §3): a keyword the item
+# holds and the base lacks, one the base holds and the item dropped, two sets
+# of one size naming different keywords, and a set holding the same keyword
+# and bit on both sides, which owes nothing.
+mail INBOX removed 10 91 NULL '[]' '["$x"]'
+mail INBOX kept 11 92 NULL '["$x","\\Seen"]' '["\\Seen","$x"]'
+mail INBOX swapped 12 93 NULL '["$x"]' '["$y"]'
 sql "UPDATE items SET flags_known = 0, marks = 0 WHERE link_id = 'unknown';
      UPDATE bindings SET conflicted = 1 WHERE item IN (SELECT id FROM items WHERE link_id = 'bound');
      UPDATE items SET conflicted = 1 WHERE link_id = 'diverged';
@@ -2788,23 +3039,31 @@ sql "UPDATE items SET flags_known = 0, marks = 0 WHERE link_id = 'unknown';
      UPDATE items SET object_hash = '$h1', level = 2 WHERE link_id = 'edited';
      INSERT INTO bindings(item, collection, source, handle, base_present) VALUES((SELECT id FROM items WHERE link_id = 'seen'), 'INBOX', 'graph', 'g20', 1);"
 run owner/recompute_refcounts
-expect "owing: every binding of the source not Clean, and no other, an unknown set holding no opinion" \
+expect "owing: every binding of the source not Clean, a keyword on the item alone or on the base alone included, and no other, an unknown set holding no opinion" \
     "$(run owner/list_owing_bindings ":collection='INBOX'" ":source='imap'" | tr '\n' ' ')|$(run owner/list_owing_bindings ":collection='INBOX'" ":source='graph'" | tr '\n' ' ')" \
-    "20 30 50 60 70 80 90 |"
+    "20 30 50 60 70 80 90 91 93 |"
 expect "lacking: the live items holding a body a source binds not" \
     "$(run owner/list_lacking_items ":collection='INBOX'" ":source='graph'" | tr '\n' ' ')|$(run owner/list_lacking_items ":collection='INBOX'" ":source='imap'" | tr '\n' ' ')" \
     "edited |"
 expect "owing: the source's bindings seek bindings_by_handle, never the whole store" \
     "$(plan owner/list_owing_bindings ":collection='INBOX'" ":source='imap'" | grep -c 'bindings_by_handle (collection=? AND source=?)' || true)" "1"
+# The two flag sets are compared by a seek each way on the other's key, in
+# the delta's read and in the eviction holding the same comparison (§11.3):
+# no temporary b-tree is built per binding to compare them.
+for statement in list_owing_bindings evict_before; do
+    steps="$(plan "owner/$statement" ":collection='INBOX'" ":source='imap'" ":before='2026-09-01T00:00:00Z'")"
+    expect "owing: $statement compares the flag sets by two anti-joins on their keys, building no temporary b-tree" \
+        "$(grep -c 'SEARCH g USING PRIMARY KEY (item=? AND source=? AND flag=?)' <<<"$steps" || true)$(grep -c 'SEARCH f USING PRIMARY KEY (item=? AND flag=?)' <<<"$steps" || true)$(grep -c 'TEMP B-TREE' <<<"$steps" || true)" "110"
+done
 
 # --- The sender rule runs once per page (STORAGE.md §14.2) ------------------
 
 fresh
 collection INBOX
 run owner/set_collection_kind ":collection='Cards'" ":account=NULL" ":kind='text/vcard'"
-mail INBOX m1 1 10 "''"
-mail INBOX m2 2 20 "''"
-mail INBOX m3 3 30 "''"
+mail INBOX m1 1 10 NULL
+mail INBOX m2 2 20 NULL
+mail INBOX m3 3 30 NULL
 run owner/insert_item ":collection='Cards'" ":link_id='c1'" ":seq=4" ":flags='[]'" ":object_hash=NULL" \
     ":sort_key=''" ":level=1" ":deleted=0" ":conflicted=0" ":conflict_object=NULL"
 for link in m1 m2 m3; do
@@ -2826,7 +3085,7 @@ expect "senders: the page's mail is tied to its senders' cards, and no other mai
 # only what no scenario can run.
 ran="$(sort -u "$dir/ran")"
 all="$(cd "$root/queries" && find . -name '*.sql' | sed 's|^\./||; s|\.sql$||' | sort)"
-waived="$(sed '/^#/d; /^$/d' "$waivers" | sort)"
+waived="$(sed '/^#/d; /^$/d; /^index\//d' "$waivers" | sort)"
 while read -r line; do
     [ -n "$line" ] || continue
     name="${line%%: *}"
@@ -2848,9 +3107,56 @@ while read -r name; do
     fi
 done <<<"$all"
 
+# --- Every index is read (STORAGE.md §4.3) -------------------------------------
+
+# Every index of the store and of the canonical search index is named by the
+# query plan of a canonical statement, its parameters unbound, or is waived
+# with its reason, one `index/name: reason` a line of the waiver file: an
+# index no statement reads costs every write and serves none. A waiver naming
+# no index, or one a plan names, fails too.
+fresh
+index
+plans="$(
+    while read -r file; do
+        { cat "$root/queries/storage/read/create_param.sql"; echo "EXPLAIN QUERY PLAN"; cat "$file"; } | sqlite3 "$dir/pimdir.db"
+    done < <(find "$root/queries/storage" -name '*.sql' | sort)
+    while read -r file; do
+        { echo "ATTACH '$dir/pimdir.db' AS store;"; cat "$root/queries/storage/read/create_param.sql"
+          echo "EXPLAIN QUERY PLAN"; cat "$file"; } | sqlite3 "$dir/index.db"
+    done < <(find "$root/queries/search" -name '*.sql' | sort)
+)"
+indexes="$(for db in pimdir index; do
+    sqlite3 "$dir/$db.db" "SELECT name FROM sqlite_schema WHERE type = 'index' AND name NOT LIKE 'sqlite_%';"
+done | sort)"
+index_waived="$(sed -n 's|^index/||p' "$waivers")"
+while read -r name; do
+    if grep -qE "INDEX $name( |$)" <<<"$plans"; then
+        if grep -q "^$name: " <<<"$index_waived"; then
+            echo "index/$name: waived, yet a canonical plan names it" >&2
+            failures=$((failures + 1))
+        fi
+    elif ! grep -q "^$name: ." <<<"$index_waived"; then
+        echo "$name: an index no canonical plan names, and waived nowhere" >&2
+        failures=$((failures + 1))
+    fi
+done <<<"$indexes"
+while read -r line; do
+    [ -n "$line" ] || continue
+    if ! grep -qxF "${line%%: *}" <<<"$indexes"; then
+        echo "index/${line%%: *}: waived, and no index of the schemas" >&2
+        failures=$((failures + 1))
+    fi
+done <<<"$index_waived"
+
+if [ -s "$dir/stray" ]; then
+    echo "a scenario binds a parameter its statement does not take:" >&2
+    sort -u "$dir/stray" >&2
+    failures=$((failures + 1))
+fi
+
 if [ "$failures" -gt 0 ]; then
     echo "$failures invariant(s) broken" >&2
     exit 1
 fi
 
-echo "every invariant scenario holds, $(grep -cxF -f <(echo "$all") <<<"$ran") of $(grep -c . <<<"$all") statements run, $(grep -c . <<<"$waived" || true) waived"
+echo "every invariant scenario holds, $(grep -cxF -f <(echo "$all") <<<"$ran") of $(grep -c . <<<"$all") statements run, $(grep -c . <<<"$waived" || true) waived, $(grep -c . <<<"$indexes") indexes read by a plan or waived, $(grep -c . <<<"$index_waived" || true) waived"

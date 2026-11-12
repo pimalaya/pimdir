@@ -14,5 +14,5 @@ SELECT i.seq, i.link_id,
        s.dtend, s.recurring, s.until
 FROM items i LEFT JOIN event_summary s ON s.item = i.id
 WHERE i.collection = :collection AND i.deleted = 0
-  AND (i.sort_key, i.seq) > (:after_key, :after_seq)
+  AND (i.sort_key, i.seq) > (coalesce(:after_key, ''), coalesce(:after_seq, 0))
 ORDER BY i.sort_key, i.seq LIMIT :limit;

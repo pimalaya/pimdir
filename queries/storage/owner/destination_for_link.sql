@@ -6,7 +6,7 @@
 -- the identity or, staged beside a live holder, by the identity minted over the
 -- provisional handle it derives, the bare key first; its handle tells which.
 -- The counterpart of origin_for_link, read from the same rows, both keys a
--- seek on bindings_by_link.
+-- seek on items_by_link, then the binding by its key.
 SELECT b.collection, b.handle FROM items i JOIN bindings b ON b.item = i.id
 WHERE (i.link_id = :link_id OR i.link_id = 'dup:' || :link_id || '#' || char(1) || :link_id)
   AND b.source = :source AND b.collection != :collection

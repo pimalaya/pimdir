@@ -3,3 +3,10 @@
 # statement run by no scenario and missing here, and on a line here naming a
 # statement a scenario runs or none at all, so the list holds only what the
 # harness cannot run.
+
+# The indexes of the schemas no canonical statement's plan names, one a line
+# as `index/name: reason`. checks/invariants.sh fails on an index named by no
+# plan and missing here, and on a line here naming an index a plan names or
+# none at all, so the list holds only what is kept for a stated reason.
+index/performers_key: a constraint, the one choice per account and capability set_performer's upsert conflicts on; performers holds a few rows and its reads scan them
+index/placement_flag_by_flag: kept for the flag reads the performance ledger moves from the search index to the store (cairn/changes/audit-2026-11-12, Q7), which will seek a flag across placements; until they land no statement reads it

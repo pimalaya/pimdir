@@ -1,6 +1,6 @@
 -- What a message's body gave the rows of the account already holding it
 -- (Annex A.1): the attachment mark and the invitation of a row of :link_id
--- whose item holds :object, so a placement gaining that body without reading
+-- whose item holds :hash, so a placement gaining that body without reading
 -- it (a copy, a move, a second label, an upgrade linking from the store)
 -- states the body's columns, not those its listing read without it. A row
 -- stating its mark comes first, then one stating an invitation; nothing when
@@ -9,8 +9,8 @@
 SELECT m.attachment, m.invitation FROM items i
 JOIN collections c ON c.id = i.collection
 JOIN mail_summary m ON m.item = i.id
-WHERE i.link_id = :link_id AND i.object_hash = :object
-  AND i.link_id NOT LIKE 'alt:%' AND i.link_id NOT LIKE 'hash:%' AND i.link_id NOT LIKE 'dup:%'
+WHERE i.link_id = :link_id AND i.object_hash = :hash
+  AND NOT (i.link_id GLOB 'alt:*' OR i.link_id GLOB 'hash:*' OR i.link_id GLOB 'dup:*')
   AND c.account IS :account
 ORDER BY m.attachment IS NULL, m.invitation IS NULL, i.collection
 LIMIT 1;

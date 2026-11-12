@@ -2,4 +2,4 @@
 -- delete_garbage_objects has committed, so one pass reclaims the collected and
 -- the orphaned together. A point lookup rather than listing every hash, which
 -- would hold the whole index in memory to answer about one file (§5).
-SELECT 1 FROM objects WHERE hash = :hash;
+SELECT 1 AS found FROM objects WHERE hash = :hash;

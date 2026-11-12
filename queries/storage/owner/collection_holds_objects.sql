@@ -7,4 +7,4 @@ SELECT EXISTS (SELECT 1 FROM items WHERE collection = :collection
     OR EXISTS (SELECT 1 FROM bindings WHERE collection = :collection
                  AND (base_object IS NOT NULL OR conflict_object IS NOT NULL
                       OR shared_object IS NOT NULL))
-    OR EXISTS (SELECT 1 FROM queue WHERE collection = :collection AND object_hash IS NOT NULL);
+    OR EXISTS (SELECT 1 FROM queue WHERE collection = :collection AND object_hash IS NOT NULL) AS holds;

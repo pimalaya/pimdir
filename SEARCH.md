@@ -1,6 +1,6 @@
 # Pimdir search specification
 
-Status: search-draft-09, requiring storage-draft-09
+Status: search-draft-10, requiring storage-draft-10
 
 The search part of the pimdir standard: a full-text index over a store ([STORAGE.md](./STORAGE.md)) and the query language over it, cross-domain.
 
@@ -43,7 +43,7 @@ The index is derived. Every row is recomputed from the store and the bodies, and
 - The **canonical shape** is [migrations/search/0001_init.sql](./migrations/search/0001_init.sql) and the statements under queries/search/, every table `STRICT`, and is the RECOMMENDED one. It needs **SQLite ≥ 3.43** with FTS5, for `contentless_delete`, a floor above the store's.
 - An index of another shape (FTS4, FTS3, or no full-text module) MAY answer the same language: every query's hit set is the one vectors/search/ gives, its text folded as §5 says and its text terms matched as §8.5 says. Its order by relevance is its own (§8.2), and so is how it keeps itself current.
 - **The hit-set guarantee leaves out text reduced from HTML, and a part's text beyond seven-bit ASCII in a charset other than UTF-8.** §6 pins neither how a `text/html` part becomes text nor, but as a recommendation, how another charset is decoded, so a word that text alone holds MAY be a hit in one conforming index and not in another. The vectors hold no such word.
-- **An index names its version and its shape.** Whatever its shape, an index holds a one-row table `index_meta` whose `format` is `pimdir-index`, whose `format_version` names the version of this part it follows, this draft's name, `search-draft-09`, while this part is a draft and `search-vN` once released (N its major), and whose `shape` names its shape: `canonical` for the canonical one, written by `init_index_meta`, and a name of the implementation's own for another, never `canonical`. Versions are ordered: drafts by their number, every draft below every release, releases by their major.
+- **An index names its version and its shape.** Whatever its shape, an index holds a one-row table `index_meta` whose `format` is `pimdir-index`, whose `format_version` names the version of this part it follows, this draft's name, `search-draft-10`, while this part is a draft and `search-vN` once released (N its major), and whose `shape` names its shape: `canonical` for the canonical one, written by `init_index_meta`, and a name of the implementation's own for another, never `canonical`. Versions are ordered: drafts by their number, every draft below every release, releases by their major.
 - **An indexer rebuilds only an older index of its own shape.** An indexer MUST refuse an index.db holding no `index_meta`, one whose `shape` is not its own, and one whose `format_version` lies above its own, naming the index's version and shape and its own, and MUST NOT rebuild, write nor delete it: a person deleting index.db hands the store to another indexer, losing nothing (§1). An index of its own shape whose `format_version` lies below its own, and one whose `index_meta` lacks `format_version`, which a draft before search-draft-08 wrote and whose indexer refuses this draft's store (STORAGE §4.2), MUST be rebuilt: there are no index migrations.
 - An index of the indexer's own shape and version MUST also be rebuilt when its `index_meta.tokenizer` differs from §5's, its schema text from 0001_init.sql's (the canonical shape), when it was built from another store or another copy of it, or when its `store_change` lies above the store's last stamp. `index_meta.store_id` and `store_incarnation` record the store's `store_id` and `incarnation` when the index was created (`init_index_meta`), and a store answering others is another (STORAGE §4.5).
 - **A query client reads only an index it implements.** It MUST refuse an index whose `shape` or `format_version` it does not implement, naming both, rather than answer from it; while this part is a draft it implements its own draft alone, as STORAGE §4.2 has a program open only its own draft's store.
@@ -115,7 +115,6 @@ The index holds:
 | `thread_of` | both | §9 |
 | `match_objects` | query client | §8.5 |
 | `match_summaries` | query client | §8.5 |
-| `match_objects_ranked` | query client | §8.2 |
 | `match_object` | query client | §8.2 |
 | `match_summary` | query client | §8.2 |
 | `flagged` | query client | §8 |
@@ -153,7 +152,7 @@ A deleted row loses its placement, which takes its flags and occurrences by casc
 
 **A body that cannot be read is tried again.** A body the blob directory no longer holds when the indexer opens it, or whose bytes fail its name (STORAGE §7), is not `unparseable`: no `object` row is written, the placement is indexed as a bodiless one (its `hash` `NULL`, its summary text written) and recorded in `missing` (`insert_missing`). Every pass first folds the recorded placements again (`load_missing_items`, which answers each as `load_changed_items` does), whether or not the store stamped them again, since a body fetched again under the same name after a quarantine restamps nothing. A placement whose body is indexed leaves `missing` (`delete_missing`), as does one holding no body any more, and one the store no longer holds goes with its placement.
 
-**Keys are reconciled when the purge count moved.** `store_meta.purges` counts purged items, collected objects and renamed collections alike (STORAGE §4.5): when it moved from `index_meta.store_purges`, `placements_gone` and `objects_gone` name what the store no longer holds, a renamed collection's old placements among them, and the indexer deletes them, pruning the thread of every mail placement that was its link id's last (§9).
+**Keys are reconciled when the purge count moved.** `store_meta.purges` counts purged items, collected objects and renamed or deleted collections alike (STORAGE §4.5): when it moved from `index_meta.store_purges`, `placements_gone` and `objects_gone` name what the store no longer holds, a renamed collection's old placements among them, and the indexer deletes them, pruning the thread of every mail placement that was its link id's last (§9).
 
 The cursor read before the pass is written by `set_index_cursor` in the transaction completing it, as `store_change`, with the purge count read beside it. A crash thus replays and skips nothing.
 
@@ -231,7 +230,7 @@ A range's occurrences are listed by `occurrences_between`, one row each with its
 
 An item is re-expanded when its body changes, when the horizon rolls, and when the time zone database or the indexer's zone changes.
 
-The roll re-expands the recurring items whose `until` is absent or not before the old horizon's end, and expands the single items whose start the new window covers and the old one did not (`items_to_reexpand`, bound to both horizons before `set_horizon` records the new one). A query outside the horizon MUST say so in its coverage (§8).
+The roll re-expands the recurring items whose `until` is absent or not before the old horizon's end, every live journal, whose summary does not say whether it recurs (STORAGE Annex A.5), and expands the single items whose start the new window covers and the old one did not (`items_to_reexpand`, bound to both horizons before `set_horizon` records the new one). A query outside the horizon MUST say so in its coverage (§8).
 
 A zoned time resolved through the time zone database moves when the database does. `index_meta.tzdb_version` records the version the occurrences were expanded under, as the database names its release (IANA's `2026b`), empty with none.
 
@@ -287,7 +286,7 @@ A range leaves the horizon when it starts before the horizon's start or ends aft
 
 ### 8.2 Semantics
 
-- **A hit is `(account, seq)`**, one per item per account, carrying its placements (STORAGE §9.2). An implementation MAY flatten to one row per placement on request.
+- **A hit is `(account, seq)`**, one per item per account, carrying its placements (STORAGE §9.2): `hit(account, seq)` answers them, every live placement of the public id in the account's collections, `account` `NULL` for those of no account, in collection order, each with its link id, flags, body, sort key and level as a listing reads them, its collection's kind, the `kind:` value it answers to (§8) and its title. A tombstone and a retained row are no placement of a hit. An implementation MAY flatten to one row per placement on request.
 - **Tags** are per placement in the store and per hit in the query: `tag:x` matches when any placement carries `x`, `not tag:x` when none does.
 - **Order** is `sort_key` descending by default, the undated last (contacts and files) in their own `sort_key` ascending; `name` the item's title (a message's subject, a card's `fn`, a calendar component's summary, a file's name) folded as Annex A.2 folds `fn`, ascending, a title-less item first; `relevance` the shape's own, best first, bm25 RECOMMENDED and the canonical shape's (FTS5 `bm25`); a shape without one MAY refuse `relevance` and say so. Ties go to `seq`, then the account.
 - **Deleted items are excluded.** The trash is the store's (STORAGE §11), not the index's.
@@ -306,7 +305,7 @@ A range leaves the horizon when it starts before the horizon's start or ends aft
 - A snippet is re-read from the blob for the hits shown, from their chunks (§6).
 - **A page.** A client MAY answer the first hits in the query's order after a cursor, the last hit it answered, rather than every hit, and every page walked to the end answers the hits and the order one whole answer does. Two forms read a page without reading every hit:
   - **The store's order.** Walking the store's pages (STORAGE §9.3, §14.1) under the query's structured terms and testing each item's text terms on the index, its body by `match_object` and a bodiless placement's summary by `match_summary`, stops at the page, the store's keyset cursor resuming it. It suits a text term matching many items; one matching few is read first (`match_objects`, `match_summaries`) and ordered.
-  - **Relevance.** `match_objects_ranked` reads the bodies a text term matches best first, a page of them at a time, and the client keeps the hits the query's other terms hold until its page is full.
+  - **Relevance.** `match_objects` answers each match with its rank, and no canonical statement orders or pages by it: the statement reading a text term's best matches first, a page of them at a time, is the implementation's own, the client keeping the hits the query's other terms hold until its page is full.
 
 ### 8.3 Grammar
 
@@ -451,7 +450,7 @@ checks/vectors.py validates that every fixture and placement resolves, re-derive
 
 ## 12. Conformance
 
-An implementation offering search conforms by one profile or both, stated as STORAGE §17 says with the shape it builds or reads (`search-draft-09 indexer (canonical)`, `search-draft-09 query client (canonical)`), and MUST meet every section its row names and answer the vectors it names.
+An implementation offering search conforms by one profile or both, stated as STORAGE §17 says with the shape it builds or reads (`search-draft-10 indexer (canonical)`, `search-draft-10 query client (canonical)`), and MUST meet every section its row names and answer the vectors it names.
 
 | Profile | What it does | Owes | Vectors |
 | --- | --- | --- | --- |

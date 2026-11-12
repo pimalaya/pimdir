@@ -8,5 +8,4 @@
 UPDATE bindings SET base_present = 1
 WHERE collection = :collection AND source = :source AND handle = :handle
   AND substr(handle, 1, 1) = char(1)
-  AND base_present = 0 AND base_flags_known = 0
-  AND base_object IS NULL AND base_revision IS NULL;
+  AND base_present = 0;

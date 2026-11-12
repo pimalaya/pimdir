@@ -79,10 +79,10 @@ SYNC.md         the sync layer (normative, optional)
 SEARCH.md       the search layer (normative, optional)
 GUIDE.md        the implementation guide (informative)
 migrations/     canonical schema migrations: storage/ and search/
-queries/        the reference statements, one file each
+queries/        the reference statements, one file each, and signatures.json, what each binds
 payloads/       the JSON Schemas of the queue's payloads
 vectors/        the normative test data
-checks/         schema, floor, statement, name, vector and reference checks (nix flake check), tags (CI)
+checks/         schema, floor, statement, signature, name, vector and reference checks (nix flake check), tags (CI)
 conventions/    Pimalaya's own conventions, outside the standard (gtd.md)
 cairn/          the dated history (log/) and audit ledgers (changes/)
 ```
@@ -91,7 +91,7 @@ The history follows [Cairn](https://github.com/pimalaya/cairn), the documents th
 
 ## Status
 
-Draft: **storage-draft-09**, **sync-draft-09** and **search-draft-09**, each named by a git tag. An implementation states the version of each part it conforms to.
+Draft: **storage-draft-10**, **sync-draft-10** and **search-draft-10**, each named by a git tag. An implementation states the version of each part it conforms to.
 
 A released part is versioned `<part>-vX.Y.Z`: STORAGE's major is the store schema version, SEARCH's the index schema version, SYNC's a breaking change to the connector seam or the engine.
 

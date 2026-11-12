@@ -38,7 +38,8 @@ CREATE TABLE store_meta (
     -- vocabulary (§13), so another algorithm is a value a migration adds,
     -- raising read_version (§6), and never a store a program reads as corrupt.
     hash_algo       TEXT    NOT NULL CHECK (typeof(hash_algo) = 'text') CHECK (hash_algo IN ('blake3')),
-    created_at      TEXT    NOT NULL CHECK (typeof(created_at) = 'text'),  -- RFC 3339, Z (§13)
+    created_at      TEXT    NOT NULL CHECK (typeof(created_at) = 'text')  -- stamped by SQLite, the shape of §13
+                    CHECK (created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'),
     -- The Annex A revision the summaries were derived under (§6): an owner at
     -- a later one re-derives what changed, then records it; one at an earlier
     -- one writing summaries records its own, so the next later owner
@@ -56,8 +57,8 @@ CREATE TABLE store_meta (
     -- records next_change - 1, the last stamp drawn.
     next_change     INTEGER NOT NULL DEFAULT 1 CHECK (typeof(next_change) = 'integer'),
     -- Rows that left without a stamp and renamed collections (§4.5): purged
-    -- items and collected objects, counted by the delete triggers below, and
-    -- every rename, counted by collections_restamp_items.
+    -- items, collected objects and deleted collections, counted by the delete
+    -- triggers below, and every rename, counted by collections_restamp_items.
     purges          INTEGER NOT NULL DEFAULT 0 CHECK (typeof(purges) = 'integer')
 );
 
@@ -78,8 +79,8 @@ END;
 -- itself (`work/INBOX`, `home/INBOX`) and records the grouping in this column
 -- rather than leaving readers to parse it back out.
 CREATE TABLE collections (
-    id          TEXT PRIMARY KEY CHECK (typeof(id) = 'text'),  -- stable id (base32 uuid or backend id), unique store-wide
-    account     TEXT CHECK (typeof(account) IN ('text', 'null')),  -- owning account, NULL in a single-account store
+    id          TEXT PRIMARY KEY CHECK (typeof(id) = 'text') CHECK (id != ''),  -- stable id (base32 uuid or backend id), unique store-wide, never empty
+    account     TEXT CHECK (typeof(account) IN ('text', 'null')) CHECK (account != ''),  -- owning account, NULL in a single-account store, never empty
     -- The media type every item shares, a closed set (§13), '' until declared.
     kind        TEXT NOT NULL CHECK (typeof(kind) = 'text') CHECK (kind IN ('', 'message/rfc822', 'text/vcard', 'text/calendar',
                 'application/octet-stream')),
@@ -134,6 +135,14 @@ BEGIN
     UPDATE store_meta SET purges = purges + 1 WHERE id = 1;
 END;
 
+-- A deleted collection leaves no stamp, like a purged row (§4.5), and an
+-- empty one takes no item whose purge would count: it counts here, so a
+-- consumer of the feed learns that a collection went and reconciles its keys.
+CREATE TRIGGER collections_count_delete AFTER DELETE ON collections
+BEGIN
+    UPDATE store_meta SET purges = purges + 1 WHERE id = 1;
+END;
+
 -- One row per source syncing a collection (a server, a phone): its sync
 -- cursor, the coverage that cursor serves, and the round under way (SYNC.md
 -- §5). A scope is `[since, until)` on the mail summary's `date`, NULL bounds
@@ -141,24 +150,33 @@ END;
 -- store is complete over it.
 CREATE TABLE sources (
     collection       TEXT NOT NULL CHECK (typeof(collection) = 'text') REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
-    source           TEXT NOT NULL CHECK (typeof(source) = 'text'),  -- source id ('left', 'right', 'phone')
+    source           TEXT NOT NULL CHECK (typeof(source) = 'text') CHECK (source != ''),  -- source id ('left', 'right', 'phone'), never empty
     checkpoint       BLOB CHECK (typeof(checkpoint) IN ('blob', 'null')),  -- opaque remote cursor (QRESYNC/JMAP state, DAV sync-token)
-    covered_since    TEXT CHECK (typeof(covered_since) IN ('text', 'null')),  -- the coverage's floor, RFC 3339 Z, NULL unbounded
-    covered_until    TEXT CHECK (typeof(covered_until) IN ('text', 'null')),  -- its ceiling, exclusive, NULL unbounded
+    -- The coverage's floor and its exclusive ceiling, NULL unbounded: an
+    -- instant at seconds precision, as mail_summary.date (§13).
+    covered_since    TEXT CHECK (typeof(covered_since) IN ('text', 'null'))
+                     CHECK (covered_since GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    covered_until    TEXT CHECK (typeof(covered_until) IN ('text', 'null'))
+                     CHECK (covered_until GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     -- When the last round closed, stamped by SQLite; NULL is never complete,
     -- and then the coverage carries no bound.
-    covered_at       TEXT CHECK (typeof(covered_at) IN ('text', 'null')) CHECK (covered_at IS NOT NULL OR (covered_since IS NULL AND covered_until IS NULL)),
+    covered_at       TEXT CHECK (typeof(covered_at) IN ('text', 'null')) CHECK (covered_at IS NOT NULL OR (covered_since IS NULL AND covered_until IS NULL))
+                     CHECK (covered_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'),
     -- The last round id drawn (open_round), so a restarted round stamps
     -- afresh and a binding's stamp names one listing.
     round            INTEGER NOT NULL DEFAULT 0 CHECK (typeof(round) = 'integer'),
-    round_since      TEXT CHECK (typeof(round_since) IN ('text', 'null')),  -- the open round's scope, NULL bounds open
-    round_until      TEXT CHECK (typeof(round_until) IN ('text', 'null')),
+    -- The open round's scope, shaped as the coverage's, NULL bounds open.
+    round_since      TEXT CHECK (typeof(round_since) IN ('text', 'null'))
+                     CHECK (round_since GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    round_until      TEXT CHECK (typeof(round_until) IN ('text', 'null'))
+                     CHECK (round_until GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     round_cursor     BLOB CHECK (typeof(round_cursor) IN ('blob', 'null')),  -- the connector's resume cursor, opaque
     round_checkpoint BLOB CHECK (typeof(round_checkpoint) IN ('blob', 'null')),  -- the checkpoint the round lands when it closes
     -- When the open round began, stamped by SQLite; NULL is no round open,
     -- and then it carries nothing.
     round_started_at TEXT CHECK (typeof(round_started_at) IN ('text', 'null')) CHECK (round_started_at IS NOT NULL OR (round_since IS NULL AND
-                     round_until IS NULL AND round_cursor IS NULL AND round_checkpoint IS NULL)),
+                     round_until IS NULL AND round_cursor IS NULL AND round_checkpoint IS NULL))
+                     CHECK (round_started_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'),
     -- Whether the open round lists only the band its coverage lacks, whose
     -- absence infers no delete of an undated member; 0 with no round open.
     round_band       INTEGER NOT NULL DEFAULT 0 CHECK (typeof(round_band) = 'integer') CHECK (round_band = 0 OR (round_band = 1 AND round_started_at IS NOT NULL)),
@@ -189,8 +207,8 @@ END;
 -- source is a candidate for its account's intents before it has synced a
 -- collection.
 CREATE TABLE capabilities (
-    account    TEXT CHECK (typeof(account) IN ('text', 'null')),
-    source     TEXT NOT NULL CHECK (typeof(source) = 'text'),
+    account    TEXT CHECK (typeof(account) IN ('text', 'null')) CHECK (account != ''),
+    source     TEXT NOT NULL CHECK (typeof(source) = 'text') CHECK (source != ''),
     collection TEXT CHECK (typeof(collection) IN ('text', 'null')) REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
     capability TEXT NOT NULL CHECK (typeof(capability) = 'text'),  -- Annex B name, or an `x-` one
     support    TEXT NOT NULL CHECK (typeof(support) = 'text') CHECK (support IN ('full', 'partial', 'none')),
@@ -204,9 +222,9 @@ CREATE UNIQUE INDEX capabilities_key ON capabilities(source, ifnull(collection, 
 -- `set-performer` action. `account` is NULL in a single-account store, so the
 -- key is an expression index rather than a primary key.
 CREATE TABLE performers (
-    account    TEXT CHECK (typeof(account) IN ('text', 'null')),
+    account    TEXT CHECK (typeof(account) IN ('text', 'null')) CHECK (account != ''),
     capability TEXT NOT NULL CHECK (typeof(capability) = 'text'),
-    source     TEXT NOT NULL CHECK (typeof(source) = 'text')
+    source     TEXT NOT NULL CHECK (typeof(source) = 'text') CHECK (source != '')
 );
 
 CREATE UNIQUE INDEX performers_key ON performers(ifnull(account, ''), capability);
@@ -225,7 +243,7 @@ CREATE UNIQUE INDEX performers_key ON performers(ifnull(account, ''), capability
 CREATE TABLE objects (
     hash     TEXT PRIMARY KEY CHECK (typeof(hash) = 'text')
              CHECK (length(hash) = 52 AND hash NOT GLOB '*[^a-z2-7]*'),
-    size     INTEGER NOT NULL CHECK (typeof(size) = 'integer'),  -- body length in bytes
+    size     INTEGER NOT NULL CHECK (typeof(size) = 'integer') CHECK (size >= 0),  -- body length in bytes
     refcount INTEGER NOT NULL DEFAULT 0 CHECK (typeof(refcount) = 'integer') CHECK (refcount >= 0)
 );
 
@@ -249,8 +267,8 @@ END;
 CREATE TABLE items (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     collection      TEXT NOT NULL CHECK (typeof(collection) = 'text') REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
-    link_id         TEXT NOT NULL CHECK (typeof(link_id) = 'text'),  -- the key the item is filed under: the identity hint, escaped as esc:<hint> when it begins like a derived key, a kind fallback, or a minted dup:<hint>#<handle> (§9)
-    seq             INTEGER NOT NULL CHECK (typeof(seq) = 'integer'),  -- public id, shared by every placement of the link id (§9.1)
+    link_id         TEXT NOT NULL CHECK (typeof(link_id) = 'text') CHECK (link_id != ''),  -- never empty; the key the item is filed under: the identity hint, escaped as esc:<hint> when it begins like a derived key, a kind fallback, or a minted dup:<hint>#<handle> (§9)
+    seq             INTEGER NOT NULL CHECK (typeof(seq) = 'integer') CHECK (seq >= 1),  -- public id, shared by every placement of the link id (§9.1)
     -- Whether the flag set is known: 1 its placement_flag rows are the set,
     -- none being known-empty; 0 unknown, and then it holds no row.
     flags_known     INTEGER NOT NULL DEFAULT 0 CHECK (typeof(flags_known) = 'integer') CHECK (flags_known IN (0, 1)),
@@ -263,7 +281,8 @@ CREATE TABLE items (
     -- The detail ladder: 1 meta, 2 full (§13).
     level           INTEGER NOT NULL CHECK (typeof(level) = 'integer') CHECK (level IN (1, 2)),
     deleted         INTEGER NOT NULL DEFAULT 0 CHECK (typeof(deleted) = 'integer') CHECK (deleted IN (0, 1)),  -- 1 while a delete propagates across sources
-    retained_at     TEXT CHECK (typeof(retained_at) IN ('text', 'null')),  -- RFC 3339 instant the last binding vanished (§11)
+    retained_at     TEXT CHECK (typeof(retained_at) IN ('text', 'null'))  -- the instant the last binding vanished (§11), the shape of §13
+                    CHECK (retained_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'),
     retained_by     TEXT CHECK (typeof(retained_by) IN ('text', 'null')),  -- the source whose removal retired it, diagnostic
     conflicted      INTEGER NOT NULL DEFAULT 0 CHECK (typeof(conflicted) = 'integer') CHECK (conflicted IN (0, 1)),  -- 1 while a cross-source content conflict is unresolved
     conflict_object TEXT CHECK (typeof(conflict_object) IN ('text', 'null')) REFERENCES objects(hash),  -- the diverging body a manual conflict recorded
@@ -273,6 +292,7 @@ CREATE TABLE items (
     UNIQUE (id, collection),
     -- The terminal states §11 and §10 describe, held by the schema.
     CHECK (retained_at IS NULL OR deleted = 1),
+    CHECK (retained_by IS NULL OR retained_at IS NOT NULL),
     CHECK (conflicted = 1 OR conflict_object IS NULL),
     CHECK (flags_known = 1 OR marks = 0)
 );
@@ -285,7 +305,7 @@ CREATE INDEX items_by_link ON items(link_id);
 -- The trash view (§11, §14.1): every deleted row, retained or still
 -- propagating. It leads with `seq` because the listing pages on the public
 -- id: ordering by anything else sorts every such row to return one page.
-CREATE INDEX items_retained ON items(collection, seq) WHERE deleted = 1;
+CREATE INDEX items_deleted ON items(collection, seq) WHERE deleted = 1;
 -- Orders a collection by the kind's own key, `seq` breaking the tie so a keyset
 -- page over a non-unique key is total. Partial on the live rows, which every
 -- listing filters on, so a mailbox whose server expunged most of it does not
@@ -424,11 +444,11 @@ CREATE TABLE bindings (
     -- The item's collection, kept for the handle index and held equal to it by
     -- the foreign key below, which a rename cascades through.
     collection        TEXT NOT NULL CHECK (typeof(collection) = 'text'),
-    source            TEXT NOT NULL CHECK (typeof(source) = 'text'),
+    source            TEXT NOT NULL CHECK (typeof(source) = 'text') CHECK (source != ''),
     -- The item's backend id on this source (IMAP UID, DAV href). Bound once:
     -- a write resolving this binding to another handle is refused, and the one
     -- licensed rebind is the handle-space rebuild (§10, §12).
-    handle            TEXT NOT NULL CHECK (typeof(handle) = 'text'),
+    handle            TEXT NOT NULL CHECK (typeof(handle) = 'text') CHECK (handle != ''),
     -- Whether the base flag set is known, as items.flags_known says of the
     -- item's: 1 base_marks and its binding_base_flag rows are the set, 0
     -- unknown.
@@ -439,7 +459,8 @@ CREATE TABLE bindings (
     base_revision     TEXT CHECK (typeof(base_revision) IN ('text', 'null')),  -- etag/modseq for mutable-content backends
     -- Whether a base exists at all, which its three value columns cannot say: a
     -- source reporting no revision, no body and no flags still agreed, and that
-    -- agreement is what tells a pending push from a settled one (§13).
+    -- agreement is what tells a pending push from a settled one (§13). The one
+    -- witness: the CHECK below lets no value column state a base without it.
     base_present      INTEGER NOT NULL DEFAULT 0 CHECK (typeof(base_present) = 'integer') CHECK (base_present IN (0, 1)),
     -- This source diverged from its OWN remote (§10), unlike items.conflicted,
     -- which is the cross-source divergence.
@@ -465,6 +486,7 @@ CREATE TABLE bindings (
     -- A binding that is not conflicted carries neither (§13).
     CHECK (conflicted = 1 OR (conflict_revision IS NULL AND conflict_object IS NULL)),
     CHECK (base_flags_known = 1 OR base_marks = 0),
+    CHECK (base_present = 1 OR (base_flags_known = 0 AND base_object IS NULL AND base_revision IS NULL)),
     -- ON UPDATE as well as ON DELETE: renaming a collection cascades into
     -- items.collection, so its bindings follow it (§14).
     FOREIGN KEY (item, collection) REFERENCES items(id, collection) ON UPDATE CASCADE ON DELETE CASCADE
@@ -518,8 +540,8 @@ CREATE TABLE mail_summary (
     sender       TEXT CHECK (typeof(sender) IN ('text', 'null')),  -- first From address, canonical (Annex A.6)
     sender_name  TEXT CHECK (typeof(sender_name) IN ('text', 'null')),  -- its display name, decoded, or NULL
     date         TEXT CHECK (typeof(date) IN ('text', 'null')),  -- RFC 3339 UTC Z at seconds precision, or NULL
-    size         INTEGER CHECK (typeof(size) IN ('integer', 'null')),  -- the body's octets, else the source's figure (Annex A.1), or NULL
-    attachment   INTEGER CHECK (typeof(attachment) IN ('integer', 'null')),  -- 1 has one, 0 has none, NULL not examined
+    size         INTEGER CHECK (typeof(size) IN ('integer', 'null')) CHECK (size >= 0),  -- the body's octets, else the source's figure (Annex A.1), or NULL
+    attachment   INTEGER CHECK (typeof(attachment) IN ('integer', 'null')) CHECK (attachment IN (0, 1)),  -- 1 has one, 0 has none, NULL not examined
     invitation   TEXT CHECK (typeof(invitation) IN ('text', 'null'))  -- the UID its first text/calendar part carries, NULL none or not examined
 );
 
@@ -532,11 +554,11 @@ CREATE INDEX mail_summary_by_invitation ON mail_summary(invitation) WHERE invita
 CREATE TABLE mail_in_reply_to (
     item       INTEGER NOT NULL CHECK (typeof(item) = 'integer') REFERENCES mail_summary(item) ON DELETE CASCADE,
     position   INTEGER NOT NULL CHECK (typeof(position) = 'integer'),
-    msg_id     TEXT    NOT NULL CHECK (typeof(msg_id) = 'text'),
+    message_id TEXT    NOT NULL CHECK (typeof(message_id) = 'text'),
     PRIMARY KEY (item, position)
 ) WITHOUT ROWID;
 
-CREATE INDEX mail_in_reply_to_by_id ON mail_in_reply_to(msg_id);
+CREATE INDEX mail_in_reply_to_by_id ON mail_in_reply_to(message_id);
 
 -- text/vcard (Annex A.2). Every EMAIL is an item_address row.
 CREATE TABLE contact_summary (
@@ -559,7 +581,7 @@ CREATE TABLE event_summary (
     dtstart_tzid  TEXT CHECK (typeof(dtstart_tzid) IN ('text', 'null')),  -- the TZID parameter, or NULL
     dtstart_value TEXT CHECK (typeof(dtstart_value) IN ('text', 'null')),  -- 'date-time' or 'date'
     dtend         TEXT CHECK (typeof(dtend) IN ('text', 'null')),  -- the value verbatim, or NULL
-    recurring     INTEGER CHECK (typeof(recurring) IN ('integer', 'null')),  -- 1 carries an RRULE or RDATE, 0 none, NULL not examined
+    recurring     INTEGER CHECK (typeof(recurring) IN ('integer', 'null')) CHECK (recurring IN (0, 1)),  -- 1 carries an RRULE or RDATE, 0 none, NULL not examined
     until         TEXT CHECK (typeof(until) IN ('text', 'null'))  -- the RRULE's UNTIL verbatim, or NULL
 );
 
@@ -576,7 +598,7 @@ CREATE TABLE task_summary (
     status        TEXT CHECK (typeof(status) IN ('text', 'null')),  -- STATUS uppercased verbatim, or NULL
     completed     TEXT CHECK (typeof(completed) IN ('text', 'null')),  -- COMPLETED verbatim (always UTC per RFC 5545), or NULL
     percent       INTEGER CHECK (typeof(percent) IN ('integer', 'null')),  -- PERCENT-COMPLETE, or NULL
-    recurring     INTEGER CHECK (typeof(recurring) IN ('integer', 'null')),
+    recurring     INTEGER CHECK (typeof(recurring) IN ('integer', 'null')) CHECK (recurring IN (0, 1)),
     until         TEXT CHECK (typeof(until) IN ('text', 'null')),
     priority      INTEGER CHECK (typeof(priority) IN ('integer', 'null')) CHECK (priority BETWEEN 0 AND 9),  -- PRIORITY, or NULL
     parent        TEXT CHECK (typeof(parent) IN ('text', 'null')),  -- the UID the first parent RELATED-TO names, or NULL
@@ -616,7 +638,7 @@ CREATE TABLE file_summary (
     item INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
     name       TEXT NOT NULL CHECK (typeof(name) = 'text'),  -- the file's name in this collection, may be empty
     media_type TEXT CHECK (typeof(media_type) IN ('text', 'null')),  -- type/subtype lowercased, no parameter, or NULL
-    size       INTEGER CHECK (typeof(size) IN ('integer', 'null')),  -- octets: the body's when held, else as stated
+    size       INTEGER CHECK (typeof(size) IN ('integer', 'null')) CHECK (size >= 0),  -- octets: the body's when held, else as stated
     part       TEXT CHECK (typeof(part) IN ('text', 'null'))  -- an attachment's IMAP section in its message, or NULL
 );
 
@@ -651,7 +673,8 @@ CREATE TABLE item_reference (
     role         TEXT NOT NULL CHECK (typeof(role) = 'text') CHECK (role IN ('attachment', 'invitation', 'sender', 'parent', 'source', 'related')
                                       OR (substr(role, 1, 2) = 'x-' AND length(role) > 2)),
     origin       TEXT NOT NULL CHECK (typeof(origin) = 'text') CHECK (origin IN ('auto', 'user')),  -- a writer's rule, or a person
-    created_at   TEXT NOT NULL CHECK (typeof(created_at) = 'text'),  -- stamped by add_reference (§13)
+    created_at   TEXT NOT NULL CHECK (typeof(created_at) = 'text')  -- stamped by add_reference (§13)
+                 CHECK (created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'),
     -- The key leads with the link id, which items_drop_references seeks by.
     PRIMARY KEY (from_link_id, from_kind, to_link_id, to_kind, role),
     CHECK (from_kind != to_kind OR from_link_id != to_link_id),
@@ -708,7 +731,8 @@ END;
 -- store, applied by the owner in append order.
 CREATE TABLE queue (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,  -- global append order
-    created_at  TEXT    NOT NULL CHECK (typeof(created_at) = 'text'),  -- RFC 3339, Z (§13)
+    created_at  TEXT    NOT NULL CHECK (typeof(created_at) = 'text')  -- stamped by SQLite, the shape of §13
+                CHECK (created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'),
     producer    TEXT    NOT NULL CHECK (typeof(producer) = 'text'),  -- enqueuing process, diagnostic
     collection  TEXT    NOT NULL CHECK (typeof(collection) = 'text') REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
     action      TEXT    NOT NULL CHECK (typeof(action) = 'text'),  -- 'add' | 'set-flags' | 'remove' | 'move' | 'copy' | 'update' | 'set-performer' | an intent (§15.3, Annex B)
@@ -718,7 +742,7 @@ CREATE TABLE queue (
     -- rename follows it, and read in place of the payload's own.
     target_collection TEXT CHECK (typeof(target_collection) IN ('text', 'null')),
     object_hash TEXT CHECK (typeof(object_hash) IN ('text', 'null')) REFERENCES objects(hash),  -- pins the payload's body against the collector, or NULL
-    attempts    INTEGER NOT NULL DEFAULT 0 CHECK (typeof(attempts) = 'integer'),
+    attempts    INTEGER NOT NULL DEFAULT 0 CHECK (typeof(attempts) = 'integer') CHECK (attempts >= 0),
     error       TEXT CHECK (typeof(error) IN ('text', 'null'))  -- last failure; non-NULL means parked
 );
 
@@ -731,9 +755,13 @@ CREATE TABLE queue (
 -- item, and the receipt still says what the add created.
 CREATE TABLE receipts (
     id         INTEGER PRIMARY KEY,        -- the applied queue row's id
-    applied_at TEXT    NOT NULL CHECK (typeof(applied_at) = 'text'),  -- RFC 3339, Z (§13)
-    collection TEXT    NOT NULL CHECK (typeof(collection) = 'text') REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
-    seq        INTEGER CHECK (typeof(seq) IN ('integer', 'null'))  -- the item an `add` created, else NULL
+    applied_at TEXT    NOT NULL CHECK (typeof(applied_at) = 'text')  -- stamped by SQLite, the shape of §13
+               CHECK (applied_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'),
+    -- The collection the row was queued on, following its rename; NULL once
+    -- that collection is gone, a `collection-delete` applied included, so the
+    -- receipt outlives it and the intent never reads as withdrawn.
+    collection TEXT    CHECK (typeof(collection) IN ('text', 'null')) REFERENCES collections(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    seq        INTEGER CHECK (typeof(seq) IN ('integer', 'null')) CHECK (seq >= 1)  -- the item an `add` created, else NULL
 );
 
 -- A reader overlays a collection's pending actions (§15.4).

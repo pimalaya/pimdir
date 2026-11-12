@@ -4,11 +4,11 @@
 -- filed under the sent or drafts role is the person's own and answers nothing.
 -- Each id answered once, in code point order. A seek per id on
 -- mail_in_reply_to_by_id.
-SELECT DISTINCT r.msg_id
+SELECT DISTINCT r.message_id
 FROM mail_in_reply_to r
 JOIN items i ON i.id = r.item
 JOIN collections c ON c.id = i.collection
 WHERE i.deleted = 0
   AND (c.role IS NULL OR c.role NOT IN ('sent', 'drafts'))
-  AND r.msg_id IN (SELECT value FROM temp.param WHERE slot = 'ids')
-ORDER BY r.msg_id;
+  AND r.message_id IN (SELECT value FROM temp.param WHERE slot = 'ids')
+ORDER BY r.message_id;

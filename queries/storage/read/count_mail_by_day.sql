@@ -2,7 +2,7 @@
 -- first and the undated (NULL) last, above the same :since. :shift is the
 -- reader's offset from UTC in whole minutes (120 east, -300 west), added to
 -- the instant before its day is read; NULL reads UTC days.
-SELECT date(nullif(i.sort_key, ''), coalesce(:shift, 0) || ' minutes') AS day, count(*)
+SELECT date(nullif(i.sort_key, ''), coalesce(:shift, 0) || ' minutes') AS day, count(*) AS count
 FROM items i
 WHERE i.collection IN (SELECT value FROM temp.param WHERE slot = 'collections') AND i.deleted = 0
   AND (:seen IS NULL

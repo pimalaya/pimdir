@@ -8,7 +8,7 @@
 -- either. An undated row ('') lies below any date, so only a range open below
 -- holds it. An open :until reads as the empty blob, which SQLite orders above
 -- every text, so both bounds stay seeks on items_by_sort.
-SELECT count(*), coalesce(sum(size), 0), count(*) - count(size)
+SELECT count(*) AS messages, coalesce(sum(size), 0) AS bytes, count(*) - count(size) AS unsized
 FROM (
   SELECT i.seq, max(s.size) AS size
   FROM items i

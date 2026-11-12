@@ -7,7 +7,7 @@
 -- The seen test is a seek on placement_flag's key and the summary is read
 -- only for the attachment filter, so with both NULL a count reads
 -- items_by_sort alone.
-SELECT count(*)
+SELECT count(*) AS count
 FROM items i
 WHERE i.collection IN (SELECT value FROM temp.param WHERE slot = 'collections') AND i.deleted = 0
   AND (:seen IS NULL

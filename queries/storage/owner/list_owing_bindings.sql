@@ -6,21 +6,22 @@
 -- projection still decides each status from the rows a load reads: a delta
 -- loads these handles beside those it lists, rather than the whole
 -- collection. Seeks bindings_by_handle on the collection and the source, and
--- each item by its id.
+-- each item by its id; the two sets are compared by an anti-join each way on
+-- the other's key, so no set is gathered to be compared.
 SELECT b.handle FROM bindings b JOIN items i ON i.id = b.item
 WHERE b.collection = :collection AND b.source = :source
   AND (b.conflicted = 1 OR i.conflicted = 1 OR i.deleted = 1
-       OR NOT (b.base_present = 1 OR b.base_flags_known = 1
-               OR b.base_object IS NOT NULL OR b.base_revision IS NOT NULL)
+       OR b.base_present = 0
        OR (i.flags_known = 1 AND b.base_flags_known = 1
            AND (i.marks != b.base_marks
-                OR EXISTS (SELECT flag FROM placement_flag f WHERE f.item = i.id
-                           EXCEPT
-                           SELECT flag FROM binding_base_flag g
-                           WHERE g.item = b.item AND g.source = b.source)
-                OR EXISTS (SELECT flag FROM binding_base_flag g
+                OR EXISTS (SELECT 1 FROM placement_flag f
+                           WHERE f.item = i.id
+                             AND NOT EXISTS (SELECT 1 FROM binding_base_flag g
+                                             WHERE g.item = b.item AND g.source = b.source
+                                               AND g.flag = f.flag))
+                OR EXISTS (SELECT 1 FROM binding_base_flag g
                            WHERE g.item = b.item AND g.source = b.source
-                           EXCEPT
-                           SELECT flag FROM placement_flag f WHERE f.item = i.id)))
+                             AND NOT EXISTS (SELECT 1 FROM placement_flag f
+                                             WHERE f.item = i.id AND f.flag = g.flag))))
        OR (i.object_hash IS NOT NULL AND i.object_hash IS NOT b.base_object))
 ORDER BY b.handle;

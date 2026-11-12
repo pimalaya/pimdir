@@ -85,6 +85,109 @@ for malformed in ../x "${well_formed^^}" "${well_formed:0:26}"; do
     fi
 done
 
+# The shapes §13 fixes are refused on the floor as on a current SQLite
+# (STORAGE.md §13): one row of each table they bind, well formed, then the
+# writes checks/invariants.sh shows refused by the CHECK naming each column,
+# each of which must fail here on a constraint and leave the store as it was.
+# The floor names the table alone in its message, so the CHECK is told by the
+# scenario there and its effect here.
+for migration in "$root"/migrations/storage/*.sql; do
+    "$floor" "$dir/shapes.db" "BEGIN; $(cat "$migration")"$'\n'"COMMIT;"
+done
+"$floor" "$dir/shapes.db" "PRAGMA foreign_keys = ON;
+    INSERT INTO store_meta(id, format_version, version, read_version, produce_version, store_id, incarnation, hash_algo, created_at, derivation)
+        VALUES(1, 'floor', 1, 1, 1, '00000000000000000000000000000000', 1, 'blake3', strftime('%Y-%m-%dT%H:%M:%fZ','now'), 1);
+    INSERT INTO collections(id, kind, name) VALUES('INBOX', 'message/rfc822', 'INBOX');
+    INSERT INTO objects(hash, size) VALUES('$well_formed', 1);
+    INSERT INTO items(id, collection, link_id, seq, level) VALUES(1, 'INBOX', 'a', 1, 2);
+    INSERT INTO items(id, collection, link_id, seq, level, deleted, retained_at, retained_by)
+        VALUES(2, 'INBOX', 'r', 2, 2, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'imap');
+    INSERT INTO bindings(item, collection, source, handle, base_present, base_object, base_revision)
+        VALUES(1, 'INBOX', 'imap', '10', 1, '$well_formed', 'r1');
+    INSERT INTO mail_summary(item, subject, date, size, attachment) VALUES(1, 's', '2026-10-06T08:00:00Z', 1, 0);
+    INSERT INTO event_summary(item, summary, recurring) VALUES(1, '', 0);
+    INSERT INTO task_summary(item, summary, recurring) VALUES(1, '', 0);
+    INSERT INTO file_summary(item, name, size) VALUES(1, '', 0);
+    INSERT INTO sources(collection, source, covered_since, covered_until, covered_at, round_since, round_until, round_started_at)
+        VALUES('INBOX', 'imap', '2026-09-01T00:00:00Z', '2026-10-01T00:00:00Z', strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+               '2026-09-01T00:00:00Z', '2026-10-01T00:00:00Z', strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+    INSERT INTO queue(created_at, producer, collection, action, payload) VALUES(strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'p', 'INBOX', 'remove', '{}');
+    INSERT INTO receipts(id, applied_at, collection, seq) VALUES(9, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'INBOX', 1);
+    INSERT INTO capabilities(source, capability, support) VALUES('imap', 'mail.send', 'full');
+    INSERT INTO performers(capability, source) VALUES('mail.send', 'imap');
+    INSERT INTO item_reference(from_kind, from_link_id, to_kind, to_link_id, role, origin, created_at)
+        VALUES('message/rfc822', 'a', 'message/rfc822', 'r', 'related', 'user', strftime('%Y-%m-%dT%H:%M:%fZ','now'));" || {
+    echo "a well-formed row is refused on SQLite $version" >&2
+    exit 1
+}
+shapes="$("$floor" "$dir/shapes.db" .dump)"
+refusals=0
+while read -r write; do
+    [ -n "$write" ] || continue
+    refusals=$((refusals + 1))
+    for shell in "$floor" sqlite3; do
+        answer="$("$shell" "$dir/shapes.db" "PRAGMA foreign_keys = ON; $write;" 2>&1 || true)"
+        if [[ "$answer" != *"CHECK constraint failed"* ]]; then
+            echo "[$write] is not refused by a constraint on SQLite $("$shell" :memory: 'SELECT sqlite_version();')" >&2
+            exit 1
+        fi
+    done
+done <<'SHAPES'
+UPDATE items SET retained_at = 'yesterday' WHERE link_id = 'r'
+UPDATE items SET retained_at = '2026-10-01T00:00:00Z' WHERE link_id = 'r'
+UPDATE items SET retained_at = '2026-10-01T00:00:00.000+00:00' WHERE link_id = 'r'
+UPDATE items SET retained_at = '2026-10-01 00:00:00.000Z' WHERE link_id = 'r'
+UPDATE store_meta SET created_at = '2026-10-01T00:00:00Z'
+UPDATE queue SET created_at = '1790000000'
+UPDATE item_reference SET created_at = '2026-10-01'
+UPDATE receipts SET applied_at = '2026-10-01T00:00:00Z'
+UPDATE sources SET covered_at = '2026-10-01T00:00:00Z'
+UPDATE sources SET round_started_at = '2026-10-01T00:00:00Z'
+UPDATE sources SET covered_since = '2026-09-01'
+UPDATE sources SET covered_until = '2026-10-01T00:00:00.000Z'
+UPDATE sources SET round_since = '2026-09-01T00:00:00'
+UPDATE sources SET round_until = ''
+UPDATE items SET seq = 0 WHERE link_id = 'a'
+INSERT INTO items(collection, link_id, seq, level) VALUES('INBOX', 'n', -3, 2)
+UPDATE receipts SET seq = 0
+INSERT INTO items(collection, link_id, seq, level) VALUES('INBOX', '', 3, 2)
+INSERT INTO collections(id, kind, name) VALUES('', 'message/rfc822', '')
+UPDATE collections SET account = ''
+UPDATE capabilities SET account = ''
+UPDATE performers SET account = ''
+UPDATE sources SET source = ''
+UPDATE bindings SET source = ''
+UPDATE capabilities SET source = ''
+UPDATE performers SET source = ''
+UPDATE bindings SET handle = ''
+UPDATE objects SET size = -5
+UPDATE mail_summary SET size = -1
+UPDATE file_summary SET size = -1
+UPDATE queue SET attempts = -1
+UPDATE mail_summary SET attachment = 7
+UPDATE event_summary SET recurring = 2
+UPDATE task_summary SET recurring = -1
+UPDATE items SET retained_by = 'imap' WHERE link_id = 'a'
+UPDATE items SET retained_at = NULL WHERE link_id = 'r'
+UPDATE bindings SET base_present = 0
+UPDATE bindings SET base_present = 0, base_object = NULL
+UPDATE bindings SET base_present = 0, base_object = NULL, base_revision = NULL, base_flags_known = 1
+SHAPES
+if [ "$("$floor" "$dir/shapes.db" .dump)" != "$shapes" ]; then
+    echo "a refused write moved a row on SQLite $version" >&2
+    exit 1
+fi
+# What each column may also hold is taken there: a NULL where one is allowed,
+# a size of none, a base let go whole.
+"$floor" "$dir/shapes.db" "PRAGMA foreign_keys = ON;
+    UPDATE mail_summary SET date = NULL, size = NULL, attachment = NULL; UPDATE event_summary SET recurring = NULL;
+    UPDATE task_summary SET recurring = 1; UPDATE sources SET covered_since = NULL, round_until = NULL;
+    UPDATE receipts SET seq = NULL; UPDATE items SET retained_by = NULL WHERE link_id = 'r'; UPDATE objects SET size = 0;
+    UPDATE bindings SET base_present = 0, base_object = NULL, base_revision = NULL;" || {
+    echo "a shape §13 allows is refused on SQLite $version" >&2
+    exit 1
+}
+
 # Every pointer index holds the pointers set alone (STORAGE.md §4.3),
 # items_by_object included, so an object's delete checks each pointer at it
 # through its index only where an equality is read as implying the pointer is
@@ -115,7 +218,8 @@ INSERT INTO temp.param VALUES ('collections', 0, 'INBOX'), ('collections', 1, 'S
 floor_plan() {
     local file="$1"; shift
     local text
-    text="$(grep -v '^ *--' "$root/queries/storage/read/$file.sql")"
+    case "$file" in */*) ;; *) file="read/$file" ;; esac
+    text="$(grep -v '^ *--' "$root/queries/storage/$file.sql")"
     for binding in "$@"; do
         text="${text//${binding%%=*}/${binding#*=}}"
     done
@@ -147,11 +251,30 @@ done
 for statement in list_items_page_asc list_contacts_page_asc list_events_page_asc list_tasks_page_asc list_journals_page_asc list_files_page_asc; do
     floor_expect "page: $statement seeks its cursor on items_by_sort" \
         "$(floor_plan "$statement" ":after_key=''" ":after_seq=0" ":limit=10" ":collection='INBOX'" | grep -c 'items_by_sort (collection=? AND (sort_key,seq)>(?,?))' || true)" "1"
+    floor_expect "page: $statement seeks a NULL cursor, the first page, on items_by_sort" \
+        "$(floor_plan "$statement" ":after_key=NULL" ":after_seq=NULL" ":limit=10" ":collection='INBOX'" | grep -c 'items_by_sort (collection=? AND (sort_key,seq)>(?,?))' || true)" "1"
 done
-for statement in count_mail count_mail_by_day count_unread; do
+floor_expect "page: list_items_page and list_retained_page seek a NULL cursor on their key" \
+    "$(floor_plan list_items_page ":after=NULL" ":limit=10" ":collection='INBOX'" | grep -c 'sqlite_autoindex_items_1 (collection=? AND link_id>?)' || true)$(floor_plan list_retained_page ":after=NULL" ":limit=10" ":collection='INBOX'" | grep -c 'items_deleted (collection=? AND seq>?)' || true)" "11"
+for statement in count_mail count_mail_by_day; do
     floor_expect "since: $statement seeks the floor on items_by_sort" \
         "$(floor_plan "$statement" ":seen=NULL" ":attachment=NULL" ":since='2026-10-06T00:00:00Z'" ":shift=NULL" | grep -c 'items_by_sort (collection=? AND sort_key>?)' || true)" "1"
 done
+# The sources of a collection and of the store are read by a loose scan there
+# too (§14.1): the recursive text compiles on the floor and seeks the next
+# source above the last.
+for statement in owner/collection_sources list_sources; do
+    floor_expect "sources: ${statement#*/} seeks the next source on bindings_by_handle" \
+        "$(floor_plan "$statement" ":collection='INBOX'" | grep -c 'SEARCH TABLE bindings AS b USING COVERING INDEX bindings_by_handle (collection=? AND source>?)' || true)" "1"
+done
+# The unread count reads items_unread there too (§14.1): the floor ignores a
+# hint it cannot use rather than failing on it, so only its plan says the
+# partial index, whose WHERE the statement spells term for term, is the one
+# read.
+for since in NULL "'2026-10-06T00:00:00Z'"; do
+    floor_expect "count: count_unread seeks items_unread, never items_by_sort, with :since $since" \
+        "$(floor_plan count_unread ":attachment=NULL" ":since=$since" | grep -c 'SEARCH TABLE items AS i USING INDEX items_unread (collection=? AND sort_key>?)' || true)$(floor_plan count_unread ":attachment=NULL" ":since=$since" | grep -c 'items_by_sort' || true)" "10"
+done
 [ "$floor_failures" = 0 ] || exit 1
 
-echo "the store schema loads on SQLite $version, $(wc -l < <("$floor" "$dir/floor.db" "$objects")) objects, every write to its $tables tables compiling, a body's name checked, an object's delete seeking its pointers, its keyset reads seeking their collection and bound, its triggers stored as the canonical text writes them and no trusted_schema there"
+echo "the store schema loads on SQLite $version, $(wc -l < <("$floor" "$dir/floor.db" "$objects")) objects, every write to its $tables tables compiling, a body's name checked, $refusals mis-shaped writes refused, an object's delete seeking its pointers, its keyset reads seeking their collection and bound, its triggers stored as the canonical text writes them and no trusted_schema there"
