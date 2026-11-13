@@ -1,0 +1,54 @@
+{
+  "v": 6,
+  "label": "a rekey whose listing is capped parks on one absent member, under every threshold",
+  "note": "the source renumbered its handles, and it caps what it lists of the folder (an IMAP server under a folder size limit): the rekey's listing, capped, names two of the three based bindings. The third resolves to no member, which a capped listing does not prove gone, and its old handle 3 names nothing in the new space, so it can be neither dropped nor carried: one absent of three is far under the half of twenty that parks an uncapped rekey, yet this one parks. Nothing is written, no Rekeyed or Deleted drop, no upsert, the checkpoint and the generation unmoved, and the run reports the absent and the bound counts; a run carrying accept_absences carries it out, dropping the third as gone (SYNC.md §4, §5, §8)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual", "generation": 1 }],
+    "objects": { "m1": { "body": "fixtures/mail-basic.eml" }, "m2": { "body": "fixtures/mail-encoded.eml" } },
+    "items": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": "m1", "level": 2, "deleted": 0 },
+      { "collection": "INBOX", "link_id": "encoded-1@example.org", "seq": 2, "flags": [], "object": "m2", "level": 2, "deleted": 0 },
+      { "collection": "INBOX", "link_id": "m03@example.org", "seq": 3, "flags": [], "object": null, "level": 1, "deleted": 0 }
+    ],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "1", "base_flags": [], "base_object": "m1", "base_revision": null, "base_present": 1 },
+      { "collection": "INBOX", "link_id": "encoded-1@example.org", "source": "imap", "handle": "2", "base_flags": [], "base_object": "m2", "base_revision": null, "base_present": 1 },
+      { "collection": "INBOX", "link_id": "m03@example.org", "source": "imap", "handle": "3", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1 }
+    ],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c0" }]
+  },
+  "run": { "verb": "rekey", "collection": "INBOX", "source": "imap" },
+  "remote": {
+    "snapshot": {
+      "items": [
+        { "handle": "101", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-basic.eml" } },
+        { "handle": "102", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-encoded.eml" } }
+      ],
+      "vanished": [],
+      "complete": true,
+      "checkpoint": "d0",
+      "capped": true
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "parked": { "absent": 1, "bound": 3 },
+    "store": {
+      "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual", "generation": 1 }],
+      "items": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": "m1", "level": 2, "deleted": 0 },
+        { "collection": "INBOX", "link_id": "encoded-1@example.org", "seq": 2, "flags": [], "object": "m2", "level": 2, "deleted": 0 },
+        { "collection": "INBOX", "link_id": "m03@example.org", "seq": 3, "flags": [], "object": null, "level": 1, "deleted": 0 }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "1", "base_flags": [], "base_object": "m1", "base_revision": null, "base_present": 1 },
+        { "collection": "INBOX", "link_id": "encoded-1@example.org", "source": "imap", "handle": "2", "base_flags": [], "base_object": "m2", "base_revision": null, "base_present": 1 },
+        { "collection": "INBOX", "link_id": "m03@example.org", "source": "imap", "handle": "3", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1 }
+      ],
+      "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c0" }]
+    }
+  }
+}

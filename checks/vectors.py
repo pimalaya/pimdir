@@ -1699,7 +1699,8 @@ for case in summaries["cases"]:
 sync_cases = sorted((root / "sync").glob("*.json"))
 # The cases a rule needs to be held at all: a Move over each conflict, and
 # an Abandon beside another source binding the item.
-rule_cases = {"a move over the item's conflict": 0, "a move over its binding's conflict": 0, "an abandon beside another source": 0}
+rule_cases = {"a move over the item's conflict": 0, "a move over its binding's conflict": 0, "an abandon beside another source": 0,
+              "a capped rekey leaving a member out": 0}
 
 for path in sync_cases:
     case = json.loads(path.read_text())
@@ -2072,7 +2073,11 @@ for path in sync_cases:
                  and binding.get("base_present", 0) == 1 and not binding["handle"].startswith("\u0001")]
         absent = [binding for binding in bound if binding["link_id"] not in resolved
                   and (binding["collection"], binding["link_id"]) not in held]
-        mass = ((len(bound) >= 20 and 2 * len(absent) > len(bound)) or (not listed and absent)) \
+        # A capped listing proves no absence, and an old handle names
+        # nothing in the new space: a capped rekey parks on any absence.
+        capped = any(page.get("capped") for page in pages)
+        rule_cases["a capped rekey leaving a member out"] += bool(capped and absent)
+        mass = ((len(bound) >= 20 and 2 * len(absent) > len(bound)) or (not listed and absent) or (capped and absent)) \
             and not options.get("accept_absences")
         closes = not case["expect"].get("failed")
     if mass and closes:

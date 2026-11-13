@@ -197,6 +197,7 @@
     "vectors/sync/156-a-move-of-an-item-in-conflict-is-refused.json": "3b91a81d90c3e7e554c22d209aa91d0c6c5ed50a8928eff3d471a2bd8deef422",
     "vectors/sync/157-an-abandon-beside-another-source-leaves-it-the-delete.json": "21c23ed0b5085102a09af7ece08a473266df1d2cff8a799a242c37a5827cf4cf",
     "vectors/sync/158-a-body-entering-under-another-messages-key-records-no-stand-in.json": "0968d151451d26a808adef1a2ac1bb76593a9ce43046d561ae2dd38c4a75c27c",
+    "vectors/sync/159-a-capped-rekey-leaving-a-member-out-parks.json": "473dc81e88fa343edcce859766c0807ddc06d26ef4eb5f0639c8c7ca1ff21038",
     "vectors/sync/16-vanished-local-edit-restages-a-create.json": "34230b06ee9c312762fed82daf16f3c119410971d5a204d52da264db1b239a3e",
     "vectors/sync/17-add-accepted-supersedes-the-provisional-handle.json": "0c51d18fd6521a98e567196a6b249db54b355765d38b4a6b1e2edb37a051a9f7",
     "vectors/sync/18-add-rejected-stays-pending.json": "4047b7ce3a22d7c34917709e05970668bdf990837e14f59be726d16d0eb8143d",
@@ -306,5 +307,5 @@
       "/cases": 73
     }
   },
-  "sync": 158
+  "sync": 159
 }
