@@ -539,7 +539,8 @@ CREATE TABLE mail_summary (
     subject      TEXT NOT NULL CHECK (typeof(subject) = 'text'),  -- decoded (RFC 2047), may be empty
     sender       TEXT CHECK (typeof(sender) IN ('text', 'null')),  -- first From address, canonical (Annex A.6)
     sender_name  TEXT CHECK (typeof(sender_name) IN ('text', 'null')),  -- its display name, decoded, or NULL
-    date         TEXT CHECK (typeof(date) IN ('text', 'null')),  -- RFC 3339 UTC Z at seconds precision, or NULL
+    date         TEXT CHECK (typeof(date) IN ('text', 'null'))  -- RFC 3339 UTC Z at seconds precision, or NULL
+                 CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     size         INTEGER CHECK (typeof(size) IN ('integer', 'null')) CHECK (size >= 0),  -- the body's octets, else the source's figure (Annex A.1), or NULL
     attachment   INTEGER CHECK (typeof(attachment) IN ('integer', 'null')) CHECK (attachment IN (0, 1)),  -- 1 has one, 0 has none, NULL not examined
     invitation   TEXT CHECK (typeof(invitation) IN ('text', 'null'))  -- the UID its first text/calendar part carries, NULL none or not examined

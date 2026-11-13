@@ -1,0 +1,18 @@
+Message-ID: <attach-2@example.org>
+Subject: Report, second edition
+From: Dan Example <dan@example.net>
+To: bob@example.org
+Date: Wed, 04 Nov 2026 09:00:00 +0000
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="mix2"
+
+--mix2
+Content-Type: text/plain; charset=utf-8
+
+A new edition under the old id.
+--mix2
+Content-Type: text/plain; name="errata.txt"
+Content-Disposition: attachment; filename="errata.txt"
+
+Errata.
+--mix2--

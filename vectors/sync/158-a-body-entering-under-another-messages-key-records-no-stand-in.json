@@ -1,0 +1,73 @@
+{
+  "v": 6,
+  "label": "a body entering under a Message-ID whose stand-ins another message recorded stands for no attachment of its own",
+  "note": "INBOX holds attach-2@example.org, the report, with its body and its three stand-ins, as vector 70 left them. Archive lists another message reusing that Message-ID, a second edition sent under the old id: another subject, sender and date, so the two share neither a seq nor a body (vector 147), and its Full upgrade fetches. Its body holds one attachment, at section 2. A part: key is built over the Message-ID alone, so part:attach-2@example.org#2 and the references from attach-2@example.org would be the first message's too: the body entering under a key another row of the account holds another body under, a message it does not agree with, records no stand-in and no reference, and the three of the report stand as they were, neither replaced nor joined. Binds an owner recording attachments (STORAGE §9, §14.3; SYNC.md §6)",
+  "store": {
+    "collections": [
+      { "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" },
+      { "id": "Archive", "account": null, "kind": "message/rfc822", "conflict": "manual" },
+      { "id": "\u0001attachments", "account": null, "kind": "application/octet-stream", "name": "attachments", "role": "attachments" }
+    ],
+    "objects": {
+      "a1": { "body": "fixtures/mail-attachments.eml" },
+      "a2": { "body": "fixtures/mail-reused-id-attachment.eml" }
+    },
+    "items": [
+      { "collection": "INBOX", "link_id": "attach-2@example.org", "seq": 1, "flags": [], "object": "a1", "level": 2, "deleted": 0, "sort_key": "2026-10-06T12:30:00Z" },
+      { "collection": "\u0001attachments", "link_id": "part:attach-2@example.org#3", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "résumé.pdf" },
+      { "collection": "\u0001attachments", "link_id": "part:attach-2@example.org#4", "seq": 3, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "café notes.txt" },
+      { "collection": "\u0001attachments", "link_id": "part:attach-2@example.org#5", "seq": 4, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "" },
+      { "collection": "Archive", "link_id": "attach-2@example.org", "seq": 5, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-11-04T09:00:00Z" }
+    ],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "attach-2@example.org", "source": "imap", "handle": "30", "base_flags": [], "base_object": "a1", "base_revision": null, "base_present": 1 },
+      { "collection": "Archive", "link_id": "attach-2@example.org", "source": "imap", "handle": "77", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1 }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "attach-2@example.org", "row": { "message_id": "attach-2@example.org", "in_reply_to": [], "subject": "Report and notes", "sender": "carol@example.org", "sender_name": "Carol", "date": "2026-10-06T12:30:00Z", "size": 1073, "attachment": 1, "invitation": null } },
+      { "table": "file_summary", "collection": "\u0001attachments", "link_id": "part:attach-2@example.org#3", "row": { "name": "résumé.pdf", "media_type": "application/pdf", "size": 15, "part": "3" } },
+      { "table": "file_summary", "collection": "\u0001attachments", "link_id": "part:attach-2@example.org#4", "row": { "name": "café notes.txt", "media_type": "text/plain", "size": 13, "part": "4" } },
+      { "table": "file_summary", "collection": "\u0001attachments", "link_id": "part:attach-2@example.org#5", "row": { "name": "", "media_type": null, "size": 10, "part": "5" } },
+      { "table": "mail_summary", "collection": "Archive", "link_id": "attach-2@example.org", "row": { "message_id": "attach-2@example.org", "in_reply_to": [], "subject": "Report, second edition", "sender": "dan@example.net", "sender_name": "Dan Example", "date": "2026-11-04T09:00:00Z", "size": 449, "attachment": 1, "invitation": null } }
+    ],
+    "references": [
+      { "from_kind": "message/rfc822", "from_link_id": "attach-2@example.org", "to_kind": "application/octet-stream", "to_link_id": "part:attach-2@example.org#3", "role": "attachment", "origin": "auto" },
+      { "from_kind": "message/rfc822", "from_link_id": "attach-2@example.org", "to_kind": "application/octet-stream", "to_link_id": "part:attach-2@example.org#4", "role": "attachment", "origin": "auto" },
+      { "from_kind": "message/rfc822", "from_link_id": "attach-2@example.org", "to_kind": "application/octet-stream", "to_link_id": "part:attach-2@example.org#5", "role": "attachment", "origin": "auto" }
+    ],
+    "sources": [{ "collection": "Archive", "source": "imap", "checkpoint": "a1" }, { "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+  },
+  "run": { "verb": "upgrade", "collection": "Archive", "source": "imap", "tier": "Full", "handles": ["77"] },
+  "remote": { "snapshot": null, "fetch": { "77": { "Full": { "body": "fixtures/mail-reused-id-attachment.eml", "revision": null } } } },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "attach-2@example.org", "seq": 1, "flags": [], "object": "a1", "level": 2, "deleted": 0, "sort_key": "2026-10-06T12:30:00Z" },
+        { "collection": "\u0001attachments", "link_id": "part:attach-2@example.org#3", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "résumé.pdf" },
+        { "collection": "\u0001attachments", "link_id": "part:attach-2@example.org#4", "seq": 3, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "café notes.txt" },
+        { "collection": "\u0001attachments", "link_id": "part:attach-2@example.org#5", "seq": 4, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "" },
+        { "collection": "Archive", "link_id": "attach-2@example.org", "seq": 5, "flags": [], "object": "a2", "level": 2, "deleted": 0, "sort_key": "2026-11-04T09:00:00Z" }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "attach-2@example.org", "source": "imap", "handle": "30", "base_flags": [], "base_object": "a1", "base_revision": null, "base_present": 1 },
+        { "collection": "Archive", "link_id": "attach-2@example.org", "source": "imap", "handle": "77", "base_flags": [], "base_object": "a2", "base_revision": null, "base_present": 1 }
+      ],
+      "summaries": [
+        { "table": "mail_summary", "collection": "INBOX", "link_id": "attach-2@example.org", "row": { "message_id": "attach-2@example.org", "in_reply_to": [], "subject": "Report and notes", "sender": "carol@example.org", "sender_name": "Carol", "date": "2026-10-06T12:30:00Z", "size": 1073, "attachment": 1, "invitation": null } },
+        { "table": "file_summary", "collection": "\u0001attachments", "link_id": "part:attach-2@example.org#3", "row": { "name": "résumé.pdf", "media_type": "application/pdf", "size": 15, "part": "3" } },
+        { "table": "file_summary", "collection": "\u0001attachments", "link_id": "part:attach-2@example.org#4", "row": { "name": "café notes.txt", "media_type": "text/plain", "size": 13, "part": "4" } },
+        { "table": "file_summary", "collection": "\u0001attachments", "link_id": "part:attach-2@example.org#5", "row": { "name": "", "media_type": null, "size": 10, "part": "5" } },
+        { "table": "mail_summary", "collection": "Archive", "link_id": "attach-2@example.org", "row": { "message_id": "attach-2@example.org", "in_reply_to": [], "subject": "Report, second edition", "sender": "dan@example.net", "sender_name": "Dan Example", "date": "2026-11-04T09:00:00Z", "size": 449, "attachment": 1, "invitation": null } }
+      ],
+      "references": [
+        { "from_kind": "message/rfc822", "from_link_id": "attach-2@example.org", "to_kind": "application/octet-stream", "to_link_id": "part:attach-2@example.org#3", "role": "attachment", "origin": "auto" },
+        { "from_kind": "message/rfc822", "from_link_id": "attach-2@example.org", "to_kind": "application/octet-stream", "to_link_id": "part:attach-2@example.org#4", "role": "attachment", "origin": "auto" },
+        { "from_kind": "message/rfc822", "from_link_id": "attach-2@example.org", "to_kind": "application/octet-stream", "to_link_id": "part:attach-2@example.org#5", "role": "attachment", "origin": "auto" }
+      ],
+      "sources": [{ "collection": "Archive", "source": "imap", "checkpoint": "a1" }, { "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+    }
+  }
+}

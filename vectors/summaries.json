@@ -1556,6 +1556,44 @@
       ]
     },
     {
+      "label": "mail, a multipart no closing delimiter ends",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-unclosed-multipart.eml",
+      "note": "the message ends after its second part's last line, no --b4-- anywhere. The end of the entity closes the multipart as a closing delimiter would (Annex A.1): what follows the last delimiter line is the last child, so the attachment is a part, the mark is 1 and its stand-in measures the 6 octets of Notes., the line break the message ends with being the missing delimiter's. Read as no part, a message cut short would lose its last attachment, mark and stand-in, while the search part indexed its text",
+      "body": { "len": 397, "blake3": "oaix2s3mabcbeycngridhcwwkzs7mdldtqlhnvbsm6otbhonevwq" },
+      "link_id": "unclosed-1@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": "unclosed-1@example.org", "in_reply_to": [], "subject": "Cut short", "sender": "billing@example.org", "sender_name": "Billing", "date": "2026-10-05T09:00:00Z", "size": 397, "attachment": 1, "invitation": null },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "billing@example.org", "name": "Billing" },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sort_key": "2026-10-05T09:00:00Z",
+      "meta_attachment": 1,
+      "attachments": [
+        { "part": "2", "name": "notes.txt", "media_type": "text/plain", "size": 6 }
+      ]
+    },
+    {
+      "label": "mail, an entity stating its fields twice",
+      "kind": "message/rfc822",
+      "fixture": "fixtures/mail-repeated-part-fields.eml",
+      "note": "the message states Content-Type twice, multipart/mixed then text/plain, and its second part states Content-Type, Content-Disposition and Content-Transfer-Encoding twice each. An entity's fields are read from their first occurrence, as a header field is (Annex A.1): the message is the multipart, at Meta too (meta_attachment), and the part is an attachment named first.csv, text/csv, measuring the 4 octets its base64 decodes to. Read from the last, the message is one text part with no attachment; the part alone read so is inline, named second.pdf and measures 8 octets",
+      "body": { "len": 617, "blake3": "g3w6uwcvuapggrkl5t7jf2nogflpoqfghowcj7aft25llm23nb7a" },
+      "link_id": "repeated-part-1@example.org",
+      "table": "mail_summary",
+      "summary": { "message_id": "repeated-part-1@example.org", "in_reply_to": [], "subject": "Stated twice", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 617, "attachment": 1, "invitation": null },
+      "addresses": [
+        { "role": "from", "position": 0, "address": "alice@example.org", "name": "Alice Example" },
+        { "role": "to", "position": 0, "address": "bob@example.org", "name": null }
+      ],
+      "sort_key": "2026-08-01T10:00:00Z",
+      "meta_attachment": 1,
+      "attachments": [
+        { "part": "2", "name": "first.csv", "media_type": "text/csv", "size": 4 }
+      ]
+    },
+    {
       "label": "mail, a header line holding a lone CR",
       "kind": "message/rfc822",
       "fixture": "fixtures/mail-stray-cr.eml",

@@ -12,4 +12,4 @@ change: owner-lock-must
 - [x] §8: the network-filesystem paragraph names the advisory locks among what a share cannot be trusted with.
 - [x] §3: the layout gains `owner.lock` and `objects.lock`, and says they are empty and lazily created.
 - [x] Log entry.
-- [ ] **Downstream, Android**: take both locks; the Java store is non-conformant until it does.
+- [x] **Downstream, Android**: take both locks; the Java store is non-conformant until it does. Decided by the owner on 2026-11-13: not taken, the store being the app's alone in one process; the app's spec states the departure from §8 (android 7e72397).

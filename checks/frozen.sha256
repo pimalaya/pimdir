@@ -14,8 +14,9 @@
 #   payloads/*.v1.schema.json
 #   queries/signatures.json#storage/* (every row of the three directories)
 # sync-v1.0.0
-#   nothing of its own: its seam is prose and vectors, which checks/tags.sh
-#   holds to the tag
+#   vectors/sync/*.json (every case the release holds, one file each, so a
+#   minor version adds a case and moves none)
+#   vectors/schema/sync.schema.json
 # search-v1.0.0, later
 #   migrations/search/0001_init.sql
 #   queries/signatures.json#search/* (every row)

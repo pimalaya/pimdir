@@ -128,6 +128,9 @@ CLOSED_FIELDS = {
     "status": {"needs-action", "in-process", "completed", "cancelled"},
     "priority": {"high", "medium", "low", "none"},
 }
+# The text fields whose value holding an @ is an address, no text term
+# (SEARCH.md sections 8, 8.3): the role fields and with:.
+ADDRESS_FIELDS = {"from", "to", "cc", "bcc", "attendee", "organizer", "email", "with"}
 DATE_FIELDS = {"date", "when"}
 OPEN_FIELDS = {"tag", "flag", "account", "collection", "folder", "thread", "id", "linked", "category"}
 FIELDS = TEXT_FIELDS | set(CLOSED_FIELDS) | DATE_FIELDS | {"changed"} | OPEN_FIELDS
@@ -233,7 +236,7 @@ def check_term(query, token):
         raise Refused("invalid-value", start, end)
     value = query[colon + 2:end - 1] if token["phrase"] else query[colon + 1:end]
     if not token["phrase"]:
-        check_wildcard(value, colon + 1, name in TEXT_FIELDS and "@" not in value)
+        check_wildcard(value, colon + 1, name in TEXT_FIELDS and not (name in ADDRESS_FIELDS and "@" in value))
     if name in CLOSED_FIELDS and value not in CLOSED_FIELDS[name]:
         raise Refused("invalid-value", colon + 1, end)
     if name in DATE_FIELDS and not range_of(value, date_point):
@@ -1484,6 +1487,14 @@ require("payloads.json: an action no schema defines stating no v, unknown",
 require("payloads.json: a known action stating a v that is no integer, as a string, a fraction, a boolean and null",
         {type(case["payload"]["v"]) for case in payload_cases
          if case["action"] in known_actions and "v" in case["payload"]} >= {int, str, float, bool, type(None)})
+# A v written with a fraction or an exponent is no integer though its value is
+# whole, which the schema alone would take as one: the reading of a JSON
+# number as an integer is the text's (STORAGE.md section 15.3).
+require("payloads.json: a known action stating a whole v written as no integer, 1.0 or 1e0, malformed where its schema accepts it",
+        any(case["action"] in known_actions and isinstance(case["payload"].get("v"), float) and case["payload"]["v"].is_integer()
+            and case["outcome"] == "malformed"
+            and not list(Draft202012Validator(payload_schemas[f"{case['action']}.v{int(case['payload']['v'])}"]).iter_errors(case["payload"]))
+            for case in payload_cases))
 # The three ways a payload is unknown: a known action at a v no schema
 # defines, an action no schema defines, and an application's own, x-.
 unknown_cases = [case for case in payload_cases if case["outcome"] == "unknown"]
@@ -1686,6 +1697,9 @@ for case in summaries["cases"]:
 
 # The sync cases (SYNC.md section 11): shape and references only.
 sync_cases = sorted((root / "sync").glob("*.json"))
+# The cases a rule needs to be held at all: a Move over each conflict, and
+# an Abandon beside another source binding the item.
+rule_cases = {"a move over the item's conflict": 0, "a move over its binding's conflict": 0, "an abandon beside another source": 0}
 
 for path in sync_cases:
     case = json.loads(path.read_text())
@@ -2108,14 +2122,20 @@ for path in sync_cases:
     # unless its resolves names each one's diverging body, or that states
     # resolves and meets none, is refused, the rows as they were. So is one
     # stating an if_match the item does not hold. A Remove that settles leaves
-    # neither conflict standing, the base adopting the binding's.
+    # neither conflict standing, the base adopting the binding's. A Move
+    # states no resolution, so one meeting a conflict is refused whatever it
+    # names, its tombstone leaving the conflict under a placement nobody is
+    # shown.
     mutation = run.get("mutation", {}) if run.get("verb") == "mutate" else {}
-    if mutation.get("kind") in ("Edit", "Remove") and not mutation.get("overrule"):
+    if mutation.get("kind") in ("Edit", "Remove", "Move") and not mutation.get("overrule"):
         kind = mutation["kind"]
         item = next((i for i in store.get("items", []) if i["collection"] == run["collection"] and i["seq"] == mutation["seq"]), {})
         binding = next((b for b in store.get("bindings", []) if b["collection"] == run["collection"]
                         and b["link_id"] == item.get("link_id") and b["source"] == run["source"]), {})
         met = [row.get("conflict_object") for row in (item, binding) if row.get("conflicted") == 1]
+        if kind == "Move":
+            rule_cases["a move over the item's conflict"] += item.get("conflicted") == 1
+            rule_cases["a move over its binding's conflict"] += binding.get("conflicted") == 1
         resolves = mutation.get("resolves")
         unresolved = (met and any(body is None or body not in (resolves or []) for body in met)) or (resolves is not None and not met)
         replaced = "if_match" in mutation and item.get("object") != mutation["if_match"]
@@ -2199,7 +2219,13 @@ for path in sync_cases:
                   [{"kind": "Abandoned", "handle": binding["handle"]}])
             require(f"{label}: an Abandon states the rows it leaves", "items" in after and "bindings" in after)
             left = [b for b in after.get("bindings", []) if b["collection"] == run["collection"] and b["link_id"] == item["link_id"]]
+            rule_cases["an abandon beside another source"] += bool(left)
             require(f"{label}: an Abandon drops the create's binding", all(b["source"] != run["source"] for b in left))
+            # Another source binding the item keeps its binding as it was, and
+            # so owes the delete (SYNC.md sections 7 and 9).
+            before = [b for b in store.get("bindings", []) if b["collection"] == run["collection"]
+                      and b["link_id"] == item["link_id"] and b["source"] != run["source"]]
+            check(f"{label}: an Abandon leaves every other source's binding of the item as it was", left, before)
             given = next((i for i in after.get("items", []) if i["collection"] == run["collection"] and i["seq"] == mutation["seq"]), {})
             require(f"{label}: an Abandon marks the item deleted, retained once no source binds it",
                     given.get("deleted") == 1 and (given.get("retained") is True) == (not left)
@@ -2371,6 +2397,8 @@ for path in sync_cases:
         if outcome.get("outcome") == "Accepted" and "assigned" in outcome and outcome["assigned"] is None and outcome.get("handle", "").startswith("\u0001"):
             require(f"{label}: an add accepted without a handle keeps its provisional binding",
                     any(binding["handle"] == outcome["handle"] for binding in case["expect"].get("store", {}).get("bindings", [])))
+for rule, count in rule_cases.items():
+    require(f"sync: a case holds {rule}", count >= 1)
 
 # The search cases (SEARCH.md section 11): every fixture and placement resolves.
 search = root / "search"
@@ -2835,20 +2863,27 @@ MEDIA = {"mail": "message/rfc822", "contact": "text/vcard", "event": "text/calen
 
 
 def conjuncts_of(query):
-    """A query's tokens with whether each stands as a conjunct of the whole
-    query (SEARCH.md section 8.2), or None for a query holding a group or an
-    `or`, which this does not read: a term right after a `not` or a `-` is
-    none."""
+    """A query's terms with whether each stands as a conjunct of the whole
+    query (SEARCH.md section 8.2), or None for a query holding an `or`,
+    which this does not read. A term right after a `not` or a `-` is none,
+    nor is one inside a negated group; a group that is itself a conjunct is
+    read through, its terms standing as the query's own."""
     tokens = lex(query)
-    if any(token["kind"] in "()" or (token["kind"] == "operator" and token["word"] == "or") for token in tokens):
+    if any(token["kind"] == "operator" and token["word"] == "or" for token in tokens):
         return None
-    terms, negated = [], False
+    terms, negated, groups = [], False, []
     for token in tokens:
         if token["kind"] == "operator":
             negated = negated or token["word"] == "not"
-            continue
-        terms.append((token, not negated))
-        negated = False
+        elif token["kind"] == "(":
+            groups.append(negated or (bool(groups) and groups[-1]))
+            negated = False
+        elif token["kind"] == ")":
+            groups.pop()
+            negated = False
+        else:
+            terms.append((token, not negated and not (groups and groups[-1])))
+            negated = False
     return terms
 
 
@@ -2933,26 +2968,30 @@ CARD_MARKS = {"phone", "address", "birthday", "photo"}
 
 def reads_of(query):
     """The kinds whose bodies the query's terms read, wherever they stand,
-    and whether a text term of it reaches the body or the attachment field."""
-    kinds, reaches = set(), False
+    whether a text term of it reaches the body or the attachment field, and
+    whether it asks a message's attachment mark."""
+    kinds, reaches, marks = set(), False, False
     for token in lex(query):
         if token["kind"] in ("text", "phrase"):
             kinds |= EVERY_BODY
             reaches = True
         elif token["kind"] == "field":
             name, value = field_of(query, token)
-            if name in TEXT_FIELDS and "@" not in value:
+            if name in TEXT_FIELDS and not (name in ADDRESS_FIELDS and "@" in value):
                 kinds |= EVERY_BODY
                 reaches = reaches or name in ("body", "attachment", "mimetype")
             elif name in DATE_FIELDS:
                 kinds.add("text/calendar")
             elif name == "has" and value == "attachment":
                 kinds.add("text/calendar")
+                marks = True
+            elif name == "thread":
+                kinds.add("message/rfc822")
             elif (name == "has" and value in CARD_MARKS) or name == "category":
                 kinds.add("text/vcard")
             elif name == "is" and value == "encrypted":
                 kinds.add("message/rfc822")
-    return kinds, reaches
+    return kinds, reaches, marks
 
 
 def rfc3339(moment):
@@ -2962,9 +3001,10 @@ def rfc3339(moment):
 def complete_of(query, now, zone):
     """Whether an answer is complete (SEARCH.md section 8.2), on an index
     that folded every change: the temporal axis full, no range out of the
-    horizon, no item cut before its end, no bodiless item, no missing or
-    unparseable placement of a kind a term reads, no encrypted one under a
-    text term reaching a body. None for a query this does not read."""
+    horizon, no item cut before its end, no bodiless item, missing or
+    unparseable placement of a kind a term reads, no bodiless message under
+    has:attachment, no encrypted body under a text term reaching one. None
+    for a query this does not read."""
     scope = collections_of(query)
     if scope is None or dated_of(query) is False:
         return None
@@ -2980,9 +3020,11 @@ def complete_of(query, now, zone):
                 return False
     if rollup(scope, rfc3339(since), rfc3339(until)) != "full":
         return False
-    kinds, reaches = reads_of(query)
+    kinds, reaches, marks = reads_of(query)
     for kind, row in coverage_of(scope).items():
-        if row["bodiless"] or (kind in kinds and (row["missing"] or row["unparseable"])) or (reaches and row["encrypted"]):
+        if kind in kinds and (row["bodiless"] or row["missing"] or row["unparseable"]):
+            return False
+        if (marks and kind == "message/rfc822" and row["bodiless"]) or (reaches and row["encrypted"]):
             return False
     return True
 

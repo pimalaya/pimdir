@@ -248,7 +248,7 @@ Structured terms compile to seeks on the store, text terms to matches on the ind
 - whether the zone the query's days were read in is another than the one the index placed floating times in;
 - how far the index lags the store.
 
-From these the answer says whether it is complete. A body that could not be read or parsed counts against a query whose terms read bodies of its kind, and an encrypted one only against a query whose text reaches past the headers, which are indexed: a mailbox holding encrypted mail still answers a search by sender, subject or flag completely.
+From these the answer says whether it is complete. A body the store does not hold yet, or one that could not be read or parsed, counts against a query whose terms read bodies of its kind, and an encrypted one only against a query whose text reaches past the headers, which are indexed: a mailbox holding encrypted mail still answers a search by sender, subject or flag completely, and one listed and not yet fetched a search by flag or date.
 
 An index may be written another way too, on an older full-text engine or none, as long as every query finds the same items, but for words only an HTML part holds, which no two implementations need reduce alike, each being expected to keep the words of two cells, two paragraphs or two list items apart; only the order by relevance is its own. An answer can be read a page at a time, by walking the store's order and testing each item against the index, or from the best matches down.
 

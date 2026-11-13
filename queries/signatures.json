@@ -172,6 +172,7 @@
 {"name": "storage/owner/stamp_bindings", "parameters": ["collection", "source"], "slots": ["handles"], "columns": []},
 {"name": "storage/owner/stamp_item", "parameters": ["collection", "link_id"], "slots": [], "columns": []},
 {"name": "storage/owner/supersede_item", "parameters": ["collection", "link_id", "by_collection", "by_link_id"], "slots": [], "columns": []},
+{"name": "storage/owner/unconfirm_action", "parameters": ["detail", "id"], "slots": [], "columns": ["id"]},
 {"name": "storage/owner/update_binding", "parameters": ["base_flags_known", "base_marks", "base_object", "base_revision", "base_present", "conflicted", "conflict_revision", "conflict_object", "shared_object", "collection", "link_id", "source"], "slots": [], "columns": []},
 {"name": "storage/owner/update_item", "parameters": ["flags_known", "marks", "object_hash", "sort_key", "level", "deleted", "conflicted", "conflict_object", "collection", "link_id"], "slots": [], "columns": []},
 {"name": "storage/owner/upsert_checkpoint", "parameters": ["collection", "source", "checkpoint"], "slots": [], "columns": []},

@@ -5,6 +5,6 @@
 -- very id and incarnation it folds (§4).
 INSERT INTO index_meta(id, format_version, shape, version, tokenizer, store_id, store_incarnation,
                        extraction, extractor)
-SELECT 1, 'search-draft-10', 'canonical', :version, :tokenizer, store_id, incarnation,
+SELECT 1, 'search-draft-11', 'canonical', :version, :tokenizer, store_id, incarnation,
        :extraction, :extractor
 FROM store.store_meta WHERE id = 1;

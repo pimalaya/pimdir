@@ -91,7 +91,7 @@ The history follows [Cairn](https://github.com/pimalaya/cairn), the documents th
 
 ## Status
 
-Draft: **storage-draft-10**, **sync-draft-10** and **search-draft-10**, each named by a git tag. An implementation states the version of each part it conforms to.
+Draft: **storage-draft-11**, **sync-draft-11** and **search-draft-11**, each named by a git tag. An implementation states the version of each part it conforms to.
 
 A released part is versioned `<part>-vX.Y.Z`: STORAGE's major is the store schema version, SEARCH's the index schema version, SYNC's a breaking change to the connector seam or the engine.
 

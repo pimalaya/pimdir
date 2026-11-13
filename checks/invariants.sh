@@ -1695,11 +1695,11 @@ expect "format: init_store_meta stamps this part's version, version 1 with both 
 case "$own_format" in
     storage-draft-*)
         expect "format: a draft's store opens under that draft alone, never under another nor a release" \
-            "$(opens "$own_format") $(opens storage-draft-09) $(opens storage-draft-99) $(opens storage-v1)" \
+            "$(opens "$own_format") $(opens storage-draft-10) $(opens storage-draft-99) $(opens storage-v1)" \
             "opened refused refused refused" ;;
     *)
         expect "format: a released store opens under its release, and under no draft" \
-            "$(opens "$own_format") $(opens storage-draft-10) $(opens storage-draft-99)" \
+            "$(opens "$own_format") $(opens storage-draft-11) $(opens storage-draft-99)" \
             "opened refused refused" ;;
 esac
 sql "ALTER TABLE store_meta DROP COLUMN format_version;"
@@ -1776,7 +1776,7 @@ judged() {
 fresh
 collection INBOX
 item INBOX a 1
-sql "UPDATE store_meta SET format_version = 'storage-draft-10';"
+sql "UPDATE store_meta SET format_version = 'storage-draft-11';"
 expect "released: a released program refuses a draft's store, whatever its profile" "$(judged 1)" "refused refused refused"
 sql "CREATE TABLE x_later (id INTEGER PRIMARY KEY, note TEXT);
      CREATE INDEX x_items_by_level ON items(level);
@@ -1797,7 +1797,7 @@ run owner/set_store_version ":version=2" ":read_version=2" ":produce_version=2"
 expect "released: a version 2 program opens it under every profile" "$(judged 2)" "opened opened opened"
 sql "PRAGMA user_version = 3;"
 expect "released: a store whose version disagrees with user_version is corrupt, and refused" "$(judged 3)" "refused refused refused"
-sql "PRAGMA user_version = 2; UPDATE store_meta SET format_version = 'storage-draft-10';"
+sql "PRAGMA user_version = 2; UPDATE store_meta SET format_version = 'storage-draft-11';"
 expect "released: a draft's name over a later version is refused all the same" "$(judged 2)" "refused refused refused"
 
 # --- A migration keeps every row; one rebuilding a table owes more (§6) ----
@@ -1842,9 +1842,9 @@ done
 fresh
 expect "sync: a store no engine wrote names no sync version, load_store_meta answering it last" \
     "$(run read/load_store_meta | cut -d'|' -f14)|$(run read/load_store_meta | awk -F'|' '{ print NF }')" "|14"
-run owner/set_sync_version ":sync_version='sync-draft-10'"
+run owner/set_sync_version ":sync_version='sync-draft-11'"
 expect "sync: set_sync_version records the engine's version, and nothing else moves" \
-    "$(run read/load_store_meta | cut -d'|' -f9,14)" "$own_format|sync-draft-10"
+    "$(run read/load_store_meta | cut -d'|' -f9,14)" "$own_format|sync-draft-11"
 expect "sync: the version is text or nothing" \
     "$(sql "UPDATE store_meta SET sync_version = x'07';" 2>&1 | grep -c CHECK)" "1"
 
@@ -1892,6 +1892,11 @@ expect "restore: two restores of one backup, the replaced store unread, are rais
 expect "identity: the id never changes and the incarnation never goes down" \
     "$(sql "UPDATE store_meta SET store_id = '00000000000000000000000000000000';" 2>&1 | grep -c 'store identity is fixed')$(sql "UPDATE store_meta SET incarnation = $copied;" 2>&1 | grep -c 'store identity is fixed')|$(run read/load_change_cursor | cut -d'|' -f3,4)" \
     "11|$id|$once_more"
+# The mode is the restore's to set (§8): the copy of a WAL database is made
+# in a rollback journal mode, whatever the store it was taken from ran in.
+sqlite3 "$dir/wal.db" "PRAGMA journal_mode = WAL; CREATE TABLE t(x); VACUUM INTO '$dir/wal-copy.db';" > /dev/null
+expect "restore: a copy made by VACUUM INTO of a WAL database carries no WAL mode, so the restore puts it in the mode of the store it replaces" \
+    "$(sqlite3 "$dir/wal.db" 'PRAGMA journal_mode;')|$(sqlite3 "$dir/wal-copy.db" 'PRAGMA journal_mode;')" "wal|delete"
 
 # --- Column types are held by the schema (§4.1) -----------------------------
 
@@ -1968,6 +1973,9 @@ source != ''|UPDATE capabilities SET source = ''
 source != ''|UPDATE performers SET source = ''
 handle != ''|UPDATE bindings SET handle = ''
 size >= 0|UPDATE objects SET size = -5
+date GLOB|UPDATE mail_summary SET date = '12 Nov 2026'
+date GLOB|UPDATE mail_summary SET date = '2026-10-06T08:00:00.000Z'
+date GLOB|UPDATE mail_summary SET date = '2026-10-06T08:00:00+00:00'
 size >= 0|UPDATE mail_summary SET size = -1
 size >= 0|UPDATE file_summary SET size = -1
 attempts >= 0|UPDATE queue SET attempts = -1
@@ -1977,11 +1985,11 @@ recurring IN (0, 1)|UPDATE task_summary SET recurring = -1
 retained_by IS NULL OR retained_at IS NOT NULL|UPDATE items SET retained_by = 'imap' WHERE link_id = 'a'
 retained_by IS NULL OR retained_at IS NOT NULL|UPDATE items SET retained_at = NULL WHERE link_id = 'r'
 SHAPES
-expect "shape: 36 writes refused, no row moved, and what each column may also hold is taken" \
+expect "shape: 39 writes refused, no row moved, and what each column may also hold is taken" \
     "$refusals|$([ "$(sqlite3 "$dir/pimdir.db" .dump)" = "$shapes" ] && echo unmoved)|$(sql "UPDATE mail_summary SET date = NULL, size = NULL, attachment = NULL; UPDATE event_summary SET recurring = NULL; UPDATE task_summary SET recurring = 1;
         UPDATE sources SET covered_since = NULL, round_until = NULL; UPDATE receipts SET seq = NULL; UPDATE items SET retained_by = NULL WHERE link_id = 'r';
         UPDATE objects SET size = 0; SELECT 'taken';")" \
-    "36|unmoved|taken"
+    "39|unmoved|taken"
 
 # --- Readers count and page under the chips (§14.1) --------------------------
 
@@ -2618,8 +2626,10 @@ for subject in first second; do
     run queue/enqueue_action ":producer='p'" ":collection='Sent'" ":action='submit'" ":payload='{\"v\":1,\"source\":\"smtp\",\"from\":\"alice@example.org\",\"rcpts\":[\"bob@example.org\"],\"subject\":\"$subject\"}'" ":target_collection=NULL" ":object_hash='$m1'"
 done
 run queue/enqueue_action ":producer='p'" ":collection='Sent'" ":action='remove'" ":payload='{\"v\":1,\"seq\":9}'" ":target_collection=NULL" ":object_hash=NULL"
-run owner/park_action ":id=1" ":error='unconfirmed: the connection dropped after the message was handed over'"
-run owner/park_action ":id=2" ":error='unconfirmed: no answer to the final dot'"
+expect "unconfirmed: unconfirm_action answers the intent it parked, the attempt counted, and nothing for a row that is gone" \
+    "$(run owner/unconfirm_action ":id=1" ":detail='the connection dropped after the message was handed over'")|$(run owner/unconfirm_action ":id=2" ":detail='no answer to the final dot'")|$(run owner/unconfirm_action ":id=7" ":detail='gone'")|$(sql "SELECT group_concat(attempts, ' ') FROM queue WHERE id IN (1, 2);")" "1|2||1 1"
+expect "unconfirmed: an action the owner applies itself is never one, its row left pending and uncounted" \
+    "$(run owner/unconfirm_action ":id=3" ":detail='a remove commits or does not'")|$(sql "SELECT attempts || ':' || (error IS NULL) FROM queue WHERE id = 3;")" "|0:1"
 run owner/park_action ":id=3" ":error='unknown seq: 9'"
 expect "unconfirmed: no drain lists it, so nothing performs it again unasked" "$(run owner/list_pending_actions | wc -l)" "0"
 expect "unconfirmed: a producer reading its row tells it by the reserved prefix, from any other parked row" \
@@ -2639,7 +2649,10 @@ run owner/release_pins ":hashes='[\"$pin\"]'"
 expect "unconfirmed: confirmed by its performer, it reads as performed, its pin released" \
     "$(run read/load_action ":id=2")$(run read/load_receipt ":id=2" | cut -d'|' -f2)|$(sql "SELECT refcount FROM objects WHERE hash = '$m1';")" "Sent|1"
 # Withdrawn: no receipt, which is how a producer tells it from a confirmation.
-run owner/park_action ":id=1" ":error='unconfirmed: again'"
+run owner/park_action ":id=3" ":error='unconfirmed: a server said so'"
+expect "unconfirmed: a failure whose text begins with the reserved prefix is recorded behind failed: , whole, and reads parked" \
+    "$(run read/load_action ":id=3" | cut -d'|' -f9)" "failed: unconfirmed: a server said so"
+run owner/unconfirm_action ":id=1" ":detail='again'" > /dev/null
 run owner/release_pins ":hashes='[\"$(run owner/cancel_action ":id=1")\"]'"
 expect "unconfirmed: withdrawn, it leaves no receipt and no pin" \
     "$(run read/load_action ":id=1")$(run read/load_receipt ":id=1")|$(sql "SELECT refcount FROM objects WHERE hash = '$m1';")" "|0"
@@ -3044,7 +3057,7 @@ fresh
 index
 isearch init_index_meta ":version=1" ":tokenizer='unicode61 remove_diacritics 0'" ":extraction=1" ":extractor='scenario 1'"
 expect "index: init_index_meta stamps this draft and the canonical shape, which load_index_meta answers" \
-    "$(isearch load_index_meta | cut -d'|' -f10,11)" "search-draft-10|canonical"
+    "$(isearch load_index_meta | cut -d'|' -f10,11)" "search-draft-11|canonical"
 expect "index: init_index_meta records the store and the incarnation it is built from" \
     "$(isearch load_index_meta | cut -d'|' -f8,9)" "$(run read/load_change_cursor | cut -d'|' -f3,4)"
 run owner/raise_incarnation ":replaced=NULL"

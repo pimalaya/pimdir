@@ -87,11 +87,14 @@
     "vectors/fixtures/mail-raw-8bit.eml": "d710b086f9618da2e334fa7b0db378b9b756d620182263ed8f9b227c1e7afc11",
     "vectors/fixtures/mail-recent.eml": "2365b456ace61c2a23ff78fe2e314a5a812b0a4512897de8601456d11e2874f7",
     "vectors/fixtures/mail-repeated-fields.eml": "706105a963ae9b2648ad51cdd6936543c5639925c55ce216193358bfd16ce815",
+    "vectors/fixtures/mail-repeated-part-fields.eml": "5e243c8aeae365b9fa9dd5c15fe5ae372f474a568f7876903d9f99a5ff1286d6",
     "vectors/fixtures/mail-reply.eml": "23bafeb80859b3767ea125835374c26aa162846d9d72e84da0fcd9cb323cd601",
+    "vectors/fixtures/mail-reused-id-attachment.eml": "57cd76aa632b80eb84b06996cd705c13abbf40bfd79ab6d345c858129e3cbe34",
     "vectors/fixtures/mail-reused-id-same-size.eml": "3220c7ba4b9a8f1f1a5acf3dc7fae516516a4e15a402c546546fb8cd626ecb31",
     "vectors/fixtures/mail-reused-message-id.eml": "b475c6ded5b0825b690d52b1e39882952b6b4dc26a92b4d037e92007655c6d6e",
     "vectors/fixtures/mail-spaced-field-name.eml": "b1d6bed4db063970965cd7f27cddfada0c5aba757a57ba0383b89f4cf4fb9008",
     "vectors/fixtures/mail-stray-cr.eml": "3e7ecd0336ebc80195ccb1fe616fdfeac4c310e9f071dd893526632953c94fac",
+    "vectors/fixtures/mail-unclosed-multipart.eml": "8caf7836216001e5f981404b1bd41820a0b4dd9750be48e1f00d03d14e0a3227",
     "vectors/fixtures/mail-unparseable-date.eml": "8d50e9ab0d3c088e2bc8fe10e2bdc7933778c40741cdd99a83500561f4efb38a",
     "vectors/fixtures/mail-unparseable-id.eml": "0af88b55f4ffc8ebc372c34e8992421b54f752b3b618b7394a814394ddf7b05f",
     "vectors/fixtures/todo-captured.ics": "32ec351eaf756d8d48ce80beec0ab3bc459e9aee737fdfbfd0c28a4c0d6a4399",
@@ -107,7 +110,7 @@
     "vectors/fixtures/todo-someday.ics": "cbad49748cacfebee3a43b6b4ad87d09d662edfaebcda29a652eaaff04fcc1ca",
     "vectors/fixtures/todo-waiting.ics": "72a107067723eacc1511a2989385588bd046eb5edd071b47694d101976ca52a4",
     "vectors/objects.json": "b901f40b9612c0e3244a72cc8aaaae1ae10e506c5e48a108d8dc2638ff6efcdd",
-    "vectors/payloads.json": "8c5dfe7ce85517230387f0de829dea5b6082608d403471f529eb7d7f8297ce07",
+    "vectors/payloads.json": "88690478f5ee325fbbe1e33c528c108426dd7b806d439ae13c2248ba4a0f24ae",
     "vectors/schema/manifest.schema.json": "96f560e9d11124166a2539390a36a1275438ce74bd95e8d8e307415252d6e678",
     "vectors/schema/objects.schema.json": "27d5271230b92359ea242565def4f1fab4bfde465bca7ce263c961c8cf94398b",
     "vectors/schema/payloads.schema.json": "cfeeaef33d63945aa2cd4ee9bce53b9b298595dccbea94b0a1f256e4c1959e8d",
@@ -117,9 +120,9 @@
     "vectors/schema/summaries.schema.json": "5dcd70af3d37d44420d5b5289ba5643a6e8905f0c9dc63d285e91a57287f4a54",
     "vectors/schema/sync.schema.json": "bba6d625e6a55c6db6d2f857aee956b984cc8c92dca89fec6b9ef1c5e1509dcd",
     "vectors/search/chunks.json": "6fc4e98bdf1306f7d5a2635fa2db4c3d96dc8856fbd61df49bc2f67d4d44de3a",
-    "vectors/search/queries.json": "7fb1ed35cdbdd8230f3e2ccda95f0c13e6a0a0bef167501446a48d1d204b017a",
+    "vectors/search/queries.json": "4d1c4a9898e2755d3e4c209e43f5ecd5b9bd92e1715c642994c79ca9d78f7fa9",
     "vectors/search/store.json": "8177c404c504b7e82f3e684b74bd8cbd40e90955d7627a26d85a2932d4e98a50",
-    "vectors/summaries.json": "df373e71c3f5e2430562f381108bc53eb5057059e9a54b098dfd7ca8c9d57cb9",
+    "vectors/summaries.json": "6a4eaead0970b91f76d2db33b53215ba35975e171f8c373b45e313d09298aad8",
     "vectors/sync/01-remote-flag-pulled.json": "2fc6a42622cde6731f7d50d0075fa7219a16a92910a7fd319c119ce128a5300d",
     "vectors/sync/02-local-flag-pushed.json": "069fbfdc0bdc0db8241513f409d0d1575034fa3eb94ff1f7dcb6889ff335535d",
     "vectors/sync/03-flags-merge-both-sides.json": "7b713cad40df84dd59c3c98ffefc9db2b112ee3e4610bd7a0e67e05e20ecad32",
@@ -190,6 +193,10 @@
     "vectors/sync/152-a-tombstoned-delivered-create-landing-on-a-bodiless-arrival-revives.json": "a6209c3fec2d9e1d8e5e543c16e2bf6c11c25c1a0e3b1897b3191177c4cb9185",
     "vectors/sync/153-a-guarded-edit-is-refused-over-an-emptied-item.json": "d622de6da829864bb4ce0d4553e9bcc7bfafac4053712c902e866d90fc1a0edf",
     "vectors/sync/154-a-guarded-remove-is-refused-over-an-emptied-item.json": "1df20fec61043701cf818ee77b8f5af69044bd4011be5b4d4c84f75640f1306f",
+    "vectors/sync/155-a-move-through-a-conflicted-binding-is-refused.json": "9deb040e324f85f10dcc2ffb96b1508acfb62b383b0a7c4e426ebbb5d4152a43",
+    "vectors/sync/156-a-move-of-an-item-in-conflict-is-refused.json": "3b91a81d90c3e7e554c22d209aa91d0c6c5ed50a8928eff3d471a2bd8deef422",
+    "vectors/sync/157-an-abandon-beside-another-source-leaves-it-the-delete.json": "21c23ed0b5085102a09af7ece08a473266df1d2cff8a799a242c37a5827cf4cf",
+    "vectors/sync/158-a-body-entering-under-another-messages-key-records-no-stand-in.json": "0968d151451d26a808adef1a2ac1bb76593a9ce43046d561ae2dd38c4a75c27c",
     "vectors/sync/16-vanished-local-edit-restages-a-create.json": "34230b06ee9c312762fed82daf16f3c119410971d5a204d52da264db1b239a3e",
     "vectors/sync/17-add-accepted-supersedes-the-provisional-handle.json": "0c51d18fd6521a98e567196a6b249db54b355765d38b4a6b1e2edb37a051a9f7",
     "vectors/sync/18-add-rejected-stays-pending.json": "4047b7ce3a22d7c34917709e05970668bdf990837e14f59be726d16d0eb8143d",
@@ -281,13 +288,13 @@
       "/objects": 13
     },
     "vectors/payloads.json": {
-      "/cases": 73
+      "/cases": 75
     },
     "vectors/search/chunks.json": {
       "/cases": 10
     },
     "vectors/search/queries.json": {
-      "/cases": 212,
+      "/cases": 220,
       "/occurrences": 7
     },
     "vectors/search/store.json": {
@@ -296,8 +303,8 @@
       "/references": 4
     },
     "vectors/summaries.json": {
-      "/cases": 71
+      "/cases": 73
     }
   },
-  "sync": 154
+  "sync": 158
 }
