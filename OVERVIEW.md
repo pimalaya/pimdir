@@ -231,9 +231,9 @@ Long texts are cut into chunks along their paragraphs as they are extracted; sni
 
 Hostile content costs a bounded amount, the same for every implementation: a message's parts are walked to a fixed depth and count, as the store walks them (§2), a calendar item writes a fixed number of occurrences, and a recurrence rule is followed for a fixed number of steps. An item cut short says from when its occurrences are missing, and an answer reaching past that says so.
 
-An owner keeping an index is expected to refresh it after each write it commits, so a list reading its rows from the store and its filters from the index sees them one write apart at most, and an agenda lists a window's occurrences in time order straight from the index. A refresh may stop between batches and resume where it stopped. A renamed collection counts among the store's removals, so one renamed while a refresh was cut short is still reconciled by the next. A body the indexer could not read is tried again on every refresh until it reads. A message that leaves the store leaves nothing of its own in the index: its thread is rebuilt as if it had never been there, and its id stays only where a remaining message names it as its parent.
+An owner keeping an index is expected to refresh it after each write it commits, so a list reading its rows from the store and its filters from the index sees them one write apart at most, and an agenda lists a window's occurrences in time order straight from the index. A refresh may stop between batches and resume where it stopped. A renamed collection counts among the store's removals, so one renamed while a refresh was cut short is still reconciled by the next. A body the indexer could not read is tried again on every refresh until it reads, a calendar item keeping the occurrences it had meanwhile. A message that leaves the store leaves nothing of its own in the index: its thread is rebuilt as if it had never been there, and its id stays only where a remaining message names it as its parent.
 
-An index names the version of the search part it follows and the way it is written. An indexer rebuilds an earlier version of its own kind, which loses nothing, and leaves alone an index of another kind or a later version, as a query client refuses one it does not understand. One built from another store or another copy of it is rebuilt.
+An index names the version of the search part it follows and the way it is written. An indexer rebuilds an earlier version of its own kind, which loses nothing, and leaves alone an index of another kind or a later version, as a query client refuses one it does not understand. One built from another store or another copy of it is rebuilt. An index also remembers which revision of the extraction rules, and which revision of its indexer's own choices, its bodies were read under: an indexer at another reads every body again, or rebuilds, so a corrected rule reaches the bodies already indexed.
 
 A query is a list of terms, free text or field and value, joined by and, or and not, under a formal grammar. A query the grammar does not accept, an unknown field included, is refused whole rather than guessed at, and so is one longer, deeper or holding more terms than fixed limits. Text is matched as the words it holds, in order, so a character a full-text engine reads as an operator is only a separator, whatever engine the index uses. The refusal gives the position at fault, what was expected there and the fields that exist, so a person or an agent can correct it.
 
@@ -241,13 +241,16 @@ A query's days, months and years are the user's, read in the zone the client sta
 
 Structured terms compile to seeks on the store, text terms to matches on the index, and the answer is their intersection in the store's own order. A hit is one item per account with every placement it has. The answer states its coverage:
 
-- how many items in scope have no body to search;
+- how many items in scope have no body to search, and how many have one that could not be read, that no parser accepted, or that is encrypted, each counted apart;
 - how many calendar items in scope had their occurrences cut short before the end of the date range;
 - whether the store holds every item of the date range, from the sources' coverage (§5);
 - whether the date range left the horizon;
+- whether the zone the query's days were read in is another than the one the index placed floating times in;
 - how far the index lags the store.
 
-An index may be written another way too, on an older full-text engine or none, as long as every query finds the same items, but for words only an HTML part holds, which no two implementations need reduce alike; only the order by relevance is its own. An answer can be read a page at a time, by walking the store's order and testing each item against the index, or from the best matches down.
+From these the answer says whether it is complete. A body that could not be read or parsed counts against a query whose terms read bodies of its kind, and an encrypted one only against a query whose text reaches past the headers, which are indexed: a mailbox holding encrypted mail still answers a search by sender, subject or flag completely.
+
+An index may be written another way too, on an older full-text engine or none, as long as every query finds the same items, but for words only an HTML part holds, which no two implementations need reduce alike, each being expected to keep the words of two cells, two paragraphs or two list items apart; only the order by relevance is its own. An answer can be read a page at a time, by walking the store's order and testing each item against the index, or from the best matches down.
 
 Normative: SEARCH.
 

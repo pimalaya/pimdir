@@ -373,9 +373,9 @@ if [ "$stated" != "$(const sync)" ]; then
     echo "SYNC.md §11 states \`v\` [$stated] for vectors/sync/, its schema holds [$(const sync)]" >&2
     failures=$((failures + 1))
 fi
-stated="$(sed -n 's/.*`v` \([0-9]*\) for queries.json and `v` \([0-9]*\) for the other two.*/\1 \2 \2/p' "$root/SEARCH.md")"
+stated="$(sed -n 's/.*`v` \([0-9]*\) for queries.json, `v` \([0-9]*\) for store.json and `v` \([0-9]*\) for chunks.json.*/\1 \2 \3/p' "$root/SEARCH.md")"
 if [ "$stated" != "$(const search-queries) $(const search-store) $(const search-chunks)" ]; then
-    echo "SEARCH.md §11 states \`v\` [$stated] for queries.json and the other two, their schemas hold [$(const search-queries) $(const search-store) $(const search-chunks)]" >&2
+    echo "SEARCH.md §11 states \`v\` [$stated] for queries.json, store.json and chunks.json, their schemas hold [$(const search-queries) $(const search-store) $(const search-chunks)]" >&2
     failures=$((failures + 1))
 fi
 

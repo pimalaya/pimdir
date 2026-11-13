@@ -71,6 +71,7 @@
     "vectors/fixtures/mail-header-cut.eml": "79fc1716a64534009fb1c0f83f64646da061a1510db7405e832b641ce4a2cbf6",
     "vectors/fixtures/mail-id-comment.eml": "aafe93cd18d2913a09da1582cdfe5259bf1a31057e647622e10acaa2ebf382a3",
     "vectors/fixtures/mail-invitation.eml": "c49c098f2204d9c92c8626f7d3580784e9a254a4809d778a17f2e1e208a8cbb2",
+    "vectors/fixtures/mail-lost.eml": "dbd4a890aacc5b6a0e1163352916634a7cf04962845b840c50940dc02e4b8267",
     "vectors/fixtures/mail-malformed-word.eml": "1ce8f806d47992b4ba52488c9b956485657510ca19b4a1f805227c27cc7c1f32",
     "vectors/fixtures/mail-many-attachments.eml": "41747aa4ab0e5962f547599ca8d24bef0cb852ce178b4ba7b8fc13045f4288be",
     "vectors/fixtures/mail-many-parts.eml": "af05edbaef8bddbcc17890efd6511e998f4c0d3a582c15a5b95f62370b7c14e7",
@@ -111,13 +112,13 @@
     "vectors/schema/objects.schema.json": "27d5271230b92359ea242565def4f1fab4bfde465bca7ce263c961c8cf94398b",
     "vectors/schema/payloads.schema.json": "cfeeaef33d63945aa2cd4ee9bce53b9b298595dccbea94b0a1f256e4c1959e8d",
     "vectors/schema/search-chunks.schema.json": "0d98341ffd6455327e176688d4affe359b04dc0317d2a3bb920d4fcc6a0d653c",
-    "vectors/schema/search-queries.schema.json": "9e157b7eb98b2c85011107cb388482466e30b7adadb66abe899d9be58701e8b5",
-    "vectors/schema/search-store.schema.json": "9dbc82edf388f855ab33f29a73935c715cb028743625034c230d608ba0eb4447",
+    "vectors/schema/search-queries.schema.json": "791f24559af3a2bae391fee9f3e1ec6ee57b404aeac870a38eff09676faa4ff8",
+    "vectors/schema/search-store.schema.json": "ffd9e3bb85ed36c8bf8962d6bd5c8feb26755a2dfe357224650dbc380bc6145a",
     "vectors/schema/summaries.schema.json": "5dcd70af3d37d44420d5b5289ba5643a6e8905f0c9dc63d285e91a57287f4a54",
     "vectors/schema/sync.schema.json": "bba6d625e6a55c6db6d2f857aee956b984cc8c92dca89fec6b9ef1c5e1509dcd",
     "vectors/search/chunks.json": "6fc4e98bdf1306f7d5a2635fa2db4c3d96dc8856fbd61df49bc2f67d4d44de3a",
-    "vectors/search/queries.json": "3e5eecf021da958baff97509c203d9fe13e2570d4d15b521797040665228a5c2",
-    "vectors/search/store.json": "0576a478ff27992d9ec71bada2be24f7fa3650b8df1591e2bb41ff750194fe73",
+    "vectors/search/queries.json": "7fb1ed35cdbdd8230f3e2ccda95f0c13e6a0a0bef167501446a48d1d204b017a",
+    "vectors/search/store.json": "8177c404c504b7e82f3e684b74bd8cbd40e90955d7627a26d85a2932d4e98a50",
     "vectors/summaries.json": "df373e71c3f5e2430562f381108bc53eb5057059e9a54b098dfd7ca8c9d57cb9",
     "vectors/sync/01-remote-flag-pulled.json": "2fc6a42622cde6731f7d50d0075fa7219a16a92910a7fd319c119ce128a5300d",
     "vectors/sync/02-local-flag-pushed.json": "069fbfdc0bdc0db8241513f409d0d1575034fa3eb94ff1f7dcb6889ff335535d",
@@ -286,12 +287,12 @@
       "/cases": 10
     },
     "vectors/search/queries.json": {
-      "/cases": 179,
+      "/cases": 212,
       "/occurrences": 7
     },
     "vectors/search/store.json": {
-      "/collections": 9,
-      "/items": 33,
+      "/collections": 11,
+      "/items": 36,
       "/references": 4
     },
     "vectors/summaries.json": {

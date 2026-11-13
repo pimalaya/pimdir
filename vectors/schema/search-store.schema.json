@@ -7,7 +7,7 @@
   "required": ["v", "collections", "items", "references"],
   "additionalProperties": false,
   "properties": {
-    "v": { "const": 1 },
+    "v": { "const": 2 },
     "note": { "type": "string" },
     "collections": {
       "type": "array",
@@ -49,9 +49,11 @@
           "link_id": { "type": "string", "minLength": 1 },
           "flags": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[!-~]+$" } },
           "fixture": { "type": "string", "pattern": "^fixtures/" },
+          "unreadable": { "const": true },
           "summary": { "$ref": "#/$defs/summary" }
         },
-        "oneOf": [{ "required": ["fixture"] }, { "required": ["summary"] }]
+        "oneOf": [{ "required": ["fixture"] }, { "required": ["summary"] }],
+        "dependentRequired": { "unreadable": ["fixture"] }
       }
     },
     "references": {

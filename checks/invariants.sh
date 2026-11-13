@@ -2882,7 +2882,7 @@ for link in diary gone; do
         ":dtstart=NULL" ":dtstart_tzid=NULL" ":dtstart_value=NULL"
 done
 sql "UPDATE items SET deleted = 1 WHERE link_id = 'gone';"
-isearch init_index_meta ":version=1" ":tokenizer='unicode61 remove_diacritics 0'"
+isearch init_index_meta ":version=1" ":tokenizer='unicode61 remove_diacritics 0'" ":extraction=1" ":extractor='scenario 1'"
 isearch set_horizon ":horizon_start='2025-08-20T12:00:00Z'" ":horizon_end='2028-08-20T12:00:00Z'"
 isearch set_tzdb_version ":tzdb_version='2026a'"
 old=(":old_start='2025-08-20T12:00:00Z'" ":old_end='2028-08-20T12:00:00Z'")
@@ -2903,7 +2903,7 @@ item Cal ev 1
 sql "UPDATE items SET sort_key = '2026-09-01T10:00:00Z' WHERE link_id = 'ev';"
 run owner/upsert_event_summary ":collection='Cal'" ":link_id='ev'" ":uid='ev'" ":summary='Review'" ":location=NULL" \
     ":dtstart='20260901T120000'" ":dtstart_tzid='Europe/Paris'" ":dtstart_value=NULL" ":dtend=NULL" ":recurring=0" ":until=NULL"
-isearch init_index_meta ":version=1" ":tokenizer='unicode61 remove_diacritics 0'"
+isearch init_index_meta ":version=1" ":tokenizer='unicode61 remove_diacritics 0'" ":extraction=1" ":extractor='scenario 1'"
 isearch set_horizon ":horizon_start='2025-08-20T12:00:00Z'" ":horizon_end='2028-08-20T12:00:00Z'"
 isearch set_tzdb_version ":tzdb_version='2026a'"
 window=(":old_start='2025-08-20T12:00:00Z'" ":old_end='2028-08-20T12:00:00Z'"
@@ -2931,12 +2931,14 @@ item Docs plan 2
 run owner/set_collection_kind ":collection='Cal2'" ":account=NULL" ":kind='text/calendar'"
 item Cal2 other 3
 expect "coverage: a bodiless file hides nothing from search and is never counted" \
-    "$(isearch coverage ":collections='[\"Cal\",\"Docs\"]'")" "text/calendar|1"
+    "$(isearch coverage ":collections='[\"Cal\",\"Docs\"]'")" "text/calendar|1|0|0|0"
 expect "coverage: only the query's collections are counted" \
-    "$(isearch coverage ":collections='[\"Docs\"]'")|$(isearch coverage ":collections='[\"Cal\",\"Cal2\"]'")" "|text/calendar|2"
+    "$(isearch coverage ":collections='[\"Docs\"]'")|$(isearch coverage ":collections='[\"Cal\",\"Cal2\"]'")" "|text/calendar|2|0|0|0"
 steps="$(isplan coverage ":collections='[\"Cal\"]'")"
 expect "coverage: each collection seeks items_bodiless, never the store's other rows" \
     "$(grep -c 'USING COVERING INDEX items_bodiless (collection=? AND deleted=? AND object_hash=?)' <<<"$steps" || true)$(grep -c 'items_by_object\|SCAN i' <<<"$steps" || true)" "10"
+expect "coverage: the bodies not read whole are walked on object_not_ok to their placements, and missing is sought on its key, never every placement nor every object" \
+    "$(grep -c 'SCAN o USING COVERING INDEX object_not_ok' <<<"$steps" || true)$(grep -c 'SEARCH p USING INDEX placement_by_hash (hash=?)' <<<"$steps" || true)$(grep -c 'SEARCH m USING COVERING INDEX sqlite_autoindex_missing_1 (collection=?)' <<<"$steps" || true)$(grep -cE 'SCAN (o|p|m)$' <<<"$steps" || true)" "1110"
 
 # --- A zero-length occurrence falls in the range it starts (SEARCH.md §8.1) --
 
@@ -3020,7 +3022,7 @@ fresh
 index
 collection INBOX
 item INBOX a 1
-isearch init_index_meta ":version=1" ":tokenizer='unicode61 remove_diacritics 0'"
+isearch init_index_meta ":version=1" ":tokenizer='unicode61 remove_diacritics 0'" ":extraction=1" ":extractor='scenario 1'"
 isearch upsert_placement ":collection='INBOX'" ":seq=1" ":link_id='a'" ":hash=NULL" > /dev/null
 head="$(run read/load_change_cursor | cut -d'|' -f1)"
 purges="$(run read/load_change_cursor | cut -d'|' -f2)"
@@ -3040,7 +3042,7 @@ expect "reconciled: past a batch, the store's purge count still stands above the
 
 fresh
 index
-isearch init_index_meta ":version=1" ":tokenizer='unicode61 remove_diacritics 0'"
+isearch init_index_meta ":version=1" ":tokenizer='unicode61 remove_diacritics 0'" ":extraction=1" ":extractor='scenario 1'"
 expect "index: init_index_meta stamps this draft and the canonical shape, which load_index_meta answers" \
     "$(isearch load_index_meta | cut -d'|' -f10,11)" "search-draft-10|canonical"
 expect "index: init_index_meta records the store and the incarnation it is built from" \
@@ -3056,7 +3058,7 @@ index
 collection INBOX
 object "$h1"
 item INBOX m 1 "$h1"
-isearch init_index_meta ":version=1" ":tokenizer='unicode61 remove_diacritics 0'"
+isearch init_index_meta ":version=1" ":tokenizer='unicode61 remove_diacritics 0'" ":extraction=1" ":extractor='scenario 1'"
 # The pass finds the blob gone: the placement indexed bodiless, recorded.
 isearch upsert_placement ":collection='INBOX'" ":seq=1" ":link_id='m'" ":hash=NULL" > /dev/null
 isearch insert_missing ":collection='INBOX'" ":seq=1"
@@ -3070,6 +3072,68 @@ expect "missing: a placement whose body is indexed leaves it" "$(isearch load_mi
 isearch insert_missing ":collection='INBOX'" ":seq=1"
 isearch delete_placement ":collection='INBOX'" ":seq=1" > /dev/null
 expect "missing: a placement deleted takes its row" "$(sqlite3 "$dir/index.db" "SELECT count(*) FROM missing;")" "0"
+
+# --- Coverage counts what the index could not read (SEARCH.md §8.2) ---------
+
+# Two mailboxes and an address book: INBOX holds a bodiless message, one whose
+# blob is gone, a sealed one and one no parser accepted, and a plain one;
+# Archive files the sealed one again; Cards holds a card no parser accepted
+# and one whose blob went after it was indexed, kept with its body's rows.
+for label in sealed broken plain card kept; do
+    printf -v "h_$label" '%s' "$(name "$label")"
+done
+fresh
+index
+collection INBOX
+collection Archive
+run owner/set_collection_kind ":collection='Cards'" ":account=NULL" ":kind='text/vcard'"
+for hash in "$h1" "$h_sealed" "$h_broken" "$h_plain" "$h_card" "$h_kept"; do
+    object "$hash"
+done
+item INBOX bare 1
+item INBOX lost 2 "$h1"
+item INBOX sealed 3 "$h_sealed"
+item INBOX broken 4 "$h_broken"
+item INBOX plain 5 "$h_plain"
+item Archive sealed 3 "$h_sealed"
+item Cards card 6 "$h_card"
+item Cards kept 7 "$h_kept"
+isearch init_index_meta ":version=1" ":tokenizer='unicode61 remove_diacritics 0'" ":extraction=1" ":extractor='scenario 1'"
+body "$h_sealed" ":status='encrypted'" > /dev/null
+body "$h_broken" ":status='unparseable'" > /dev/null
+body "$h_plain" > /dev/null
+body "$h_card" ":status='unparseable'" > /dev/null
+body "$h_kept" > /dev/null
+for spec in INBOX:1:bare:NULL INBOX:2:lost:NULL INBOX:3:sealed:"'$h_sealed'" INBOX:4:broken:"'$h_broken'" \
+    INBOX:5:plain:"'$h_plain'" Archive:3:sealed:"'$h_sealed'" Cards:6:card:"'$h_card'" Cards:7:kept:"'$h_kept'"; do
+    IFS=: read -r collection seq link hash <<<"$spec"
+    isearch upsert_placement ":collection='$collection'" ":seq=$seq" ":link_id='$link'" ":hash=$hash" > /dev/null
+done
+isearch insert_missing ":collection='INBOX'" ":seq=2"
+isearch insert_missing ":collection='Cards'" ":seq=7"
+expect "coverage: per kind, the bodiless items, the placements recorded missing, and those whose body is recorded unparseable and encrypted, each a count of its own, a body read whole in none" \
+    "$(isearch coverage ":collections='[\"INBOX\",\"Archive\",\"Cards\"]'" | sort | tr '\n' ' ')" \
+    "message/rfc822|1|1|1|2 text/vcard|0|1|1|0 "
+expect "coverage: a body filed twice counts once per placement of the query's collections, and a collection counting none answers no row" \
+    "$(isearch coverage ":collections='[\"Archive\"]'")|$(isearch coverage ":collections='[\"INBOX\"]'")|$(isearch coverage ":collections='[\"Nowhere\"]'")" \
+    "message/rfc822|0|0|0|1|message/rfc822|1|1|1|1|"
+isearch delete_missing ":collection='INBOX'" ":seq=2"
+isearch delete_placement ":collection='INBOX'" ":seq=4" > /dev/null
+expect "coverage: a placement read at last, and one gone, are counted no more" \
+    "$(isearch coverage ":collections='[\"INBOX\"]'")" "message/rfc822|1|0|0|1"
+
+# --- An index records the revisions of its extraction (SEARCH.md §2, §6) ----
+
+expect "extraction: init_index_meta records the revision of the extraction and the indexer's own, which load_index_meta answers last" \
+    "$(isearch load_index_meta | cut -d'|' -f13,14)" "1|scenario 1"
+isearch set_extraction ":extraction=2" ":extractor='scenario 1'"
+expect "extraction: an indexer at another revision records its own once it extracted every held body again, its own extractor's standing" \
+    "$(isearch load_index_meta | cut -d'|' -f13,14)" "2|scenario 1"
+isearch set_extraction ":extraction=2" ":extractor='other 7'"
+expect "extraction: another indexer's own revision is recorded apart, the format's standing" \
+    "$(isearch load_index_meta | cut -d'|' -f13,14)" "2|other 7"
+expect "extraction: an index states both, neither defaulted nor null" \
+    "$(sqlite3 "$dir/index.db" "INSERT INTO index_meta(id, format_version, shape, version, tokenizer, store_id, store_incarnation) VALUES (2, 'x', 'canonical', 1, 't', 's', 1);" 2>&1 | grep -c 'NOT NULL constraint failed: index_meta.extraction')$(sqlite3 "$dir/index.db" "UPDATE index_meta SET extractor = NULL;" 2>&1 | grep -c 'NOT NULL constraint failed: index_meta.extractor')$(sqlite3 "$dir/index.db" "UPDATE index_meta SET extraction = 'two';" 2>&1 | grep -c 'cannot store TEXT value in INTEGER column')" "111"
 
 # --- A message that leaves prunes its thread (SEARCH.md §9) ----------------
 

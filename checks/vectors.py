@@ -198,7 +198,8 @@ def check_wildcard(word, offset, allowed):
 
 
 def date_point(value):
-    if re.fullmatch(r"\d{4}", value) or value in {"today", "yesterday"} or re.fullmatch(r"\d+[dwy]", value):
+    amount = re.fullmatch(r"(\d+)[dwy]", value)
+    if re.fullmatch(r"\d{4}", value) or value in {"today", "yesterday"} or (amount and len(amount.group(1)) <= DIGITS["relative"]):
         return True
     if re.fullmatch(r"\d{4}-\d{2}", value):
         return 1 <= int(value[5:]) <= 12
@@ -237,7 +238,7 @@ def check_term(query, token):
         raise Refused("invalid-value", colon + 1, end)
     if name in DATE_FIELDS and not range_of(value, date_point):
         raise Refused("invalid-date", colon + 1, end)
-    if name == "changed" and not range_of(value, lambda side: side.isascii() and side.isdigit()):
+    if name == "changed" and not range_of(value, lambda side: side.isascii() and side.isdigit() and len(side) <= DIGITS["stamp"]):
         raise Refused("invalid-value", colon + 1, end)
 
 
@@ -358,6 +359,12 @@ def temporal_of(query, collections):
             since, until = low_span[0], high_span[1]
         else:
             return None
+    return rollup(scope, since, until)
+
+
+def rollup(scope, since, until):
+    """The temporal axis over collections and a range of RFC 3339 instants,
+    either side None when open."""
     floor = ceiling = None
     filling = False
     for collection in scope:
@@ -384,28 +391,47 @@ def instant(text):
 
 
 def point_span(point, now, zone=timezone.utc):
-    """A point's span (SEARCH.md section 8.1), its days read in `zone`."""
-    def midnight(day):
-        return datetime(day.year, day.month, day.day, tzinfo=zone).astimezone(timezone.utc)
+    """A point's span (SEARCH.md section 8.1), its days read in `zone`, a
+    bound no instant of a four-digit year states being open, None: an end
+    past 9999-12-31T23:59:59Z, a start before the year 0000.
+
+    NOTE: Python's calendar starts at the year 0001, so a start within the
+    year 0000 reads open here where the prose bounds it; every case's points
+    are checked to stand clear of that year."""
+    def midnight(year, month, day):
+        try:
+            if year > 9999:
+                # The midnight ending 9999, a day after the one starting its
+                # last day, which no transition moves.
+                return datetime(9999, 12, 31, tzinfo=zone).astimezone(timezone.utc) + timedelta(days=1)
+            return datetime(year, month, day, tzinfo=zone).astimezone(timezone.utc)
+        except (ValueError, OverflowError):
+            return None
+
+    def day_after(day):
+        return (day.year + 1, 1, 1) if (day.month, day.day) == (12, 31) else (day + timedelta(days=1)).timetuple()[:3]
 
     today = now.astimezone(zone).date()
     if point == "today":
-        return midnight(today), midnight(today + timedelta(days=1))
+        return midnight(*today.timetuple()[:3]), midnight(*day_after(today))
     if point == "yesterday":
-        return midnight(today - timedelta(days=1)), midnight(today)
+        return midnight(*(today - timedelta(days=1)).timetuple()[:3]), midnight(*today.timetuple()[:3])
     amount = re.fullmatch(r"(\d+)([dwy])", point)
     if amount:
         n, unit = int(amount.group(1)), amount.group(2)
-        start = now.replace(year=now.year - n) if unit == "y" else now - timedelta(days=n * (7 if unit == "w" else 1))
+        try:
+            start = now.replace(year=now.year - n) if unit == "y" else now - timedelta(days=n * (7 if unit == "w" else 1))
+        except (ValueError, OverflowError):
+            start = None
         return start, now
     if re.fullmatch(r"\d{4}", point):
-        return midnight(date(int(point), 1, 1)), midnight(date(int(point) + 1, 1, 1))
+        return midnight(int(point), 1, 1), midnight(int(point) + 1, 1, 1)
     if re.fullmatch(r"\d{4}-\d{2}", point):
         year, month = int(point[:4]), int(point[5:])
-        return midnight(date(year, month, 1)), midnight(date(year + month // 12, month % 12 + 1, 1))
+        return midnight(year, month, 1), midnight(year + month // 12, month % 12 + 1, 1)
     if re.fullmatch(r"\d{4}-\d{2}-\d{2}", point):
         day = date.fromisoformat(point)
-        return midnight(day), midnight(day + timedelta(days=1))
+        return midnight(day.year, day.month, day.day), midnight(*day_after(day))
     return None, None
 
 
@@ -2359,6 +2385,11 @@ limits_table = search_md.split("| Limit | Bound |")[1].split("\n\n")[0]
 LIMITS = {row.split("|")[1].strip(): int(row.split("|")[2].split()[0].replace(",", ""))
           for row in limits_table.splitlines()[2:]}
 check("search limits: the table states length, nesting and terms", sorted(LIMITS), ["length", "nesting", "terms"])
+# The digits a relative amount and a stamp hold at most, read from the
+# grammar's two rules.
+DIGITS = {rule: int(most) for rule, most in re.findall(r"^(relative|stamp) += 1\*(\d+)DIGIT\b", search_md, re.M)}
+check("search grammar: relative and stamp bound their digits", sorted(DIGITS), ["relative", "stamp"])
+DIGITS = {"relative": 0, "stamp": 0} | DIGITS
 placements = {(item["collection"], item["seq"]) for item in store["items"]}
 accounts = {c["id"]: c["account"] for c in store["collections"]}
 hits = {(accounts[item["collection"]], item["seq"]) for item in store["items"]}
@@ -2379,6 +2410,24 @@ for item in store["items"]:
     require(f"search store: {item['link_id']} in a known collection", item["collection"] in accounts)
     if "fixture" in item:
         require(f"search store: {item['fixture']} exists", (root / item["fixture"]).is_file())
+
+# A seq is one item's (STORAGE section 9.1): the placements sharing one hold
+# one link id and one body. An item stated unreadable has its blob taken out
+# before the index is built (SEARCH.md section 11), so no other item may hold
+# that body, which would go with it.
+by_seq = {}
+for item in store["items"]:
+    by_seq.setdefault(item["seq"], []).append(item)
+for seq, placed in by_seq.items():
+    require(f"search store: seq {seq} names one item, one link id and one body in every collection filing it",
+            len({(item["link_id"], item.get("fixture"), item.get("unreadable", False)) for item in placed}) == 1
+            and (len(placed) == 1 or all("fixture" in item for item in placed))
+            and len({item["collection"] for item in placed}) == len(placed))
+unreadable = {item["fixture"] for item in store["items"] if item.get("unreadable")}
+for item in store["items"]:
+    if item.get("fixture") in unreadable:
+        require(f"search store: {item['fixture']} is unreadable for every item holding it", item.get("unreadable") is True)
+require("search store: an item's body cannot be read", len(unreadable) >= 1)
 
 # A reference names two endpoints the store holds (STORAGE section 14.2), each
 # a kind and a link id with an item under that kind.
@@ -2407,10 +2456,13 @@ def clock_of(case):
 
 # A case answers hits, a threaded listing or a refusal (SEARCH.md section 11),
 # and the grammar above accepts its query or refuses it as the case says.
-KEYS = {"query", "hits", "threads", "error", "sort", "ordered", "horizon_left", "temporal", "cut", "zone", "now", "note"}
+KEYS = {"query", "hits", "threads", "error", "sort", "ordered", "horizon_left", "temporal", "cut", "zone", "now", "note",
+        "index_zone", "zone_differs", "coverage", "complete"}
 for case in queries["cases"]:
     label = f"search {case['query']!r}"
     require(f"{label}: known keys only", set(case) <= KEYS)
+    require(f"{label}: no date point of the year 0000, which point_span cannot place",
+            not re.search(r"\b(date|when):\"?(\S*\.\.)?0000", case["query"]))
     answers = [key for key in ("hits", "threads", "error") if key in case]
     require(f"{label}: answers one of hits, threads or error", len(answers) == 1)
     require(f"{label}: a known sort", case.get("sort", "date") in {"date", "name", "relevance"})
@@ -2438,7 +2490,8 @@ for case in queries["cases"]:
     except Refused as refused:
         got = {"code": refused.code, "start": refused.start, "end": refused.end}
     if "error" in case:
-        require(f"{label}: refusals carry no sort, order, coverage or clock", not set(case) & {"sort", "ordered", "horizon_left", "temporal", "cut", "zone", "now"})
+        require(f"{label}: refusals carry no sort, order, coverage or clock",
+                not set(case) & {"sort", "ordered", "horizon_left", "temporal", "cut", "zone", "now", "index_zone", "zone_differs", "coverage", "complete"})
         require(f"{label}: a known code", case["error"].get("code") in CODES)
         check(f"{label}: refusal", got, case["error"])
     else:
@@ -2524,9 +2577,9 @@ def fold(text):
 
 
 def fts_term(column, text, prefix):
-    """One FTS5 string, its `"` doubled, a prefix starred, filtered to a
-    column (SEARCH.md section 8.5)."""
-    expression = '"' + fold(text).replace('"', '""') + '"' + (" *" if prefix else "")
+    """One FTS5 string, its `"` doubled and its U+0000 a space, a prefix
+    starred, filtered to a column (SEARCH.md section 8.5)."""
+    expression = '"' + fold(text).replace('"', '""').replace("\x00", " ") + '"' + (" *" if prefix else "")
     return f"{{{column}}} : {expression}" if column else expression
 
 
@@ -2569,11 +2622,12 @@ titles.executemany("INSERT INTO t(rowid, title) VALUES (?, ?)", [(at, fold(title
 
 def title_hits(expression):
     rows = titles.execute("SELECT rowid FROM t WHERE t MATCH ?", (expression,)).fetchall()
-    return sorted([accounts[titled[at - 1][1]["collection"]], titled[at - 1][1]["seq"]] for at, in rows)
+    # A hit is (account, seq), one for an item filed twice in an account.
+    return [list(hit) for hit in sorted({(accounts[titled[at - 1][1]["collection"]], titled[at - 1][1]["seq"]) for at, in rows})]
 
 
 FTS5_SYNTAX = re.compile(r'[\^+{}():*"-]|\b(AND|OR|NOT|NEAR)\b')
-title_cases = 0
+title_cases = nul_cases = 0
 for case in queries["cases"]:
     if "hits" not in case:
         continue
@@ -2599,7 +2653,17 @@ for case in queries["cases"]:
         except sqlite3.OperationalError:
             raw = None
         require(f"{label}: holds FTS5 syntax that its text spliced raw answers alike", raw != sorted(case["hits"]))
+    if "\x00" in text:
+        # FTS5 reads no expression past U+0000: left in the string, the
+        # term must be one FTS5 refuses or answers otherwise.
+        nul_cases += 1
+        try:
+            kept = title_hits('{title} : "' + fold(text).replace('"', '""') + '"')
+        except sqlite3.OperationalError:
+            kept = None
+        require(f"{label}: holds U+0000 that its text left in the FTS5 string answers alike", kept != sorted(case["hits"]))
 require("search: a text term holding FTS5 syntax is re-derived", title_cases >= 9)
+require("search: a text term holding U+0000 is re-derived", nul_cases >= 1)
 
 # The bounds of SEARCH.md section 7, read from its prose, and a second path
 # expanding a series a simple rule states: one VEVENT, a UTC DTSTART, a
@@ -2766,22 +2830,255 @@ def single_event(bytes_, zone):
     return start, end
 
 
+MEDIA = {"mail": "message/rfc822", "contact": "text/vcard", "event": "text/calendar", "task": "text/calendar",
+         "journal": "text/calendar", "file": "application/octet-stream"}
+
+
+def conjuncts_of(query):
+    """A query's tokens with whether each stands as a conjunct of the whole
+    query (SEARCH.md section 8.2), or None for a query holding a group or an
+    `or`, which this does not read: a term right after a `not` or a `-` is
+    none."""
+    tokens = lex(query)
+    if any(token["kind"] in "()" or (token["kind"] == "operator" and token["word"] == "or") for token in tokens):
+        return None
+    terms, negated = [], False
+    for token in tokens:
+        if token["kind"] == "operator":
+            negated = negated or token["word"] == "not"
+            continue
+        terms.append((token, not negated))
+        negated = False
+    return terms
+
+
+def field_of(query, token):
+    """A field term's name and value, a phrase value without its quotes."""
+    name = query[token["start"]:token["colon"]]
+    value = query[token["colon"] + 1:token["end"]]
+    return name, value[1:-1] if token["phrase"] else value
+
+
+def collections_of(query):
+    """The query's collections (SEARCH.md section 8.2): those its account:,
+    collection:, folder: and kind: conjuncts leave."""
+    terms = conjuncts_of(query)
+    if terms is None:
+        return None
+    scope = list(store["collections"])
+    for token, conjunct in terms:
+        if token["kind"] != "field" or not conjunct:
+            continue
+        name, value = field_of(query, token)
+        if name in ("collection", "folder"):
+            scope = [c for c in scope if c["id"] == value]
+        elif name == "account":
+            scope = [c for c in scope if c["account"] == value]
+        elif name == "kind":
+            scope = [c for c in scope if c["kind"] == MEDIA[value]]
+    return scope
+
+
+def dated_of(query):
+    """The value of the query's date: or when: conjunct, None with none, and
+    False for a query whose date terms this does not read: more than one, or
+    one that is no conjunct."""
+    found = [(field_of(query, token)[1], conjunct) for token, conjunct in conjuncts_of(query)
+             if token["kind"] == "field" and field_of(query, token)[0] in DATE_FIELDS]
+    if not found:
+        return None
+    return found[0][0] if len(found) == 1 and found[0][1] else False
+
+
+def range_span(value, now, zone):
+    """A date value's span, either side None when open."""
+    low, _, high = value.partition("..") if ".." in value else (value, "", value)
+    return (point_span(low, now, zone)[0] if low else None), (point_span(high, now, zone)[1] if high else None)
+
+
+def sealed(bytes_):
+    """Whether a message's body is one the extraction records encrypted
+    (SEARCH.md section 6), by its own Content-Type."""
+    stated = header_field(header_fields(bytes_), "content-type") or ""
+    return stated.strip().lower().split(";")[0].strip() in ("multipart/encrypted", "application/pkcs7-mime")
+
+
+def coverage_of(scope):
+    """What `coverage` answers over collections (SEARCH.md section 8.2), per
+    kind: the bodiless items, the placements stated unreadable, none recorded
+    unparseable, every fixture being one its parser accepts, and the
+    placements of an encrypted message; a file never, a kind counting nothing
+    left out."""
+    ids = {c["id"]: c["kind"] for c in scope if c["kind"] != "application/octet-stream"}
+    counts = {}
+    for item in store["items"]:
+        kind = ids.get(item["collection"])
+        if kind is None:
+            continue
+        row = counts.setdefault(kind, {"bodiless": 0, "missing": 0, "unparseable": 0, "encrypted": 0})
+        if "summary" in item:
+            row["bodiless"] += 1
+        elif item.get("unreadable"):
+            row["missing"] += 1
+        elif kind == "message/rfc822" and sealed((root / item["fixture"]).read_bytes()):
+            row["encrypted"] += 1
+    return {kind: row for kind, row in counts.items() if any(row.values())}
+
+
+# The kinds whose bodies a term reads (SEARCH.md section 8.2), and the text
+# terms matched in the body or the attachment field (section 8.5).
+EVERY_BODY = {"message/rfc822", "text/vcard", "text/calendar"}
+CARD_MARKS = {"phone", "address", "birthday", "photo"}
+
+
+def reads_of(query):
+    """The kinds whose bodies the query's terms read, wherever they stand,
+    and whether a text term of it reaches the body or the attachment field."""
+    kinds, reaches = set(), False
+    for token in lex(query):
+        if token["kind"] in ("text", "phrase"):
+            kinds |= EVERY_BODY
+            reaches = True
+        elif token["kind"] == "field":
+            name, value = field_of(query, token)
+            if name in TEXT_FIELDS and "@" not in value:
+                kinds |= EVERY_BODY
+                reaches = reaches or name in ("body", "attachment", "mimetype")
+            elif name in DATE_FIELDS:
+                kinds.add("text/calendar")
+            elif name == "has" and value == "attachment":
+                kinds.add("text/calendar")
+            elif (name == "has" and value in CARD_MARKS) or name == "category":
+                kinds.add("text/vcard")
+            elif name == "is" and value == "encrypted":
+                kinds.add("message/rfc822")
+    return kinds, reaches
+
+
+def rfc3339(moment):
+    return None if moment is None else moment.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def complete_of(query, now, zone):
+    """Whether an answer is complete (SEARCH.md section 8.2), on an index
+    that folded every change: the temporal axis full, no range out of the
+    horizon, no item cut before its end, no bodiless item, no missing or
+    unparseable placement of a kind a term reads, no encrypted one under a
+    text term reaching a body. None for a query this does not read."""
+    scope = collections_of(query)
+    if scope is None or dated_of(query) is False:
+        return None
+    since = until = None
+    calendar = any(c["kind"] == "text/calendar" for c in scope)
+    if dated_of(query) is not None:
+        since, until = range_span(dated_of(query), now, zone)
+        if calendar:
+            if since is None or until is None or since < horizon[0] or until > horizon[1]:
+                return False
+            ids = {c["id"] for c in scope}
+            if any(collection in ids and cut is not None and instant(cut) < until for (collection, _), (_, cut) in series.items()):
+                return False
+    if rollup(scope, rfc3339(since), rfc3339(until)) != "full":
+        return False
+    kinds, reaches = reads_of(query)
+    for kind, row in coverage_of(scope).items():
+        if row["bodiless"] or (kind in kinds and (row["missing"] or row["unparseable"])) or (reaches and row["encrypted"]):
+            return False
+    return True
+
+
+check("search coverage: the file's, over every collection of the store", queries["coverage"], coverage_of(store["collections"]))
+stated = {"coverage": 0, "complete": 0, True: 0, False: 0, "sealed": set(), "lost": set()}
+for case in queries["cases"]:
+    if "error" in case:
+        continue
+    label = f"search {case['query']!r}"
+    now, zone = clock_of(case)
+    scope = collections_of(case["query"])
+    if "coverage" in case:
+        require(f"{label}: a coverage case is one checks/vectors.py re-derives", scope is not None)
+        if scope is not None:
+            check(f"{label}: coverage over the query's collections", case["coverage"], coverage_of(scope))
+            stated["coverage"] += 1
+    if "complete" in case:
+        derived = complete_of(case["query"], now, zone)
+        require(f"{label}: a complete case is one checks/vectors.py re-derives", derived is not None)
+        if derived is not None:
+            check(f"{label}: complete", case["complete"], derived)
+            stated["complete"] += 1
+            stated[derived] += 1
+            counts = coverage_of(scope).get("message/rfc822", {})
+            for key, count in (("sealed", "encrypted"), ("lost", "missing")):
+                if counts.get(count) and not counts.get("bodiless"):
+                    stated[key].add(derived)
+    # The zone the query states against the one the index read floating times
+    # in (SEARCH.md sections 8.1, 8.2), compared as names, said only where a
+    # date term can reach a calendar item.
+    index_zone = case.get("index_zone", case.get("zone", "UTC"))
+    if scope is None or dated_of(case["query"]) is False:
+        require(f"{label}: a case stating zone_differs or index_zone is one checks/vectors.py re-derives",
+                not set(case) & {"zone_differs", "index_zone"})
+    else:
+        differs = (index_zone != case.get("zone", "UTC") and dated_of(case["query"]) is not None
+                   and any(c["kind"] == "text/calendar" for c in scope))
+        check(f"{label}: zone_differs", case.get("zone_differs", False), differs)
+        stated["differs" if differs else "agrees"] = stated.get("differs" if differs else "agrees", 0) + ("index_zone" in case)
+require("search: cases state the coverage of their collections and whether they are complete, either way",
+        stated["coverage"] >= 4 and stated[True] >= 3 and stated[False] >= 3)
+require("search: a collection holding an encrypted body and none bodiless answers complete and not, by the query's terms",
+        stated["sealed"] == {True, False})
+require("search: a collection holding a missing body and none bodiless answers complete and not, by the query's terms",
+        stated["lost"] == {True, False})
+require("search: a case asks in another zone than its index's, with and without a calendar in reach",
+        stated.get("differs", 0) >= 1 and stated.get("agrees", 0) >= 1)
+
+
+# The hits of a case asking mail alone by date, `kind:mail` beside one date
+# term (SEARCH.md section 8.1): a message compares its sort key, its date
+# (STORAGE Annex A.1), which no zone places, against the term's span, a side
+# no instant of a four-digit year states being open.
+mail_dated = 0
+for case in queries["cases"]:
+    terms = case["query"].split()
+    if "hits" not in case or len(terms) != 2 or terms[0] != "kind:mail" or not terms[1].startswith("date:"):
+        continue
+    since, until = range_span(terms[1][5:], *clock_of(case))
+    derived = set()
+    for item in store["items"]:
+        if kinds[item["collection"]] != "message/rfc822":
+            continue
+        key = instant(item["summary"]["sort_key"] if "summary" in item else mail_columns((root / item["fixture"]).read_bytes())["date"])
+        if (since is None or since <= key) and (until is None or key < until):
+            derived.add((accounts[item["collection"]], item["seq"]))
+    check(f"search {case['query']!r}: the messages dated in the range", sorted(map(tuple, case["hits"])), sorted(derived))
+    mail_dated += since is None or until is None
+require("search: a date range open on a side no four-digit year states is re-derived, each side", mail_dated >= 2)
+
 for case in queries["cases"]:
     if "zone" not in case:
         continue
     label = f"search {case['query']!r}"
     terms = dict(term.partition(":")[::2] for term in case["query"].split())
-    if not (len(case["query"].split()) == 2 and set(terms) == {"collection", "date"} and ".." not in terms["date"]
-            and "hits" in case):
+    if not (len(case["query"].split()) == 2 and set(terms) in ({"collection", "date"}, {"kind", "date"})
+            and terms.get("kind", "mail") == "mail" and ".." not in terms["date"] and "hits" in case):
         failures.append(f"{label}: a zoned case is one checks/vectors.py re-derives")
         continue
     now, zone = clock_of(case)
+    try:
+        placed = ZoneInfo(case["index_zone"]) if case.get("index_zone", "UTC") != "UTC" else timezone.utc
+    except (ZoneInfoNotFoundError, ValueError):
+        failures.append(f"{label}: index_zone {case['index_zone']!r} names no IANA zone")
+        continue
+    if "index_zone" not in case:
+        placed = zone
+    if "kind" in terms:
+        continue
     since, until = point_span(terms["date"], now, zone)
     derived = set()
     for item in store["items"]:
         if item["collection"] != terms["collection"]:
             continue
-        span = single_event((root / item["fixture"]).read_bytes(), zone) if "fixture" in item else None
+        span = single_event((root / item["fixture"]).read_bytes(), placed) if "fixture" in item else None
         if span is None:
             failures.append(f"{label}: {item['link_id']} is no single event this re-derives")
             continue
@@ -2789,6 +3086,8 @@ for case in queries["cases"]:
         if start < until and (end > since or (start == end and start >= since)):
             derived.add((accounts[item["collection"]], item["seq"]))
     check(f"{label}: hits read in {case['zone']}", sorted(map(tuple, case["hits"])), sorted(derived))
+
+
 # The task writers (conventions/gtd.md section 1): every case's shape and
 # references, and what its edit may change, re-derived from the bytes on both
 # sides by a second path, so an expected fixture that touches a line the

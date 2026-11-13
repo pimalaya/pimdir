@@ -7,14 +7,10 @@
   "required": ["v", "now", "horizon", "coverage", "cases", "occurrences"],
   "additionalProperties": false,
   "properties": {
-    "v": { "const": 3 },
+    "v": { "const": 4 },
     "now": { "type": "string" },
     "horizon": { "type": "object", "required": ["start", "end"], "additionalProperties": false, "properties": { "start": { "type": "string" }, "end": { "type": "string" } } },
-    "coverage": {
-      "type": "object",
-      "propertyNames": { "enum": ["message/rfc822", "text/vcard", "text/calendar", "application/octet-stream"] },
-      "additionalProperties": { "type": "integer", "minimum": 0 }
-    },
+    "coverage": { "$ref": "#/$defs/coverage" },
     "note": { "type": "string" },
     "cases": { "type": "array", "items": { "$ref": "#/$defs/case" } },
     "occurrences": {
@@ -33,6 +29,22 @@
     }
   },
   "$defs": {
+    "count": { "type": "integer", "minimum": 0 },
+    "coverage": {
+      "type": "object",
+      "propertyNames": { "enum": ["message/rfc822", "text/vcard", "text/calendar"] },
+      "additionalProperties": {
+        "type": "object",
+        "required": ["bodiless", "missing", "unparseable", "encrypted"],
+        "additionalProperties": false,
+        "properties": {
+          "bodiless": { "$ref": "#/$defs/count" },
+          "missing": { "$ref": "#/$defs/count" },
+          "unparseable": { "$ref": "#/$defs/count" },
+          "encrypted": { "$ref": "#/$defs/count" }
+        }
+      }
+    },
     "hits": { "type": "array", "items": { "type": "array", "prefixItems": [{ "type": "string" }, { "type": "integer", "minimum": 1 }], "items": false, "minItems": 2 } },
     "case": {
       "type": "object",
@@ -42,6 +54,7 @@
         "query": { "type": "string" },
         "note": { "type": "string" },
         "zone": { "type": "string", "minLength": 1 },
+        "index_zone": { "type": "string", "minLength": 1 },
         "now": { "type": "string" },
         "sort": { "enum": ["date", "name", "relevance"] },
         "ordered": { "const": true },
@@ -72,6 +85,9 @@
           }
         },
         "horizon_left": { "const": true },
+        "zone_differs": { "const": true },
+        "coverage": { "$ref": "#/$defs/coverage" },
+        "complete": { "type": "boolean" },
         "temporal": {
           "oneOf": [
             { "const": "full" },
@@ -85,7 +101,8 @@
         },
         "cut": { "type": "integer", "minimum": 0 }
       },
-      "oneOf": [{ "required": ["hits"] }, { "required": ["threads"] }, { "required": ["error"] }]
+      "oneOf": [{ "required": ["hits"] }, { "required": ["threads"] }, { "required": ["error"] }],
+      "dependentRequired": { "index_zone": ["zone"] }
     }
   }
 }

@@ -40,12 +40,19 @@ CREATE TABLE index_meta (
     tzdb_version  TEXT    NOT NULL DEFAULT '',
     -- The time zone floating times and dates were read in (§7), an IANA name or
     -- UTC: an indexer stating another re-expands the calendar items.
-    floating_zone TEXT    NOT NULL DEFAULT 'UTC'
+    floating_zone TEXT    NOT NULL DEFAULT 'UTC',
+    -- The revision of §6 the bodies were extracted and the occurrences
+    -- expanded under, and the indexer's own for what §6 leaves to it, an
+    -- opaque text (§2): an indexer at another of either extracts every held
+    -- body again and records its own.
+    extraction    INTEGER NOT NULL,
+    extractor     TEXT    NOT NULL
 ) STRICT;
 
 -- One row per indexed body, keyed on the store's object hash, a name of
 -- STORAGE.md §5 by the same CHECK as the store's. The input is immutable, so
--- a row is never re-indexed; it goes when the object goes.
+-- a row is written once under a revision of the extraction (§2); it goes when
+-- the object goes.
 --
 -- `id` is an explicit INTEGER PRIMARY KEY, so it is the rowid and stable: a
 -- table keyed on anything else has an implicit rowid VACUUM may renumber, and
@@ -66,6 +73,11 @@ CREATE TABLE object (
     bday   INTEGER NOT NULL CHECK (bday IN (0, 1)),
     photo  INTEGER NOT NULL CHECK (photo IN (0, 1))
 ) STRICT;
+
+-- The bodies the extraction did not read whole (§6), encrypted or
+-- unparseable, so a query's coverage counts them by a seek (coverage, §8.2).
+-- Partial, so it holds those few alone.
+CREATE INDEX object_not_ok ON object(status, hash) WHERE status <> 'ok';
 
 -- A card's CATEGORIES values (§6), folded, each once, so category: reads a
 -- card by a seek as it reads a task on the store's task_summary. Gone with
@@ -111,8 +123,8 @@ CREATE TABLE placement (
     collection TEXT    NOT NULL,
     seq        INTEGER NOT NULL,
     link_id    TEXT    NOT NULL,
-    -- The body indexed for it, or NULL while bodiless or while its body is
-    -- missing (§4).
+    -- The body indexed for it, or NULL while bodiless or while its body was
+    -- never read (§4).
     hash       TEXT    CHECK (length(hash) = 52 AND hash NOT GLOB '*[^a-z2-7]*'),
     -- The instant from which a calendar item's occurrences are not all
     -- written, RFC 3339 Z, when §7's bounds stopped its expansion; NULL
@@ -128,9 +140,10 @@ CREATE INDEX placement_by_link ON placement(link_id);
 CREATE INDEX placement_cut ON placement(collection, cut) WHERE cut IS NOT NULL;
 
 -- The placements whose body the indexer could not read (§4): gone from the
--- blob directory or failing its name. Each pass reads them again, whether or
--- not the store stamps them again; a row goes once its body is indexed, and
--- with its placement.
+-- blob directory or failing its name, when a pass went to index it or to
+-- expand it again. Each pass reads them again, whether or not the store
+-- stamps them again; a row goes once its body was read for what the pass
+-- needed of it, and with its placement.
 CREATE TABLE missing (
     collection TEXT    NOT NULL,
     seq        INTEGER NOT NULL,

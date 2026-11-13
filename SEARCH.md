@@ -46,6 +46,7 @@ The index is derived. Every row is recomputed from the store and the bodies, and
 - **An index names its version and its shape.** Whatever its shape, an index holds a one-row table `index_meta` whose `format` is `pimdir-index`, whose `format_version` names the version of this part it follows, this draft's name, `search-draft-10`, while this part is a draft and `search-vN` once released (N its major), and whose `shape` names its shape: `canonical` for the canonical one, written by `init_index_meta`, and a name of the implementation's own for another, never `canonical`. Versions are ordered: drafts by their number, every draft below every release, releases by their major.
 - **An indexer rebuilds only an older index of its own shape.** An indexer MUST refuse an index.db holding no `index_meta`, one whose `shape` is not its own, and one whose `format_version` lies above its own, naming the index's version and shape and its own, and MUST NOT rebuild, write nor delete it: a person deleting index.db hands the store to another indexer, losing nothing (§1). An index of its own shape whose `format_version` lies below its own, and one whose `index_meta` lacks `format_version`, which a draft before search-draft-08 wrote and whose indexer refuses this draft's store (STORAGE §4.2), MUST be rebuilt: there are no index migrations.
 - An index of the indexer's own shape and version MUST also be rebuilt when its `index_meta.tokenizer` differs from §5's, its schema text from 0001_init.sql's (the canonical shape), when it was built from another store or another copy of it, or when its `store_change` lies above the store's last stamp. `index_meta.store_id` and `store_incarnation` record the store's `store_id` and `incarnation` when the index was created (`init_index_meta`), and a store answering others is another (STORAGE §4.5).
+- **An index records the revisions of its extraction.** `index_meta.extraction` records the revision of §6 its bodies were extracted and its occurrences expanded under, and `index_meta.extractor` the indexer's own revision of what this part leaves to it (how a `text/html` part is reduced, the charsets it decodes, what its parsers accept), an opaque text, both written by `init_index_meta`. An indexer MUST state an `extractor`, and another one whenever a change of its own alters what the extraction of a body yields. An indexer finding either differing from its own, the texts compared byte for byte, MUST extract again every body the index holds and expand again every calendar item, leaving what a rebuild would write, and record its own (`set_extraction`) in the transaction completing it; it MAY rebuild the index instead. Whatever its shape, an index records both and its indexer owes the same.
 - **A query client reads only an index it implements.** It MUST refuse an index whose `shape` or `format_version` it does not implement, naming both, rather than answer from it; while this part is a draft it implements its own draft alone, as STORAGE §4.2 has a program open only its own draft's store.
 - The canonical schema's version is the index's own `PRAGMA user_version`, mirrored in `index_meta.version`. While this part is a draft a schema change is folded into 0001_init.sql, the version staying 1, `format_version` telling one draft's index from another's.
 - The schema text is compared object by object: each table, index and trigger 0001_init.sql creates, by name, against the index's own by its `sqlite_master` text, `--` comments removed and whitespace collapsed, the shadow tables FTS5 creates and a table of the implementation's own beside them left out.
@@ -70,7 +71,7 @@ The index holds:
 - a `summary_text` row per placement with no body;
 - a `missing` row per placement whose body could not be read (§4);
 - the derived `flag`, `occurrence`, `thread`, `message` and `chunk` tables;
-- `index_meta`: its version and shape and the store it was built from (§2), the store cursors folded in (§4), the horizon and the time zones the occurrences stand under (§7).
+- `index_meta`: its version and shape, the store it was built from and the revisions of its extraction (§2), the store cursors folded in (§4), the horizon and the time zones the occurrences stand under (§7).
 
 **Statements.** Each statement under queries/search/ is named here with the profile that runs it: the indexer, a query client, or both. A statement's name, its named parameters and the columns it answers bind on STORAGE §4.4's terms.
 
@@ -78,6 +79,7 @@ The index holds:
 | --- | --- | --- |
 | `init_index_meta` | indexer | §2 |
 | `load_index_meta` | both | §2, §4, §7 |
+| `set_extraction` | indexer | §2 |
 | `load_changed_items` | indexer | §4 |
 | `load_missing_items` | indexer | §4 |
 | `insert_missing` | indexer | §4 |
@@ -150,7 +152,9 @@ Per row:
 
 A deleted row loses its placement, which takes its flags and occurrences by cascade. The indexer deletes its summary text by the rowid the delete returns. Its body's text stays until the object goes. A mail placement that was its link id's last prunes its thread (§9) in the same transaction.
 
-**A body that cannot be read is tried again.** A body the blob directory no longer holds when the indexer opens it, or whose bytes fail its name (STORAGE §7), is not `unparseable`: no `object` row is written, the placement is indexed as a bodiless one (its `hash` `NULL`, its summary text written) and recorded in `missing` (`insert_missing`). Every pass first folds the recorded placements again (`load_missing_items`, which answers each as `load_changed_items` does), whether or not the store stamped them again, since a body fetched again under the same name after a quarantine restamps nothing. A placement whose body is indexed leaves `missing` (`delete_missing`), as does one holding no body any more, and one the store no longer holds goes with its placement.
+**A body that cannot be read is tried again.** A body the blob directory no longer holds when the indexer opens it, or whose bytes fail its name (STORAGE §7), is not `unparseable`, and its placement is recorded in `missing` (`insert_missing`). One the index never read writes no `object` row: the placement is indexed as a bodiless one, its `hash` `NULL` and its summary text written. One the index holds already, which a re-expansion opens again (§7), keeps its rows, its occurrences and its cut as they stand.
+
+Every pass first folds the recorded placements again (`load_missing_items`, which answers each as `load_changed_items` does), whether or not the store stamped them again, since a body fetched again under the same name after a quarantine restamps nothing, and expands again each calendar placement among them, its body indexed or not. A placement leaves `missing` (`delete_missing`) only once its body was read for all the pass needed of it, the indexing and, for a calendar item, the expansion. One holding no body any more leaves it too, and one the store no longer holds goes with its placement.
 
 **Keys are reconciled when the purge count moved.** `store_meta.purges` counts purged items, collected objects and renamed or deleted collections alike (STORAGE §4.5): when it moved from `index_meta.store_purges`, `placements_gone` and `objects_gone` name what the store no longer holds, a renamed collection's old placements among them, and the indexer deletes them, pruning the thread of every mail placement that was its link id's last (§9).
 
@@ -172,6 +176,8 @@ An address is indexed whole, as its local part and as its domain in the `people`
 
 ## 6. Extraction
 
+This section is at **revision 1**. A change to what this section extracts from a body, or to what §7 expands from one, bumps it, in a minor version of this part once released; `index_meta.extraction` records the revision an index stands under, an indexer at another extracting every held body again (§2).
+
 A body is extracted once, by hash, into seven fields: `title`, `people` (every name and address, plus §5's address tokens), `body`, `attachment` (part names and media types), `place`, `org`, `note`.
 
 Beside `people`, one field per address role of STORAGE Annex A.6 (`from`, `to`, `cc`, `bcc`, `email`, `organizer`, `attendee`) holds that role's names and addresses alone, so `from:jane` is a match on the sender and not on anyone the message names.
@@ -186,7 +192,7 @@ The body's `object` row records whether the extraction wrote any text into the `
 
 A card's row also records whether it holds a `TEL`, an `ADR`, a `BDAY` and a `PHOTO` (`object.tel`, `object.adr`, `object.bday`, `object.photo`, 1 or 0, every other kind's 0), so `has:phone`, `has:address`, `has:birthday` and `has:photo` read a card by a seek (`holding`). Its `CATEGORIES` values are recorded beside it, each property's list split on unescaped commas and decoded as STORAGE Annex A.4 splits a task's, empty values dropped, folded as Annex A.2 folds `fn`, each once (`object_category`, `insert_object_category`), so `category:` reads a card by a seek (`categorised`) as it reads a task on `task_category`.
 
-Mail extraction MUST walk the MIME tree as STORAGE Annex A.1 bounds the walk, reading no part it leaves unread, decode transfer encodings, decode each text part by its `charset`, decode RFC 2047 and RFC 2231, prefer `text/plain` and reduce `text/html` to text. The reduction is the implementation's own, which this part does not pin, and text so reduced is outside the hit-set guarantee (§2).
+Mail extraction MUST walk the MIME tree as STORAGE Annex A.1 bounds the walk, reading no part it leaves unread, decode transfer encodings, decode each text part by its `charset`, decode RFC 2047 and RFC 2231, prefer `text/plain` and reduce `text/html` to text. The reduction is the implementation's own, which this part does not pin, and text so reduced is outside the hit-set guarantee (§2). It SHOULD separate tokens at the boundaries of block-level elements, so the texts of two table cells, two paragraphs or two list items never join into one token, and SHOULD skip the content of the head, style, script and template elements whatever their attributes.
 
 A header field the extraction reads, `Subject` and the address fields here and `In-Reply-To` and `References` in §9, MUST be read as STORAGE Annex A.1 reads one: its line split into name and value and its name matched as A.1 says, and a field present twice read from its first occurrence, so the index holds the subject and the people the summary row states, never those of a later occurrence.
 
@@ -206,7 +212,7 @@ The chunks thus cover the text but its blank-line runs, a field of blank lines a
 
 A snippet is cut from a hit's chunks (`chunks_of`), and an embedding index embeds the same ones without extracting again.
 
-The offsets index the text as the indexer extracted it, before §5's fold, which is stored nowhere, and §6 pins neither `text/html` reduction nor the decoding of every charset. A query client re-extracts the field from the blob to cut a snippet. One whose extraction is not the indexer's implementation MUST re-chunk its own text by the rule above rather than apply the stored offsets to it.
+The offsets index the text as the indexer extracted it, before §5's fold, which is stored nowhere, and §6 pins neither `text/html` reduction nor the decoding of every charset. A query client re-extracts the field from the blob to cut a snippet. One whose extraction is not the indexer's, which `index_meta.extractor` names (§2), MUST re-chunk its own text by the rule above rather than apply the stored offsets to it.
 
 A placement with no body indexes its summary row and address rows into `summary_text`: `title` from the subject, `fn`, `summary` or a file's `name`, `people` and the role fields from the addresses. The `summary_text` row is dropped once the body is indexed (§4).
 
@@ -230,7 +236,9 @@ A zoned time resolves through the resource's own `VTIMEZONE`, else the IANA time
 
 A range's occurrences are listed by `occurrences_between`, one row each with its instants, in the order `start`, then `seq`, then `collection`, on §8.1's overlap rule, an occurrence of zero length falling in the range it starts. A client drawing calendar time over a range, an agenda, reads them there and the summary rows of their items from the store (STORAGE Annex A), a body only to open one; a range outside the horizon, or reaching past an item's cut, is incomplete there as it is in a query's coverage (§8.2).
 
-An item is re-expanded when its body changes, when the horizon rolls, and when the time zone database or the indexer's zone changes.
+An item is re-expanded when its body changes, when the horizon rolls, when the time zone database or the indexer's zone changes, and when the revision of the extraction does (§2).
+
+A re-expansion that cannot read an item's body (§4) MUST keep the occurrences and the cut the index holds for it, never replace them by none, and record its placement in `missing`, so every pass expands the item again until its body is read: the horizon, the version and the zone a pass records then stand for every item but those `missing` names.
 
 The roll re-expands the recurring items whose `until` is absent or not before the old horizon's end, every live journal, whose summary does not say whether it recurs (STORAGE Annex A.5), and expands the single items whose start the new window covers and the old one did not (`items_to_reexpand`, bound to both horizons before `set_horizon` records the new one). A query outside the horizon MUST say so in its coverage (§8).
 
@@ -277,6 +285,7 @@ A `date:` or `when:` value is a point or a range of points (`date-value`, §8.3)
 - A relative amount (`3d`, `2w`, `1y`: days, weeks of seven days, calendar years) names the instant that long before `now`.
 - A single point is its span, a single relative amount the span from its instant to `now`.
 - A range `a..b` runs from the start of `a`'s span to the end of `b`'s, either side open.
+- A bound no instant of a four-digit year states is open: a span whose end lies past 9999-12-31T23:59:59Z is open on that side, and so is one whose start lies before 0000-01-01T00:00:00Z, which a relative amount reaches.
 
 Every span is half-open.
 
@@ -286,18 +295,41 @@ Every span is half-open.
 
 A range leaves the horizon when it starts before the horizon's start or ends after its end, an open side always, and only in a query whose kinds and collections can hold a calendar item. The horizon bounds occurrences alone, so a query reaching mail, contacts or files alone, by `kind:` or by its collections, never leaves it.
 
+A client stating another zone than the index's `floating_zone` reads its days in one zone over floating times and dates the index placed in another. The two are compared as names, as §7 compares an indexer's zone with the recorded one, a client stating none stating `UTC`. Where they differ, the answer to a query holding a `date:` or `when:` term, whose collections (§8.2) hold a calendar one, says so in its coverage.
+
 ### 8.2 Semantics
 
 - **A hit is `(account, seq)`**, one per item per account, carrying its placements (STORAGE §9.2): `hit(account, seq)` answers them, every live placement of the public id in the account's collections, `account` `NULL` for those of no account, in collection order, each with its link id, flags, body, sort key and level as a listing reads them, its collection's kind, the `kind:` value it answers to (§8) and its title. A tombstone and a retained row are no placement of a hit. An implementation MAY flatten to one row per placement on request.
 - **Tags** are per placement in the store and per hit in the query: `tag:x` matches when any placement carries `x`, `not tag:x` when none does.
 - **Order** is `sort_key` descending by default, the undated last (contacts and files) in their own `sort_key` ascending; `name` the item's title (a message's subject, a card's `fn`, a calendar component's summary, a file's name) folded as Annex A.2 folds `fn`, ascending, a title-less item first; `relevance` the shape's own, best first, bm25 RECOMMENDED and the canonical shape's (FTS5 `bm25`); a shape without one MAY refuse `relevance` and say so. Ties go to `seq`, then the account.
 - **Deleted items are excluded.** The trash is the store's (STORAGE §11), not the index's.
+- **The query's collections** are those its terms leave: every collection of the store, less those an `account:`, `collection:`, `folder:` or `kind:` term rules out by its account, its id or its kind, `event`, `task` and `journal` each naming the calendar kind. Only a term standing as a conjunct of the whole query rules any out, joined to the rest by `and`, written or not; one negated, inside a group or beside an `or` rules none out.
 - **Coverage is part of the answer**:
-  - per kind, how many live items of the query's collections have no body, among the kinds whose body search reads, mail, contacts and calendars, never files (§6): `coverage`, bound to those collections;
+  - per kind, among the query's collections and the kinds whose body search reads, mail, contacts and calendars, never files (§6), four counts, each a key of its own (`coverage`, bound to those collections):
+    - `bodiless`, the live items holding no body, read from the store;
+    - `missing`, the placements whose body could not be read (§4), read from the index;
+    - `unparseable`, the placements whose body the extraction recorded so (§6), read from the index;
+    - `encrypted`, likewise;
   - whether a date range left the horizon (§8.1);
   - for a query bounded by date, how many calendar items of its collections had their occurrences cut before the range's end (§7): `cut_before`, its end `NULL` for a range open there;
+  - whether the zone the query stated differs from the one the index read floating times in, where a date term can reach a calendar item (§8.1);
   - how far the index lags the store;
-  - per hit, whether it matched on its body or its summary.
+  - per hit, whether it matched on its body or its summary;
+  - whether the answer is complete.
+- A body filed in several of the query's collections counts once per placement, and a placement recorded `missing` whose body the index holds as `unparseable` or `encrypted` counts under both keys.
+- **A term reads a body** when the index answers it from what the extraction recorded of one, wherever it stands in the query, negated or not. Each reads the bodies of these kinds alone:
+  - a text term (§8.5): mail, contacts and calendars;
+  - `date:` and `when:`: calendars, by their occurrences (§7);
+  - `has:attachment`: calendars, a message's mark being the store's;
+  - `has:phone`, `has:address`, `has:birthday`, `has:photo` and `category:`: contacts, a task's categories being the store's;
+  - `is:encrypted`: mail.
+- **An answer is complete** when nothing its coverage reports could have changed it, that is when all of these hold:
+  - the lag is zero and the temporal axis is `full`;
+  - no date range left the horizon, and no calendar item was cut before the range's end;
+  - no kind counts a `bodiless` item;
+  - no kind counts a `missing` or an `unparseable` placement while a term of the query reads a body of that kind;
+  - no `encrypted` placement is counted while the query holds a text term matched in the `body` or the `attachment` field (§8.5): free text, `body:`, `attachment:` or `mimetype:`.
+- An encrypted body's headers are indexed (§6), so a mailbox holding encrypted mail answers complete to a query of structured terms, and to one whose text terms read the header fields alone. A zone that differs is reported apart and leaves an answer complete.
 - **The lag, `behind`**, is store-wide: the stamps the store drew above `index_meta.store_change` (`behind`). It is zero exactly when the index has folded every change, else an upper bound on the rows a refresh has yet to fold, since a row changed twice draws two stamps. A purge draws none, and a hit the store no longer holds is never answered (§1). A one-shot answer says it.
 - **Coverage has a temporal axis**: whether the store holds every member of the queried collections over the query's date range, open on a side the query does not bound, read from their sources' coverage (STORAGE §10, `list_coverage`). It is `full`, or `bounded` with:
   - `since`, the instant below which a queried collection is not known complete (a `covered_since` above the range's start, `null` when no floor is the cause);
@@ -343,9 +375,9 @@ point        = year / month / day / %s"today" / %s"yesterday" / relative
 year         = 4DIGIT
 month        = 4DIGIT "-" 2DIGIT            ; 01 to 12
 day          = 4DIGIT "-" 2DIGIT "-" 2DIGIT ; a date of the Gregorian calendar
-relative     = 1*DIGIT ( %s"d" / %s"w" / %s"y" )
+relative     = 1*6DIGIT ( %s"d" / %s"w" / %s"y" )
 stamp-value  = stamp / stamp ".." [ stamp ] / ".." stamp
-stamp        = 1*DIGIT
+stamp        = 1*18DIGIT
 ```
 
 - **Tokens** are `(`, `)`, a phrase, a field term, a text, an operator and a `-` beginning a primary, read longest first: a text, a field term and a value run to the next `sep`, parenthesis or double quote. A `sep` is no token and is otherwise insignificant, so two words are two terms only across one, while a parenthesis or a phrase needs none beside it.
@@ -355,7 +387,7 @@ stamp        = 1*DIGIT
 - **Fields.** A word holding a colon outside quotes is a field term, never free text. Its field is the text before the first colon and MUST be a name of §8's table, as written; anything else is refused (`unknown-field`). To search a text holding a colon, a URL or a time, quote it. The value is the rest of the word, colons included, or the phrase right after the colon.
 - **Phrases** run to the next `"`, with no escape. Nothing inside one is an operator, a field or a wildcard: its text is tokenised as §5 says and matched as a phrase (§8.5). A text or a phrase yielding no token matches no item.
 - **Wildcard.** A `*` MUST be the last character of a text or of a text field's value, after two characters or more. Anywhere else outside a phrase it is refused (`invalid-wildcard`). The text fields are `subject:`, `title:`, `summary:`, `body:`, the role fields, `with:`, `person:`, `attachment:`, `mimetype:` and `location:`; a value holding `@` is an address, not text.
-- **Values.** `kind:`, `is:`, `has:`, `status:` and `priority:` take `kind-value`, `is-value`, `has-value`, `status-value` and `priority-value`; `date:` and `when:` take `date-value`, `changed:` `stamp-value`; every other field takes its value as written. A phrase value is read the same, its quotes aside.
+- **Values.** `kind:`, `is:`, `has:`, `status:` and `priority:` take `kind-value`, `is-value`, `has-value`, `status-value` and `priority-value`; `date:` and `when:` take `date-value`, `changed:` `stamp-value`; every other field takes its value as written. A phrase value is read the same, its quotes aside. A relative amount holds at most six digits and a stamp at most eighteen, every such stamp fitting a signed 64-bit integer; a longer one is no value of its rule, refused as any other (`invalid-date`, `invalid-value`).
 - **Limits.** A query is bounded, so every client refuses the same hostile one before reading it whole:
 
 | Limit | Bound | Span refused (§8.4) |
@@ -404,7 +436,7 @@ A text, a phrase and the value of a text field holding no `@` (§8.3) are each a
 
 The canonical shape compiles a text term to one FTS5 expression, bound as `:match` to `match_objects` and `match_summaries` and to their page and probe forms (§8.2):
 
-- one FTS5 string: `"`, the folded text with every `"` doubled, then `"`, which FTS5 hands whole to the tokenizer as a phrase;
+- one FTS5 string: `"`, the folded text with every `"` doubled and every U+0000 written as a space, then `"`, which FTS5 hands whole to the tokenizer as a phrase. U+0000, which the grammar admits in a term, separates tokens as every other character the tokenizer keeps in none, and FTS5 reads no expression past one;
 - then ` *` when the term ends with the wildcard, and nothing else;
 - before it, for a field term, the column filter `{`, its field's column, `} : `, among `object_text`'s columns for a body and `summary_text`'s for a summary; free text takes none. A field term whose field `summary_text` lacks (`body:`, `attachment:`, `mimetype:`, `location:`) is not run against summaries.
 
@@ -412,7 +444,7 @@ Nothing else of the query reaches the expression. For example `body:^report` com
 
 ## 9. Threads
 
-Mail only. A message's `parent` is its first `In-Reply-To` id, else the last `References` id (RFC 5322 §3.6.4), from the headers at `Full` and from its first `mail_in_reply_to` id (`position` 0) for a bodiless item.
+Mail only. A message's `parent` is its first `In-Reply-To` id, else the last `References` id (RFC 5322 §3.6.4), from the headers at `Full` and from its first `mail_in_reply_to` id (`position` 0) for a bodiless item. Each of the two fields is read as §6 reads a header field: one stated twice is read from its first occurrence, as STORAGE Annex A.1 reads the `In-Reply-To` the summary lists, so a later occurrence names no parent.
 
 A **member** is a message a live mail placement holds. Every id a member bears or names as its parent has a `message` row, present in the store or not, and no other id has one. Two replies to a parent nobody holds are thus one thread, and a parent arriving later joins what already waited for it. A cycle is broken by ignoring the edge that would close it.
 
@@ -430,25 +462,25 @@ Tagging from a query stages one `set-flags` action per placement of each hit thr
 
 ## 11. Test vectors
 
-vectors/search/ holds the fixture store and the queries every conforming implementation MUST answer alike, each file stating the version of its format, `v` 3 for queries.json and `v` 1 for the other two, and conforming to its JSON Schema under vectors/schema/:
+vectors/search/ holds the fixture store and the queries every conforming implementation MUST answer alike, each file stating the version of its format, `v` 4 for queries.json, `v` 2 for store.json and `v` 1 for chunks.json, and conforming to its JSON Schema under vectors/schema/:
 
-- `store.json`: collections (`id`, `account`, `kind`), items (`collection`, `seq`, `link_id`, `flags`, and a `fixture` or a `summary` for a bodiless item) and the references the store records (`from_kind`, `from_link_id`, `to_kind`, `to_link_id`, `role`, `origin`), given rather than derived.
-- `queries.json`: the `now` relative dates resolve against, in UTC, the horizon and the coverage, and the cases, then the `occurrences` windows, each a `start`, an `end` and the `rows` `occurrences_between` answers for it, `(collection, seq, start, end)` in its order.
+- `store.json`: collections (`id`, `account`, `kind`), items (`collection`, `seq`, `link_id`, `flags`, and a `fixture` or a `summary` for a bodiless item, an item stating `unreadable` being one whose row and summary the store holds and whose body the indexer cannot read, §4) and the references the store records (`from_kind`, `from_link_id`, `to_kind`, `to_link_id`, `role`, `origin`), given rather than derived.
+- `queries.json`: the `now` relative dates resolve against, in UTC, the horizon, the coverage over every collection of the store, per kind its four counts (§8.2), and the cases, then the `occurrences` windows, each a `start`, an `end` and the `rows` `occurrences_between` answers for it, `(collection, seq, start, end)` in its order.
 - `chunks.json`: field texts and the chunk boundaries §6 cuts them into.
 
-A case has a `query`, an optional `sort` (`date`, `name`, `relevance`), an optional `zone` and `now`, and one answer:
+A case has a `query`, an optional `sort` (`date`, `name`, `relevance`), an optional `zone`, `index_zone` and `now`, and one answer:
 
 - the expected `hits` as `(account, seq)` pairs, a list when the case says `ordered` and a set otherwise;
 - or the `threads` of a threaded listing (§9), each its id, `count`, `first`, `last` and hits;
 - or the `error` of a refusal, its `code`, `start` and `end` compared and the rest not.
 
-A case stating a `zone`, an IANA name, is asked stating it (§8.1), on an index whose indexer stated it as its floating zone (§7); a case stating a `now` resolves its dates against that instant in place of the file's, the index still drawn around the file's. A case whose date range leaves the horizon says `horizon_left`. A case stating `cut` compares the count `cut_before` answers over its collections and its range (§8.2). A case stating `temporal`, `"full"` or its `since`, `until` and `filling`, compares the temporal coverage, which the collections' `sources` rows in store.json (`source`, `covered_since`, `covered_until`, `covered_at`) give. A case not stating it compares nothing there.
+A case stating a `zone`, an IANA name, is asked stating it (§8.1), on an index whose indexer stated it as its floating zone (§7), or stated the case's `index_zone` where it names one, `UTC` being the index built stating none; a case whose answer says the two zones differ says `zone_differs` (§8.2). A case stating a `now` resolves its dates against that instant in place of the file's, the index still drawn around the file's. A case whose date range leaves the horizon says `horizon_left`. A case stating `cut` compares the count `cut_before` answers over its collections and its range (§8.2). A case stating `temporal`, `"full"` or its `since`, `until` and `filling`, compares the temporal coverage, which the collections' `sources` rows in store.json (`source`, `covered_since`, `covered_until`, `covered_at`) give. A case stating `coverage` compares what `coverage` answers over its query's collections, per kind its four counts, a kind counting nothing left out, and one stating `complete` whether its answer is complete (§8.2). A case not stating one of these compares nothing there.
 
-An implementation builds the store, indexes it at `now` stating no zone, so `UTC` (§7), and compares; for the cases stating a zone, it indexes it again stating that zone, which re-expands every calendar item, and compares those.
+An implementation builds the store, takes out of its blob directory the body of each item stating `unreadable`, indexes it at `now` stating no zone, so `UTC` (§7), and compares; for the cases stating a zone, it indexes it again stating that zone, which re-expands every calendar item, and compares those.
 
-The cases bind every shape (§2), but a case sorted by `relevance` binds its order only where the shape ranks by bm25: another compares its hits as a set, and one refusing `relevance` skips it. The fold and the tokenisation are pinned by cases whose hits depend on diacritics (a Latin accent, a Greek tonos), a domain token or a digits-only telephone number, §8.5's compilation by text terms holding FTS5's syntax, §8.3's limits by a query at and one past each, and §7's bounds by a series stepping by the hour and one by the second.
+The cases bind every shape (§2), but a case sorted by `relevance` binds its order only where the shape ranks by bm25: another compares its hits as a set, and one refusing `relevance` skips it. The fold and the tokenisation are pinned by cases whose hits depend on diacritics (a Latin accent, a Greek tonos), a domain token or a digits-only telephone number, §8.5's compilation by text terms holding FTS5's syntax and U+0000, §8.3's limits by a query at and one past each, its bounds on a relative amount and a stamp likewise, §8.1's open sides by a range ending in the year 9999, §6's reading of a field stated twice by a message stating four, §8.2's counts and completeness by a collection holding an encrypted body and one holding a body the indexer cannot read, and §7's bounds by a series stepping by the hour and one by the second.
 
-checks/vectors.py validates that every fixture and placement resolves, re-derives every refusal, the limits of §8.3 read from its table, and every chunk boundary from §8.3, §8.4 and §6, and checks that every other query is one the grammar accepts, and that every occurrence row names a calendar item and overlaps its window in order. It also re-derives the hits of every case whose query is one text term on the `title` field, compiling it as §8.5 says over an FTS5 table of the fixtures' titles, and refuses a case holding an FTS5 metacharacter that the term's text spliced raw would answer alike; and it expands the series a simple rule states (a UTC start, a fixed step, limiting `BYxxx` parts), so the windows and the `cut` counts reaching them follow §7's bounds; and it re-derives the hits of every case stating a zone, one `collection:` and one `date:` term over single events, each read as an indexer stating that zone places it. Only an implementation runs a case against the store.
+checks/vectors.py validates that every fixture and placement resolves, re-derives every refusal, the limits of §8.3 read from its table, and every chunk boundary from §8.3, §8.4 and §6, and checks that every other query is one the grammar accepts, and that every occurrence row names a calendar item and overlaps its window in order. It also re-derives the hits of every case whose query is one text term on the `title` field, compiling it as §8.5 says over an FTS5 table of the fixtures' titles, and refuses a case holding an FTS5 metacharacter that the term's text spliced raw would answer alike; and it expands the series a simple rule states (a UTC start, a fixed step, limiting `BYxxx` parts), so the windows and the `cut` counts reaching them follow §7's bounds; and it re-derives the hits of every case stating a zone, one `date:` term beside one `collection:` term over single events, each read as an indexer stating the index's zone places it, or beside `kind:mail` over the messages' dates. For a query of no group and no `or` it re-derives the coverage a case states, from the store's bodiless items, its unreadable ones and its encrypted messages, whether the answer is complete, and whether its zones differ. Only an implementation runs a case against the store.
 
 ## 12. Conformance
 
