@@ -989,10 +989,16 @@ mail INBOX future 3 40 "'2035-01-01T00:00:00Z'"
 run owner/open_round ":collection='INBOX'" ":source='imap'" ":since='2026-09-01T00:00:00Z'" ":until=NULL" ":band=0"
 expect "narrowed: a listing no filter narrowed finds every unlisted member of its scope absent" \
     "$(run owner/list_unstamped_bindings ":collection='INBOX'" ":source='imap'" ":narrowed=0" ":enumerated=0" | tr '\n' ' ')" "20|nodate 30|recent 40|future "
-expect "narrowed: a narrowed one, only a member dated before the round opened, never the undated nor the future-dated" \
-    "$(run owner/list_unstamped_bindings ":collection='INBOX'" ":source='imap'" ":narrowed=1" ":enumerated=0" | tr '\n' ' ')" "30|recent "
-expect "narrowed: an unfiltered enumeration of handles finds absent the undated or future-dated member it lacks, alone" \
+expect "narrowed: a narrowed one handing no enumeration finds none absent, a filter's silence proving nothing" \
+    "$(run owner/list_unstamped_bindings ":collection='INBOX'" ":source='imap'" ":narrowed=1" ":enumerated=0" | tr '\n' ' ')" ""
+expect "narrowed: an unfiltered enumeration of handles finds absent what it lacks, whatever its date" \
     "$(run owner/list_unstamped_bindings ":collection='INBOX'" ":source='imap'" ":narrowed=1" ":enumerated=1" ":handles='[\"20\"]'" | tr '\n' ' ')" "30|recent 40|future "
+expect "narrowed: a member the enumeration holds is never absent, dated before the round opened included" \
+    "$(run owner/list_unstamped_bindings ":collection='INBOX'" ":source='imap'" ":narrowed=1" ":enumerated=1" ":handles='[\"30\"]'" | tr '\n' ' ')" "20|nodate 40|future "
+mail INBOX resent 4 50 "'2026-01-01T00:00:00Z'"
+run owner/open_round ":collection='INBOX'" ":source='imap'" ":since=NULL" ":until='2026-09-01T00:00:00Z'" ":band=1"
+expect "narrowed: a band whose upper bound read the arrival keeps an old-dated member its enumeration holds" \
+    "$(run owner/list_unstamped_bindings ":collection='INBOX'" ":source='imap'" ":narrowed=1" ":enumerated=1" ":handles='[\"30\",\"50\"]'" | tr '\n' ' ')|$(run owner/list_unstamped_bindings ":collection='INBOX'" ":source='imap'" ":narrowed=1" ":enumerated=1" ":handles='[\"30\"]'" | tr '\n' ' ')" "|50|resent "
 
 # --- Evicting below a date is manual and pushes nothing (§11.3) -------------
 

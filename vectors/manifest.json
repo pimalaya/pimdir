@@ -140,7 +140,7 @@
     "vectors/sync/104-a-second-policy-loser-is-minted-again.json": "884250f3d24b643c558356d5666ab77d6575ab67724397b44538f245b7222835",
     "vectors/sync/105-an-overruling-edit-keeps-both-diverging-bodies.json": "195fbf4fffb2077ff3a8b783735818f7eaf1ec2c0bf177401c1fc19bc78cd517",
     "vectors/sync/106-an-empty-listing-parks-below-twenty.json": "f24056111a1c020b10d3fd9b64c1a743fab7b10801be07527ae92cb843014be7",
-    "vectors/sync/107-a-narrowed-round-keeps-what-its-filter-could-not-list.json": "4295e49a5cb26f65f706213e2d769bb380466090ee7a1bb9c1224891b5e121eb",
+    "vectors/sync/107-a-narrowed-round-keeps-what-its-filter-could-not-list.json": "92d93378368340c0ab4a5c08d66c9747d5f58f85719ec31856a6e5a45fcf456e",
     "vectors/sync/108-a-file-revived-at-meta-sets-its-retained-body-aside.json": "d340ba216a6579c6cbc2f033525108517caf234527b49af3aeacb475ffd885ee",
     "vectors/sync/109-a-retained-message-under-its-id-meets-another-message.json": "85ff3370fd268ea6df95599e93c89c6ee2b75a00a0a079fb98da0e056ddb70ff",
     "vectors/sync/11-remote-content-pulled.json": "cc0776ca3c699921a06be210106b242472e24e31983f3dc269f3111fb4c1a7bd",
@@ -199,6 +199,8 @@
     "vectors/sync/158-a-body-entering-under-another-messages-key-records-no-stand-in.json": "0968d151451d26a808adef1a2ac1bb76593a9ce43046d561ae2dd38c4a75c27c",
     "vectors/sync/159-a-capped-rekey-leaving-a-member-out-parks.json": "473dc81e88fa343edcce859766c0807ddc06d26ef4eb5f0639c8c7ca1ff21038",
     "vectors/sync/16-vanished-local-edit-restages-a-create.json": "34230b06ee9c312762fed82daf16f3c119410971d5a204d52da264db1b239a3e",
+    "vectors/sync/160-a-band-narrowed-by-arrival-keeps-an-old-dated-member-its-enumeration-holds.json": "7365ecbf5cf01cc910ad99d748dbd74d368d82438298aa2a4cdfecd117f29641",
+    "vectors/sync/161-a-narrowed-round-keeps-a-date-ahead-of-its-arrival-its-enumeration-holds.json": "5239fe7c6dd9519da302518d2b1266ad6b61edbdb37ef32e6046f8589c2418e0",
     "vectors/sync/17-add-accepted-supersedes-the-provisional-handle.json": "0c51d18fd6521a98e567196a6b249db54b355765d38b4a6b1e2edb37a051a9f7",
     "vectors/sync/18-add-rejected-stays-pending.json": "4047b7ce3a22d7c34917709e05970668bdf990837e14f59be726d16d0eb8143d",
     "vectors/sync/19-delta-vanished-retains.json": "aa9ddb3919ad7cb7c777d3d589931387bb4fc3c27f8e6b74c3ec01851c385677",
@@ -229,7 +231,7 @@
     "vectors/sync/44-the-attachment-mark-without-the-body.json": "904d32955362ce8a6d3b3e35501964719ed69cedc5d972ba1b9c2ece99974b3e",
     "vectors/sync/45-the-walk-replaces-the-mark.json": "00a025df0376019336b30b6d4b2f666e76bea52f6a928e3bb520caeb88a67b22",
     "vectors/sync/46-a-band-round-keeps-an-undated-member.json": "0f61caf8ce5c1a54e8fb06b04bc1b32f118be9065843cf10be8fa9858d5bfc5a",
-    "vectors/sync/47-a-whole-scope-round-drops-an-undated-member.json": "42dee28c8eed176a7d57e33fcb4da32a3082c79c2129540ba2a4b8e898f0739c",
+    "vectors/sync/47-a-whole-scope-round-drops-an-undated-member.json": "d101a0e99724e59e4d36876f71f44b19fb12dfe0f3a42b810a682e8f209a1953",
     "vectors/sync/48-a-move-beside-a-held-copy-relocates.json": "3815b1d01c14851bb3920dca53f7c7f6b61fd7bc1e5b8970fe9d6b6d80601852",
     "vectors/sync/49-a-create-beside-a-held-copy-copies-from-its-origin.json": "82a841a255fe1e26133a82544a20f5ef245e36c7753cf5f55576d42c272f731f",
     "vectors/sync/50-a-page-lands-a-create-under-a-minted-key.json": "9a0e6f046908664e4d3b3d00e2fae2e74dc7661f6c415146a77514dadd9b84b7",
@@ -307,5 +309,5 @@
       "/cases": 73
     }
   },
-  "sync": 159
+  "sync": 161
 }

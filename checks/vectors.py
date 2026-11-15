@@ -1697,10 +1697,13 @@ for case in summaries["cases"]:
 
 # The sync cases (SYNC.md section 11): shape and references only.
 sync_cases = sorted((root / "sync").glob("*.json"))
-# The cases a rule needs to be held at all: a Move over each conflict, and
-# an Abandon beside another source binding the item.
+# The cases a rule needs to be held at all: a Move over each conflict, an
+# Abandon beside another source binding the item, a capped rekey, and a
+# dated member a narrowed round keeps with and without an enumeration.
 rule_cases = {"a move over the item's conflict": 0, "a move over its binding's conflict": 0, "an abandon beside another source": 0,
-              "a capped rekey leaving a member out": 0}
+              "a capped rekey leaving a member out": 0,
+              "a narrowed round keeping a dated member its enumeration holds": 0,
+              "a narrowed round handing no enumeration keeping a dated member": 0}
 
 for path in sync_cases:
     case = json.loads(path.read_text())
@@ -2016,16 +2019,13 @@ for path in sync_cases:
         return (scope.get("since") is None or scope["since"] <= date_) and (scope.get("until") is None or date_ < scope["until"])
 
     # A narrowed listing (SYNC.md sections 4 and 5) proves the absence only of
-    # a member dated before the round opened: the stored instant of an open
-    # round, else the run's own. An undated or a later-dated member is absent
-    # only when the last page's unfiltered enumeration lacks its handle.
+    # a member its last page's unfiltered enumeration lacks, whatever its date,
+    # and of none when that page hands no enumeration.
     listing = remote.get("pages") or ([remote["snapshot"]] if remote.get("snapshot") else [])
     last_page = listing[-1] if listing else {}
     narrowed = last_page.get("narrowed") is True
     enumerated = last_page.get("enumerated")
     capped = last_page.get("capped") is True
-    opened = (row.get("round_started_at") if row.get("round_open") else None) or \
-        datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     for at, page in enumerate(listing):
         require(f"{label}: page {at} of a narrowed listing says so, as every page of the round does", page.get("narrowed", False) == narrowed)
         require(f"{label}: page {at} of a capped listing says so, as every page of the round does", page.get("capped", False) == capped)
@@ -2039,9 +2039,6 @@ for path in sync_cases:
             return False
         if not narrowed:
             return True
-        date_ = dates.get(binding["link_id"])
-        if date_ is not None and date_ < opened:
-            return True
         return enumerated is not None and binding["handle"] not in enumerated
 
     held = {(item["collection"], item["link_id"]) for item in store.get("items", []) if item.get("deleted") == 1}
@@ -2053,6 +2050,15 @@ for path in sync_cases:
              and in_scope(binding["link_id"])]
     absent = [binding for binding in bound if binding["handle"] not in listed | vanished
               and (binding["collection"], binding["link_id"]) not in held and provable(binding)]
+    # A dated member a narrowed round left unlisted and keeps: its enumeration
+    # holds it, or the round hands none.
+    if narrowed and closes:
+        kept_dated = [binding for binding in bound if binding["handle"] not in listed | vanished
+                      and dates.get(binding["link_id"]) is not None
+                      and (enumerated is None or binding["handle"] in enumerated)]
+        rule = ("a narrowed round keeping a dated member its enumeration holds" if enumerated is not None
+                else "a narrowed round handing no enumeration keeping a dated member")
+        rule_cases[rule] += bool(kept_dated)
     # A round that named no member, none of its pages, heads nor earlier runs
     # stamping a binding with its id, parks while any based binding is absent,
     # whatever their number (SYNC.md section 5, an empty listing).

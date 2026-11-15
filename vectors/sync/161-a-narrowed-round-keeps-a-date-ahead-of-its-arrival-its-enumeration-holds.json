@@ -1,0 +1,68 @@
+{
+  "v": 6,
+  "label": "a round narrowed by received date keeps a member dated ahead of its arrival that its enumeration holds",
+  "note": "Graph lists the scope [2026-09-01, open) by receivedDateTime from two days below since, and says so (narrowed), handing on its last page the folder's message ids with no $filter (enumerated). 13 is dated 1 October by a sender's clock six weeks fast and arrived on 20 August, before the filter's window: dated inside the scope and before the round opened, missed by the filter, held by the enumeration. It is kept, neither dropped nor pushed, as is 11, undated and held by it too. 14, dated 5 October and missing from the enumeration, is dropped (SYNC.md §4, §5)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {},
+    "items": [
+      { "collection": "INBOX", "link_id": "recent-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z" },
+      { "collection": "INBOX", "link_id": "nodate-1@example.org", "seq": 2, "flags": ["\\Draft"], "object": null, "level": 1, "deleted": 0, "sort_key": "" },
+      { "collection": "INBOX", "link_id": "skew-1@example.org", "seq": 3, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-01T09:00:00Z" },
+      { "collection": "INBOX", "link_id": "footer-1@example.org", "seq": 4, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-05T07:00:00Z" }
+    ],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "graph", "handle": "12", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": null },
+      { "collection": "INBOX", "link_id": "nodate-1@example.org", "source": "graph", "handle": "11", "base_flags": ["\\Draft"], "base_object": null, "base_revision": null, "base_present": 1, "round": null },
+      { "collection": "INBOX", "link_id": "skew-1@example.org", "source": "graph", "handle": "13", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": null },
+      { "collection": "INBOX", "link_id": "footer-1@example.org", "source": "graph", "handle": "14", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": null }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "recent-1@example.org", "row": { "message_id": "recent-1@example.org", "in_reply_to": [], "subject": "Today's agenda", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-10-06T08:30:00Z", "size": 241, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "nodate-1@example.org", "row": { "message_id": "nodate-1@example.org", "in_reply_to": [], "subject": "When?", "sender": "alice@example.org", "sender_name": "Alice Example", "date": null, "size": 165, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "skew-1@example.org", "row": { "message_id": "skew-1@example.org", "in_reply_to": [], "subject": "Clock ahead", "sender": "mallory@example.org", "sender_name": "Mallory Example", "date": "2026-10-01T09:00:00Z", "size": 203, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "footer-1@example.org", "row": { "message_id": "footer-1@example.org", "in_reply_to": [], "subject": "[list] Release notes", "sender": "robot@lists.example.org", "sender_name": "List Robot", "date": "2026-10-05T07:00:00Z", "size": 425, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [
+      { "collection": "INBOX", "source": "graph", "checkpoint": "c0", "round": 0, "round_open": false, "round_since": null, "round_until": null, "round_cursor": null, "round_checkpoint": null, "round_band": false, "covered": false, "covered_since": null, "covered_until": null }
+    ]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "INBOX",
+    "source": "graph",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual",
+      "scope": { "since": "2026-09-01T00:00:00Z", "until": null }
+    }
+  },
+  "remote": {
+    "pages": [
+      { "items": [{ "handle": "12", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-recent.eml" } }], "vanished": [], "last": true, "cursor": null, "checkpoint": "c1", "narrowed": true, "enumerated": ["11", "12", "13"] }
+    ],
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [{ "kind": "Vanished", "handle": "14" }],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "retained": false, "retained_by": null },
+        { "collection": "INBOX", "link_id": "nodate-1@example.org", "seq": 2, "flags": ["\\Draft"], "object": null, "level": 1, "deleted": 0, "retained": false, "retained_by": null },
+        { "collection": "INBOX", "link_id": "skew-1@example.org", "seq": 3, "flags": [], "object": null, "level": 1, "deleted": 0, "retained": false, "retained_by": null },
+        { "collection": "INBOX", "link_id": "footer-1@example.org", "seq": 4, "flags": [], "object": null, "level": 1, "deleted": 1, "retained": true, "retained_by": "graph" }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "nodate-1@example.org", "source": "graph", "handle": "11", "base_flags": ["\\Draft"], "base_object": null, "base_revision": null, "base_present": 1, "round": null },
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "graph", "handle": "12", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 },
+        { "collection": "INBOX", "link_id": "skew-1@example.org", "source": "graph", "handle": "13", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": null }
+      ],
+      "sources": [
+        { "collection": "INBOX", "source": "graph", "checkpoint": "c1", "round": 1, "round_open": false, "round_since": null, "round_until": null, "round_cursor": null, "round_checkpoint": null, "round_band": false, "covered": true, "covered_since": "2026-09-01T00:00:00Z", "covered_until": null }
+      ]
+    }
+  }
+}

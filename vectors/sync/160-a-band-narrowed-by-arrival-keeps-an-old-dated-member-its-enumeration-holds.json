@@ -1,0 +1,69 @@
+{
+  "v": 6,
+  "label": "a band round narrowed by arrival keeps an old-dated member its enumeration holds",
+  "note": "the coverage is [2026-10-16, open) and the scope widens to [2025-11-01, open); Gmail's checkpoint is bound to no scope, so the round lists the band [2025-11-01, 2026-10-16) alone. The connector narrows it by before: and after:, which read the arrival, and says so (narrowed), handing on its last page the label's ids listed with no query (enumerated). 9 is a CI message whose Date is 1 January 2026 but which arrived in November: inside the band by its Date, after the band by its arrival, so the filter misses it, and the enumeration holds it. It is kept, neither dropped nor pushed, though dated long before the round opened. 8, in the band and missing from the enumeration too, is dropped; 10 is named; 13, dated after the band, is neither listed nor dropped (SYNC.md §4, §5)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {},
+    "items": [
+      { "collection": "INBOX", "link_id": "ci-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-01-01T00:00:00Z" },
+      { "collection": "INBOX", "link_id": "gone-1@example.org", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-03-02T09:00:00Z" },
+      { "collection": "INBOX", "link_id": "fresh-1@example.org", "seq": 3, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-11-02T08:00:00Z" }
+    ],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "ci-1@example.org", "source": "gmail", "handle": "9", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 },
+      { "collection": "INBOX", "link_id": "gone-1@example.org", "source": "gmail", "handle": "8", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 },
+      { "collection": "INBOX", "link_id": "fresh-1@example.org", "source": "gmail", "handle": "13", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "ci-1@example.org", "row": { "message_id": "ci-1@example.org", "in_reply_to": [], "subject": "[ci] submission test", "sender": "ci@example.org", "sender_name": "CI Robot", "date": "2026-01-01T00:00:00Z", "size": 212, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "gone-1@example.org", "row": { "message_id": "gone-1@example.org", "in_reply_to": [], "subject": "Spring cleaning", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-03-02T09:00:00Z", "size": 187, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "fresh-1@example.org", "row": { "message_id": "fresh-1@example.org", "in_reply_to": [], "subject": "This week", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-11-02T08:00:00Z", "size": 176, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [
+      { "collection": "INBOX", "source": "gmail", "checkpoint": "c1", "round": 1, "round_open": false, "round_since": null, "round_until": null, "round_cursor": null, "round_checkpoint": null, "round_band": false, "covered": true, "covered_since": "2026-10-16T00:00:00Z", "covered_until": null }
+    ]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "INBOX",
+    "source": "gmail",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual",
+      "scope": { "since": "2025-11-01T00:00:00Z", "until": null }
+    }
+  },
+  "remote": {
+    "scope_bound": false,
+    "pages": [
+      { "items": [{ "handle": "10", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-basic.eml" } }], "vanished": [], "last": true, "cursor": null, "checkpoint": null, "narrowed": true, "enumerated": ["10", "13", "9"] }
+    ],
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [
+      { "kind": "Added", "handle": "10" },
+      { "kind": "Vanished", "handle": "8" }
+    ],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "ci-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-01-01T00:00:00Z", "retained": false, "retained_by": null },
+        { "collection": "INBOX", "link_id": "gone-1@example.org", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 1, "sort_key": "2026-03-02T09:00:00Z", "retained": true, "retained_by": "gmail" },
+        { "collection": "INBOX", "link_id": "fresh-1@example.org", "seq": 3, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-11-02T08:00:00Z", "retained": false, "retained_by": null },
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 4, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z", "retained": false, "retained_by": null }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "gmail", "handle": "10", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 2 },
+        { "collection": "INBOX", "link_id": "ci-1@example.org", "source": "gmail", "handle": "9", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 },
+        { "collection": "INBOX", "link_id": "fresh-1@example.org", "source": "gmail", "handle": "13", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "round": 1 }
+      ],
+      "sources": [
+        { "collection": "INBOX", "source": "gmail", "checkpoint": "c1", "round": 2, "round_open": false, "round_since": null, "round_until": null, "round_cursor": null, "round_checkpoint": null, "round_band": false, "covered": true, "covered_since": "2025-11-01T00:00:00Z", "covered_until": null }
+      ]
+    }
+  }
+}
