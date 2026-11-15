@@ -1,7 +1,7 @@
 ---
 cairn: change
 id: a-narrowed-round-proves-only-what-its-enumeration-lacks
-status: draft
+status: landed
 created: 2026-11-15
 ---
 
@@ -31,6 +31,8 @@ Neverest avoids the first class for now by not narrowing band rounds by their ce
 4. **The prose around it**: §5 "A narrowed listing says so" names the two classes a filter misses and asks a connector to hand `enumerated` on a band round's last page too, saying that a narrowed round handing none deletes nothing by absence; the margin paragraph no longer calls a received-date narrowing "a superset of the scope"; §5's list of what is no absence names a member the enumeration holds. STORAGE §10's round bullet, GUIDE §9 to §11 and OVERVIEW §5 follow.
 
 ## Decision (the owner's)
+
+Decided by the owner on 2026-11-15: reading (a), landed in draft-12 (cairn/log/2026-11-15-draft-12-a-narrowed-round-and-a-pending-create.md).
 
 Item 2 changes what a tagged draft infers, beyond restoring what the prose meant: under sync-draft-11 a narrowed round without an enumeration dropped a dated member it did not list (vector 107 dropped 14). Three readings:
 

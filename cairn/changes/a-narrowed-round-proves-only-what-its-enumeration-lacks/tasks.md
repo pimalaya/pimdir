@@ -13,7 +13,7 @@ change: a-narrowed-round-proves-only-what-its-enumeration-lacks
 - [x] vectors/sync/107 rewritten (14 kept), 160 (a band narrowed by arrival keeps an old-dated member its enumeration holds) and 161 (a `Date` ahead of its arrival kept) new, 47's note; vectors/README.md; vectors/manifest.json restated
 - [x] `nix flake check path:$PWD` green on the working tree, its nine checks (2026-11-15)
 - [x] io-pimdir follows in its working tree: re-vendored spec, the engine applying the page's proof itself; 107, 160 and 161 fail there on the old statement and pass on the new (2026-11-15)
-- [ ] The owner's decision: reading (a), (b) or (c) of the proposal; (a) is what the tree holds
+- [x] The owner's decision: reading (a), taken on 2026-11-15
 - [ ] The bump and tags (the owner's): sync-draft-12 and storage-draft-12, checks/tags.sh failing until then
 - [x] Commit both repositories, then checks/io-pimdir.rev to the io-pimdir commit following it (pimdir 6ccc3d4, io-pimdir 3b6eaa9, pinned at 11145ef)
 - [ ] Consumers: neverest hands `enumerated` on a band round's last page (its IMAP and Gmail connectors leave it out there), or accepts that its narrowed band rounds infer no delete; the Android app and neverest take the io-pimdir release carrying the statement

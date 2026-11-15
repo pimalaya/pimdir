@@ -1,6 +1,6 @@
 # Pimdir storage specification
 
-Status: storage-draft-11, the base, requiring no other part, released together with the sync part
+Status: storage-draft-12, the base, requiring no other part, released together with the sync part
 
 The storage part of the pimdir standard, and its base: a **SQLite database** (the index and the mutable state) plus a **content-addressed blob directory** (the bodies). The two layers over it are [SYNC.md](./SYNC.md), how sources reconcile through the store, and [SEARCH.md](./SEARCH.md), the index and query language over it.
 
@@ -127,7 +127,7 @@ No other file belongs in the directory, an implementation's own included: what a
 
 ### 4.2 Schema version
 
-`store_meta.format_version` names the version of this part whose schema the store holds: this draft's name, `storage-draft-11`, while this part is a draft, and `storage-vN` once released, N its major alone. `init_store_meta` writes it when the store is created, and `set_store_version` with every migration (§6).
+`store_meta.format_version` names the version of this part whose schema the store holds: this draft's name, `storage-draft-12`, while this part is a draft, and `storage-vN` once released, N its major alone. `init_store_meta` writes it when the store is created, and `set_store_version` with every migration (§6).
 
 **A draft's store opens under that draft alone.** While this part is a draft, a program of any profile MUST refuse a store whose `format_version` is not its own draft's name, naming both, and a store lacking the column, which a draft before storage-draft-08 wrote. A released program refuses every draft store the same way, so no draft store is carried into a release. A refused store is never reconciled, migrated, rebuilt nor written, and never deleted.
 
@@ -708,7 +708,7 @@ A store is opened as one source. `load` reads the shared items and that source's
 
 **Chunks.** A writer MAY cut one operation's writes into several batches, its **chunks**, each committed apart (an engine pushing in bounded chunks, SYNC.md §5). A body stored in one chunk may first be referenced by a later one, so the collector MUST NOT run between two chunks of one operation (§5), nor an eviction or a release below a date (§11.3, §11.4).
 
-**The version of the sync state.** The rows an engine writes for its sources, **sync state** (`bindings` and their base flags, `sources`, and the cross-source columns `deleted`, `conflicted` and `conflict_object` of `items`), follow the sync part their engine implements. `store_meta.sync_version` names it: `NULL` until an engine writes, then its version (`sync-draft-11`, or `sync-vN` once released), written by `set_sync_version` in the transaction of the engine's first write and whenever another version takes the store over. What an engine does with a version it did not write is the sync part's (SYNC.md §10); a program writing no sync state never reads it.
+**The version of the sync state.** The rows an engine writes for its sources, **sync state** (`bindings` and their base flags, `sources`, and the cross-source columns `deleted`, `conflicted` and `conflict_object` of `items`), follow the sync part their engine implements. `store_meta.sync_version` names it: `NULL` until an engine writes, then its version (`sync-draft-12`, or `sync-vN` once released), written by `set_sync_version` in the transaction of the engine's first write and whenever another version takes the store over. What an engine does with a version it did not write is the sync part's (SYNC.md §10); a program writing no sync state never reads it.
 
 The queue adds **`enqueue`**, **`drain`**, **`cancel`** and **`prune_receipts`** (§15); retention adds **`purge`** and **`purge_retained_before`** (§11.2), the owner's manual **`evict_before`** (§11.3) and **`release_before`** (§11.4), each reporting rows and never bytes. **`collect_garbage()`** is §5's collector, reporting the rows, files and bytes it freed.
 
@@ -1037,7 +1037,7 @@ Every file under vectors/ states the version of its format as a top-level `v` an
 
 ## 17. Conformance
 
-An implementation conforms to this part by one profile, each holding the one before. It MUST meet every section its row names, keep §4.4's terms for the statements of its directories, each run under its canonical name or its effect reached through statements of its own, and pass the vectors its row names, and MUST state its conformance as each part's version and the profile it meets there, the layers' by SYNC.md §12 and SEARCH.md §12: `storage-draft-11 owner, sync-draft-11 engine, search-draft-11 indexer (canonical)`. One running text of its own for any statement of its directories, or reaching an effect through statements of its own (§4.4), adds `(own statement text)` after its profile: `storage-draft-11 owner (own statement text), sync-draft-11 engine`.
+An implementation conforms to this part by one profile, each holding the one before. It MUST meet every section its row names, keep §4.4's terms for the statements of its directories, each run under its canonical name or its effect reached through statements of its own, and pass the vectors its row names, and MUST state its conformance as each part's version and the profile it meets there, the layers' by SYNC.md §12 and SEARCH.md §12: `storage-draft-12 owner, sync-draft-12 engine, search-draft-12 indexer (canonical)`. One running text of its own for any statement of its directories, or reaching an effect through statements of its own (§4.4), adds `(own statement text)` after its profile: `storage-draft-12 owner (own statement text), sync-draft-12 engine`.
 
 | Profile | What it does | Owes | Statements | Vectors |
 | --- | --- | --- | --- | --- |
