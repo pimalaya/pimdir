@@ -779,7 +779,7 @@ A **reader** (§8) opens read-only and projects the store as a local backend. Re
 - **`list_replied(ids)`**: which of the message ids the `ids` slot names, bare as Annex A.1 and A.4 store them, a live mail's `mail_in_reply_to` names, mail under the `sent` or `drafts` role aside, each once: which of the mails tasks came from were answered. A seek per id on `mail_in_reply_to_by_id`.
 - **`list_items_changed_since`**, **`list_collections_changed_since`**, **`load_change_cursor`**: the feed (§4.5).
 - **`list_retained_page(collection, after, limit)`** (cursor on `seq`), **`count_retained`**, **`retained_bytes()`**: the trash view (§11), every deleted row, `retained_at` `NULL` on one a source still binds.
-- **`load_capabilities(collection)`**, **`load_item_capabilities(collection, seq)`**: what every source syncing a collection, or binding one item, can do there, a row naming the collection winning over the source-wide one, an undeclared source listed once with no capability.
+- **`load_capabilities(collection)`**, **`load_item_capabilities(collection, seq)`**: what every source syncing a collection, or binding one item, can do there, a row naming the collection winning over the source-wide one, an undeclared source listed once with no capability; an item's source also answers `held`, 0 when it binds the item as a pending create alone (§15.6).
 - **`list_capability_sources(account, collection, capability)`**: the candidates to perform an intent anchored on a collection, or anywhere in the account when none is named. **`load_performer(account, capability)`**: the user's choice among them (§15.6).
 - **`load_action(id)`**, **`load_receipt(id)`**: one queue row by the id its enqueue answered, pending or parked, and what it became once applied (§15.4).
 - **`list_sources()`**, **`list_conflicted_bindings(account)`** (the bindings awaiting a decision with the three bodies the divergence is between, answered by index, never by paging), **`list_conflicted_items(account)`** (the items two sources disagree on, the same way), **`list_item_bindings(collection, link_id)`** (where one item lives per source), **`link_for_handle`** and **`handle_for_link`**, **`load_kind`**.
@@ -993,9 +993,9 @@ An owner that knows it writes it, `none` included, as it writes every other. A r
 
 **The sources concerned.** The capabilities an action needs (Annex B's table) are read against:
 
-- for an action on one item, every source binding it (`load_item_capabilities`);
+- for an action on one item, every source binding it (`load_item_capabilities`), but, for a `remove`, a `move` or a `copy`, one binding it as a pending create alone (`held` 0), whose server holds nothing of it yet: the remove withdraws that create and pushes nothing (SYNC.md §7), and a move or a copy reaches that source in the target alone (below), so neither needs its delete right nor its move;
 - for an `add`, every source syncing the collection (`load_capabilities`);
-- for a `move` or `copy`, also every source syncing the target that binds nothing of the item;
+- for a `move` or `copy`, also every source syncing the target that binds nothing of the item, or binds it as a pending create alone, each asked there what an `add` of the item carrying its flags needs, the change it pushes being an `Add` (SYNC.md §2);
 - for an `add` carrying `supersedes`, also what a `remove` of the superseded item needs, from the sources binding it.
 
 **The producer's gate.** Before it enqueues, a producer SHOULD resolve the capabilities the action needs against the sources concerned. A producer that gates does not enqueue an action a declared source does not support: it reports the capability, the source and its detail, and lets the user change the action. A `partial` support passes and its detail SHOULD be shown. A producer that does not gate enqueues the action as it is, and the owner's backstop parks it when a source concerned does not support it: the gate decides nothing the backstop does not decide again.

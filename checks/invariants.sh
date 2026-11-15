@@ -620,9 +620,15 @@ if fails owner/set_capability ":account=NULL" ":source='graph'" ":collection=NUL
     expect "capability: support is one of three words" "accepted" "refused"
 fi
 item INBOX a 1
-sql "INSERT INTO bindings(item, collection, source, handle) VALUES((SELECT id FROM items WHERE collection = 'INBOX' AND link_id = 'a'), 'INBOX', 'graph', '1');"
-expect "capability: an item answers for the sources binding it alone" \
-    "$(run read/load_item_capabilities ":collection='INBOX'" ":seq=1" | tr '\n' ' ')" "graph|mail.message.remove|full| "
+sql "INSERT INTO bindings(item, collection, source, handle, base_present) VALUES((SELECT id FROM items WHERE collection = 'INBOX' AND link_id = 'a'), 'INBOX', 'graph', '1', 1);"
+expect "capability: an item answers for the sources binding it alone, each holding it" \
+    "$(run read/load_item_capabilities ":collection='INBOX'" ":seq=1" | tr '\n' ' ')" "graph|mail.message.remove|full||1 "
+item INBOX b 2
+item INBOX c 3
+sql "INSERT INTO bindings(item, collection, source, handle) VALUES((SELECT id FROM items WHERE collection = 'INBOX' AND link_id = 'b'), 'INBOX', 'graph', char(1) || 'b');
+     INSERT INTO bindings(item, collection, source, handle, base_present) VALUES((SELECT id FROM items WHERE collection = 'INBOX' AND link_id = 'c'), 'INBOX', 'graph', char(1) || 'c', 1);"
+expect "capability: a pending create is bound unheld, its server holding nothing yet, a delivered one held" \
+    "$(run read/load_item_capabilities ":collection='INBOX'" ":seq=2" | cut -d'|' -f1,5)|$(run read/load_item_capabilities ":collection='INBOX'" ":seq=3" | cut -d'|' -f1,5)" "graph|0|graph|1"
 run owner/set_capability ":account=NULL" ":source='graph'" ":collection=NULL" ":capability='mail.submit'" ":support='full'" ":detail=NULL"
 run owner/set_capability ":account=NULL" ":source='imap'" ":collection=NULL" ":capability='mail.submit'" ":support='partial'" ":detail='no Bcc'"
 expect "capability: two candidates make an intent ambiguous" \

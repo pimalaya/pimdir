@@ -243,7 +243,7 @@
 {"name": "storage/read/load_generation", "parameters": ["collection"], "slots": [], "columns": ["generation"]},
 {"name": "storage/read/load_in_reply_to", "parameters": ["collection"], "slots": [], "columns": ["link_id", "position", "message_id"]},
 {"name": "storage/read/load_in_reply_to_by_link", "parameters": ["collection"], "slots": ["links"], "columns": ["link_id", "position", "message_id"]},
-{"name": "storage/read/load_item_capabilities", "parameters": ["collection", "seq"], "slots": [], "columns": ["source", "capability", "support", "detail"]},
+{"name": "storage/read/load_item_capabilities", "parameters": ["collection", "seq"], "slots": [], "columns": ["source", "capability", "support", "detail", "held"]},
 {"name": "storage/read/load_kind", "parameters": ["collection"], "slots": [], "columns": ["kind"]},
 {"name": "storage/read/load_pending_actions", "parameters": ["collection"], "slots": [], "columns": ["id", "created_at", "producer", "action", "payload", "target_collection", "object_hash", "attempts"]},
 {"name": "storage/read/load_performer", "parameters": ["account", "capability"], "slots": [], "columns": ["source"]},
