@@ -12,5 +12,5 @@ change: a-pending-create-is-withdrawn-whatever-the-rights
 - [x] `nix flake check path:$PWD` green on the working tree (2026-11-15)
 - [x] io-pimdir follows in its working tree: the gate reads `held` for a remove, a move and a copy; its test fails on the old gate with "mail.message.remove … pull-only" (2026-11-15)
 - [ ] The bump and tags (the owner's), with a-narrowed-round-proves-only-what-its-enumeration-lacks
-- [ ] Commit both repositories, then checks/io-pimdir.rev to the io-pimdir commit following it
+- [x] Commit both repositories, then checks/io-pimdir.rev to the io-pimdir commit following it (pimdir 9ce9c3d, io-pimdir d7273d3, pinned at 11145ef)
 - [ ] calendula reads `PimdirReader::item_capabilities`, which still lists every source binding the item: a UI greying out a delete from it greys out a withdrawal; to look at when it next moves
