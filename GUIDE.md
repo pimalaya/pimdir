@@ -69,7 +69,7 @@ An **owner** is the one process that mutates the store:
 
 An **engine** (SYNC §12) is an owner that reproduces every case under vectors/sync/, over **connectors** answering SYNC §4's requests. An **indexer** (SEARCH §12) adds, for the canonical shape, SQLite 3.43 with FTS5, migrations/search/ and the indexer's statements of SEARCH §3, or a shape of its own, named in its `index_meta`, answering the same hit sets, and every **query client** on it, refusing an index it does not implement, answers the cases under vectors/search/ alike.
 
-Use the statements verbatim. Each prepares against the canonical schema (checks/schema.sh proves it on every push), and checks/invariants.sh runs them through the scenarios the parts argue from. Text of your own, which an SQLite older than 3.37 needs, is yours to keep equivalent. A canonical name you run binds what runs under it: its parameters, its result columns in order and its effect. One name may run several statements of yours, in order in one transaction, nothing else writing between them. You need not keep every name: a section's effect may be reached through statements of your own under names of your own (a write folding a batch in fewer statements), which STORAGE §7's invariants, the rule that a statement names its columns, the rules of that section and the model vectors still bind, and where a part says an operation runs a statement, it describes the reference form. Say so either way when you state your conformance, `storage-draft-12 owner (own statement text)` (STORAGE §4.4, §17). queries/signatures.json lists what each name binds, its parameters, its list slots and its columns in order, so a port checks its own text against one file and a diff of that file says when a signature moved.
+Use the statements verbatim. Each prepares against the canonical schema (checks/schema.sh proves it on every push), and checks/invariants.sh runs them through the scenarios the parts argue from. Text of your own, which an SQLite older than 3.37 needs, is yours to keep equivalent. A canonical name you run binds what runs under it: its parameters, its result columns in order and its effect. One name may run several statements of yours, in order in one transaction, nothing else writing between them. You need not keep every name: a section's effect may be reached through statements of your own under names of your own (a write folding a batch in fewer statements), which STORAGE §7's invariants, the rule that a statement names its columns, the rules of that section and the model vectors still bind, and where a part says an operation runs a statement, it describes the reference form. Say so either way when you state your conformance, `storage-draft-13 owner (own statement text)` (STORAGE §4.4, §17). queries/signatures.json lists what each name binds, its parameters, its list slots and its columns in order, so a port checks its own text against one file and a diff of that file says when a signature moved.
 
 ## 2. Opening a store
 
@@ -229,7 +229,7 @@ An engine reads a collection as one source, at the scope the verb needs (STORAGE
 - `All`: `load_items` and `load_bindings`;
 - `Links`: `load_items_by_link` and `load_bindings_by_link`, which seek the link ids however large the collection;
 - `Handles`: `link_for_handle`, then the same two;
-- always `load_conflict`, `load_checkpoint` with the coverage it serves, and `load_round`; a round's last page adds `list_unstamped_bindings`.
+- always `load_conflict`, `load_checkpoint` with the coverage it serves, and `load_round`; a round's last page adds `list_unstamped_bindings`. A sync reads `list_refusals` too, keeping its source's refused keys by handle (§10 step 7).
 
 A round's last page and a rekey ask for `All`, counting every based binding in scope to tell an absence and a park. A delta asks for `Handles` of what it lists or drops and of what `list_owing_bindings` names (a binding whose placement may owe a push: conflicted, deleted, unbased, its flags or its body off its base), and for `Links` of its hints and of what `list_lacking_items` names (the live items holding a body the source binds not); its load grows with what moved, not with the collection. A page before the last asks for `Handles` of its members and `Links` of their hints, an upgrade for the handles it raises, a mutation for the placement it edits or every holder of the link id an `Add` must not collide with. Returning more than asked is allowed, less is not.
 
@@ -305,10 +305,13 @@ The level is `Full` only when a body is present, whatever the row claims. An unk
      - a remote edit over a local tombstone revives and pulls, or follows the policy when the tombstone holds a local edit too. A revision the tombstone's base does not name is such an edit, so a move whose push record was lost is abandoned with the member live in the source;
    - creates: a `Created` derives `Add`, by server-side copy from its origin when it has one, naming the binding it may be moved from when it has one, which a connector able to move delivers by a `MOVE` then a write of the body, and one unable to by an upload;
    - never a `Remove` but from a tombstone the store holds, the consumer's or one an absence or a removal on another source left: no scope, interruption, restart, widening, collection, nor an absence other than a closed round's in its scope derives one; and never a collection deleted on a server because another source stopped listing it, unless the configuration enables it and the collection is empty or fully reconciled in the run;
-   - rights: with `push` off nothing is pushed and everything is pulled; a forbidden kind keeps its change pending; a delete the rights forbid is held beside another source of the collection, one holding a binding or a checkpoint there, and reverted when this source is alone; a rejected push is pending like any other.
+   - rights: with `push` off nothing is pushed and everything is pulled; a forbidden kind keeps its change pending; a delete the rights forbid is held beside another source of the collection, one holding a binding or a checkpoint there, and reverted when this source is alone; a rejected or refused push is pending like any other;
+   - refused: a change whose key is the `refused_key` `list_refusals` answers for its binding is held, not pushed, and reported `Refused` with that `refusal`; one derived under another key (the body edited, the flags changed) is pushed as any other.
 7. **Push in bounded chunks.** Every change carries the idempotency key SYNC §4 derives, which a connector forgets once the checkpoint after the chunk lands. After each chunk, write (§5) the outcomes:
    - `Accepted` rebases the placement as the flag axis left it; an `Add` assigned a handle supersedes the provisional handle in the same batch; an `Add` accepted with none is delivered (`DeliverPlacement`: `deliver_binding` gives its binding a base naming nothing, while it holds none), for the next listing to land, never pushed again; an accepted `Remove` relocating into a destination delivers that create the same way;
-   - `Rejected` or unreported leaves it pending.
+   - `Rejected` or unreported leaves it pending;
+   - `Refused` leaves it pending too, and the write records the refusal on the binding pushed for (`RefusePlacement`: `refuse_binding` with the change's key and the reason, scrubbed of credentials), stamped by SQLite; a binding nothing holds under the handle, a create the store offers this source, records nothing;
+   - `Accepted` on a binding a refusal stands on also clears it (`ClearRefusal`: `clear_refusal`). A drop of the handle takes the refusal with the binding.
 
    Do not collect between chunks.
 8. **Write the checkpoint** in the batch after the last chunk, never earlier: a delta's with `upsert_checkpoint`, a round's with `close_round`, which lands the checkpoint the round carries, the last page's or else the latest a head or a page recorded (the old one kept when it carries none) and the coverage: the round's scope, or the span of a band round and the coverage it adjoins.
@@ -318,7 +321,8 @@ The level is `Full` only when a body is present, whatever the row claims. An unk
    - `FlagsChanged`, `ContentChanged` and `Vanished` for what was pulled;
    - `Conflicted` for a divergence the run or its write recorded;
    - `Overruled` for a body a policy did not adopt, with the retained item's link id;
-   - `Created` for an accepted add or a create a listing landed.
+   - `Created` for an accepted add or a create a listing landed;
+   - `Refused` for a change refused this run or held for a refusal standing, with the reason, every run while it stands, a held one with the write after its merge.
 
    An accepted flag, body or delete push reports nothing. Report a parked round with its counts.
 
@@ -478,7 +482,7 @@ Every other source then projects the change as its own `Dirty` or `Tombstone` an
 
 Several actions may share step 2's transaction, each body stored and pinned before its `enqueue_action`: all are appended or none, their ids in the order enqueued, the lock held across them all. Hold the lock too across a `pin_object` of a body you did not write, from the moment you verify its file until the transaction commits.
 
-**Follow** a row, as a producer or a reader: `load_action(id)` while it is pending or parked (`error` set), an `error` beginning with `unconfirmed: ` marking an intent whose outcome nobody knows, to show as neither sent nor failed; once gone, `load_receipt(id)`, whose `seq` is the item an `add` created. A performed intent has one too, its `seq` the item it left when its performer knew it. In neither, it was withdrawn or applied too long ago for its receipt.
+**Follow** a row, as a producer or a reader: `load_action(id)` while it is pending or parked (`error` set), an `error` beginning with `unconfirmed: ` marking an intent whose outcome nobody knows, to show as neither sent nor failed; once gone, `load_receipt(id)`, whose `seq` is the item the row acted on, the one an `add` created or a `move` or a `copy` left in its target, and `load_receipt_refusals(id)`, the refusals standing on that item: per collection and source the reason a remote refused the change and when, to show the row applied and refused by that source. Offer the item's own actions as the way out, never a retry of the row: a `remove` withdraws a refused create, an `update` or a `move` (into Drafts, say) stages a change the source is asked again. `list_refusals(collection)` lists every refusal of a collection beside its queue. A performed intent has one too, its `seq` the item it left when its performer knew it. In neither, it was withdrawn or applied too long ago for its receipt.
 
 **Declare**, as the owner, for every source it runs, before draining an action for it and again when its configuration changes:
 
@@ -507,9 +511,9 @@ A source no longer run gets `delete_capabilities` alone.
      - a `move` meeting a conflict, the item's or that of the binding it runs through, parks naming it: it carries no resolution, so the conflict is settled first and the item moved after.
      - an `update` meeting a conflict, the item's or that of the binding it runs through (run it through a conflicted binding whose `conflict_object` its `resolves` names, when there is one), parks naming the conflict unless its `resolves` names each conflict's `conflict_object`; one stating `resolves` and meeting none parks too; a resolution applied settles as the `Edit` of §11 does.
    - Settle refcounts, the row's pin included.
-   - `record_receipt` with the row's id and collection, and for an `add` the `seq` that `seq_by_link` answers for the key it staged; `COMMIT`.
+   - `record_receipt` with the row's id and collection and the `seq` of the item it acted on: the one a `set-flags`, an `update` or a `remove` names, and for an `add`, a `move` or a `copy` the `seq` that `seq_by_link` answers for the key it staged, in the target for the last two; `COMMIT`.
 
-   Now and then, `prune_receipts` with an instant at least seven days back.
+   Now and then, `prune_receipts` with an instant at least seven days back; it keeps a receipt while a refusal stands on its item.
 3. On any failure, `ROLLBACK` first, which restores the claimed row, then in a new transaction:
    - an environment failure (busy, a body unreadable): `bump_attempts`, the row left pending until the owner's bound on attempts, then parked; an `add` or `update` is never applied without its body;
    - a store failure (a refused rebind, a constraint) or any other permanent one: `park_action` with the error, which counts the attempt itself and records a text beginning with `unconfirmed: ` behind `failed: `, a failure never reading as an unknown outcome.

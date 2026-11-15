@@ -1,5 +1,5 @@
 {
-  "v": 6,
+  "v": 7,
   "label": "an abandon is refused on a create that was never delivered",
   "note": "the create of Trash is still pending, its binding holding no base: no source took it, so there is no arrival to give up waiting for, and a person withdrawing it stages a Remove. An Abandon gives up a delivered create and nothing else: it is refused, staging nothing, the rows as they were (SYNC.md §7)",
   "store": {

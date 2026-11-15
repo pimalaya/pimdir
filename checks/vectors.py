@@ -1698,12 +1698,14 @@ for case in summaries["cases"]:
 # The sync cases (SYNC.md section 11): shape and references only.
 sync_cases = sorted((root / "sync").glob("*.json"))
 # The cases a rule needs to be held at all: a Move over each conflict, an
-# Abandon beside another source binding the item, a capped rekey, and a
-# dated member a narrowed round keeps with and without an enumeration.
+# Abandon beside another source binding the item, a capped rekey, a dated
+# member a narrowed round keeps with and without an enumeration, and a refusal
+# recorded, held and cleared.
 rule_cases = {"a move over the item's conflict": 0, "a move over its binding's conflict": 0, "an abandon beside another source": 0,
               "a capped rekey leaving a member out": 0,
               "a narrowed round keeping a dated member its enumeration holds": 0,
-              "a narrowed round handing no enumeration keeping a dated member": 0}
+              "a narrowed round handing no enumeration keeping a dated member": 0,
+              "a refusal recorded": 0, "a refused change held": 0, "a refusal cleared by an accepted push": 0}
 
 for path in sync_cases:
     case = json.loads(path.read_text())
@@ -2394,7 +2396,7 @@ for path in sync_cases:
             resolved["object"] = names.get(push["object"], push["object"])
         check(f"{label}: push {push.get('handle')} key", push.get("key"), change_key(case["run"]["collection"], resolved))
     for outcome in case["expect"].get("outcomes", []):
-        require(f"{label}: outcome {outcome.get('handle')} is Accepted or Rejected", outcome.get("outcome") in {"Accepted", "Rejected"})
+        require(f"{label}: outcome {outcome.get('handle')} is Accepted, Rejected or Refused", outcome.get("outcome") in {"Accepted", "Rejected", "Refused"})
         # A connector states whether an accepted Remove carrying `to` relocated
         # the member or deleted it (SYNC.md section 4): only a relocation
         # delivers the destination's create.
@@ -2408,6 +2410,46 @@ for path in sync_cases:
         if outcome.get("outcome") == "Accepted" and "assigned" in outcome and outcome["assigned"] is None and outcome.get("handle", "").startswith("\u0001"):
             require(f"{label}: an add accepted without a handle keeps its provisional binding",
                     any(binding["handle"] == outcome["handle"] for binding in case["expect"].get("store", {}).get("bindings", [])))
+    # A refused change is held (SYNC.md section 5): no push carries the key a
+    # refusal standing on its binding names; a Refused outcome stands on the
+    # binding it was pushed for, under that push's key, and is reported with
+    # its reason, as a held one is; an accepted push of a refused binding
+    # clears its refusal. A create the source binds not records none.
+    before_own, after_own = ({b["handle"]: b for b in rows.get("bindings", [])
+                              if b["collection"] == run["collection"] and b["source"] == run["source"]}
+                             for rows in (store, after))
+    standing = {handle: b for handle, b in before_own.items() if b.get("refusal") is not None}
+    for binding in list(before_own.values()) + list(after_own.values()):
+        require(f"{label}: binding {binding['handle']} states a refusal with its key, or neither",
+                (binding.get("refusal") is None) == (binding.get("refused_key") is None))
+    keys = {push["handle"]: push.get("key") for push in case["expect"].get("pushes", [])}
+    reported = {(event["handle"], event.get("reason")) for event in case["expect"].get("events", []) if event["kind"] == "Refused"}
+    for handle, key in keys.items():
+        require(f"{label}: push {handle} carries no key a refusal standing on its binding names",
+                handle not in standing or standing[handle].get("refused_key") != key)
+    refused_now = set()
+    for outcome in case["expect"].get("outcomes", []):
+        handle = outcome["handle"]
+        if outcome["outcome"] == "Refused":
+            refused_now.add(handle)
+            require(f"{label}: refusal of {handle} is reported with its reason", (handle, outcome.get("reason")) in reported)
+            if handle in before_own and "bindings" in after:
+                binding = after_own.get(handle, {})
+                require(f"{label}: refusal of {handle} stands on its binding under the key pushed",
+                        binding.get("refusal") == outcome.get("reason") and binding.get("refused_key") == keys.get(handle))
+            rule_cases["a refusal recorded"] += 1
+        if outcome["outcome"] == "Accepted" and handle in standing and handle in after_own:
+            require(f"{label}: an accepted push of {handle} clears its refusal",
+                    "refusal" in after_own[handle] and after_own[handle]["refusal"] is None)
+            rule_cases["a refusal cleared by an accepted push"] += 1
+    for handle, reason in reported:
+        require(f"{label}: a Refused event names a refusal of the run or one standing",
+                handle in refused_now or (handle in standing and standing[handle]["refusal"] == reason))
+        if handle in standing and handle not in keys:
+            rule_cases["a refused change held"] += 1
+            if "bindings" in after:
+                require(f"{label}: a held refusal of {handle} still stands",
+                        after_own.get(handle, {}).get("refused_key") == standing[handle]["refused_key"])
 for rule, count in rule_cases.items():
     require(f"sync: a case holds {rule}", count >= 1)
 

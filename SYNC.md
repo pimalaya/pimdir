@@ -1,6 +1,6 @@
 # Pimdir sync specification
 
-Status: sync-draft-12, requiring storage-draft-12, released together with it
+Status: sync-draft-13, requiring storage-draft-13, released together with it
 
 The sync part of the pimdir standard: how one or more sources reconcile through a store ([STORAGE.md](./STORAGE.md)), so the store is an offline replica of each source and every source sees every other's changes. It fixes what an engine derives from the store's rows and a source's answers, and what it writes back.
 
@@ -69,7 +69,8 @@ Nothing here requires a language or a coroutine form. A collection of a media ty
 - **Coverage**: the scope of the last round that closed, and when it closed: the scope the checkpoint serves (STORAGE §4.3).
 - **Resume cursor**: the connector's opaque position in an open round, landed with each page.
 - **Change**: what the engine asks a source to do, one of `Add`, `Remove`, `SetFlags` and `Update`, each with an idempotency key (§4). A **push** is a change sent, in a batch of them.
-- **Outcome**: `Accepted`, with the handle assigned to an `Add`, the revision a mutable kind reports and, for a `Remove` carrying `to`, whether it relocated the member, or `Rejected`.
+- **Outcome**: `Accepted`, with the handle assigned to an `Add`, the revision a mutable kind reports and, for a `Remove` carrying `to`, whether it relocated the member; `Rejected`, a precondition the base failed; or `Refused`, the remote refusing the change itself for good, with its reason (§4).
+- **Refusal**: a `Refused` outcome recorded on the binding the change was pushed for: its reason, the change's key and when, which holds that change (§5, STORAGE §13).
 
 An edit has three names, one per place it stands in: the **action** a producer queues (STORAGE §15.3), the **mutation** the engine stages for it in the store (§7), and the **change** a source is then asked to make (§4, §5).
 
@@ -200,6 +201,12 @@ A connector listing delta heads MUST read every page's members no earlier than t
   - The engine derives both from the placement's flags after the flag merge (§5), against the set the source holds (the one the run listed, else the base): `add` what the placement carries and that set lacks, `remove` what that set carries and the placement lacks.
   - A placement whose flags are unknown pushes none, and one deriving two empty sets pushes nothing.
 - `Update { handle, object, if_match }`: replace a mutable body, gated on `if_match` where supported; accepted with the revision the member holds, on `Add`'s terms.
+
+**Outcomes.** A connector answers each change `Accepted`, on the terms above, `Rejected` or `Refused { reason }`, or leaves it unreported:
+
+- `Rejected`: a precondition the base failed (a stale `If-Match` answered `412` or `409`, a `STORE` refused under `UNCHANGEDSINCE`), which a later listing moves past.
+- `Refused`: the remote refusing the change itself, as it stands, whatever the base: a status naming the request (an HTTP status from 400 to 499 but 408, 409, 412, 425 and 429, an IMAP `NO` naming the command), or an error naming a rule the change breaks (an append into a Graph folder other than Drafts, a floating time a calendar API refuses, a size or a quota exceeded, a collection the account may not write). `reason` is the text the remote gave, which the engine records once scrubbed (STORAGE §18).
+- A connector that cannot tell a refusal from a stale base MUST answer `Rejected`. A failure of the transport (a timeout, a dropped connection, a `5xx`, a `408`, `425` or `429`) is no outcome: the change is left unreported.
 
 **An add accepted without a handle.** A source that creates a member without saying which (an IMAP `APPEND` on a server without UIDPLUS, RFC 4315) is answered `Accepted` with no assigned handle. The engine then MUST record the create delivered (§2, `DeliverPlacement`, §10), its provisional binding, staged body and flags kept, no `Superseded` drop written and no `Created` reported, and so pushes it no second time. A create no listing can land (§6) is left pending instead, and MUST NOT be pushed again in that run.
 
@@ -355,7 +362,7 @@ A remote edit over a local tombstone MUST revive it and pull; a tombstone also h
 
 A revision the tombstone's base does not name is a remote edit, an enumeration carrying no body to say otherwise. A move whose staged edit was pushed ahead of its remove, and whose push record was lost, is therefore abandoned rather than half-applied: the member stays in the source, live and clean at the pushed revision, and the consumer restages the move.
 
-**Push direction and rights.** A source has a master `push` switch and four rights: `flags`, `content`, `add`, `remove`. With `push` false nothing is pushed and remote changes are still pulled. A change a right forbids stays pending while the others propagate. A rejected push is pending like any other and follows no policy.
+**Push direction and rights.** A source has a master `push` switch and four rights: `flags`, `content`, `add`, `remove`. With `push` false nothing is pushed and remote changes are still pulled. A change a right forbids stays pending while the others propagate. A rejected or a refused push is pending like any other and follows no policy.
 
 **A refused delete**, one the source's rights forbid, is decided per collection from the other sources syncing it, any holding a binding or a checkpoint there (`collection_sources`):
 
@@ -376,7 +383,11 @@ A delivered create waits whatever the listings say: a round landing it on none o
 
 Landed, a delivered create keeps what was staged on it, a tombstone included, and the run pushes what it owes against the handle it landed on, so an action taken on it before its arrival reaches the server.
 
-**Push discipline.** A push MUST be confirmed before local state moves. `Accepted` rebases the placement and, for an add assigned a handle, supersedes the provisional handle in the same batch (one assigned none is delivered, §4). `Rejected` or unreported leaves it pending, and an engine SHOULD report a create rejected on consecutive runs rather than push it for ever.
+**Push discipline.** A push MUST be confirmed before local state moves. `Accepted` rebases the placement and, for an add assigned a handle, supersedes the provisional handle in the same batch (one assigned none is delivered, §4). `Rejected`, `Refused` or unreported leaves it pending.
+
+**A refused change is held.** The write recording a `Refused` outcome MUST record the refusal on the binding the change was pushed for (`RefusePlacement`, §10): the reason and the change's key (§4), replacing a refusal standing there. A placement whose derived change carries the key a refusal standing on its binding names MUST NOT push it: the change is held, pending, neither dropped nor reverted, for as long as that refusal stands. A change derived since under another key (a body edited, a flag set changed, the item moved) is pushed as any other, and its own outcome replaces or clears the refusal.
+
+The write recording an accepted push of a binding a refusal stands on MUST clear it (`ClearRefusal`, §10). A refusal goes with its binding: a create withdrawn (§7) or landed (§6), a member dropped, a handle a rekey renumbered. A create the source binds not, one the store offers it (§3, §9), has no binding to record a refusal on: it is pushed again by the next run.
 
 Pushes go in bounded chunks, each followed by the write recording its outcomes, and the owner MUST NOT collect between two chunks (STORAGE §5). The checkpoint, a delta's or the one a round closes with, MUST land in the write after the last chunk and in no earlier one. A page's cursor and the checkpoint an open round carries are not the source's checkpoint, and land with the page or the head carrying them.
 
@@ -390,7 +401,8 @@ A sync reports per item, in order, what the remote changed locally and what the 
 - `Conflicted` on a divergence, the source's own or one its write records on the item (§9);
 - `Overruled` on a body a policy did not adopt (§9), or a revive set aside (§6), naming the retained item that keeps it;
 - `Abandoned` on a delivered create an `Abandon` gave up (§7), naming its provisional handle;
-- `Created` on an accepted add under its assigned handle, and on a create a listing landed under the handle it lists.
+- `Created` on an accepted add under its assigned handle, and on a create a listing landed under the handle it lists;
+- `Refused` on a change the remote refused this run, and on one the run holds for a refusal standing (above), naming the handle and the reason: every run reports a refusal for as long as it holds its change, so a caller is told without counting runs. A held change's is reported with the write after its merge, which records it as standing.
 
 A run also reports a round it parked (above), as a rekey reports itself parked (§8). A pushed flag, body or delete reports nothing: the consumer made it.
 
@@ -582,7 +594,7 @@ This is how an absence a closed round found (§5) reaches every other source, an
 
 **A per-source conflict is its own fact.** `bindings.conflicted` and `items.conflicted` never set each other. An upsert carrying no divergence clears the binding's and becomes the shared body, so resolving is an ordinary edit. A tombstone projected for a conflicted binding still carries the divergence.
 
-A binding with no base is a pending create, and a minted key is an ordinary key: it reconciles, propagates and conflicts like any other, a target's refusal reported as a rejected push. A `hash:` key is not offered to another source: it asserts no identity.
+A binding with no base is a pending create, and a minted key is an ordinary key: it reconciles, propagates and conflicts like any other, a target's refusal reported as a refused or a rejected push. A `hash:` key is not offered to another source: it asserts no identity.
 
 ## 10. The load and the write
 
@@ -596,19 +608,21 @@ Every verb begins with a load naming a collection and a selection, `All`, `Handl
 - The last page of a round and a rekey ask for the whole collection: what each finds absent, and whether a mass absence parks it (§5, §8), is counted over every based binding of the source in its scope.
 - A page before the last and a head ask for `Handles` of their members and `Links` of the hints they carry, which naming them needs (§6).
 
-Every verb ends in a batch. A sync's carries the round's own operations: `OpenRound` first in its first page's batch, `Stamp` after the page's upserts, `SetRoundCursor` with every page and head (a head's carrying no cursor, so the one a page landed stays), `CloseRound` last in the write after the last chunk, and `SetCoverage` beside a delta's checkpoint. Its drops are `Deleted` for a member gone from the source, `Superseded` for a provisional handle an accepted add or a landed arrival replaced (§4, §6), and `Rekeyed` for a handle a rekey renumbered (§8); a `DeliverPlacement` records a create an add accepted with no handle, or a relocation accepted, delivered (§4), the relocation's naming its destination's collection. An `Abandon` writes a `Deleted` drop of the provisional handle it gives up (§7). A mutation's `Edit` states `Overrule` before its upsert when it carries `overrule`, and an `Edit` or a `Remove` states `Settle` when its `resolves` names the item's conflict (§7); an upgrade settling a conflict under `PreferLocal` states `Overrule` before the upsert adopting the fetched body (§6).
+A sync also reads the refusals standing in the collection (`list_refusals`), its source's holding the changes their keys name (§5): a refused binding owes a push, so every load deriving one loads it.
+
+Every verb ends in a batch. A sync's carries the round's own operations: `OpenRound` first in its first page's batch, `Stamp` after the page's upserts, `SetRoundCursor` with every page and head (a head's carrying no cursor, so the one a page landed stays), `CloseRound` last in the write after the last chunk, and `SetCoverage` beside a delta's checkpoint. Its drops are `Deleted` for a member gone from the source, `Superseded` for a provisional handle an accepted add or a landed arrival replaced (§4, §6), and `Rekeyed` for a handle a rekey renumbered (§8); a `DeliverPlacement` records a create an add accepted with no handle, or a relocation accepted, delivered (§4), the relocation's naming its destination's collection; a `RefusePlacement` records a refusal on the binding a refused change was pushed for, and a `ClearRefusal` clears one in the write recording that binding's next accepted push (§5). An `Abandon` writes a `Deleted` drop of the provisional handle it gives up (§7). A mutation's `Edit` states `Overrule` before its upsert when it carries `overrule`, and an `Edit` or a `Remove` states `Settle` when its `resolves` names the item's conflict (§7); an upgrade settling a conflict under `PreferLocal` states `Overrule` before the upsert adopting the fetched body (§6).
 
 A batch is cut between candidates, never inside one, and a rekey is never cut. The checkpoint is per source and lands last (§5). A `Full` fetch MAY stream its body to its blob path itself and hand a `StoreObject` naming it.
 
 **The write keys another message apart.** A `Links` load answers this source's holders alone, so a page before the last, a head and an upgrade name a member without seeing an item another source binds under the same hint, and cannot apply §6's rule for another message reusing a `Message-ID`. The write applies it whichever step named the member (STORAGE §14), and an engine whose load showed the row mints the member the same way first, so both name it alike.
 
-**The version of the sync state.** An engine records its version, this part's (`sync-draft-12` now), in `store_meta.sync_version` with `set_sync_version` (STORAGE §14), in the transaction of its first write to a store naming none. A store naming none holds no sync state yet.
+**The version of the sync state.** An engine records its version, this part's (`sync-draft-13` now), in `store_meta.sync_version` with `set_sync_version` (STORAGE §14), in the transaction of its first write to a store naming none. A store naming none holds no sync state yet.
 
 While this part is a draft, an engine MUST refuse a store whose `sync_version` names another version than its own draft's, naming both, and run no verb on it: a draft's sync state is read under that draft alone, as a draft's store is (STORAGE §4.2). Once this part is released, an engine MUST refuse sync state a draft wrote, or a major above its own; sync state of a major below its own it reads as that major defines it, and records its own version only in the write converting what the majors between them changed.
 
 ## 11. Test vectors
 
-vectors/sync/ holds cases every conforming engine MUST reproduce, one JSON file each, stating `v` 6 (the version of the format this section describes) and conforming to vectors/schema/sync.schema.json. A case states:
+vectors/sync/ holds cases every conforming engine MUST reproduce, one JSON file each, stating `v` 7 (the version of the format this section describes) and conforming to vectors/schema/sync.schema.json. A case states:
 
 - `store`: the rows before the run, bodies named by label, summaries by their row. An object stated with `blob` false has its row and no blob file: a body that cannot be read. One stated `corrupt` has its row and a blob file whose bytes do not hash to its name (any other bytes, the fixture's altered): a body that fails verification (STORAGE §7).
 - `run`: the verb, collection, source and options (`push`, `rights`, `conflict`, `scope` as `since` and `until`, and `accept_absences`); an `upgrade` run its `tier` and the `handles` it upgrades; a `mutate` run carries its `mutation` (§7) by `kind`: an `Add` its `object` and `flags`, an `Edit` its `seq` and `object` with its `if_match`, `overrule` and `resolves` (a list of object labels) where it states them, a `Remove` its `seq` with its `if_match` and `resolves` where it states them, a `SetFlags` its `seq` and `flags` with its `base` where it states one, a `Copy` or a `Move` its `seq` and the collection it goes `to`, an `Abandon` its `seq`, objects named by label.
@@ -618,25 +632,25 @@ vectors/sync/ holds cases every conforming engine MUST reproduce, one JSON file 
   - `cursor_rejected` when it refuses the stored cursor, `interrupted_after` when it fails after that many pages (a head not counted), `scope_bound` false for a checkpoint bound to no scope;
   - `heads`, the heads it lists (`delta`, `band`), and `head`, its answer to the run's head: its `kind`, the `from` checkpoint or the `since` instant the engine MUST ask it from, then `rejected` when it refuses that position, or the page's `items`, `vanished` and `checkpoint`;
   - the fetch answers by handle and tier, a file's carrying its stated `meta`.
-- `expect`: the pushes in order, the outcomes fed back, the events (an `Overruled` one naming the retained item's `link_id`, a `Disagreed` one the `link_id` of the create its member was minted apart from, an `Abandoned` one the provisional handle given up), `parked` with the `absent` and `bound` counts of a round or a rekey the run parked, `failed` when the run MUST fail, and the rows after, which a failed run leaves as its last write did. An object it states after the run is the row and the file the run leaves under its name, `blob` and `corrupt` read as in `store`: one stating neither holds bytes hashing to its name.
+- `expect`: the pushes in order, the outcomes fed back, the events (an `Overruled` one naming the retained item's `link_id`, a `Disagreed` one the `link_id` of the create its member was minted apart from, an `Abandoned` one the provisional handle given up, a `Refused` one the `reason`), `parked` with the `absent` and `bound` counts of a round or a rekey the run parked, `failed` when the run MUST fail, and the rows after, which a failed run leaves as its last write did. An object it states after the run is the row and the file the run leaves under its name, `blob` and `corrupt` read as in `store`: one stating neither holds bytes hashing to its name.
 
-A provisional handle is written with its leading `U+0001`. A source row states its round as `round`, `round_open` and the round's columns (`round_band` among them and, where a band head reads it, `round_started_at`), and its coverage as `covered` and the coverage's bounds; a binding states its `round`.
+A provisional handle is written with its leading `U+0001`. A source row states its round as `round`, `round_open` and the round's columns (`round_band` among them and, where a band head reads it, `round_started_at`), and its coverage as `covered` and the coverage's bounds; a binding states its `round`, and the refusal standing on it as `refusal` and `refused_key`.
 
 A `store` may state `supersessions`, rows of the table (STORAGE §4.3), for a held tombstone. `expect` may state the `collections` a run declares, with their `name` and `role`, and the `references` it records. Vectors 70 and 158 bind an engine whose owner records attachments (STORAGE §14.3); every other case leaves them out of its store.
 
-A push is compared on its change, handle and `key` (§4) and on what the change carries: `flags` for an `Add`, `add` and `remove` for a `SetFlags`, `to` and `link_id`, `if_match`, `origin` as collection and handle, `supersedes` as collection, handle and `if_match` when the add carries it, and `object` by label. An outcome names its handle, `Accepted` or `Rejected`, and for an add the `assigned` handle and the `revision` reported, and for a remove carrying `to` whether it `relocated`. An add accepted with no handle (§4) states `assigned` as `null`.
+A push is compared on its change, handle and `key` (§4) and on what the change carries: `flags` for an `Add`, `add` and `remove` for a `SetFlags`, `to` and `link_id`, `if_match`, `origin` as collection and handle, `supersedes` as collection, handle and `if_match` when the add carries it, and `object` by label. An outcome names its handle, `Accepted`, `Rejected` or `Refused` with its `reason`, and for an add the `assigned` handle and the `revision` reported, and for a remove carrying `to` whether it `relocated`. An add accepted with no handle (§4) states `assigned` as `null`.
 
-Rows are compared as parsed structures on the columns a case names, a flag set and a summary's lists as arrays (STORAGE §16), excluding `changed` stamps and the instants SQLite stamps (`retained_at`, `covered_at`, `round_started_at`), which a case states as present or absent. Chunked pushes or writes are compared concatenated.
+Rows are compared as parsed structures on the columns a case names, a flag set and a summary's lists as arrays (STORAGE §16), excluding `changed` stamps and the instants SQLite stamps (`retained_at`, `covered_at`, `round_started_at`, `refused_at`), which a case states as present or absent, a refusal's instant by its `refusal`. Chunked pushes or writes are compared concatenated.
 
-Every case pins two rules: no `Remove` is pushed but for a tombstone the store held or the run staged; and no based binding of the run's source is dropped but for a removal its remote stated, an absence from a round the run closed (in that round's scope and not parked), a tombstone, a delivered create an `Abandon` gave up, or a rekey not parked. checks/vectors.py validates each case's structure, references, every push's key, every `Overruled` event's key (§9, STORAGE §9), those two rules, the mass-absence and empty-listing guards of §5 and §8, the park of a capped rekey on any absence (§8), a narrowed round's absences (§5), a held message named apart from a member it does not agree with (§6), and that no body is pushed over, nor left facing, a server edit nobody has read (§5, §6, §9), and that an `Edit` or a `Remove` settling a conflict its `resolves` does not name, or stating an `if_match` the item does not hold, fails with the rows unchanged, as a `Move` meeting any conflict does (§7); that an `Abandon` gives up a delivered create alone, retained and reported or, another source binding the item, tombstoned with that binding as it was, and fails on any other placement (§7); the set a `SetFlags` carrying `base` leaves (§7); every `Disagreed` event, and that none is missing (§5, §6); and, across collections, that a message draws the `seq` of a row it agrees with and of no other, and that an upgrade leaves no placement holding a body its summary disagreed with (§6, STORAGE §9). Only an implementation runs one.
+Every case pins two rules: no `Remove` is pushed but for a tombstone the store held or the run staged; and no based binding of the run's source is dropped but for a removal its remote stated, an absence from a round the run closed (in that round's scope and not parked), a tombstone, a delivered create an `Abandon` gave up, or a rekey not parked. checks/vectors.py validates each case's structure, references, every push's key, every `Overruled` event's key (§9, STORAGE §9), those two rules, the mass-absence and empty-listing guards of §5 and §8, the park of a capped rekey on any absence (§8), a narrowed round's absences (§5), a held message named apart from a member it does not agree with (§6), and that no body is pushed over, nor left facing, a server edit nobody has read (§5, §6, §9), and that an `Edit` or a `Remove` settling a conflict its `resolves` does not name, or stating an `if_match` the item does not hold, fails with the rows unchanged, as a `Move` meeting any conflict does (§7); that an `Abandon` gives up a delivered create alone, retained and reported or, another source binding the item, tombstoned with that binding as it was, and fails on any other placement (§7); the set a `SetFlags` carrying `base` leaves (§7); every `Disagreed` event, and that none is missing (§5, §6); and, across collections, that a message draws the `seq` of a row it agrees with and of no other, and that an upgrade leaves no placement holding a body its summary disagreed with (§6, STORAGE §9); and that no change is pushed under the key a refusal standing on its binding names, that a `Refused` outcome stands recorded on its binding under its key and is reported, a held refusal reported too, and that an accepted push leaves no refusal on the binding it was pushed for (§5). Only an implementation runs one.
 
 ## 12. Conformance
 
-An implementation offering sync conforms by one profile or both, stated as STORAGE §17 says (`sync-draft-12 engine`, `sync-draft-12 connector (IMAP)`), and MUST meet every section its row names and pass the vectors it names.
+An implementation offering sync conforms by one profile or both, stated as STORAGE §17 says (`sync-draft-13 engine`, `sync-draft-13 connector (IMAP)`), and MUST meet every section its row names and pass the vectors it names.
 
 | Profile | What it does | Owes | Vectors |
 | --- | --- | --- | --- |
 | engine | runs the verbs over a store as its owner (STORAGE §17) | §1 to §10, and STORAGE §10 to §12 and §14 | every case under vectors/sync/ |
 | connector | answers an engine's enumerate, fetch and push for one source over one protocol, which its statement names | §4, and what §5 and §8 ask of a listing | none alone: a case's `remote` is what a connector answers, run by an engine |
 
-Both meet STORAGE §18 where it names them: a connector writes no credential into a checkpoint, a resume cursor or an error, and a name a server hands it is untrusted.
+Both meet STORAGE §18 where it names them: a connector writes no credential into a checkpoint, a resume cursor, an error or a refusal's reason, and a name a server hands it is untrusted.

@@ -482,7 +482,19 @@ CREATE TABLE bindings (
     -- §5), NULL until one did: a round's last page drops the in-scope
     -- bindings it did not stamp.
     round             INTEGER CHECK (typeof(round) IN ('integer', 'null')),
+    -- The refusal standing on this binding (SYNC.md §4, §5): the reason the
+    -- remote refused a change for good, scrubbed (§18), the idempotency key of
+    -- that change, which the engine holds while it derives the same one, and
+    -- the instant SQLite stamped it (refuse_binding). Cleared by the next
+    -- accepted push (clear_refusal), gone with the binding.
+    refusal           TEXT CHECK (typeof(refusal) IN ('text', 'null')),
+    refused_key       TEXT CHECK (typeof(refused_key) IN ('text', 'null'))
+                      CHECK (refused_key GLOB '[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]'),
+    refused_at        TEXT CHECK (typeof(refused_at) IN ('text', 'null'))  -- the shape of §13
+                      CHECK (refused_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'),
     PRIMARY KEY (item, source),
+    -- A refusal states its reason, its key and its instant, or none of them.
+    CHECK ((refusal IS NULL) = (refused_key IS NULL) AND (refusal IS NULL) = (refused_at IS NULL)),
     -- A binding that is not conflicted carries neither (§13).
     CHECK (conflicted = 1 OR (conflict_revision IS NULL AND conflict_object IS NULL)),
     CHECK (base_flags_known = 1 OR base_marks = 0),
@@ -749,11 +761,13 @@ CREATE TABLE queue (
 
 -- What became of an applied action (§15.2, §15.4), keyed by the queue row's id:
 -- application deletes the row, so a producer holding the id its enqueue
--- answered reads here that the row was applied and, for an `add`, the seq of
--- the item it created. Written by the owner in the transaction applying the
--- row, kept at least seven days, then pruned (prune_receipts). A cancelled row
--- leaves none. `seq` names no foreign key: a later move or purge retires the
--- item, and the receipt still says what the add created.
+-- answered reads here that the row was applied and the seq of the item it
+-- acted on, the one it created for an `add`, a `move` and a `copy`, and a
+-- refusal standing there (load_receipt_refusals). Written by the owner in the
+-- transaction applying the row, kept at least seven days and while a refusal
+-- stands on its item, then pruned (prune_receipts). A cancelled row leaves
+-- none. `seq` names no foreign key: a later move or purge retires the item,
+-- and the receipt still says what the row acted on.
 CREATE TABLE receipts (
     id         INTEGER PRIMARY KEY,        -- the applied queue row's id
     applied_at TEXT    NOT NULL CHECK (typeof(applied_at) = 'text')  -- stamped by SQLite, the shape of §13
@@ -762,7 +776,7 @@ CREATE TABLE receipts (
     -- that collection is gone, a `collection-delete` applied included, so the
     -- receipt outlives it and the intent never reads as withdrawn.
     collection TEXT    CHECK (typeof(collection) IN ('text', 'null')) REFERENCES collections(id) ON UPDATE CASCADE ON DELETE SET NULL,
-    seq        INTEGER CHECK (typeof(seq) IN ('integer', 'null')) CHECK (seq >= 1)  -- the item an `add` created, else NULL
+    seq        INTEGER CHECK (typeof(seq) IN ('integer', 'null')) CHECK (seq >= 1)  -- the item the row acted on or created, else NULL
 );
 
 -- A reader overlays a collection's pending actions (§15.4).
@@ -812,3 +826,7 @@ CREATE INDEX bindings_conflicted ON bindings(item, source) WHERE conflicted = 1;
 -- and one that does not fails here rather than leaving two rows the lookup
 -- answers from at random.
 CREATE UNIQUE INDEX bindings_by_handle ON bindings(collection, source, handle);
+-- The refusals standing in a collection (list_refusals), which a frontend's
+-- queue view and an engine's load read. Partial, so it holds only what a
+-- remote refused and is empty at rest.
+CREATE INDEX bindings_refused ON bindings(collection, source) WHERE refusal IS NOT NULL;

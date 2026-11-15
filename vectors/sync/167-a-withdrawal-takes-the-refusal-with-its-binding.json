@@ -1,0 +1,26 @@
+{
+  "v": 7,
+  "label": "a remove staged on a refused pending create withdraws it, the refusal going with its binding",
+  "note": "the way out of a refused create is the item's own remove: it withdraws the create, nothing being owed to the source, so the binding goes with the refusal it held and the item is retained (SYNC.md §5, §7, STORAGE §15.4)",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
+    "objects": {
+      "c1": { "body": "fixtures/card-basic.vcf" }
+    },
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0 }],
+    "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "\u0001urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0, "refusal": "the address book takes no contact of this kind", "refused_key": "03010fcf94a7027b" }],
+    "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d1" }]
+  },
+  "run": { "verb": "mutate", "collection": "Contacts", "source": "dav", "mutation": { "kind": "Remove", "seq": 1 } },
+  "remote": { "snapshot": null, "fetch": {} },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 1, "retained": true, "retained_by": "dav" }],
+      "bindings": [],
+      "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d1" }]
+    }
+  }
+}

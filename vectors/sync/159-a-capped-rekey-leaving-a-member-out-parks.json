@@ -1,5 +1,5 @@
 {
-  "v": 6,
+  "v": 7,
   "label": "a rekey whose listing is capped parks on one absent member, under every threshold",
   "note": "the source renumbered its handles, and it caps what it lists of the folder (an IMAP server under a folder size limit): the rekey's listing, capped, names two of the three based bindings. The third resolves to no member, which a capped listing does not prove gone, and its old handle 3 names nothing in the new space, so it can be neither dropped nor carried: one absent of three is far under the half of twenty that parks an uncapped rekey, yet this one parks. Nothing is written, no Rekeyed or Deleted drop, no upsert, the checkpoint and the generation unmoved, and the run reports the absent and the bound counts; a run carrying accept_absences carries it out, dropping the third as gone (SYNC.md §4, §5, §8)",
   "store": {

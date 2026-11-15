@@ -7,7 +7,7 @@
   "required": ["v", "label", "note", "store", "run", "remote", "expect"],
   "additionalProperties": false,
   "properties": {
-    "v": { "const": 6 },
+    "v": { "const": 7 },
     "label": { "type": "string" },
     "note": { "type": "string" },
     "store": { "$ref": "#/$defs/store" },
@@ -81,7 +81,9 @@
         "conflict_revision": { "$ref": "#/$defs/maybe" },
         "conflict_object": { "$ref": "#/$defs/object" },
         "shared_object": { "$ref": "#/$defs/object" },
-        "round": { "type": ["integer", "null"] }
+        "round": { "type": ["integer", "null"] },
+        "refusal": { "$ref": "#/$defs/maybe" },
+        "refused_key": { "oneOf": [{ "type": "null" }, { "type": "string", "pattern": "^[0-9a-f]{16}$" }] }
       }
     },
     "source": {
@@ -463,21 +465,29 @@
       "additionalProperties": false,
       "properties": {
         "handle": { "type": "string" },
-        "outcome": { "enum": ["Accepted", "Rejected"] },
+        "outcome": { "enum": ["Accepted", "Rejected", "Refused"] },
+        "reason": { "type": "string", "minLength": 1 },
         "assigned": { "$ref": "#/$defs/maybe" },
         "revision": { "$ref": "#/$defs/maybe" },
         "relocated": { "type": "boolean" }
-      }
+      },
+      "if": { "properties": { "outcome": { "const": "Refused" } } },
+      "then": { "required": ["reason"] },
+      "else": { "not": { "required": ["reason"] } }
     },
     "event": {
       "type": "object",
       "required": ["kind", "handle"],
       "additionalProperties": false,
       "properties": {
-        "kind": { "enum": ["Added", "Disagreed", "FlagsChanged", "ContentChanged", "Vanished", "Conflicted", "Overruled", "Created", "Abandoned"] },
+        "kind": { "enum": ["Added", "Disagreed", "FlagsChanged", "ContentChanged", "Vanished", "Conflicted", "Overruled", "Created", "Abandoned", "Refused"] },
         "handle": { "type": "string" },
-        "link_id": { "type": "string" }
-      }
+        "link_id": { "type": "string" },
+        "reason": { "type": "string", "minLength": 1 }
+      },
+      "if": { "properties": { "kind": { "const": "Refused" } } },
+      "then": { "required": ["reason"] },
+      "else": { "not": { "required": ["reason"] } }
     },
     "expect": {
       "type": "object",

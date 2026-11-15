@@ -1,5 +1,5 @@
 {
-  "v": 6,
+  "v": 7,
   "label": "a move through a conflicted binding is refused, keeping the conflict, both bodies and the card where it stood",
   "note": "the store of vector 143 beside a second address book the same source syncs: the binding diverged at r2 and the upgrade read the server's body, c3. A frontend queued a move of the card into Friends before the conflict arose. A Move states no resolution, so meeting the conflict it is refused and stages nothing, which the drain parks naming the conflict: applied, its tombstone would leave the diverging body pinned under a placement no listing shows, and the create it stages in Friends would carry c2 as though nobody else had edited the card. The person settles the conflict first, by an Edit or a Remove stating resolves, and moves the card after (SYNC.md §7; STORAGE §15.2, §15.3)",
   "store": {

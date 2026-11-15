@@ -1707,11 +1707,11 @@ expect "format: init_store_meta stamps this part's version, version 1 with both 
 case "$own_format" in
     storage-draft-*)
         expect "format: a draft's store opens under that draft alone, never under another nor a release" \
-            "$(opens "$own_format") $(opens storage-draft-11) $(opens storage-draft-99) $(opens storage-v1)" \
+            "$(opens "$own_format") $(opens storage-draft-12) $(opens storage-draft-99) $(opens storage-v1)" \
             "opened refused refused refused" ;;
     *)
         expect "format: a released store opens under its release, and under no draft" \
-            "$(opens "$own_format") $(opens storage-draft-12) $(opens storage-draft-99)" \
+            "$(opens "$own_format") $(opens storage-draft-13) $(opens storage-draft-99)" \
             "opened refused refused" ;;
 esac
 sql "ALTER TABLE store_meta DROP COLUMN format_version;"
@@ -1788,7 +1788,7 @@ judged() {
 fresh
 collection INBOX
 item INBOX a 1
-sql "UPDATE store_meta SET format_version = 'storage-draft-12';"
+sql "UPDATE store_meta SET format_version = 'storage-draft-13';"
 expect "released: a released program refuses a draft's store, whatever its profile" "$(judged 1)" "refused refused refused"
 sql "CREATE TABLE x_later (id INTEGER PRIMARY KEY, note TEXT);
      CREATE INDEX x_items_by_level ON items(level);
@@ -1809,7 +1809,7 @@ run owner/set_store_version ":version=2" ":read_version=2" ":produce_version=2"
 expect "released: a version 2 program opens it under every profile" "$(judged 2)" "opened opened opened"
 sql "PRAGMA user_version = 3;"
 expect "released: a store whose version disagrees with user_version is corrupt, and refused" "$(judged 3)" "refused refused refused"
-sql "PRAGMA user_version = 2; UPDATE store_meta SET format_version = 'storage-draft-12';"
+sql "PRAGMA user_version = 2; UPDATE store_meta SET format_version = 'storage-draft-13';"
 expect "released: a draft's name over a later version is refused all the same" "$(judged 2)" "refused refused refused"
 
 # --- A migration keeps every row; one rebuilding a table owes more (§6) ----
@@ -1854,9 +1854,9 @@ done
 fresh
 expect "sync: a store no engine wrote names no sync version, load_store_meta answering it last" \
     "$(run read/load_store_meta | cut -d'|' -f14)|$(run read/load_store_meta | awk -F'|' '{ print NF }')" "|14"
-run owner/set_sync_version ":sync_version='sync-draft-12'"
+run owner/set_sync_version ":sync_version='sync-draft-13'"
 expect "sync: set_sync_version records the engine's version, and nothing else moves" \
-    "$(run read/load_store_meta | cut -d'|' -f9,14)" "$own_format|sync-draft-12"
+    "$(run read/load_store_meta | cut -d'|' -f9,14)" "$own_format|sync-draft-13"
 expect "sync: the version is text or nothing" \
     "$(sql "UPDATE store_meta SET sync_version = x'07';" 2>&1 | grep -c CHECK)" "1"
 
@@ -2228,6 +2228,72 @@ run owner/update_binding ":collection='Trash'" ":link_id='landed'" ":source='ima
     ":conflict_object=NULL" ":shared_object=NULL"
 expect "delivered: a round's last page finds a based member absent, never a delivered create" \
     "$(run owner/list_unstamped_bindings ":collection='Trash'" ":source='imap'" ":narrowed=0" ":enumerated=0" | tr '\n' ' ')" "7|landed "
+
+# --- A refused push stands on its binding and shows on its receipt (§4.3, §13,
+# §15.4, SYNC.md §5) -----------------------------------------------------------
+# A remote refusing a change for good leaves its reason and key on the binding
+# it was pushed for; an upsert keeps it, the next accepted push clears it, and
+# it goes with its binding. A receipt names the item its row acted on, reads
+# the refusals of that item in its own account, and is kept while one stands.
+
+fresh
+collection INBOX
+collection Drafts
+collection Other "'work'"
+p="$(printf '\001')"
+item INBOX mid:a 7
+bind INBOX mid:a graph "${p}mid:a" 0
+bind INBOX mid:a imap 10 1
+item INBOX mid:b 8
+bind INBOX mid:b graph 20 1
+item Other mid:a 7
+bind Other mid:a graph 30 1
+# refusals <collection>: its refusals, the handle left out, which the CLI
+# prints escaped when provisional.
+refusals() {
+    run read/list_refusals ":collection='$1'" | cut -d'|' -f1,2,4,5 | tr '\n' ' '
+}
+run owner/refuse_binding ":collection='INBOX'" ":source='graph'" ":handle='${p}mid:a'" \
+    ":key='0123456789abcdef'" ":reason='append to Drafts only'"
+run owner/refuse_binding ":collection='INBOX'" ":source='graph'" ":handle='${p}gone'" \
+    ":key='0123456789abcdef'" ":reason='nothing binds it'"
+run owner/refuse_binding ":collection='Other'" ":source='graph'" ":handle='30'" \
+    ":key='fedcba9876543210'" ":reason='another account'"
+expect "refused: a refusal stands on the binding pushed for, none where nothing binds the handle" \
+    "$(refusals INBOX)" "7|graph|append to Drafts only|0123456789abcdef "
+expect "refused: SQLite stamps when, in the shape of §13" \
+    "$(sql "SELECT count(*) FROM bindings WHERE refused_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z';")" "2"
+fails owner/refuse_binding ":collection='INBOX'" ":source='graph'" ":handle='20'" ":key=NULL" ":reason='no key'" &&
+    fails owner/refuse_binding ":collection='INBOX'" ":source='graph'" ":handle='20'" ":key='0123456789ABCDEF'" ":reason='a key of another shape'"
+expect "refused: a refusal states its key, sixteen lowercase hexadecimal digits" "$?" "0"
+run owner/update_binding ":collection='INBOX'" ":link_id='mid:a'" ":source='graph'" ":base_flags_known=0" ":base_marks=0" \
+    ":base_object=NULL" ":base_revision=NULL" ":base_present=0" ":conflicted=0" ":conflict_revision=NULL" \
+    ":conflict_object=NULL" ":shared_object=NULL"
+expect "refused: an upsert of the binding keeps the refusal" \
+    "$(refusals INBOX)" "7|graph|append to Drafts only|0123456789abcdef "
+run owner/record_receipt ":id=1" ":collection='INBOX'" ":seq=7"
+run owner/record_receipt ":id=2" ":collection='INBOX'" ":seq=8"
+run owner/record_receipt ":id=3" ":collection='Drafts'" ":seq=7"
+expect "refused: a receipt keeps its columns and reads the refusal on its item, in its own account" \
+    "$(run read/load_receipt ":id=1" | cut -d'|' -f2,3)|$(run read/load_receipt_refusals ":id=1" | cut -d'|' -f1-3 | tr '\n' ' ')" \
+    "INBOX|7|INBOX|graph|append to Drafts only "
+expect "refused: a move's receipt reads the create it left in its target" \
+    "$(run read/load_receipt_refusals ":id=3" | cut -d'|' -f1-3)" "INBOX|graph|append to Drafts only"
+expect "refused: a receipt whose item no refusal stands on reads none" \
+    "$(run read/load_receipt_refusals ":id=2")" ""
+run owner/prune_receipts ":before='9999-01-01T00:00:00.000Z'"
+expect "refused: pruning keeps a receipt while a refusal stands on its item" \
+    "$(sql "SELECT group_concat(id, ' ') FROM (SELECT id FROM receipts ORDER BY id);")" "1 3"
+run owner/clear_refusal ":collection='INBOX'" ":source='graph'" ":handle='${p}mid:a'"
+expect "refused: an accepted push clears the refusal, another account's standing" \
+    "$(refusals INBOX)|$(run read/load_receipt_refusals ":id=1")|$(refusals Other)" \
+    "||7|graph|another account|fedcba9876543210 "
+run owner/prune_receipts ":before='9999-01-01T00:00:00.000Z'"
+expect "refused: cleared, the receipt is pruned as any other" "$(sql "SELECT count(*) FROM receipts;")" "0"
+run owner/refuse_binding ":collection='INBOX'" ":source='graph'" ":handle='${p}mid:a'" \
+    ":key='0123456789abcdef'" ":reason='append to Drafts only'"
+run owner/delete_binding ":collection='INBOX'" ":link_id='mid:a'" ":source='graph'"
+expect "refused: a withdrawal takes the refusal with its binding" "$(refusals INBOX)" ""
 
 # --- A write batch reads its own link ids (§14) ------------------------------
 
@@ -3069,7 +3135,7 @@ fresh
 index
 isearch init_index_meta ":version=1" ":tokenizer='unicode61 remove_diacritics 0'" ":extraction=1" ":extractor='scenario 1'"
 expect "index: init_index_meta stamps this draft and the canonical shape, which load_index_meta answers" \
-    "$(isearch load_index_meta | cut -d'|' -f10,11)" "search-draft-12|canonical"
+    "$(isearch load_index_meta | cut -d'|' -f10,11)" "search-draft-13|canonical"
 expect "index: init_index_meta records the store and the incarnation it is built from" \
     "$(isearch load_index_meta | cut -d'|' -f8,9)" "$(run read/load_change_cursor | cut -d'|' -f3,4)"
 run owner/raise_incarnation ":replaced=NULL"

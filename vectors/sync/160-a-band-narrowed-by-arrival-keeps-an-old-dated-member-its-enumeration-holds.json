@@ -1,5 +1,5 @@
 {
-  "v": 6,
+  "v": 7,
   "label": "a band round narrowed by arrival keeps an old-dated member its enumeration holds",
   "note": "the coverage is [2026-10-16, open) and the scope widens to [2025-11-01, open); Gmail's checkpoint is bound to no scope, so the round lists the band [2025-11-01, 2026-10-16) alone. The connector narrows it by before: and after:, which read the arrival, and says so (narrowed), handing on its last page the label's ids listed with no query (enumerated). 9 is a CI message whose Date is 1 January 2026 but which arrived in November: inside the band by its Date, after the band by its arrival, so the filter misses it, and the enumeration holds it. It is kept, neither dropped nor pushed, though dated long before the round opened. 8, in the band and missing from the enumeration too, is dropped; 10 is named; 13, dated after the band, is neither listed nor dropped (SYNC.md §4, §5)",
   "store": {

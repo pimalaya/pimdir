@@ -1,7 +1,7 @@
 ---
 cairn: change
 id: a-refused-push-shows-on-its-receipt
-status: draft
+status: landed
 created: 2026-11-15
 ---
 
@@ -37,11 +37,11 @@ The ask was to turn the originating row back into its parked state, with the rea
 
 ## Decisions asked
 
-- **D1** The outcome: a new `Refused { reason }` (recommended), or a reason and a `permanent` flag on `Rejected`.
-- **D2** Where it is kept: binding columns (recommended: the binding is the push state of an item on one source, and drops with it), or a table of refusals keyed by item and source.
-- **D3** Hold by key (recommended), or push again every run as today, recording only.
-- **D4** Receipts naming the item for every action (recommended), or for an `add` alone, refusals of other actions then shown by collection only.
-- **D5** Re-parking the row as asked: not recommended (above).
+- **D1** The outcome: a new `Refused { reason }` (recommended), or a reason and a `permanent` flag on `Rejected`. **Decided 2026-11-15 by the owner: `Refused { reason }`.**
+- **D2** Where it is kept: binding columns (recommended: the binding is the push state of an item on one source, and drops with it), or a table of refusals keyed by item and source. **Decided 2026-11-15 by the owner: binding columns.**
+- **D3** Hold by key (recommended), or push again every run as today, recording only. **Decided 2026-11-15 by the owner: hold by key.**
+- **D4** Receipts naming the item for every action (recommended), or for an `add` alone, refusals of other actions then shown by collection only. **Decided 2026-11-15 by the owner: every action.**
+- **D5** Re-parking the row as asked: not recommended (above). **Decided 2026-11-15 by the owner: no re-parking.**
 
 ## Cost
 
