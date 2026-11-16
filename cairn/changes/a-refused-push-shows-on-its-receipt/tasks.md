@@ -16,5 +16,5 @@ change: a-refused-push-shows-on-its-receipt
 - [x] The draft-13 bump and tags, the owner's (pimdir 627271b, tagged with the io-pimdir pin, 2026-11-15)
 - [ ] A refusal of a create the store offers a source, recorded nowhere today (log entry, "Left open")
 - [ ] neverest and the Android app classify their refusals
-- [ ] Next draft: SYNC §4 lists a size or quota limit among the refusals, but a change held by its key never unsticks once space frees, and an expired credential would hold every change it met. neverest (N30, 2026-11-16) keeps quotas, 401, 407 and 423 as `Rejected`; the next draft should say so (a refusal is the change itself, never the account's state)
+- [ ] Next draft (owner ruling D34, 2026-11-16: the spec moves, not neverest): SYNC §4 excepts 401, 407 and 423 from a refusal, beside 408, 409, 412, 425 and 429 (credentials, proxy authentication, a DAV lock someone else holds: none is about the change), and drops "a quota exceeded" from the refusals, keeping "a size exceeded": a change held by its key never unsticks once space frees or a credential is renewed
 - [ ] Next draft: a create offered to a source binding nothing of it (propagated from another source) records its refusal nowhere, so it is pushed and reported every run (seen live by neverest, 2026-11-16)
