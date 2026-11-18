@@ -37,7 +37,7 @@ A person wanting the item on every source but the refusing one has no action for
 
 ### Decision asked
 
-- **D6** Bind a refused offered create as the source's pending create (a, recommended), a table (b), exclusion (c) or the status quo (d). Specified as (a) in the working tree, for the owner to confirm or turn back before the draft-14 bump.
+- **D6** Bind a refused offered create as the source's pending create (a, recommended), a table (b), exclusion (c) or the status quo (d). Specified as (a) in the working tree, for the owner to confirm or turn back before the draft-14 bump. **Decided 2026-11-18 by the owner: (a), as landed.**
 
 ## An expansion bounded by its instances (PIM-15)
 
@@ -51,4 +51,4 @@ CLI family analysis of 2026-11-15, PIM-15: one 570-byte event stalls the indexer
 
 ### Decision asked
 
-- **D7** (a), (b) or (c). Nothing is written yet: (a) moves search-draft-14 after its bump commit, so it is the owner's.
+- **D7** (a), (b) or (c). Nothing is written yet: (a) moves search-draft-14 after its bump commit, so it is the owner's. **Decided 2026-11-18 by the owner: (a), folded into search-draft-14 before its tags, the bound 10,000,000 instances from `DTSTART`.**

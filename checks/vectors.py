@@ -2780,12 +2780,16 @@ require("search: a text term holding U+0000 is re-derived", nul_cases >= 1)
 # The bounds of SEARCH.md section 7, read from its prose, and a second path
 # expanding a series a simple rule states: one VEVENT, a UTC DTSTART, a
 # DURATION, an RRULE stepping by the second, the minute, the hour or the day
-# whose BYxxx parts only limit, no COUNT, UNTIL, RDATE, EXDATE nor override.
-# Its occurrences in the windows, and the cut a case reaching it counts,
-# follow the bounds; every other calendar item of the store states a bounded
-# series and is never cut.
-bounds = re.search(r"An item writes at most ([\d,]+) occurrences.*?examines at most ([\d,]+) periods", search_md)
-OCCURRENCES, PERIODS = (int(number.replace(",", "")) for number in bounds.groups())
+# whose BYxxx parts only limit, no COUNT, UNTIL, RDATE, EXDATE nor override;
+# or one whose BYxxx parts only expand each period into the same instants,
+# with a COUNT or none. Its occurrences in the windows, and the cut a case
+# reaching it counts, follow the bounds; every other calendar item of the
+# store states a bounded series and is never cut.
+bounds = re.search(r"An item writes at most ([\d,]+) occurrences.*?examines at most ([\d,]+) periods"
+                   r".*?walks at most ([\d,]+) instances", search_md)
+OCCURRENCES, PERIODS, INSTANCES = (int(number.replace(",", "")) for number in bounds.groups())
+# The BYxxx parts that expand a period of each step into its instants.
+EXPANDING = {"MINUTELY": {"BYSECOND"}, "HOURLY": {"BYMINUTE", "BYSECOND"}}
 # The BYxxx parts that limit a rule of each step (RFC 5545 section 3.3.10).
 LIMITING = {
     "SECONDLY": {"BYMONTH", "BYMONTHDAY", "BYHOUR", "BYMINUTE", "BYSECOND"},
@@ -2818,11 +2822,13 @@ def simple_series(bytes_, horizon):
     rule = dict(part.split("=", 1) for part in properties["RRULE"][1].split(";"))
     frequency = rule.pop("FREQ", None)
     step = STEPS.get(frequency, 0) * int(rule.pop("INTERVAL", "1"))
+    length = int(duration[1][2:-1]) * {"H": 3600, "M": 60, "S": 1}[duration[1][-1]]
+    first = epoch(f"{start[1][0:4]}-{start[1][4:6]}-{start[1][6:8]}T{start[1][9:11]}:{start[1][11:13]}:{start[1][13:15]}Z")
+    if step and set(rule) & EXPANDING.get(frequency, set()):
+        return expanded_series(rule, frequency, step, first, length, horizon)
     if not step or set(rule) - LIMITING[frequency]:
         return None
     sets = {part: {int(value) for value in values.split(",")} for part, values in rule.items()}
-    length = int(duration[1][2:-1]) * {"H": 3600, "M": 60, "S": 1}[duration[1][-1]]
-    first = epoch(f"{start[1][0:4]}-{start[1][4:6]}-{start[1][6:8]}T{start[1][9:11]}:{start[1][11:13]}:{start[1][13:15]}Z")
     low, high = horizon
     written, cut = [], None
     for period in range(PERIODS + 1):
@@ -2845,6 +2851,55 @@ def simple_series(bytes_, horizon):
                 cut = at
                 break
             written.append((at, at + length))
+    return [(stamp(a), stamp(b)) for a, b in written], (stamp(cut) if cut is not None else None)
+
+
+def expanded_series(rule, frequency, step, first, length, horizon):
+    """The occurrences and the cut of a rule whose BYxxx parts only expand
+    each period into the same instants, a COUNT or none beside them: the
+    instances counted from DTSTART by arithmetic, under the three bounds of
+    section 7. None for a rule holding another part."""
+    count = int(rule.pop("COUNT")) if "COUNT" in rule else None
+    if set(rule) - EXPANDING[frequency]:
+        return None
+    sets = {part: sorted({int(value) for value in values.split(",")}) for part, values in rule.items()}
+    unit = STEPS[frequency]
+    origin = first - first % unit
+    seconds = sets.get("BYSECOND", [first % 60])
+    minutes = sets.get("BYMINUTE", [first % 3600 // 60]) if frequency == "HOURLY" else [0]
+    offsets = sorted(minute * 60 + second for minute in minutes for second in seconds)
+    head = [offset for offset in offsets if origin + offset >= first]
+
+    def start_of(n):
+        if n < len(head):
+            return origin + head[n]
+        period, at = divmod(n - len(head), len(offsets))
+        return origin + (period + 1) * step + offsets[at]
+
+    in_periods = len(head) + (PERIODS - 1) * len(offsets)
+    walked = min(INSTANCES, in_periods, count if count is not None else INSTANCES)
+    cut = None
+    if count is None or count > walked:
+        cut = start_of(INSTANCES) if INSTANCES <= in_periods else origin + PERIODS * step
+
+    low, high = horizon
+    begin, end = 0, walked
+    while begin < end:
+        middle = (begin + end) // 2
+        if start_of(middle) + length > low:
+            end = middle
+        else:
+            begin = middle
+            begin += 1
+    written = []
+    for n in range(begin, walked):
+        at = start_of(n)
+        if at >= high:
+            break
+        if len(written) == OCCURRENCES:
+            cut = at if cut is None else min(cut, at)
+            break
+        written.append((at, at + length))
     return [(stamp(a), stamp(b)) for a, b in written], (stamp(cut) if cut is not None else None)
 
 

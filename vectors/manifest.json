@@ -32,6 +32,7 @@
     "vectors/fixtures/event-blank-uid.ics": "74e73c59979abd73ffe83f9b79139de3660bb730dc9372138cec61452e760b82",
     "vectors/fixtures/event-date-new-year.ics": "6e0fa060b00f2b96f9f5a7aab7cc99c2738bb0971cd478b0892b916f7fa6d7f8",
     "vectors/fixtures/event-date-only.ics": "397052fb43d67750a07ee2cffab27c6a15a6a1acf03657435d9e536197227a63",
+    "vectors/fixtures/event-dense.ics": "8d8120a617415867fb5380339602f0031f2133b7aa34ca1e6dc5a83a0e1847b7",
     "vectors/fixtures/event-floating-late.ics": "c58c4563b4bf0b749da20a0fac932d33195288c2ad3dc483ebf7690f529965e0",
     "vectors/fixtures/event-floating.ics": "45007e98d5f2fe7e35aa04efd5f8feba9f863ac4b6a043772256c84d4af3c8f8",
     "vectors/fixtures/event-hourly.ics": "5bb168a2470b3465d683f284646451abd2fa5937467fff60de3d0a5e45c3092a",
@@ -121,8 +122,8 @@
     "vectors/schema/sync.schema.json": "be962daaba033eb192ec08e5dde7a3ef4608b52caa5aac5e487bdc02e1255544",
     "vectors/schema/versions.schema.json": "189ca52345b56a64626844d8805ebaea10356ae5ecae651a8c9675610a500705",
     "vectors/search/chunks.json": "6fc4e98bdf1306f7d5a2635fa2db4c3d96dc8856fbd61df49bc2f67d4d44de3a",
-    "vectors/search/queries.json": "4d1c4a9898e2755d3e4c209e43f5ecd5b9bd92e1715c642994c79ca9d78f7fa9",
-    "vectors/search/store.json": "8177c404c504b7e82f3e684b74bd8cbd40e90955d7627a26d85a2932d4e98a50",
+    "vectors/search/queries.json": "dbe8d4c3a729290820b90699e70d34b43bffb2c1603b774ea805f02290085022",
+    "vectors/search/store.json": "e9456aad4a57e745c978d401e4b1300c3b383ac020b209d5bec7a15b6d6b855a",
     "vectors/summaries.json": "6a4eaead0970b91f76d2db33b53215ba35975e171f8c373b45e313d09298aad8",
     "vectors/sync/01-remote-flag-pulled.json": "ab769478c2e49e3503c41682e397e5434d89471f960e87a846d99db6ea51dbfc",
     "vectors/sync/02-local-flag-pushed.json": "0d744f65e2a588085913b6f001a8507fcece77a6792255101dcc24cfad881390",
@@ -309,12 +310,12 @@
       "/cases": 10
     },
     "vectors/search/queries.json": {
-      "/cases": 220,
-      "/occurrences": 7
+      "/cases": 221,
+      "/occurrences": 8
     },
     "vectors/search/store.json": {
       "/collections": 11,
-      "/items": 36,
+      "/items": 37,
       "/references": 4
     },
     "vectors/summaries.json": {
