@@ -207,7 +207,10 @@
     "vectors/sync/165-an-accepted-update-clears-the-refusal-standing.json": "aeaee15211ddf17181ab6e0d0f6b64d32d58702f2ccd29f11c0449f2ae2a25c7",
     "vectors/sync/166-a-refused-remove-is-held.json": "de53d3fb08a74b420a304ea08da7225ac937cdaf7d2f744ca97844636e277d06",
     "vectors/sync/167-a-withdrawal-takes-the-refusal-with-its-binding.json": "d0eadd8ed3051dd72d7d5c5a89e0c9efec4504b695bdafa098f75eddd60f7ddd",
+    "vectors/sync/168-a-tombstone-over-a-conflicted-binding-pushes-no-remove.json": "2dd56d062d466103dd3cc03e5812a7ef4c582acc901d3e87d0c97b2c1eb0e58b",
+    "vectors/sync/169-a-delete-propagates-over-an-item-conflict.json": "01aa7bb26db80335ac98edd27f748629c202a91eab7890d477b425ef23c9e6b0",
     "vectors/sync/17-add-accepted-supersedes-the-provisional-handle.json": "1d166447c02d4733cc3504b5489664bdf7e9b22b4fce8dc1090774decbaefc35",
+    "vectors/sync/170-a-move-into-its-own-collection-is-refused.json": "2cfff636faf96159467a5bb3e294f4b605f1fcf95a1ad2d532c9746af2e6003e",
     "vectors/sync/18-add-rejected-stays-pending.json": "4119f9fbfeb968a593839358c26982acbacb31f1731d9d27e3b7c4e174cc024e",
     "vectors/sync/19-delta-vanished-retains.json": "cc3a67d38b548a9dd8cfbaa672ba8d78ec10e2fdcc74b774192f42589dcdccba",
     "vectors/sync/20-move-source-first-relocates.json": "27f78e055cc6e765d6538be834208b5369c562d2523d9b85f07d5d010425f9a5",
@@ -315,5 +318,5 @@
       "/cases": 73
     }
   },
-  "sync": 167
+  "sync": 170
 }

@@ -1,0 +1,47 @@
+{
+  "v": 7,
+  "label": "a delete another source stated propagates over an item conflict, which the retained item keeps",
+  "note": "the store of vector 33 before b's server edit: the card diverged between a and b under manual, the item holding a's c3 and b's c2 as its conflict_object. a's server then removed the card, so a's binding went and the item is deleted. b binds it with no conflict of its own and projects a Tombstone, not a Conflict: the item's conflict is between bodies the store holds, and a delete elsewhere settles nothing, so the remove is pushed gated on b's revision, as any delete propagates. Accepted, b's binding goes and the item is retained with both bodies and its conflict, listed in the trash (SYNC.md §3, §9; STORAGE §11)",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
+    "objects": {
+      "c1": { "body": "fixtures/card-basic.vcf" },
+      "c2": { "body": "fixtures/card-basic-edited.vcf" },
+      "c3": { "body": "fixtures/card-basic-renamed.vcf" }
+    },
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c3", "level": 2, "deleted": 1, "conflicted": 1, "conflict_object": "c2" }],
+    "bindings": [
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "b", "handle": "b.vcf", "base_flags": [], "base_object": "c2", "base_revision": "r2", "base_present": 1, "shared_object": "c1" }
+    ],
+    "sources": [{ "collection": "Contacts", "source": "a", "checkpoint": "a2" }, { "collection": "Contacts", "source": "b", "checkpoint": "b1" }]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "Contacts",
+    "source": "b",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual"
+    }
+  },
+  "remote": {
+    "snapshot": {
+      "items": [],
+      "vanished": [],
+      "complete": false,
+      "checkpoint": "b2"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [{ "kind": "Remove", "handle": "b.vcf", "to": null, "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "if_match": "r2", "key": "74cc82089d60576f" }],
+    "outcomes": [{ "handle": "b.vcf", "outcome": "Accepted" }],
+    "events": [],
+    "store": {
+      "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c3", "level": 2, "deleted": 1, "retained": true, "retained_by": "b", "conflicted": 1, "conflict_object": "c2" }],
+      "bindings": [],
+      "sources": [{ "collection": "Contacts", "source": "a", "checkpoint": "a2" }, { "collection": "Contacts", "source": "b", "checkpoint": "b2" }]
+    }
+  }
+}
