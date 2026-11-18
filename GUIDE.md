@@ -310,7 +310,7 @@ The level is `Full` only when a body is present, whatever the row claims. An unk
 7. **Push in bounded chunks.** Every change carries the idempotency key SYNC §4 derives, which a connector forgets once the checkpoint after the chunk lands. After each chunk, write (§5) the outcomes:
    - `Accepted` rebases the placement as the flag axis left it; an `Add` assigned a handle supersedes the provisional handle in the same batch; an `Add` accepted with none is delivered (`DeliverPlacement`: `deliver_binding` gives its binding a base naming nothing, while it holds none), for the next listing to land, never pushed again; an accepted `Remove` relocating into a destination delivers that create the same way;
    - `Rejected` or unreported leaves it pending;
-   - `Refused` leaves it pending too, and the write records the refusal on the binding pushed for (`RefusePlacement`: `refuse_binding` with the change's key and the reason, scrubbed of credentials), stamped by SQLite; a binding nothing holds under the handle, a create the store offers this source, records nothing;
+   - `Refused` leaves it pending too, and the write records the refusal on the binding pushed for (`RefusePlacement`: `refuse_binding` with the change's key and the reason, scrubbed of credentials), stamped by SQLite; a create the store offered this source, which it binds not, is first upserted as its pending create (the provisional handle, no base), so the refusal has a binding to stand on;
    - `Accepted` on a binding a refusal stands on also clears it (`ClearRefusal`: `clear_refusal`). A drop of the handle takes the refusal with the binding.
 
    Do not collect between chunks.

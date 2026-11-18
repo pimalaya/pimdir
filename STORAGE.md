@@ -695,7 +695,7 @@ A store is opened as one source. `load` reads the shared items and that source's
 
   A `Superseded` or `Rekeyed` drop marks nothing deleted.
 - `DeliverPlacement { collection, handle }`: the source's create under the provisional `handle` was delivered (SYNC.md §2, §4): its binding gains a base naming nothing, no flag set, revision nor body (`deliver_binding`), while it holds none. A binding holding a base, or no binding under that handle, is left as it is, the create having been landed, withdrawn or delivered since. A relocation's names its destination's collection, which the batch holds apart from its own (SYNC.md §5).
-- `RefusePlacement { collection, handle, key, reason }`: the remote refused for good the change keyed `key` the source pushed for its binding under `handle`, giving `reason` (SYNC.md §4, §5): the binding records it, replacing a refusal standing there, and a handle nothing binds records nothing.
+- `RefusePlacement { collection, handle, key, reason }`: the remote refused for good the change keyed `key` the source pushed for its binding under `handle`, giving `reason` (SYNC.md §4, §5): the binding records it, replacing a refusal standing there, and a handle nothing binds records nothing. An engine whose offered create is refused binds it first, by an upsert earlier in the batch (SYNC.md §5), so every refusal it writes has its binding.
 - `ClearRefusal { collection, handle }`: the source's binding under `handle` had a push accepted (SYNC.md §5): the refusal standing on it is cleared.
 
   A refusal is the binding's under its handle: a drop of the handle takes it, a `Superseded` or a `Rekeyed` one included, and the binding an upsert then writes under another handle holds none. An upsert of the binding keeps it.

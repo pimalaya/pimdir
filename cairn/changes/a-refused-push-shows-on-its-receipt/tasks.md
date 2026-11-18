@@ -14,7 +14,7 @@ change: a-refused-push-shows-on-its-receipt
 - [x] GUIDE §9, §10, §13, OVERVIEW §5, §8
 - [x] io-pimdir follows in its working tree (same id, 2026-11-15)
 - [x] The draft-13 bump and tags, the owner's (pimdir 627271b, tagged with the io-pimdir pin, 2026-11-15)
-- [ ] A refusal of a create the store offers a source, recorded nowhere today (log entry, "Left open")
+- [x] A refusal of a create the store offers a source, recorded nowhere today (log entry, "Left open"): see the line below
 - [ ] neverest and the Android app classify their refusals
 - [x] Next draft (owner ruling D34, 2026-11-16: the spec moves, not neverest): SYNC §4 excepts 401, 407 and 423 from a refusal, beside 408, 409, 412, 425 and 429 (credentials, proxy authentication, a DAV lock someone else holds: none is about the change), and drops "a quota exceeded" from the refusals, keeping "a size exceeded": a change held by its key never unsticks once space frees or a credential is renewed. Folded 2026-11-18 (cairn/log/2026-11-18-refusals-tombstones-and-moves-in-place.md)
-- [ ] Next draft: a create offered to a source binding nothing of it (propagated from another source) records its refusal nowhere, so it is pushed and reported every run (seen live by neverest, 2026-11-16)
+- [x] Next draft: a create offered to a source binding nothing of it (propagated from another source) records its refusal nowhere, so it is pushed and reported every run (seen live by neverest, 2026-11-16). Specified 2026-11-18 as D6 (a) of cairn/changes/the-draft-14-lines (cairn/log/2026-11-18-a-refused-offered-create-is-bound.md)

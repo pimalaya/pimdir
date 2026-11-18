@@ -1700,12 +1700,13 @@ sync_cases = sorted((root / "sync").glob("*.json"))
 # The cases a rule needs to be held at all: a Move over each conflict, an
 # Abandon beside another source binding the item, a capped rekey, a dated
 # member a narrowed round keeps with and without an enumeration, and a refusal
-# recorded, held and cleared.
+# recorded, held and cleared, an offered create bound on its refusal.
 rule_cases = {"a move over the item's conflict": 0, "a move over its binding's conflict": 0, "an abandon beside another source": 0,
               "a capped rekey leaving a member out": 0,
               "a narrowed round keeping a dated member its enumeration holds": 0,
               "a narrowed round handing no enumeration keeping a dated member": 0,
-              "a refusal recorded": 0, "a refused change held": 0, "a refusal cleared by an accepted push": 0}
+              "a refusal recorded": 0, "a refused change held": 0, "a refusal cleared by an accepted push": 0,
+              "an offered create bound on its refusal": 0}
 
 for path in sync_cases:
     case = json.loads(path.read_text())
@@ -2414,7 +2415,9 @@ for path in sync_cases:
     # refusal standing on its binding names; a Refused outcome stands on the
     # binding it was pushed for, under that push's key, and is reported with
     # its reason, as a held one is; an accepted push of a refused binding
-    # clears its refusal. A create the source binds not records none.
+    # clears its refusal. A create the source binds not, one the store
+    # offered, is bound by that write as its pending create, so its refusal
+    # stands on a binding too.
     before_own, after_own = ({b["handle"]: b for b in rows.get("bindings", [])
                               if b["collection"] == run["collection"] and b["source"] == run["source"]}
                              for rows in (store, after))
@@ -2433,8 +2436,12 @@ for path in sync_cases:
         if outcome["outcome"] == "Refused":
             refused_now.add(handle)
             require(f"{label}: refusal of {handle} is reported with its reason", (handle, outcome.get("reason")) in reported)
-            if handle in before_own and "bindings" in after:
+            if "bindings" in after:
                 binding = after_own.get(handle, {})
+                if handle not in before_own:
+                    require(f"{label}: the offered create {handle} is bound as a pending create on its refusal",
+                            handle in after_own and after_own[handle].get("base_present") == 0)
+                    rule_cases["an offered create bound on its refusal"] += 1
                 require(f"{label}: refusal of {handle} stands on its binding under the key pushed",
                         binding.get("refusal") == outcome.get("reason") and binding.get("refused_key") == keys.get(handle))
             rule_cases["a refusal recorded"] += 1
