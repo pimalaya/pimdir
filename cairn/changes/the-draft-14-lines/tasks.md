@@ -13,4 +13,4 @@ change: the-draft-14-lines
 - [x] The draft-14 bump (cairn/log/2026-11-18-draft-14.md); the tags are the owner's
 - [x] io-pimdir follows, spec/ re-vendored, checks/io-pimdir.rev pinned (io-pimdir d7cfe5e, pin 496452b)
 - [x] D7 (a), decided by the owner 2026-11-18: SEARCH §7 bounds the instances an expander walks, vector item 35 (cairn/log/2026-11-18-an-expansion-bounded-by-its-instances.md)
-- [ ] io-pimdir follows D7, re-vendored, checks/io-pimdir.rev pinned again before the draft-14 tags
+- [x] io-pimdir follows D7 (0d06c31, spec/ at pimdir 2997103), checks/io-pimdir.rev pinned again (38e54e0); the draft-14 tags, the owner's, go on that pin commit
