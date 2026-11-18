@@ -11,6 +11,6 @@ change: the-draft-14-lines
 - [x] The refusal of a create offered to a source binding nothing of it: proposed with D6, specified as (a); vector 171 (cairn/log/2026-11-18-a-refused-offered-create-is-bound.md). D6 decided (a) by the owner, 2026-11-18
 - [x] C1, C2, C4 of audit-2026-11-12; Y2 re-checked, kept open as neverest's (cairn/log/2026-11-18-the-audit-lines-before-v1.md)
 - [x] The draft-14 bump (cairn/log/2026-11-18-draft-14.md); the tags are the owner's
-- [x] io-pimdir follows, spec/ re-vendored, checks/io-pimdir.rev pinned (io-pimdir d7cfe5e, pin 496452b)
+- [x] io-pimdir follows, spec/ re-vendored, checks/io-pimdir.rev pinned (io-pimdir 59886ad, pin 6af0541)
 - [x] D7 (a), decided by the owner 2026-11-18: SEARCH §7 bounds the instances an expander walks, vector item 35 (cairn/log/2026-11-18-an-expansion-bounded-by-its-instances.md)
-- [x] io-pimdir follows D7 (0d06c31, spec/ at pimdir 2997103), checks/io-pimdir.rev pinned again (38e54e0); the draft-14 tags, the owner's, go on that pin commit
+- [x] io-pimdir follows D7 (1b34ff5, spec/ at pimdir da7e01a), checks/io-pimdir.rev pinned again (b83ffc7); the draft-14 tags, the owner's, go on that pin commit
