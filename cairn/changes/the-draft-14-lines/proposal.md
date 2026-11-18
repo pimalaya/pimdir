@@ -38,3 +38,17 @@ A person wanting the item on every source but the refusing one has no action for
 ### Decision asked
 
 - **D6** Bind a refused offered create as the source's pending create (a, recommended), a table (b), exclusion (c) or the status quo (d). Specified as (a) in the working tree, for the owner to confirm or turn back before the draft-14 bump.
+
+## An expansion bounded by its instances (PIM-15)
+
+CLI family analysis of 2026-11-15, PIM-15: one 570-byte event stalls the indexer. Measured on io-pimdir d7cfe5e (release build, 2026-11-18): `DTSTART:19140601T000000Z` with `RRULE:FREQ=HOURLY;BYMINUTE=0,...,59;BYSECOND=0,...,59` expands in 15 ms without `COUNT`, 255 ms with `COUNT=40000000` and 2.47 s with `COUNT=400000000`, linear at about 6 ns an instance; at the reported `COUNT=4000000000` that is about 22 s in release, 205 s in debug. The cost is the instances walked before the horizon to learn where a counted series ends, 3,600 an hourly period here and up to 31,622,400 a yearly one stating every `BYxxx`: SEARCH §7 bounds periods (1,000,000) and occurrences written (10,000), never instances walked, so a conforming expander is bound to walk them all. The refresh deadline is no answer: the walk is inside one item's expansion, which no check between batches, nor between a batch's items, interrupts.
+
+### Alternatives
+
+- **(a) Bound the instances an expander walks (recommended).** SEARCH §7: an expander walks at most 10,000,000 instances of an item's rules from its `DTSTART`, before the horizon or in it; an item this bound stops records its cut at the start of the first instance not walked, the earlier of the three. A vector (vectors/search/) with the item above pins the cut. Folded into search-draft-14 before its tags, io-pimdir re-pinned, or as search-draft-15.
+- **(b) Count without walking**, no format change: ical-rs counts a period's instances from its `BYxxx` sets (a product for the rules above, a calendar computation for `BYDAY` with `BYSETPOS`), so `COUNT` is located per period. Exact, but a new ical-rs surface, and still 1,000,000 periods of set arithmetic per item.
+- **(c) A deadline inside the expansion**, io-pimdir only: the expander yields every so many instances and the indexer checks its deadline. Stops a one-shot answer waiting, never the owner's indexer, which has no deadline, and the item is expanded again at every horizon roll and rebuild.
+
+### Decision asked
+
+- **D7** (a), (b) or (c). Nothing is written yet: (a) moves search-draft-14 after its bump commit, so it is the owner's.
