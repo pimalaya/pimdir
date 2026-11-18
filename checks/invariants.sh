@@ -1707,11 +1707,11 @@ expect "format: init_store_meta stamps this part's version, version 1 with both 
 case "$own_format" in
     storage-draft-*)
         expect "format: a draft's store opens under that draft alone, never under another nor a release" \
-            "$(opens "$own_format") $(opens storage-draft-12) $(opens storage-draft-99) $(opens storage-v1)" \
+            "$(opens "$own_format") $(opens storage-draft-13) $(opens storage-draft-99) $(opens storage-v1)" \
             "opened refused refused refused" ;;
     *)
         expect "format: a released store opens under its release, and under no draft" \
-            "$(opens "$own_format") $(opens storage-draft-13) $(opens storage-draft-99)" \
+            "$(opens "$own_format") $(opens storage-draft-14) $(opens storage-draft-99)" \
             "opened refused refused" ;;
 esac
 sql "ALTER TABLE store_meta DROP COLUMN format_version;"
@@ -1788,7 +1788,7 @@ judged() {
 fresh
 collection INBOX
 item INBOX a 1
-sql "UPDATE store_meta SET format_version = 'storage-draft-13';"
+sql "UPDATE store_meta SET format_version = 'storage-draft-14';"
 expect "released: a released program refuses a draft's store, whatever its profile" "$(judged 1)" "refused refused refused"
 sql "CREATE TABLE x_later (id INTEGER PRIMARY KEY, note TEXT);
      CREATE INDEX x_items_by_level ON items(level);
@@ -1809,7 +1809,7 @@ run owner/set_store_version ":version=2" ":read_version=2" ":produce_version=2"
 expect "released: a version 2 program opens it under every profile" "$(judged 2)" "opened opened opened"
 sql "PRAGMA user_version = 3;"
 expect "released: a store whose version disagrees with user_version is corrupt, and refused" "$(judged 3)" "refused refused refused"
-sql "PRAGMA user_version = 2; UPDATE store_meta SET format_version = 'storage-draft-13';"
+sql "PRAGMA user_version = 2; UPDATE store_meta SET format_version = 'storage-draft-14';"
 expect "released: a draft's name over a later version is refused all the same" "$(judged 2)" "refused refused refused"
 
 # --- A migration keeps every row; one rebuilding a table owes more (§6) ----
@@ -1854,9 +1854,9 @@ done
 fresh
 expect "sync: a store no engine wrote names no sync version, load_store_meta answering it last" \
     "$(run read/load_store_meta | cut -d'|' -f14)|$(run read/load_store_meta | awk -F'|' '{ print NF }')" "|14"
-run owner/set_sync_version ":sync_version='sync-draft-13'"
+run owner/set_sync_version ":sync_version='sync-draft-14'"
 expect "sync: set_sync_version records the engine's version, and nothing else moves" \
-    "$(run read/load_store_meta | cut -d'|' -f9,14)" "$own_format|sync-draft-13"
+    "$(run read/load_store_meta | cut -d'|' -f9,14)" "$own_format|sync-draft-14"
 expect "sync: the version is text or nothing" \
     "$(sql "UPDATE store_meta SET sync_version = x'07';" 2>&1 | grep -c CHECK)" "1"
 
@@ -3135,7 +3135,7 @@ fresh
 index
 isearch init_index_meta ":version=1" ":tokenizer='unicode61 remove_diacritics 0'" ":extraction=1" ":extractor='scenario 1'"
 expect "index: init_index_meta stamps this draft and the canonical shape, which load_index_meta answers" \
-    "$(isearch load_index_meta | cut -d'|' -f10,11)" "search-draft-13|canonical"
+    "$(isearch load_index_meta | cut -d'|' -f10,11)" "search-draft-14|canonical"
 expect "index: init_index_meta records the store and the incarnation it is built from" \
     "$(isearch load_index_meta | cut -d'|' -f8,9)" "$(run read/load_change_cursor | cut -d'|' -f3,4)"
 run owner/raise_incarnation ":replaced=NULL"

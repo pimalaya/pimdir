@@ -10,5 +10,5 @@ change: the-draft-14-lines
 - [x] PIM-14: a move in place refused and parked; vector 170 (same log)
 - [x] The refusal of a create offered to a source binding nothing of it: proposed with D6, specified as (a); vector 171 (cairn/log/2026-11-18-a-refused-offered-create-is-bound.md). D6 awaits the owner
 - [x] C1, C2, C4 of audit-2026-11-12; Y2 re-checked, kept open as neverest's (cairn/log/2026-11-18-the-audit-lines-before-v1.md)
-- [ ] The draft-14 bump
+- [x] The draft-14 bump (cairn/log/2026-11-18-draft-14.md); the tags are the owner's
 - [ ] io-pimdir follows, spec/ re-vendored, checks/io-pimdir.rev pinned
