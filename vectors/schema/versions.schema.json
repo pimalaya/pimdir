@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pimalaya/pimdir/vectors/schema/versions.schema.json",
+  "$comment": "SPDX-License-Identifier: MIT OR Apache-2.0",
+  "title": "The order of format versions (STORAGE.md section 4.2), vectors/versions.json",
+  "type": "object",
+  "required": ["v", "cases"],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "const": 1 },
+    "note": { "type": "string" },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["found", "own", "order"],
+        "additionalProperties": false,
+        "properties": {
+          "found": { "type": ["string", "null"] },
+          "own": { "type": "string" },
+          "order": { "enum": ["earlier", "same", "later", "unknown"] },
+          "note": { "type": "string" }
+        }
+      }
+    }
+  }
+}

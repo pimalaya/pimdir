@@ -119,6 +119,7 @@
     "vectors/schema/search-store.schema.json": "ffd9e3bb85ed36c8bf8962d6bd5c8feb26755a2dfe357224650dbc380bc6145a",
     "vectors/schema/summaries.schema.json": "5dcd70af3d37d44420d5b5289ba5643a6e8905f0c9dc63d285e91a57287f4a54",
     "vectors/schema/sync.schema.json": "be962daaba033eb192ec08e5dde7a3ef4608b52caa5aac5e487bdc02e1255544",
+    "vectors/schema/versions.schema.json": "189ca52345b56a64626844d8805ebaea10356ae5ecae651a8c9675610a500705",
     "vectors/search/chunks.json": "6fc4e98bdf1306f7d5a2635fa2db4c3d96dc8856fbd61df49bc2f67d4d44de3a",
     "vectors/search/queries.json": "4d1c4a9898e2755d3e4c209e43f5ecd5b9bd92e1715c642994c79ca9d78f7fa9",
     "vectors/search/store.json": "8177c404c504b7e82f3e684b74bd8cbd40e90955d7627a26d85a2932d4e98a50",
@@ -293,7 +294,8 @@
     "vectors/sync/96-a-rekey-matches-copies-at-one-revision-in-handle-order.json": "81a82cc49492f46c78e306bee4dd8ebbeebae6e68237922a57b5fdd53fc4d7cd",
     "vectors/sync/97-a-bodiless-arrival-landing-a-mutable-create-conflicts.json": "ede12ec5ea4ee55d28d8c25d4d2abd3320dddd5a69e2383a61d1a2a82712de77",
     "vectors/sync/98-an-upgrade-fetching-the-staged-body-clears-the-conflict.json": "9151034265a3cd105930446e4bedfa47109a82c02d497d510e88ae81aa751236",
-    "vectors/sync/99-a-page-before-the-last-mints-another-message-apart.json": "c03045f247b83496e549f388842a6b1e005b2a3a3b57e764cb5c3aeb3313c113"
+    "vectors/sync/99-a-page-before-the-last-mints-another-message-apart.json": "c03045f247b83496e549f388842a6b1e005b2a3a3b57e764cb5c3aeb3313c113",
+    "vectors/versions.json": "a931b8b8cacc7665a211ef644e07956531ac85ff26b6e6e2d09dcf9d722c3376"
   },
   "cases": {
     "vectors/objects.json": {
@@ -317,6 +319,9 @@
     },
     "vectors/summaries.json": {
       "/cases": 73
+    },
+    "vectors/versions.json": {
+      "/cases": 24
     }
   },
   "sync": 171

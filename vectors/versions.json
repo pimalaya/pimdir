@@ -1,0 +1,30 @@
+{
+  "v": 1,
+  "note": "STORAGE.md section 4.2: a store's format_version against a program's own, ordered none first, then the drafts by number, then the releases by major; a marker the order does not read is unknown. order says where the store stands: earlier, same, later or unknown",
+  "cases": [
+    { "found": null, "own": "storage-draft-13", "order": "earlier" },
+    { "found": null, "own": "storage-v1", "order": "earlier" },
+    { "found": "storage-draft-07", "own": "storage-draft-13", "order": "earlier" },
+    { "found": "storage-draft-08", "own": "storage-draft-13", "order": "earlier" },
+    { "found": "storage-draft-9", "own": "storage-draft-13", "order": "earlier" },
+    { "found": "storage-draft-13", "own": "storage-draft-13", "order": "same" },
+    { "found": "storage-draft-014", "own": "storage-draft-13", "order": "later" },
+    { "found": "storage-draft-14", "own": "storage-draft-13", "order": "later" },
+    { "found": "storage-draft-13", "own": "storage-v1", "order": "earlier" },
+    { "found": "storage-draft-99", "own": "storage-v1", "order": "earlier" },
+    { "found": "storage-v1", "own": "storage-draft-13", "order": "later" },
+    { "found": "storage-v1", "own": "storage-v1", "order": "same" },
+    { "found": "storage-v2", "own": "storage-v1", "order": "later" },
+    { "found": "storage-v10", "own": "storage-v9", "order": "later" },
+    { "found": "storage-v1", "own": "storage-v2", "order": "earlier" },
+    { "found": "storage-v01", "own": "storage-v1", "order": "unknown" },
+    { "found": "storage-v", "own": "storage-v1", "order": "unknown" },
+    { "found": "storage-draft-", "own": "storage-draft-13", "order": "unknown" },
+    { "found": "storage-draft-1a", "own": "storage-draft-13", "order": "unknown" },
+    { "found": "storage-draft--1", "own": "storage-draft-13", "order": "unknown" },
+    { "found": "storage-v+2", "own": "storage-v1", "order": "unknown" },
+    { "found": "pimdir-1", "own": "storage-draft-13", "order": "unknown" },
+    { "found": "", "own": "storage-v1", "order": "unknown" },
+    { "found": "storage-draft-13", "own": "storage-x", "order": "unknown" }
+  ]
+}

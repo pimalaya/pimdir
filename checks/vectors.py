@@ -1291,7 +1291,7 @@ check("vectors/sync/: numbered from 1, no gap, no number twice", numbers, list(r
 FORMATS = {
     "objects.json": "objects", "summaries.json": "summaries", "search/store.json": "search-store",
     "search/queries.json": "search-queries", "search/chunks.json": "search-chunks",
-    "payloads.json": "payloads", "manifest.json": "manifest",
+    "payloads.json": "payloads", "manifest.json": "manifest", "versions.json": "versions",
 }
 for path in sorted(root.rglob("*.json")):
     relative = path.relative_to(root).as_posix()
@@ -1306,6 +1306,30 @@ for path in sorted(root.rglob("*.json")):
     schema = json.loads((root / "schema" / f"{format_}.schema.json").read_text())
     for error in Draft202012Validator(schema).iter_errors(document):
         failures.append(f"{relative}: {error.json_path}: {error.message}")
+
+# The order of format versions (STORAGE.md section 4.2): none first, then the
+# drafts by the decimal number after storage-draft-, then the releases by a
+# major written without a leading zero; any other marker is read neither way.
+def format_rank(marker):
+    if marker is None:
+        return (0, 0)
+    if marker.startswith("storage-draft-"):
+        number = marker[len("storage-draft-"):]
+        return (1, int(number)) if number.isascii() and number.isdigit() else None
+    if marker.startswith("storage-v"):
+        major = marker[len("storage-v"):]
+        canonical = major.isascii() and major.isdigit() and not major.startswith("0")
+        return (2, int(major)) if canonical else None
+    return None
+
+
+versions = json.loads((root / "versions.json").read_text())
+for case in versions["cases"]:
+    found, own = format_rank(case["found"]), format_rank(case["own"])
+    order = "unknown" if found is None or own is None else "earlier" if found < own else "later" if found > own else "same"
+    check(f"versions.json: {case['found']!r} against {case['own']}", case["order"], order)
+for order in ("earlier", "same", "later", "unknown"):
+    require(f"versions.json: a case of a store {order}", any(case["order"] == order for case in versions["cases"]))
 
 # A summary row in any format names the columns of its table in the canonical
 # schema (STORAGE.md section 4.3), read off migrations/storage/, a list column
@@ -3339,6 +3363,7 @@ if failures:
 
 print(
     f"{len(objects['base32']['cases'])} base32 cases, "
+    f"{len(versions['cases'])} version orders, "
     f"{len(objects['objects'])} object names, "
     f"{len(summaries['cases'])} summaries over {len(fixtures)} fixtures, "
     f"{sum('hint' in case for case in summaries['cases'])} minted link ids, "
