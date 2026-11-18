@@ -73,7 +73,7 @@
     { "query": "organizer:erin", "hits": [["home", 15]], "note": "the organizer role's own field, by name" },
     { "query": "attendee:frank@example.com", "hits": [["home", 15]], "note": "an address seek on the attendee role" },
     { "query": "flag:\\Flagged", "hits": [["home", 3]], "note": "flag: takes a flag as written, as tag: does" },
-    { "query": "folder:home/Calendar", "hits": [["home", 6], ["home", 7], ["home", 15], ["home", 16], ["home", 23], ["home", 26], ["home", 27], ["home", 28]], "note": "folder: is an alias of collection:" },
+    { "query": "folder:home/Calendar", "hits": [["home", 6], ["home", 7], ["home", 15], ["home", 16], ["home", 23], ["home", 26], ["home", 27], ["home", 28], ["home", 35]], "note": "folder: is an alias of collection:" },
     { "query": "id:reply-1@example.org", "hits": [["home", 11]], "note": "an item by its link id" },
     { "query": "id:4", "hits": [["home", 4], ["home", 24]], "note": "digits alone name the item of that seq and every item whose link id they are: the contact of seq 4 and the file whose source states the id 4, a hit set rather than a guess (SEARCH.md §8)" },
     { "query": "id:24", "hits": [["home", 24]], "note": "the file by its seq, no item holding the link id 24" },

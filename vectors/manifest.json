@@ -122,7 +122,7 @@
     "vectors/schema/sync.schema.json": "be962daaba033eb192ec08e5dde7a3ef4608b52caa5aac5e487bdc02e1255544",
     "vectors/schema/versions.schema.json": "189ca52345b56a64626844d8805ebaea10356ae5ecae651a8c9675610a500705",
     "vectors/search/chunks.json": "6fc4e98bdf1306f7d5a2635fa2db4c3d96dc8856fbd61df49bc2f67d4d44de3a",
-    "vectors/search/queries.json": "dbe8d4c3a729290820b90699e70d34b43bffb2c1603b774ea805f02290085022",
+    "vectors/search/queries.json": "08b8eb1feb84d25515dc27dbc75fa100d200512b71006ad351b5e67739759ff5",
     "vectors/search/store.json": "e9456aad4a57e745c978d401e4b1300c3b383ac020b209d5bec7a15b6d6b855a",
     "vectors/summaries.json": "6a4eaead0970b91f76d2db33b53215ba35975e171f8c373b45e313d09298aad8",
     "vectors/sync/01-remote-flag-pulled.json": "ab769478c2e49e3503c41682e397e5434d89471f960e87a846d99db6ea51dbfc",
