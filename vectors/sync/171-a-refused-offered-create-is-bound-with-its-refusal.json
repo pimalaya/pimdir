@@ -1,5 +1,5 @@
 {
-  "v": 7,
+  "v": 8,
   "label": "a create the store offers a source, refused for good, is bound as that source's pending create with its refusal",
   "note": "source a holds the card and source b syncs the address book, binding nothing of it: the store offers b the card as a create and b pushes its Add, which b's remote refuses for good. The write recording the refusal binds the card to b as its own pending create, under the provisional handle the Add was pushed under, with no base, and records the refusal on that binding, so the next run holds the Add rather than pushing it again, and the receipt of the row that queued the card reads the refusal. a's binding and the item are untouched (SYNC.md §5, STORAGE §14)",
   "store": {

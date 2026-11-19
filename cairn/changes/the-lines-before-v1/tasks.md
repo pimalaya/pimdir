@@ -43,7 +43,7 @@ Each open line as `<repo> <change>/tasks.md:<line>, <what> | <class> | <evidence
 - [ ] pimdir the-consumers-gaps-fold-into-draft-08:20, tags storage-draft-08, sync-draft-07, search-draft-08, gtd-draft-03 | obsolete | the three part tags exist; gtd left the standard (log 2026-10-30-gtd-leaves-the-standard.md)
 - [ ] pimdir audit-2026-11-12:46, Y2 | blocks v1 | fake-server tests landed in neverest on 2026-11-19; a real-server run is owed (the owner's grant)
 - [ ] pimdir audit-2026-11-12:104, C3 | after v1 | class any; in progress uncommitted in himalaya src/shared/attachment/download.rs, not in pimalaya-cli as the line asks
-- [ ] pimdir audit-2026-11-12:106, C5 | after v1 | class any; proposed in io-pimdir cairn/changes/the-store-rules-the-clis-restate, an owner ruling first
+- [ ] pimdir audit-2026-11-12:106, C5 | after v1 | ruled 2026-11-19 (every recommendation taken); the five hoists landed in io-pimdir the same day (io-pimdir cairn/log/2026-11-19-the-store-rules-the-clis-restate.md); open until himalaya, cardamum and calendula drop their copies, after an io-pimdir release
 - [x] pimdir audit-2026-11-12:111, N1 | obsolete | closed 2026-11-19 in its repository (ticked in audit-2026-11-12); was: class any; neverest `DryRunReplica::new` still clones file by file
 - [ ] pimdir audit-2026-11-12:112, N2 | after v1 | class any, not re-verified
 - [ ] pimdir audit-2026-11-12:120, A5 | after v1 | class after
@@ -94,30 +94,30 @@ Each open line as `<repo> <change>/tasks.md:<line>, <what> | <class> | <evidence
 - [ ] pimdir search-milestones:29, the tz database version exposed | obsolete | ical log 2026-10-27-tzdb-pinned-and-versioned.md, io-pimdir src/search/refresh.rs `tzdb_version`
 - [ ] pimdir no-write-collects:14, the Android collector | obsolete | android MailStore.java `collectGarbage`, PimdirBlobs.java
 - [ ] pimdir two-silent-losses-fold-into-draft-08:15, a producer waits on a failing file | after v1 | liveness, not a loss; STORAGE §5 unchanged
-- [ ] pimdir two-silent-losses-fold-into-draft-08:16, a sync vector stating a file with no row | owner question | needs a field in vectors/schema/sync.schema.json, frozen at sync-v1 (O13): before the tags or never in this format
+- [x] pimdir two-silent-losses-fold-into-draft-08:16, a sync vector stating a file with no row | landed | ruled 2026-11-19 before the draft-14 tags: `row` on a sync object, format 8, vector 172 (cairn/log/2026-11-19-a-file-with-no-row.md); no draft bump, the parts being untagged
 
 ## io-pimdir
 
 - [ ] io-pimdir a-conflict-never-hides-a-server-edit:16, neverest picks it up | obsolete | neverest on io-pimdir 0.17.0
 - [ ] io-pimdir a-delta-loads-what-it-names:12, a round's last page keeps `All` | after v1 | speed; an added count statement
 - [ ] io-pimdir a-delta-loads-what-it-names:14, bench a step into 100k and 1M | after v1 | measurement; write speed closed 2026-11-13
-- [ ] io-pimdir a-page-lands-in-few-statements:12, :14, :26, device run and numbers | obsolete | the 2026-11-13 phone run and the owner's closure
-- [ ] io-pimdir a-page-lands-in-few-statements:18 to :20, the pending stamp in pimdir, io-pimdir and Android | obsolete | the pending stamp left the format (pimdir log 2026-11-05-storage-draft-09.md)
-- [ ] io-pimdir a-page-lands-in-few-statements:24, :27, the sender rule once a page, a chunked lookup | obsolete | not to be re-proposed (2026-11-13)
-- [ ] io-pimdir a-page-lands-in-few-statements:31, fold, log, CHANGELOG | after v1 | closing the ledger only
-- [ ] io-pimdir an-owner-write-checks-its-fence:6 to :10 (5 lines) | owner decision | after v1 by Q9; brief in its proposal.md, 2026-11-19
+- [x] io-pimdir a-page-lands-in-few-statements:12, :14, :26, device run and numbers | obsolete | the 2026-11-13 phone run and the owner's closure; ticked there 2026-11-19, the change abandoned
+- [x] io-pimdir a-page-lands-in-few-statements:18 to :20, the pending stamp in pimdir, io-pimdir and Android | obsolete | the pending stamp left the format (pimdir log 2026-11-05-storage-draft-09.md); ticked there 2026-11-19, the change abandoned
+- [x] io-pimdir a-page-lands-in-few-statements:24, :27, the sender rule once a page, a chunked lookup | obsolete | not to be re-proposed (2026-11-13); ticked there 2026-11-19, the change abandoned
+- [x] io-pimdir a-page-lands-in-few-statements:31, fold, log, CHANGELOG | obsolete | the change closed as abandoned 2026-11-19, its delta never folded
+- [ ] io-pimdir an-owner-write-checks-its-fence:7 to :11 (5 lines) | after v1 | ruled 2026-11-19: option (a), a storage-v1 minor adding a `store_meta` column, Android exempt; the change active and deferred
 - [ ] io-pimdir charset-tables-for-legacy-cjk:13, neverest enables the feature | obsolete | the feature was removed, encoding_rs a plain dependency (log 2026-11-13-the-crate-follows-draft-10-payloads-and-identity.md)
 - [ ] io-pimdir a-refused-push-shows-on-its-receipt:11, spec/REVISION | obsolete | spec/REVISION at da7e01a
 - [ ] io-pimdir a-refused-push-shows-on-its-receipt:12, neverest and Android answer `Refused` | obsolete | neverest src/sync/remote.rs, android rust/src/offline.rs build `PimdirPushOutcome::Refused`
 - [ ] io-pimdir a-page-sorts-its-own-hits:11, the threads' statement per hit | after v1 | search speed, an added statement
-- [ ] io-pimdir an-ambiguous-intent-awaits-confirmation:6 to :12 (7 lines) | obsolete | landed through pimdir O7 and F16: `unconfirm_action`, `retry_action` (src/client.rs), `PimdirActionStatus::Unconfirmed`, `queue retry`, tests/queue_text.rs, neverest src/sync/submit.rs; its proposal still says draft
+- [x] io-pimdir an-ambiguous-intent-awaits-confirmation:6 to :12 (7 lines) | obsolete | landed through pimdir O7 and F16: `unconfirm_action`, `retry_action` (src/client.rs), `PimdirActionStatus::Unconfirmed`, `queue retry`, tests/queue_text.rs, neverest src/sync/submit.rs; the change landed 2026-11-19 (io-pimdir cairn/log/2026-11-19-an-ambiguous-intent-awaits-confirmation.md)
 - [ ] io-pimdir raw-payloads-print-their-length:6 to :9 (4 lines) | after v1 | log privacy and API, no format effect
 - [ ] io-pimdir a-pending-create-is-withdrawn-whatever-the-rights:14, calendula reads item_capabilities | obsolete | nothing to change: calendula reads it only for online meetings
 - [ ] io-pimdir one-refusal-for-another-version:12, the three CLIs show it | after v1 | calendula and cardamum done 2026-11-18; himalaya pending per its session (himalaya src/error.rs already names `PimdirFormatRefusal`), to confirm there
 - [ ] io-pimdir derivation-before-the-write:6 to :10 (5 lines) | after v1 | writer-lock hold time, internal
 - [ ] io-pimdir an-in-memory-card-matcher:12, cardamum calls it | obsolete | cardamum src/shared/card/search.rs calls `match_cards`
 - [ ] io-pimdir deep-mime-regression:6 to :8 (3 lines) | after v1 | a test generator only; the fix landed (189db40)
-- [ ] io-pimdir a-push-reads-back-the-server-bytes:6 to :12 (7 lines) | owner question | after v1 if additive; before sync-v1 if SYNC §5 makes the server's body the base a MUST
+- [ ] io-pimdir a-push-reads-back-the-server-bytes:7 to :13 (7 lines) | after v1 | ruled 2026-11-19: after v1, an additive optional body on the push outcome; the change active and deferred
 - [ ] io-pimdir the-crate-follows-storage-draft-08:87, `coverage` and `match_objects_ranked` | obsolete | `coverage` landed; `match_objects_ranked` cut (pimdir F10)
 - [ ] io-pimdir the-crate-follows-storage-draft-08:107 to :111 (5 lines), pimdir ticks, CI pin, neverest, himalaya, Android | obsolete | pimdir CI `implementation` job; every consumer on io-pimdir 0.17.0 and draft-14
 - [ ] io-pimdir an-io-free-indexer:8, review the yields with the owner | after v1 | crate API, not format
@@ -127,7 +127,7 @@ Each open line as `<repo> <change>/tasks.md:<line>, <what> | <class> | <evidence
 - [x] io-pimdir the-default-enqueue-strips:11, calendula's online-meeting path | obsolete | calendula src/pimdir/backend.rs routes `ItemOrigin::User` to `enqueue_user_body` (ticked there 2026-11-19)
 - [ ] io-pimdir one-no-replace-move:9, Android moves through `PimdirBlobMove` | after v1 | app work (2026-11-19)
 - [ ] io-pimdir a-purge-of-chosen-items:9, neverest calls `purge_items` | after v1 | neverest work (2026-11-19)
-- [ ] io-pimdir the-store-rules-the-clis-restate:6 to :9 (4 lines) | after v1 | C5, an owner ruling first (2026-11-19)
+- [ ] io-pimdir the-store-rules-the-clis-restate:9, the CLIs drop their copies | after v1 | lines 6 to 8 ticked 2026-11-19 (ruling, hoists, fold); their sessions, after an io-pimdir release
 
 ## Found on 2026-11-19
 

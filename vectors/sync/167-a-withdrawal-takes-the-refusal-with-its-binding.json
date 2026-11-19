@@ -1,5 +1,5 @@
 {
-  "v": 7,
+  "v": 8,
   "label": "a remove staged on a refused pending create withdraws it, the refusal going with its binding",
   "note": "the way out of a refused create is the item's own remove: it withdraws the create, nothing being owed to the source, so the binding goes with the refusal it held and the item is retained (SYNC.md §5, §7, STORAGE §15.4)",
   "store": {

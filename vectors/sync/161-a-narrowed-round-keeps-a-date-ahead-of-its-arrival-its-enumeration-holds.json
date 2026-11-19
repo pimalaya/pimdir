@@ -1,5 +1,5 @@
 {
-  "v": 7,
+  "v": 8,
   "label": "a round narrowed by received date keeps a member dated ahead of its arrival that its enumeration holds",
   "note": "Graph lists the scope [2026-09-01, open) by receivedDateTime from two days below since, and says so (narrowed), handing on its last page the folder's message ids with no $filter (enumerated). 13 is dated 1 October by a sender's clock six weeks fast and arrived on 20 August, before the filter's window: dated inside the scope and before the round opened, missed by the filter, held by the enumeration. It is kept, neither dropped nor pushed, as is 11, undated and held by it too. 14, dated 5 October and missing from the enumeration, is dropped (SYNC.md §4, §5)",
   "store": {

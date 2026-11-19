@@ -7,7 +7,7 @@
   "required": ["v", "label", "note", "store", "run", "remote", "expect"],
   "additionalProperties": false,
   "properties": {
-    "v": { "const": 7 },
+    "v": { "const": 8 },
     "label": { "type": "string" },
     "note": { "type": "string" },
     "store": { "$ref": "#/$defs/store" },
@@ -43,7 +43,7 @@
       "type": "object",
       "required": ["body"],
       "additionalProperties": false,
-      "properties": { "body": { "type": "string" }, "blob": { "type": "boolean" }, "corrupt": { "type": "boolean" } }
+      "properties": { "body": { "type": "string" }, "blob": { "type": "boolean" }, "corrupt": { "type": "boolean" }, "row": { "type": "boolean" } }
     },
     "item": {
       "type": "object",

@@ -26,7 +26,12 @@ The freeze gate of README.md checks the reference implementation alone, and io-p
 
 A8 to A11 (Android, class before) and N1 were closed in their repositories on 2026-11-19 (android cairn/log/2026-11-19-the-audit-lines-a7-to-a11.md, neverest cairn/log/2026-11-19-a-dry-run-replica-is-a-consistent-copy.md), uncommitted at the time of this reading, and are ticked in audit-2026-11-12. Line 2 is neverest's, a consumer marked "before"; the owner decides whether it holds the tags or follows them.
 
-### Owner decisions before sync-v1
+### Owner decisions before sync-v1 (ruled 2026-11-19)
+
+The owner took every recommendation below on 2026-11-19: the read-back after v1, additive; the file with no row landed before the tags (pimdir cairn/log/2026-11-19-a-file-with-no-row.md, the sync vectors at format 8, vector 172, no draft bump); the fence after v1, as a storage-v1 minor adding a `store_meta` column, Android exempt. The two io-pimdir changes are `active`, accepted and deferred past the tags. None of the three blocks v1 now; the file with no row moves checks/io-pimdir.rev, since v0.17.0 refuses the sync vectors' format 8.
+
+As the three stood before the ruling:
+
 
 - io-pimdir a-push-reads-back-the-server-bytes (draft, 7 lines): after v1 if a push outcome only gains an optional body (additive to SYNC §4); before sync-v1 if SYNC §5 is to say the base MUST be the server's body, which changes engine behaviour and vectors sync-v1 pins. Recommendation: after v1, additive; the local body still holds what the server dropped, so nothing is lost meanwhile.
 - pimdir two-silent-losses-fold-into-draft-08/tasks.md:16: a sync vector stating a file with no row needs a field in vectors/schema/sync.schema.json, which joins checks/frozen.sha256 at sync-v1 (O13). Before the tags, or never without a new vector format. Recommendation: before, if the owner still wants it, as one optional field.
@@ -36,5 +41,7 @@ A8 to A11 (Android, class before) and N1 were closed in their repositories on 20
 
 - pimdir, 113 open lines read, 8 since ticked (T7, P5, N1, A7 to A11): blocks v1 2, after v1 76 (C5 included), obsolete 25, owner question 1.
 - io-pimdir, 68 open lines read, 6 since ticked (release-hygiene 3, the two draft-14 pin lines, the-default-enqueue-strips:11): blocks v1 0, after v1 22, obsolete 28, owner decision 5 (the fence) and 7 (a-push-reads-back-the-server-bytes, an owner question); plus 8 lines the changes of 2026-11-19 opened (one-no-replace-move 1, a-purge-of-chosen-items 2, the-store-rules-the-clis-restate 4, the-merge-verdict-is-public 1), all after v1.
+
+Since, on 2026-11-19 (the owner's rulings): pimdir's owner question is landed (two-silent-losses:16), so pimdir has no owner question left; io-pimdir's 12 owner lines are after v1 (the fence 5, the read-back 7), an-ambiguous-intent-awaits-confirmation landed (7 lines ticked), a-page-lands-in-few-statements abandoned (its 10 lines ticked), and the-store-rules-the-clis-restate ticked 3 of its 4 lines (the CLIs' own stays, after v1).
 
 The per-line table is tasks.md.

@@ -1,5 +1,5 @@
 {
-  "v": 7,
+  "v": 8,
   "label": "a create edited since its refusal derives an Add under another key, which is pushed; accepted, the refusal goes with the provisional binding",
   "note": "the body changed, so does the Add's key: the change is a new one and is pushed. Accepted under an assigned handle, the provisional binding is superseded and the binding under the new handle holds no refusal (SYNC.md §5)",
   "store": {

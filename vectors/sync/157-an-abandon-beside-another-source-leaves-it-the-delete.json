@@ -1,5 +1,5 @@
 {
-  "v": 7,
+  "v": 8,
   "label": "a delivered create given up while another source binds the item is a tombstone for that source, which owes the delete",
   "note": "a card written on the device was pushed to both sources of the address book: a answered its handle and revision, b accepted the add with no handle, so b's create is delivered and no listing of b ever named the member. The Abandon through b drops b's binding as a removal the source stated is dropped: the item is marked deleted and, a still binding it, not retained. That binding is as it was, its base naming c1 at r1, so a projects a tombstone and its next sync pushes the delete, as for any member gone from one source of two (SYNC.md §7, §9). The other reading, the item left live for a, would have b offered it again and add a second member where the first may have landed. Nothing is pushed by the mutation itself, and the run reports the provisional handle it gave up",
   "store": {

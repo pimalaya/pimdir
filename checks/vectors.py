@@ -1742,6 +1742,16 @@ for path in sync_cases:
     labels = set(store.get("objects", {})) | set(case["expect"].get("store", {}).get("objects", {}))
     for object_label, spec in store.get("objects", {}).items():
         require(f"{label}: object {object_label} names a fixture", (root / spec["body"]).is_file())
+    # An object stated with `row` false is a file under its name with no row
+    # (SYNC.md section 11), so it has a file and no row names it: nothing
+    # references a body the store does not hold.
+    for side, rows in (("store", store), ("expected store", case["expect"].get("store", {}))):
+        rowless = {object_label for object_label, spec in rows.get("objects", {}).items() if spec.get("row") is False}
+        for object_label in rowless:
+            require(f"{label}: {side} object {object_label} with no row has a file", rows["objects"][object_label].get("blob") is not False)
+        named = {item.get(column) for item in rows.get("items", []) for column in ("object", "conflict_object")}
+        named |= {binding.get(column) for binding in rows.get("bindings", []) for column in ("base_object", "conflict_object", "shared_object")}
+        require(f"{label}: {side} names no object with no row", not rowless & named)
     # A run may declare a collection, as an owner recording attachments
     # declares the account's (STORAGE section 14.3).
     expected = case["expect"].get("store", {})
@@ -2149,9 +2159,9 @@ for path in sync_cases:
     # blake3 for the derivation, so an engine's keys are checked against the
     # prose and never against another engine.
     names = {object_label: name(blake3((root / spec["body"]).read_bytes()).digest()) for object_label, spec in store.get("objects", {}).items()}
-    # A body whose bytes fail its name, or with no blob, is no body (STORAGE
-    # section 7): no push carries it.
-    unread = {object_label for object_label, spec in store.get("objects", {}).items() if spec.get("corrupt") or spec.get("blob") is False}
+    # A body whose bytes fail its name, with no blob or with no row, is no body
+    # (STORAGE section 7): no push carries it.
+    unread = {object_label for object_label, spec in store.get("objects", {}).items() if spec.get("corrupt") or spec.get("blob") is False or spec.get("row") is False}
     for push in case["expect"].get("pushes", []):
         require(f"{label}: push {push.get('handle')} carries no body it could not verify", push.get("object") not in unread)
     # A conflict is settled by an overrule or by a person's resolution naming
