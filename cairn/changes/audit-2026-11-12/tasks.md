@@ -109,7 +109,7 @@ Severity is high, medium or low, as the skeptic left it. The class says when a l
 ## neverest
 
 - [x] **N1 medium** (any): `--dry-run` clones the store file by file (pimdir.db, its WAL, index.db, the lock files) while producers take no sync.lock, the file copy of a live store §8 forbids (src/offline/driver.rs:6522-6541). io-pimdir offers the replica: one snapshot through the backup API, objects/ hard-linked under the shared staging lock. Closed in neverest: neverest cairn/log/2026-11-19-a-dry-run-replica-is-a-consistent-copy.md (uncommitted on 2026-11-19)
-- [ ] **N2 low** (any): the drive loop exists twice; neverest's copy (src/offline/mod.rs:127-236) does not count the verb in flight, so the collector's refusal is blind to its verbs. Harmless today. A public guard on `PimdirSourceStore`. 2026-11-19: asked of io-pimdir by neverest, a public in-flight guard on `PimdirSourceStore`; after v1
+- [x] **N2 low** (any): the drive loop exists twice; neverest's copy (src/offline/mod.rs:127-236) does not count the verb in flight, so the collector's refusal is blind to its verbs. Harmless today. A public guard on `PimdirSourceStore`. 2026-11-19: asked of io-pimdir by neverest, a public in-flight guard on `PimdirSourceStore`; after v1. Closed 2026-11-19: io-pimdir `PimdirSourceStore::running` answers the public `client::PimdirRunning` guard `run` holds (io-pimdir cairn/log/2026-11-19-a-runner-of-its-own-counts-its-verb.md, unreleased); neverest holds it across `run_verb_paged` (neverest cairn/log/2026-11-19-the-drive-loop-counts-its-verb.md), on a path patch until io-pimdir is released.
 
 ## The Android app
 
