@@ -2014,6 +2014,15 @@ for path in sync_cases:
         for binding in after.get("bindings", []):
             if binding["source"] == run["source"] and binding.get("conflicted") == 1:
                 require(f"{label}: binding {binding['handle']} under {policy} is settled once its diverging body is read", binding.get("conflict_object") is None)
+    # A hash: key asserts no identity, so no source is offered an item under
+    # one: an Add a sync pushes under it is its source's own create (SYNC.md
+    # section 9).
+    if run.get("verb") == "sync":
+        for push in case["expect"].get("pushes", []):
+            if push.get("kind") == "Add" and str(push.get("link_id", "")).startswith("hash:"):
+                require(f"{label}: Add {push['handle']} under a hash: key is its source's own create, never an offer",
+                        any(b["link_id"] == push["link_id"] and b["source"] == run["source"]
+                            for b in store.get("bindings", [])))
     # An item conflict waiting for an unread body clears once an upgrade reads
     # one equal to the item's, whatever the policy (SYNC.md sections 6 and 9).
     if run.get("verb") == "upgrade":

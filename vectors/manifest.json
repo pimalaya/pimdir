@@ -155,7 +155,7 @@
     "vectors/sync/114-a-fill-settles-a-prefer-incoming-divergence.json": "76766c72e787c3bcf35aacc7968b7c15e490c541cd347da2e796cee255a0570b",
     "vectors/sync/115-a-fill-settles-a-prefer-existing-divergence.json": "75df44860172c7d571a0dd3d14d6e729810a44934f58c7af1158c5e9d9f1c465",
     "vectors/sync/116-an-upgrade-settles-a-prefer-local-conflict-keeping-the-server-body.json": "05255f7da434993679007500178ab086df53c4e72be4abb54c95a857c705e406",
-    "vectors/sync/117-prefer-local-keeps-the-body-it-pushes-over.json": "10d72e56e773fee49c002c435d554e45d5960ad66948eeb6da358f341c6ba82f",
+    "vectors/sync/117-prefer-local-keeps-the-body-it-pushes-over.json": "204474ade8b0157bb79232e513ec3f0b1cf6689063aab44f44ef9c7759cf4eff",
     "vectors/sync/118-a-person-settles-an-item-conflict-keeping-its-body-through-the-other-source.json": "39564550719bcb800a5e79a9c1a4db22b2738ebe4f7865e961926618ad2e85db",
     "vectors/sync/119-a-person-settles-an-item-conflict-taking-the-diverging-body-through-the-other-source.json": "1d23584502240612b8eef8913afa434e0e205967a9895730331b118ce461a700",
     "vectors/sync/12-local-content-pushed.json": "84ec6878148be8ceed30d0e13db519389d87975c07a913e56151978afb6ab656",
@@ -228,13 +228,19 @@
     "vectors/sync/180-an-ordinary-edit-moves-the-agreement-point.json": "eb4254ec6704684d0e1986c8fde1eb905c2f81c1f64692c2438dffae62db7350",
     "vectors/sync/181-prefer-remote-over-an-item-another-source-changed-meets-prefer-incoming.json": "5029331c120229091c202e8eb9934d1bed0dfb044580ed128ae2287d257e85a5",
     "vectors/sync/182-prefer-remote-over-an-item-another-source-changed-meets-prefer-existing.json": "a260253d5b692678062bd99fe55e41ca34ac138a5d3bb311e84557fd4c0c89a6",
-    "vectors/sync/183-prefer-remote-over-an-item-another-source-changed-meets-manual.json": "486791034b1bacc6225b339e7a6262203b7f46def131135dfa3f3d2ea1f95120",
+    "vectors/sync/183-prefer-remote-over-an-item-another-source-changed-meets-manual.json": "81efc2d6eabde8a5e3bdd6e19bc5d9c7e1c4d176a148e0e1f415768c461f3001",
     "vectors/sync/184-a-member-joining-an-item-reports-added-alone.json": "0204cb2632b04997fd76ae18b802a23a95ad3ec2773f2943a57ab7f868e297cd",
     "vectors/sync/185-a-member-joining-with-a-diverging-body-meets-prefer-incoming.json": "f3308152a2910f323d8d619bf3b65a4351b42278f12029a941b7c2cf770cae8c",
     "vectors/sync/186-a-pending-create-beside-a-parked-round-derives-no-add.json": "32e61bf415bb4d8bc59442b935b43e95618d6245f70be5c0bed1034b7f3383f1",
     "vectors/sync/187-a-member-joining-without-its-body-records-the-divergence.json": "c552170ed9a8026550312ad62ba3729bdcb3a0839b4b303a58a903a6850de07d",
     "vectors/sync/188-an-upgrade-reading-a-joined-body-equal-to-the-items-clears-the-conflict.json": "d8afadd0af67144ce7c6229fe944005478e7a9ea74543c2be6bf57a31872e375",
+    "vectors/sync/189-a-member-carrying-the-placements-own-body-is-the-lost-push.json": "988301d2cb5abf47e53bdc8b63a16f8c8cccef17df472f32aaf3d0c2aff542c2",
     "vectors/sync/19-delta-vanished-retains.json": "6f23942ec9b35aa6b9aeafeaaa3fa1616da547870d0fe8dfc5f9957852a81805",
+    "vectors/sync/190-a-rekey-reports-an-arrival-added.json": "8c1fe76db606983ccc7dc001e693c0b451b2e0596a958fcc63f9dce4a371e0e6",
+    "vectors/sync/191-a-hash-keyed-item-is-offered-to-no-other-source.json": "c54db19c52360b89f3f0cd33837c22b1ceec13a02a267a1126f35d2f7aa92114",
+    "vectors/sync/192-a-server-edit-meeting-another-sources-change-is-the-collections-divergence.json": "1b919b01566d0361ae090e821d0df50fd34a09024b7813d345bca3ec5d14f06a",
+    "vectors/sync/193-a-server-edit-meeting-another-sources-change-under-manual-conflicts-the-item.json": "fcf4b92435a68bb318bf382162cb105555052572759248c5508f4198f6bf08cb",
+    "vectors/sync/194-a-write-draws-named-members-seqs-before-kept-bodies.json": "dedad9a27938ba1d41a20e2c44958dc0a49536de4953fe3f00a58203676b0d0d",
     "vectors/sync/20-move-source-first-relocates.json": "21729b1c61a5085e531c817866cf1471944a0d22bf4df5ce4a89289cb7edf40d",
     "vectors/sync/21-a-page-lands-a-pending-create.json": "6e6d36fb5836347ca11426072acfd4cad17924e268516fd3ffeee1ca0009cc80",
     "vectors/sync/22-rekey-carries-a-minted-key.json": "86bdf0df6fea79ff71e196cb3ad427d5d84df35ff5a3c1b4472fe489f7c0b15b",
@@ -347,5 +353,5 @@
       "/cases": 24
     }
   },
-  "sync": 188
+  "sync": 194
 }

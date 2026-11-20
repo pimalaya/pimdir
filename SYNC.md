@@ -334,13 +334,13 @@ The flag axis leaves the status alone while the content axis still owes a push, 
 
 A placement holding no body (a pull having emptied it) owes nothing until the upgrade refetches it. One holding a local body over a base that names a revision and no body (an edit staged after such a pull) MUST derive no `Update`, nor the `Remove` a move's staged edit rides ahead of (below): the body the server holds at that revision is one nobody has read, and pushing over it would lose it unkept. It waits for the upgrade, which fetches that body into the base (§6), after which the local body is an edit over a body read. A placement whose local body the run keeps, pushed or conflicted, keeps that body's summary.
 
-Both is a conflict, resolved by the source's policy. Mail reports no revision and never reaches this axis. A file (STORAGE §14.3) is mutable: a connector to a folder MUST report a revision, an edit being a new body under the same key.
+Both is a conflict, resolved by the source's policy, when the local body is the binding's own: the item's body the one the binding last agreed with the shared item (`shared_object`, its base until it folded once, §9), an edit made through it. A local body another source folded into the item since, the item's body differing from that one, is no edit of this binding's but propagation it owes: whatever the source's policy, `KeepLocal` aside, the member is pulled and the write folds it, the divergence settled by the collection's `conflict` (§9). `KeepLocal` settles it as any remote change, the store being authoritative. Mail reports no revision and never reaches this axis. A file (STORAGE §14.3) is mutable: a connector to a folder MUST report a revision, an edit being a new body under the same key.
 
 A `Conflict` placement meeting a revision newer than its `conflict_revision` records the new one and drops its `conflict_object`, which described the old revision; the upgrade fetches it anew (§6).
 
 One carrying no `conflict_revision` (the item's conflict, §9) and meeting a revision its base does not hold MUST mark the binding conflicted with that revision and ask for the diverging body, whatever the source's policy, reported as `Conflicted`.
 
-A conflict whose fetched body equals the placement's own is no divergence (the push whose record was lost had landed): the binding adopts the revision and body as its base and the conflict clears.
+A conflict whose fetched body equals the placement's own is no divergence (the push whose record was lost had landed): the binding adopts the revision and body as its base and the conflict clears. So is a member carrying, at a revision its base does not hold, the very body the placement holds over that base: whatever the policy, the binding adopts the listed revision and that body as its base, nothing is recorded, pushed or reported, the read being what the lost record would have said.
 
 **Conflict policy** is the source's, settling it against its own remote:
 
@@ -409,7 +409,7 @@ A sync reports per item, in order, what the remote changed locally and what the 
 
 A run also reports a round it parked (above), as a rekey reports itself parked (§8). A pushed flag, body or delete reports nothing: the consumer made it.
 
-Only a sync reports events: an upgrade, a mutation and a rekey report none, save `Overruled`, which any verb whose write kept a body no one asked to lose reports, and `Abandoned`, which the mutation giving a create up reports.
+Only a sync and a rekey report events: a rekey reports `Added` for a member no old binding resolves to (§8), and an upgrade and a mutation report none, save `Overruled`, which any verb whose write kept a body no one asked to lose reports, and `Abandoned`, which the mutation giving a create up reports.
 
 ## 6. Upgrade
 
@@ -524,6 +524,8 @@ The batch drops each old handle it re-writes with reason `Rekeyed`, which licens
 
 An old binding no member resolves to by link id is dropped `Deleted`, whether or not the new space reuses its handle, since a server restarting its numbering at 1 hands a carried member the handle a gone one held, and an upsert under it before that drop would fold the carried member into the gone one's item (§10).
 
+A member resolving to no old binding, an arrival the renumbering met, is named as a page names one (§6) in the same batch and reported `Added`, as a sync naming it would: the rekey's checkpoint lists it no more.
+
 A binding with no base is outside the rekey and is carried as it is. So is a delivered create (§2) no member resolves to by link id, which no rekey finds absent nor counts; one a member resolves to is carried onto it as a page lands it (§6).
 
 **A rekey missing most members parks.** A rekey whose listing leaves more than half of the based bindings of this source in the collection resolving to no member, when those bindings number at least 20, MUST NOT be written unless the run carries the `accept_absences` option. They are counted as §5 counts a round's absences, the whole collection being its scope and a binding absent when no member resolves to its link id. A rekey whose listing names no member parks the same way while any based binding of this source is absent, whatever their number (§5, an empty listing).
@@ -588,7 +590,7 @@ An upsert leaving a conflicted binding counts as the source having changed its b
 
 So MUST the diverging body an overruling `Edit` does not adopt (§7): an automatic settle never discards a body silently, and only a person's resolution may.
 
-The write keeps it as a retained item beside the one it lost to (STORAGE §11), keyed by the identity minted over the handle of the binding whose upsert, upgrade (§6) or overruling `Edit` (§7) settled it (`dup:`, the link id, `#`, that handle), minted again over a held key: a key any row of the collection has, the retained body a policy kept before included (STORAGE §9). A second body one binding loses is so kept beside the first, and an overruling `Edit` keeping two bodies keys the item's over the binding's. The run reports each `Overruled` (§5), in the order kept.
+The write keeps it as a retained item beside the one it lost to (STORAGE §11), its summary and sort key read from its own body (STORAGE Annex A), keyed by the identity minted over the handle of the binding whose upsert, upgrade (§6) or overruling `Edit` (§7) settled it (`dup:`, the link id, `#`, that handle), minted again over a held key: a key any row of the collection has, the retained body a policy kept before included (STORAGE §9). A second body one binding loses is so kept beside the first, and an overruling `Edit` keeping two bodies keys the item's over the binding's. The run reports each `Overruled` (§5), in the order kept.
 
 **Deletes propagate.** A `Deleted` drop or a `Tombstone` upsert marks the item deleted; the dropping source loses its binding, a tombstoning one keeps it. Every other source projects a `Tombstone`; a source lacking the item projects nothing.
 

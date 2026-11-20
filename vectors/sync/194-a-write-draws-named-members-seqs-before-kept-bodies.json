@@ -1,0 +1,220 @@
+{
+  "v": 11,
+  "label": "a write draws the seqs of the members it names before those of the bodies it keeps",
+  "note": "the case of 181, b's listing also naming n.vcf, a card the store holds no row of. The page's write names n.vcf, a new item, and keeps c3, the body prefer-incoming replaced, as a retained item: it draws the seq of each item its upserts name first, in the batch's order (b.vcf naming no new item, then n.vcf, seq 2), then that of each body it keeps, in the order kept (c3, seq 3), so every owner numbers the batch alike (STORAGE.md §9.1; SYNC.md §9)",
+  "store": {
+    "collections": [
+      {
+        "id": "Contacts",
+        "account": null,
+        "kind": "text/vcard",
+        "conflict": "prefer-incoming"
+      }
+    ],
+    "objects": {
+      "c1": {
+        "body": "fixtures/card-basic.vcf"
+      },
+      "c2": {
+        "body": "fixtures/card-basic-edited.vcf"
+      },
+      "c3": {
+        "body": "fixtures/card-basic-renamed.vcf"
+      },
+      "c4": {
+        "body": "fixtures/card-kind.vcf"
+      }
+    },
+    "items": [
+      {
+        "collection": "Contacts",
+        "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40",
+        "seq": 1,
+        "flags": [],
+        "object": "c3",
+        "level": 2,
+        "deleted": 0
+      }
+    ],
+    "bindings": [
+      {
+        "collection": "Contacts",
+        "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40",
+        "source": "a",
+        "handle": "a.vcf",
+        "base_flags": [],
+        "base_object": "c1",
+        "base_revision": "r1",
+        "base_present": 1,
+        "shared_object": "c3"
+      },
+      {
+        "collection": "Contacts",
+        "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40",
+        "source": "b",
+        "handle": "b.vcf",
+        "base_flags": [],
+        "base_object": "c1",
+        "base_revision": "r1",
+        "base_present": 1,
+        "shared_object": "c1"
+      }
+    ],
+    "sources": [
+      {
+        "collection": "Contacts",
+        "source": "a",
+        "checkpoint": "a1"
+      },
+      {
+        "collection": "Contacts",
+        "source": "b",
+        "checkpoint": "b1"
+      }
+    ]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "Contacts",
+    "source": "b",
+    "options": {
+      "push": true,
+      "rights": {
+        "flags": true,
+        "content": true,
+        "add": true,
+        "remove": true
+      },
+      "conflict": "prefer-remote"
+    }
+  },
+  "remote": {
+    "snapshot": {
+      "items": [
+        {
+          "handle": "b.vcf",
+          "flags": [],
+          "revision": "r2",
+          "carries": true,
+          "meta": {
+            "body": "fixtures/card-basic-edited.vcf"
+          }
+        },
+        {
+          "handle": "n.vcf",
+          "flags": [],
+          "revision": "n1",
+          "carries": true,
+          "meta": {
+            "body": "fixtures/card-kind.vcf"
+          }
+        }
+      ],
+      "vanished": [],
+      "complete": true,
+      "checkpoint": "b2"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [
+      {
+        "kind": "ContentChanged",
+        "handle": "b.vcf"
+      },
+      {
+        "kind": "Overruled",
+        "handle": "b.vcf",
+        "link_id": "dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#b.vcf"
+      },
+      {
+        "kind": "Added",
+        "handle": "n.vcf"
+      }
+    ],
+    "store": {
+      "items": [
+        {
+          "collection": "Contacts",
+          "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40",
+          "seq": 1,
+          "flags": [],
+          "object": "c2",
+          "level": 2,
+          "deleted": 0,
+          "conflicted": 0,
+          "conflict_object": null
+        },
+        {
+          "collection": "Contacts",
+          "link_id": "dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#b.vcf",
+          "seq": 3,
+          "flags": [],
+          "object": "c3",
+          "level": 2,
+          "deleted": 1,
+          "retained": true,
+          "retained_by": "b"
+        },
+        {
+          "collection": "Contacts",
+          "link_id": "urn:uuid:5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e",
+          "seq": 2,
+          "flags": [],
+          "object": "c4",
+          "level": 2,
+          "deleted": 0
+        }
+      ],
+      "bindings": [
+        {
+          "collection": "Contacts",
+          "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40",
+          "source": "a",
+          "handle": "a.vcf",
+          "base_flags": [],
+          "base_object": "c1",
+          "base_revision": "r1",
+          "base_present": 1,
+          "shared_object": "c3"
+        },
+        {
+          "collection": "Contacts",
+          "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40",
+          "source": "b",
+          "handle": "b.vcf",
+          "base_flags": [],
+          "base_object": "c2",
+          "base_revision": "r2",
+          "base_present": 1,
+          "shared_object": "c2",
+          "conflicted": 0
+        },
+        {
+          "collection": "Contacts",
+          "link_id": "urn:uuid:5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e",
+          "source": "b",
+          "handle": "n.vcf",
+          "base_flags": [],
+          "base_object": "c4",
+          "base_revision": "n1",
+          "base_present": 1
+        }
+      ],
+      "sources": [
+        {
+          "collection": "Contacts",
+          "source": "a",
+          "checkpoint": "a1"
+        },
+        {
+          "collection": "Contacts",
+          "source": "b",
+          "checkpoint": "b2"
+        }
+      ]
+    }
+  }
+}

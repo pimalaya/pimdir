@@ -1,0 +1,28 @@
+{
+  "v": 11,
+  "label": "an item under a hash: key is offered to no other source",
+  "note": "source a holds a card stating no UID, keyed by the hash of its bytes (STORAGE §9). Source b lacks it and syncs a listing naming nothing: the store holds the body, yet a hash: key asserts no identity, so b is offered no Add (SYNC.md §9): pushed, the card would come back from b's server under the key its own bytes give there, which nothing guarantees equal, and two copies would follow",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
+    "objects": { "c1": { "body": "fixtures/card-empty-uid.vcf" } },
+    "items": [{ "collection": "Contacts", "link_id": "hash:6978bdefb73bfcc5", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0 }],
+    "bindings": [
+      { "collection": "Contacts", "link_id": "hash:6978bdefb73bfcc5", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1, "shared_object": "c1" }
+    ],
+    "sources": [{ "collection": "Contacts", "source": "a", "checkpoint": "a1" }, { "collection": "Contacts", "source": "b", "checkpoint": "b0" }]
+  },
+  "run": { "verb": "sync", "collection": "Contacts", "source": "b", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual" } },
+  "remote": { "snapshot": { "items": [], "vanished": [], "complete": true, "checkpoint": "b1" }, "fetch": {} },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [{ "collection": "Contacts", "link_id": "hash:6978bdefb73bfcc5", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0 }],
+      "bindings": [
+        { "collection": "Contacts", "link_id": "hash:6978bdefb73bfcc5", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1, "shared_object": "c1" }
+      ],
+      "sources": [{ "collection": "Contacts", "source": "a", "checkpoint": "a1" }, { "collection": "Contacts", "source": "b", "checkpoint": "b1" }]
+    }
+  }
+}
