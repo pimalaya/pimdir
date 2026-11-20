@@ -41,7 +41,7 @@ change: the-freeze-plan
 ## 5. Owner decisions
 
 - [x] D2 decided (2026-11-20): in sync-v1
-- [ ] D2 landed: SYNC text, a vector, io-pimdir, neverest mapping its one-way authority to it
+- [x] D2 landed: SYNC text, vectors 174 and 175, io-pimdir (neverest mapping waits for an io-pimdir release)
 - [x] D3 decided (2026-11-20): search inside io-pimdir 1.0, SEARCH released with the other parts
 - [x] D4 decided (2026-11-20): outside
 - [ ] D4 stated in the `pimdir` binary's help and README
