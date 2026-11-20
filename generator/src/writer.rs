@@ -356,6 +356,7 @@ fn write_rounds(store: &Store, stamped: &Stamps, collection: &Collection) -> Res
         for round in 1..=sync.rounds {
             let open = sync.open.as_ref().filter(|_| round == sync.rounds);
             let (since, until) = open.map_or(&covered, |open| &open.scope).values();
+            let band = Value::Integer(i64::from(open.is_some_and(|open| open.band)));
             run(
                 store,
                 "storage/owner/open_round",
@@ -364,7 +365,7 @@ fn write_rounds(store: &Store, stamped: &Stamps, collection: &Collection) -> Res
                     ("source", &source),
                     ("since", &since),
                     ("until", &until),
-                    ("band", &Value::Integer(0)),
+                    ("band", &band),
                 ],
             )?;
             let key = (collection.id.as_str(), name.as_str(), round);

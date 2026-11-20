@@ -100,6 +100,15 @@ pub struct Remote {
     /// The pushes after which its next run fails, the last one taken and its
     /// outcome never written, as a crash between the two, once.
     pub crash: Option<usize>,
+    /// Whether its checkpoint is bound to the scope it was made under (SYNC
+    /// §4); one bound to none lets a widening list the band it lacks.
+    pub scope_bound: bool,
+    /// Whether its connector lists delta heads (SYNC §4).
+    pub delta_heads: bool,
+    /// Whether it rejects the next resume cursor it is handed, once.
+    pub reject_cursor: bool,
+    /// The page of its next round whose cursor it leaves out, once.
+    pub drop_cursor: Option<usize>,
 }
 
 /// A member as a page lists it.
@@ -173,6 +182,10 @@ impl Remote {
             clock: Instant::at(2026, 10, 1, 9, 0, 0),
             interrupt: None,
             crash: None,
+            scope_bound: true,
+            delta_heads: false,
+            reject_cursor: false,
+            drop_cursor: None,
         }
     }
 

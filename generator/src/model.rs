@@ -96,6 +96,8 @@ pub struct OpenRound {
     /// The resume cursor its last page landed, none for a parked round,
     /// which resumes from its first page.
     pub cursor: Option<String>,
+    /// Whether it lists only the band its coverage lacks (SYNC §5).
+    pub band: bool,
 }
 
 /// `[since, until)` on a message's summary `date`, either bound open (SYNC
@@ -136,6 +138,34 @@ impl Scope {
         floor && ceiling
     }
 
+    /// The band it adds to `coverage` on one side, adjoining it, which a
+    /// round may list alone when its source's checkpoint is bound to no
+    /// scope (SYNC §5); none when it widens both sides or none.
+    pub fn band(&self, coverage: &Scope) -> Option<Scope> {
+        let lower = match (self.since, coverage.since) {
+            (None, Some(floor)) => Some((None, floor)),
+            (Some(own), Some(floor)) if own < floor => Some((Some(own), floor)),
+            _ => None,
+        };
+        let upper = match (self.until, coverage.until) {
+            (None, Some(ceiling)) => Some((ceiling, None)),
+            (Some(own), Some(ceiling)) if own > ceiling => Some((ceiling, Some(own))),
+            _ => None,
+        };
+        let same_floor = self.since == coverage.since;
+        let same_ceiling = self.until == coverage.until;
+        match (lower, upper) {
+            (Some((since, floor)), None) if same_ceiling => Some(Scope {
+                since,
+                until: Some(floor),
+            }),
+            (None, Some((ceiling, until))) if same_floor => Some(Scope {
+                since: Some(ceiling),
+                until,
+            }),
+            _ => None,
+        }
+    }
     /// Its bounds as the store holds them, `NULL` for an open one.
     pub fn values(&self) -> (Value, Value) {
         let bound = |instant: Option<Instant>| {

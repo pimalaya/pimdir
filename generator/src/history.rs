@@ -1422,6 +1422,149 @@ impl History {
 
         Self { steps }
     }
+
+    /// Rounds resumed, restarted and banded (SYNC §4, §5). On work/INBOX, a
+    /// connector listing delta heads: a round cut after its first page,
+    /// then an arrival, a flag change and a stated removal, the round
+    /// resumed after a head naming them. On work/Archive: a round cut, a
+    /// message its first page named lost unannounced, and the cursor
+    /// rejected, the round restarted under a new id finding it absent. On
+    /// work/Sent Items: a page handing no cursor, refused, the round resumed
+    /// after. On work/Lists, a checkpoint bound to no scope: a round over
+    /// October, then a widening to September listing the band alone, cut,
+    /// resumed after a head from the source's checkpoint, an undated message
+    /// lost unannounced kept.
+    pub fn heads(seed: u64) -> Self {
+        let mut draw = Draw::new(seed);
+        let mut model = Model::new();
+        let mut steps = vec![Step {
+            label: String::from("an empty store"),
+            run: None,
+            model: model.clone(),
+        }];
+        let mut record = |label: String, run: Option<Run>, model: &Model| {
+            steps.push(Step {
+                label,
+                run,
+                model: model.clone(),
+            });
+        };
+        let mut dated = |date: Option<Instant>| Mail {
+            date,
+            ..draw.message(false)
+        };
+        let day = |month: u32, day: u32| Some(Instant::at(2026, month, day, 9, 0, 0));
+        let from = |month: u32| Options {
+            scope: Scope {
+                since: Some(Instant::at(2026, month, 1, 0, 0, 0)),
+                until: None,
+            },
+            accept_absences: false,
+        };
+        let mailbox = |model: &mut Model, id: &str, source: &str| {
+            model.declare(Collection {
+                id: String::from(id),
+                account: Some(String::from("work")),
+                kind: Some(Kind::Mail),
+                name: String::from(id),
+                role: None,
+                sources: synced_by(&[source]),
+                conflict: String::from("manual"),
+                generation: 1,
+            });
+            Remote::new(source, id)
+        };
+
+        let id = "work/INBOX";
+        let mut remote = mailbox(&mut model, id, "inbox-imap");
+        remote.delta_heads = true;
+        for date in 1..=9 {
+            remote.deliver(dated(day(10, date)).file(), BTreeSet::new());
+        }
+        remote.interrupt = Some(1);
+        let run = model.sync(&mut remote, PAGE);
+        record(
+            format!("{id}: a round cut after its first page"),
+            Some(run),
+            &model,
+        );
+        remote.deliver(dated(day(10, 20)).file(), BTreeSet::new());
+        remote.set_flags("1", set(&["\\Flagged"]));
+        remote.expunge("8");
+        let run = model.sync(&mut remote, PAGE);
+        record(
+            format!("{id}: the round resumed after a head"),
+            Some(run),
+            &model,
+        );
+
+        let id = "work/Archive";
+        let mut remote = mailbox(&mut model, id, "archive-imap");
+        for date in 1..=7 {
+            remote.deliver(dated(day(9, date)).file(), BTreeSet::new());
+        }
+        remote.interrupt = Some(1);
+        let run = model.sync(&mut remote, PAGE);
+        record(
+            format!("{id}: a round cut after its first page"),
+            Some(run),
+            &model,
+        );
+        remote.forget("7");
+        remote.reject_cursor = true;
+        let run = model.sync(&mut remote, PAGE);
+        record(
+            format!("{id}: the cursor rejected, the round restarted"),
+            Some(run),
+            &model,
+        );
+
+        let id = "work/Sent Items";
+        let mut remote = mailbox(&mut model, id, "sent-imap");
+        for date in 1..=7 {
+            remote.deliver(dated(day(8, date)).file(), BTreeSet::new());
+        }
+        remote.drop_cursor = Some(1);
+        let run = model.sync(&mut remote, PAGE);
+        record(format!("{id}: a page handing no cursor"), Some(run), &model);
+        let run = model.sync(&mut remote, PAGE);
+        record(format!("{id}: the round resumed"), Some(run), &model);
+
+        let id = "work/Lists";
+        let mut remote = mailbox(&mut model, id, "lists-imap");
+        remote.scope_bound = false;
+        remote.delta_heads = true;
+        remote.deliver(dated(None).file(), BTreeSet::new());
+        for date in [
+            day(10, 2),
+            day(10, 3),
+            day(9, 2),
+            day(9, 3),
+            day(9, 4),
+            day(9, 5),
+        ] {
+            remote.deliver(dated(date).file(), BTreeSet::new());
+        }
+        let run = model.sync_with(&mut remote, PAGE, &from(10));
+        record(format!("{id}: a round over October"), Some(run), &model);
+        remote.forget("1");
+        remote.deliver(dated(day(10, 9)).file(), BTreeSet::new());
+        remote.interrupt = Some(1);
+        let run = model.sync_with(&mut remote, PAGE, &from(9));
+        record(
+            format!("{id}: a band over September, cut"),
+            Some(run),
+            &model,
+        );
+        let run = model.sync_with(&mut remote, PAGE, &from(9));
+        record(
+            format!("{id}: the band resumed after a head"),
+            Some(run),
+            &model,
+        );
+
+        Self { steps }
+    }
 }
 
 impl Model {
@@ -1513,6 +1656,7 @@ mod tests {
             History::scopes(37),
             History::rekeys(41),
             History::crashes(43),
+            History::heads(47),
         ];
         for (index, step) in histories
             .iter()
@@ -2507,6 +2651,12 @@ mod tests {
     fn a_pull_agreeing_with_the_item_settles_without_a_conflict() {
         let history = History::sources(31);
         let (model, run) = shared(&history, 3, 4);
+        assert!(
+            !run.events
+                .iter()
+                .any(|event| matches!(event, Event::ContentChanged(_))),
+            "a body the item already holds is none it took"
+        );
         let item = held_by(model, 3, "b", "r1.vcf");
         assert!(!item.conflicted);
         assert_eq!(item.object, base(item, 3, "a"));
@@ -2898,6 +3048,7 @@ mod tests {
 
             let (before, _) = unread(&history, book, 1);
             let (model, run) = unread(&history, book, 2);
+            assert_eq!(run.handles, ["r1.vcf", "r2.vcf"]);
             let same = card(model, "r1.vcf");
             assert!(!same.conflicted, "a body read equal to the item's");
             let binding = same.bound(&b).unwrap();
@@ -3223,5 +3374,129 @@ mod tests {
                 ),
             }
         }
+    }
+
+    #[test]
+    fn a_resumed_round_lists_its_head_first_and_closes_on_its_checkpoint() {
+        let history = History::heads(47);
+        let inbox = "work/INBOX";
+        let (before, _) = rekeyed(&history, 1);
+        let (model, run) = rekeyed(&history, 2);
+        let head = run.head.as_ref().expect("a delta head");
+        let round = before.collections[inbox].sources["inbox-imap"].rounds;
+        assert_eq!(head.vanished, ["8"]);
+        assert!(run.events.contains(&Event::Vanished(String::from("8"))));
+        for member in &head.items {
+            let item = handled(model, inbox, &member.handle).unwrap();
+            assert_eq!(item.bindings[0].round, Some(round), "a head stamps");
+        }
+        assert_eq!(
+            handled(model, inbox, "1").unwrap().flags,
+            Some(set(&["\\Flagged"]))
+        );
+        let state = &model.collections[inbox].sources["inbox-imap"];
+        assert_eq!(state.rounds, round);
+        assert_eq!(
+            state.checkpoint,
+            head.checkpoint.clone().map(String::into_bytes)
+        );
+        assert_eq!(
+            run.events
+                .iter()
+                .filter(|event| matches!(event, Event::Vanished(_)))
+                .count(),
+            1,
+            "nothing a head or a page named is found absent"
+        );
+    }
+
+    #[test]
+    fn a_rejected_cursor_restarts_the_round_under_a_new_id() {
+        let history = History::heads(47);
+        let archive = "work/Archive";
+        let (before, _) = rekeyed(&history, 3);
+        let (model, run) = rekeyed(&history, 4);
+        let old = before.collections[archive].sources["archive-imap"].rounds;
+        let state = &model.collections[archive].sources["archive-imap"];
+        assert_eq!(state.rounds, old + 1);
+        assert!(run.pages[0].checkpoint.is_some(), "from the first page");
+        assert!(run.head.is_none());
+        assert!(
+            run.events.contains(&Event::Vanished(String::from("7"))),
+            "the abandoned listing's stamps protect nothing"
+        );
+        assert!(
+            model
+                .live(archive)
+                .all(|item| item.bindings[0].round == Some(old + 1))
+        );
+    }
+
+    #[test]
+    fn a_page_handing_no_cursor_fails_the_run_before_its_write() {
+        let history = History::heads(47);
+        let sent = "work/Sent Items";
+        let (model, run) = rekeyed(&history, 5);
+        assert!(run.failed);
+        assert_eq!(run.pages.len(), 1);
+        let open = model.collections[sent].sources["sent-imap"]
+            .open
+            .clone()
+            .unwrap();
+        assert_eq!(open.cursor, run.pages[0].cursor);
+        assert_eq!(model.live(sent).count(), run.pages[0].items.len());
+
+        let (model, run) = rekeyed(&history, 6);
+        assert!(!run.failed);
+        assert_eq!(model.live(sent).count(), 7);
+        assert!(model.collections[sent].sources["sent-imap"].open.is_none());
+    }
+
+    #[test]
+    fn a_widening_lists_the_band_alone_and_keeps_an_undated_member() {
+        let history = History::heads(47);
+        let lists = "work/Lists";
+        let (covered, _) = rekeyed(&history, 7);
+        let (model, run) = rekeyed(&history, 8);
+        assert_eq!(run.options.scope, since(9));
+        let open = model.collections[lists].sources["lists-imap"]
+            .open
+            .clone()
+            .unwrap();
+        assert!(open.band);
+        assert_eq!(
+            open.scope,
+            Scope {
+                since: since(9).since,
+                until: since(10).since,
+            }
+        );
+        assert!(run.pages.iter().all(|page| page.checkpoint.is_none()));
+        for member in run.pages.iter().flat_map(|page| page.items.iter()) {
+            let item = handled(model, lists, &member.handle).unwrap();
+            assert!(open.scope.holds(item.date().as_deref()) && item.date().is_some());
+        }
+
+        let (model, run) = rekeyed(&history, 9);
+        let head = run
+            .head
+            .as_ref()
+            .expect("a head from the source's checkpoint");
+        let state = &model.collections[lists].sources["lists-imap"];
+        assert_eq!(state.coverage, Some(since(9)));
+        assert_eq!(
+            state.checkpoint,
+            head.checkpoint.clone().map(String::into_bytes)
+        );
+        let undated = covered
+            .live(lists)
+            .find(|item| item.date().is_none())
+            .unwrap();
+        assert!(
+            model
+                .live(lists)
+                .any(|item| item.link_id == undated.link_id),
+            "a band round finds no undated member absent"
+        );
     }
 }

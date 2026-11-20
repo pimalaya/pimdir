@@ -372,7 +372,7 @@ impl Oracle<'_> {
                 until,
                 cursor,
                 checkpoint,
-                Value::Integer(0),
+                Value::Integer(i64::from(sync.open.as_ref().is_some_and(|open| open.band))),
             ];
             self.expect("storage/owner/load_round", &params, vec![row]);
         }

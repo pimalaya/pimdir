@@ -14,7 +14,10 @@
 //! no scope, every right, no head, no rekey, which later parts add
 //! (README.md, "Limits").
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    mem,
+};
 
 use rusqlite::types::Value;
 
@@ -228,12 +231,21 @@ pub struct Options {
 /// One verb run over one collection and the script it ran against.
 #[derive(Clone, Debug)]
 pub struct Run {
-    /// `sync` or `upgrade`.
+    /// `sync`, `upgrade` or `rekey`.
     pub verb: &'static str,
+    /// What it was asked, a vector's `run.options`: the scope and whether
+    /// absences are accepted.
+    pub options: Options,
+    /// The source's conflict policy against its remote (SYNC §5).
+    pub policy: Policy,
+    /// The handles an upgrade raised, none for another verb.
+    pub handles: Vec<String>,
     /// The collection.
     pub collection: String,
     /// The source.
     pub source: String,
+    /// The head listed before a resumed round's pages, if any.
+    pub head: Option<Page>,
     /// The pages the enumeration answered, a round's or a delta's.
     pub pages: Vec<Page>,
     /// The bodies fetched, by handle.
@@ -277,8 +289,12 @@ impl Model {
     /// choosing its listing as SYNC §5 does: the open round resumed when it
     /// lists the scope asked for, a round of pages of `size` opened when no
     /// round closed, one is open over another scope or the scope reaches
-    /// outside the coverage, else a delta from the checkpoint, recording a
-    /// narrower scope as the coverage.
+    /// outside the coverage (the band it lacks alone where the checkpoint is
+    /// bound to no scope), else a delta from the checkpoint, recording a
+    /// narrower scope as the coverage. A resumed round lists its delta head
+    /// first where the connector lists heads; one whose cursor the source
+    /// rejects restarts under a new id; a page handing no cursor, or a cut,
+    /// fails the run with what landed kept.
     pub fn sync_in(
         &mut self,
         remotes: &mut BTreeMap<String, Remote>,
@@ -287,37 +303,85 @@ impl Model {
         options: &Options,
     ) -> Run {
         let collection = String::from(collection);
-        let remote = &remotes[&collection];
-        let source = remote.source.clone();
+        let source = remotes[&collection].source.clone();
         let state = self.collections[&collection]
             .sources
             .get(&source)
             .cloned()
             .unwrap_or_default();
         let scope = &options.scope;
-        let (listing, round) = match (&state.open, &state.coverage) {
-            (Some(open), _) if &open.scope == scope => (true, state.rounds),
+        let band = match remotes[&collection].scope_bound {
+            true => None,
+            false => state
+                .coverage
+                .as_ref()
+                .and_then(|coverage| scope.band(coverage)),
+        };
+        let banded = band.is_some();
+        let target = band.unwrap_or_else(|| scope.clone());
+        let open = state
+            .open
+            .as_ref()
+            .filter(|open| open.scope == target && open.band == banded);
+        let (listing, mut round) = match (&state.open, &state.coverage) {
+            _ if open.is_some() => (true, state.rounds),
             (Some(_), _) | (None, None) => (true, state.rounds + 1),
             (None, Some(coverage)) if !scope.within(coverage) => (true, state.rounds + 1),
             _ => (false, state.rounds),
         };
-        let resumed = state.open.as_ref().filter(|open| &open.scope == scope);
-        let cursor = resumed.and_then(|open| open.cursor.clone());
-        let landed = resumed.and_then(|open| open.checkpoint.clone());
+        let remote = remotes.get_mut(&collection).expect("a remote");
+        let mut cursor = open.and_then(|open| open.cursor.clone());
+        let mut landed = open.and_then(|open| open.checkpoint.clone());
+        let restarted = cursor.is_some() && mem::take(&mut remote.reject_cursor);
+        if restarted {
+            round = state.rounds + 1;
+            cursor = None;
+            landed = None;
+        }
+        let resuming = open.is_some() && !restarted;
+        let from = match banded {
+            true => state.checkpoint.clone(),
+            false => landed.clone(),
+        };
+        let head = from
+            .filter(|_| resuming && remote.delta_heads)
+            .map(|from| remote.delta(&String::from_utf8_lossy(&from), scope));
+        let dropped = remote.drop_cursor.take();
+        let remote = &remotes[&collection];
         let mut pages = match listing {
-            true => remote.round_from(size, scope, cursor.as_deref()),
+            true => remote.round_from(size, &target, cursor.as_deref()),
             false => {
                 let checkpoint = state.checkpoint.clone().unwrap_or_default();
                 vec![remote.delta(&String::from_utf8_lossy(&checkpoint), scope)]
             }
         };
+        if let Some(page) = dropped
+            .and_then(|at| pages.get_mut(at))
+            .filter(|page| !page.last)
+        {
+            page.cursor = None;
+        }
+        if banded {
+            for page in &mut pages {
+                page.checkpoint = None;
+                page.items
+                    .retain(|member| remote.members[&member.handle].date().is_some());
+            }
+        }
+        let refused = pages
+            .iter()
+            .position(|page| !page.last && page.cursor.is_none());
+        if let Some(at) = refused {
+            pages.truncate(at);
+        }
         let interrupt = remotes
             .get_mut(&collection)
             .expect("a remote")
             .interrupt
             .take();
-        let interrupted = listing && interrupt.is_some_and(|after| after < pages.len());
-        if let (true, Some(after)) = (interrupted, interrupt) {
+        let interrupted =
+            refused.is_some() || (listing && interrupt.is_some_and(|after| after < pages.len()));
+        if let (None, Some(after)) = (refused, interrupt.filter(|_| interrupted)) {
             pages.truncate(after);
         }
         let policy = remotes[&collection].policy;
@@ -325,7 +389,7 @@ impl Model {
         let mut listed: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
         let mut owing: BTreeSet<String> = BTreeSet::new();
 
-        for page in &pages {
+        for page in head.iter().chain(pages.iter()) {
             for member in &page.items {
                 listed.insert(member.handle.clone(), member.flags.clone());
                 let filed = remotes[&collection].members[&member.handle].filed.clone();
@@ -383,6 +447,7 @@ impl Model {
         let checkpoint = pages
             .iter()
             .rev()
+            .chain(head.iter())
             .find_map(|page| page.checkpoint.clone())
             .map(String::into_bytes)
             .or(landed);
@@ -390,14 +455,19 @@ impl Model {
             let entry = self.sync_state(&collection, &source);
             entry.rounds = round;
             entry.open = Some(OpenRound {
-                scope: scope.clone(),
+                scope: target,
+                band: banded,
                 checkpoint,
-                cursor: pages.last().and_then(|page| page.cursor.clone()),
+                cursor: pages.last().and_then(|page| page.cursor.clone()).or(cursor),
             });
             return Run {
                 verb: "sync",
+                options: options.clone(),
+                policy,
+                handles: Vec::new(),
                 collection,
                 source,
+                head,
                 pages,
                 fetch: BTreeMap::new(),
                 pushes: Vec::new(),
@@ -410,7 +480,16 @@ impl Model {
         }
 
         let (parked, unlisted) = match listing {
-            true => self.absences(&collection, &source, round, &pages, options, &mut events),
+            true => {
+                let named = head.as_ref().is_some_and(|head| !head.items.is_empty());
+                let listed = Listing {
+                    pages: &pages,
+                    named,
+                    scope: &target,
+                    band: banded,
+                };
+                self.absences(&collection, &source, round, listed, options, &mut events)
+            }
             false => (None, None),
         };
         let entry = self.sync_state(&collection, &source);
@@ -418,7 +497,8 @@ impl Model {
         match (listing, parked) {
             (true, Some(_)) => {
                 entry.open = Some(OpenRound {
-                    scope: scope.clone(),
+                    scope: target.clone(),
+                    band: banded,
                     checkpoint,
                     cursor: None,
                 });
@@ -481,6 +561,9 @@ impl Model {
 
         Run {
             verb: "sync",
+            options: options.clone(),
+            policy,
+            handles: Vec::new(),
             pushes: pushes
                 .into_iter()
                 .map(|push| {
@@ -490,6 +573,7 @@ impl Model {
                 .collect(),
             collection,
             source,
+            head,
             pages,
             fetch: BTreeMap::new(),
             outcomes,
@@ -515,10 +599,11 @@ impl Model {
         collection: &str,
         source: &str,
         round: i64,
-        pages: &[Page],
+        listing: Listing,
         options: &Options,
         events: &mut Vec<Event>,
     ) -> (Option<(usize, usize)>, Option<usize>) {
+        let pages = listing.pages;
         let Some(last) = pages.last() else {
             return (None, None);
         };
@@ -526,7 +611,10 @@ impl Model {
             .items
             .iter()
             .filter(|item| item.collection == collection)
-            .filter(|item| options.scope.holds(item.date().as_deref()))
+            .filter(|item| match item.date() {
+                Some(date) => listing.scope.holds(Some(&date)),
+                None => !listing.band,
+            })
             .filter_map(|item| item.bound(source))
             .filter(|binding| binding.base_present && !binding.handle.starts_with('\u{1}'))
             .map(|binding| (binding.handle.clone(), binding.round == Some(round)))
@@ -547,7 +635,7 @@ impl Model {
             })
             .collect();
 
-        let named = pages.iter().any(|page| !page.items.is_empty());
+        let named = listing.named || pages.iter().any(|page| !page.items.is_empty());
         let mass = absent.len() * 2 > scoped.len() && scoped.len() >= 20;
         let empty = !named && !absent.is_empty();
         if (mass || empty) && !options.accept_absences {
@@ -711,8 +799,12 @@ impl Model {
 
         Run {
             verb: "rekey",
+            options: options.clone(),
+            policy: remote.policy,
+            handles: Vec::new(),
             collection,
             source,
+            head: None,
             pages,
             fetch: BTreeMap::new(),
             pushes: Vec::new(),
@@ -781,8 +873,12 @@ impl Model {
 
         Run {
             verb: "upgrade",
+            options: Options::default(),
+            policy: remote.policy,
+            handles: handles.to_vec(),
             collection,
             source,
+            head: None,
             pages: Vec::new(),
             fetch,
             pushes: Vec::new(),
@@ -1609,6 +1705,15 @@ fn declared(summary: &Summary) -> Option<String> {
         Value::Text(hint) if !hint.trim_matches([' ', '\t']).is_empty() => Some(hint),
         _ => None,
     }
+}
+
+/// What a round listed, as its absences read it: its pages, whether a head
+/// named a member, and the scope it lists, a band or not.
+struct Listing<'a> {
+    pages: &'a [Page],
+    named: bool,
+    scope: &'a Scope,
+    band: bool,
 }
 
 /// How a run settles a remote revision its base does not hold.
