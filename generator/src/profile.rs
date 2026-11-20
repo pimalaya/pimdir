@@ -747,6 +747,15 @@ impl Draw {
         );
 
         let (seq, ..) = pick(model, "work/INBOX", 2, &known).expect("a message");
+        model.enqueue(
+            "himalaya",
+            "work/INBOX",
+            Action::SetFlags {
+                seq,
+                flags: BTreeSet::from([String::from("$Filed")]),
+                base: None,
+            },
+        );
         let to = String::from("work/Archive");
         model.enqueue("himalaya", "work/INBOX", Action::Move { seq, to });
         let (seq, ..) = pick(model, "work/INBOX", 3, &known).expect("a message");

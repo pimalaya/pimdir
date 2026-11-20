@@ -202,6 +202,18 @@ impl Action {
             _ => None,
         }
     }
+
+    /// The `seq` of the item it acts on, for an action on an existing one.
+    pub fn seq(&self) -> Option<i64> {
+        match self {
+            Self::SetFlags { seq, .. }
+            | Self::Remove { seq, .. }
+            | Self::Update { seq, .. }
+            | Self::Move { seq, .. }
+            | Self::Copy { seq, .. } => Some(*seq),
+            _ => None,
+        }
+    }
 }
 
 /// One row of the queue, or one applied since.
@@ -292,19 +304,52 @@ impl Model {
         self.queue[id as usize - 1].state = state;
     }
 
-    /// The live items of `collection` as a reader overlaying its pending
-    /// rows shows them, each folded as the owner would apply it, a row it
-    /// would park or skip folded into nothing (STORAGE §15.4).
+    /// The live items of `collection` as a reader overlaying the pending rows
+    /// shows them, each folded as the owner would apply it, a row it would
+    /// park or skip folded into nothing (STORAGE §15.4): the collection's own
+    /// rows but its `add` rows, shown apart ([`Model::pending_creates`]), and
+    /// what other collections' `move` and `copy` rows bring into it, the rows
+    /// queued on the item where it leaves folded in first, all in append
+    /// order.
     pub fn overlay(&self, collection: &str) -> Vec<Item> {
-        let mut folded = self.clone();
-        for row in self
+        let pending = |row: &&Row| row.state == RowState::Pending;
+        let mut rows: Vec<&Row> = self
             .queue
             .iter()
-            .filter(|row| row.collection == collection && row.state == RowState::Pending)
+            .filter(pending)
+            .filter(|row| row.collection == collection)
+            .filter(|row| !matches!(row.action, Action::Add { .. }))
+            .collect();
+        for arrival in
+            self.queue.iter().filter(pending).filter(|row| {
+                row.collection != collection && row.action.target() == Some(collection)
+            })
         {
+            rows.extend(self.queue.iter().filter(pending).filter(|row| {
+                row.collection == arrival.collection
+                    && row.id <= arrival.id
+                    && row.action.seq() == arrival.action.seq()
+            }));
+        }
+        rows.sort_by_key(|row| row.id);
+        rows.dedup_by_key(|row| row.id);
+
+        let mut folded = self.clone();
+        for row in rows {
             folded.apply(&row.collection, &row.action);
         }
         folded.live(collection).cloned().collect()
+    }
+
+    /// The pending `add` rows queued on `collection`, which a reader shows
+    /// apart as the creates they stage, the `seq` of each being the owner's
+    /// to draw when it applies the row (STORAGE §9.1, §15.4).
+    pub fn pending_creates(&self, collection: &str) -> Vec<&Row> {
+        self.queue
+            .iter()
+            .filter(|row| row.collection == collection && row.state == RowState::Pending)
+            .filter(|row| matches!(row.action, Action::Add { .. }))
+            .collect()
     }
 
     /// Applies `action` queued on `collection` as the owner's drain does,
@@ -593,7 +638,7 @@ fn acting(item: &Item, resolving: bool) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
-    use std::{env, fs, process};
+    use std::{collections::BTreeSet, env, fs, process};
 
     use rusqlite::types::Value;
 
@@ -667,13 +712,35 @@ mod tests {
                 _ => None,
             })
             .unwrap();
-        assert!(shown.iter().any(|item| item.link_id == added));
+        assert!(
+            shown.iter().all(|item| item.link_id != added),
+            "a pending add shows in no listing of items"
+        );
+        let creates = model.pending_creates("work/contacts");
+        assert!(creates.iter().any(|row| matches!(
+            &row.action,
+            Action::Add { link_id, .. } if *link_id == added
+        )));
+        assert!(
+            creates
+                .iter()
+                .all(|row| matches!(row.action, Action::Add { .. }))
+        );
     }
 
     #[test]
     fn an_overlay_shows_flags_changed_by_their_base_and_skips_a_base_over_unknown_flags() {
         let model = structure();
         let shown = model.overlay("work/INBOX");
+        let moved = model
+            .queue
+            .iter()
+            .filter(|row| row.state == RowState::Pending)
+            .find_map(|row| match &row.action {
+                Action::Move { seq, .. } => Some(*seq),
+                _ => None,
+            })
+            .unwrap();
 
         for row in model
             .queue
@@ -683,6 +750,9 @@ mod tests {
             let Action::SetFlags { seq, base, .. } = &row.action else {
                 continue;
             };
+            if *seq == moved {
+                continue;
+            }
             let held = model
                 .items
                 .iter()
@@ -704,25 +774,59 @@ mod tests {
             }
         }
 
-        let moved = model
+        assert!(shown.iter().all(|item| item.seq != moved));
+        let arrived = model.overlay("work/Archive");
+        let item = arrived
+            .iter()
+            .find(|item| item.seq == moved)
+            .expect("a move queued on another collection shows in its target");
+        assert_eq!(
+            item.flags,
+            Some(BTreeSet::from([String::from("$Filed")])),
+            "the rows queued on it where it leaves fold in first"
+        );
+    }
+
+    #[test]
+    fn a_move_the_owner_would_park_brings_nothing_into_its_target() {
+        let mut model = structure();
+        let queued: Vec<i64> = model
             .queue
             .iter()
-            .filter(|row| row.state == RowState::Pending)
-            .find_map(|row| match &row.action {
-                Action::Move { seq, .. } => Some(*seq),
-                _ => None,
+            .filter_map(|row| row.action.seq())
+            .collect();
+        let index = model
+            .items
+            .iter()
+            .position(|item| {
+                item.collection == "work/INBOX"
+                    && item.state == State::Live
+                    && !item.bindings.is_empty()
+                    && !queued.contains(&item.seq)
+                    && !model
+                        .items
+                        .iter()
+                        .any(|other| other.collection == "work/Archive" && other.seq == item.seq)
             })
             .unwrap();
-        assert!(shown.iter().all(|item| item.seq != moved));
+        model.items[index].conflicted = true;
+        let seq = model.items[index].seq;
+        let to = String::from("work/Archive");
+        model.enqueue("himalaya", "work/INBOX", Action::Move { seq, to });
+
         assert!(
             model
                 .overlay("work/Archive")
                 .iter()
-                .all(|item| item.seq != moved),
-            "a move queued on another collection is that collection's to fold"
+                .all(|item| item.seq != seq)
+        );
+        assert!(
+            model
+                .overlay("work/INBOX")
+                .iter()
+                .any(|item| item.seq == seq)
         );
     }
-
     #[test]
     fn a_drained_write_moves_its_binding_shared_body_onto_the_body_it_carries() {
         let mut model = structure();
