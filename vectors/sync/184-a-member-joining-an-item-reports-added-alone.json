@@ -1,0 +1,31 @@
+{
+  "v": 11,
+  "label": "a member joining an item another source binds is reported Added alone, its flags folded with no base",
+  "note": "source a holds basic-1@example.org, read; source b binds none of it and lists the same message, agreeing on subject, date and sender, flagged on b's server. The member joins the live item (SYNC.md §6): b's binding is inserted with its listed flags as its base, the item's flags fold the member's with no base, the union of the two, and the message's shared body stands, b's base and shared_object adopting it (§9). Naming the member is reported Added, and nothing else: a join pulls nothing, the flag it brings being the item's first sight of b, not a change b's remote made over a base. The item b now binds is no longer one b lacks, so no Add is offered; b's base lacks \\Seen, which the run pushes. a's base lacks \\Flagged, which a pushes on its next sync",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },
+    "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "a", "handle": "10", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1, "shared_object": "m1" }
+    ],
+    "summaries": [{ "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } }],
+    "sources": [{ "collection": "INBOX", "source": "a", "checkpoint": "a1" }, { "collection": "INBOX", "source": "b", "checkpoint": "b0" }]
+  },
+  "run": { "verb": "sync", "collection": "INBOX", "source": "b", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual" } },
+  "remote": { "snapshot": { "items": [{ "handle": "77", "flags": ["\\Flagged"], "revision": null, "meta": { "body": "fixtures/mail-basic.eml" } }], "vanished": [], "complete": true, "checkpoint": "b1" }, "fetch": {} },
+  "expect": {
+    "pushes": [{ "kind": "SetFlags", "handle": "77", "add": ["\\Seen"], "remove": [], "key": "cdd086a6f9084a57" }],
+    "outcomes": [{ "handle": "77", "outcome": "Accepted" }],
+    "events": [{ "kind": "Added", "handle": "77" }],
+    "store": {
+      "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Flagged", "\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "a", "handle": "10", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1, "shared_object": "m1" },
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "b", "handle": "77", "base_flags": ["\\Flagged", "\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1, "shared_object": "m1" }
+      ],
+      "summaries": [{ "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } }],
+      "sources": [{ "collection": "INBOX", "source": "a", "checkpoint": "a1" }, { "collection": "INBOX", "source": "b", "checkpoint": "b1" }]
+    }
+  }
+}

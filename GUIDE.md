@@ -316,9 +316,9 @@ The level is `Full` only when a body is present, whatever the row claims. An unk
    Do not collect between chunks.
 8. **Write the checkpoint** in the batch after the last chunk, never earlier: a delta's with `upsert_checkpoint`, a round's with `close_round`, which lands the checkpoint the round carries, the last page's or else the latest a head or a page recorded (the old one kept when it carries none) and the coverage: the round's scope, or the span of a band round and the coverage it adjoins.
 9. **Report events** once the write recording them has committed, per item, in order:
-   - `Added` for a member named;
+   - `Added` for a member named, one joining an item another source binds included;
    - `Disagreed`, after its `Added`, for a member minted apart from a pending or a delivered create of this source holding its hint, with that create's link id: the create is then pushed beside it, or goes on waiting;
-   - `FlagsChanged`, `ContentChanged` and `Vanished` for what was pulled;
+   - `FlagsChanged`, `ContentChanged` and `Vanished` for what was pulled, `ContentChanged` only for a body the item took, never one the collection's policy kept apart;
    - `Conflicted` for a divergence the run or its write recorded;
    - `Overruled` for a body a policy did not adopt, with the retained item's link id;
    - `Created` for an accepted add or a create a listing landed;

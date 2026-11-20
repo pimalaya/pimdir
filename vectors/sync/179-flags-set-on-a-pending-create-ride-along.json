@@ -1,5 +1,5 @@
 {
-  "v": 10,
+  "v": 11,
   "label": "flags set on a pending create apply to it, the create staying a create",
   "note": "the Archive item is imap's pending create, staged and not pushed. A SetFlags on it replaces its flags and leaves it a create, no base and its provisional handle, so its Add carries the new set when pushed (SYNC.md sections 5 and 7). A drain applying a queued set-flags on it does the same",
   "store": {

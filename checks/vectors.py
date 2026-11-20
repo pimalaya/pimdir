@@ -1724,12 +1724,14 @@ for case in summaries["cases"]:
 sync_cases = sorted((root / "sync").glob("*.json"))
 # The cases a rule needs to be held at all: a Move over each conflict, an
 # Abandon beside another source binding the item, a capped rekey, a dated
-# member a narrowed round keeps with and without an enumeration, and a refusal
-# recorded, held and cleared, an offered create bound on its refusal.
+# member a narrowed round keeps with and without an enumeration, a capped or
+# narrowed round reporting what it left unlisted, and a refusal recorded, held
+# and cleared, an offered create bound on its refusal.
 rule_cases = {"a move over the item's conflict": 0, "a move over its binding's conflict": 0, "an abandon beside another source": 0,
               "a capped rekey leaving a member out": 0,
               "a narrowed round keeping a dated member its enumeration holds": 0,
               "a narrowed round handing no enumeration keeping a dated member": 0,
+              "a capped or narrowed round reporting what it left unlisted": 0,
               "a refusal recorded": 0, "a refused change held": 0, "a refusal cleared by an accepted push": 0,
               "an offered create bound on its refusal": 0}
 
@@ -2105,6 +2107,21 @@ for path in sync_cases:
         rule = ("a narrowed round keeping a dated member its enumeration holds" if enumerated is not None
                 else "a narrowed round handing no enumeration keeping a dated member")
         rule_cases[rule] += bool(kept_dated)
+    # A capped round, or a narrowed one handing no enumeration, finds no member
+    # absent and reports how many based bindings in its scope it left unlisted,
+    # counted as the absences are (SYNC.md section 5); no other run reports one.
+    stamped = {binding["handle"] for binding in store.get("bindings", [])
+               if row.get("round_open") is True and binding.get("round") == row.get("round")
+               and binding["collection"] == run["collection"] and binding["source"] == run["source"]}
+    unproving = capped or (narrowed and enumerated is None)
+    if closes and unproving and run.get("verb") == "sync":
+        left = [binding for binding in bound if binding["handle"] not in listed | vanished | stamped
+                and (binding["collection"], binding["link_id"]) not in held]
+        check(f"{label}: the based bindings a capped or narrowed round left unlisted", case["expect"].get("unlisted", 0), len(left))
+        rule_cases["a capped or narrowed round reporting what it left unlisted"] += bool(left)
+    else:
+        require(f"{label}: only a closing capped round, or a narrowed one handing no enumeration, reports bindings unlisted",
+                "unlisted" not in case["expect"])
     # A round that named no member, none of its pages, heads nor earlier runs
     # stamping a binding with its id, parks while any based binding is absent,
     # whatever their number (SYNC.md section 5, an empty listing).

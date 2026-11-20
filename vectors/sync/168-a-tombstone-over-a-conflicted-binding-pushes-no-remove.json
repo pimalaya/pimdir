@@ -1,5 +1,5 @@
 {
-  "v": 10,
+  "v": 11,
   "label": "a tombstone over a conflicted binding pushes no remove: the server edit its conflict holds beats the delete",
   "note": "the card was edited locally to c2 while dav's server moved it to r2, and the binding recorded that conflict, the diverging body not yet read. Another source then stated the card removed, so the item is deleted and dav projects a Tombstone, carrying its binding's conflict, a delete elsewhere settling nothing here. The binding's conflict_revision is a server edit past its base, which beats the delete: the delta does not list the card again, and the run still derives no Remove. Holding the local edit too, the tombstone is the both-changed case and follows the policy, so under manual the card is revived and stays conflicted at r2 (SYNC.md §3, §5, §9)",
   "store": {

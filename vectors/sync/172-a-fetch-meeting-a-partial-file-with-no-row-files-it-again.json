@@ -1,5 +1,5 @@
 {
-  "v": 10,
+  "v": 11,
   "label": "a fetched body whose name a partial file with no row holds sets that file aside and lands",
   "note": "vector 130 in the crash's own state: c2 has no row, and the file under its name holds bytes that do not hash to it (corrupt), as a crash in the middle of an exclusive create and copy leaves it, the transaction that would have stored the row never committed. The Full fetch brings c2, and the owner's write finds the name held whatever the rows say: it verifies the file there, which fails, moves it into quarantine/ and files the fetched bytes with their row, so the item and the base name a body that reads. Trusting the file for its name, for want of a row, would leave the item pointing at bytes the next read sets aside (STORAGE §5, §7; SYNC.md §6). The format states no file under quarantine/",
   "store": {

@@ -1,5 +1,5 @@
 {
-  "v": 10,
+  "v": 11,
   "label": "an add whose key a refusal standing on its binding names is held, not pushed, and reported each run",
   "note": "the create is as it was refused: its derived Add carries the key the refusal names, so no push is sent, the create stays pending and the refusal stands, and the run reports it Refused with the reason it holds (SYNC.md §5)",
   "store": {

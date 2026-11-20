@@ -1,5 +1,5 @@
 {
-  "v": 10,
+  "v": 11,
   "label": "an add stating the hash: key its own bytes give is staged under it",
   "note": "the case of 176 stating hash:6978bdefb73bfcc5, the key c1's bytes give: the add is staged under it, a pending create under its provisional handle whose shared_object is the body it carries, the item taking it (SYNC.md sections 7 and 9; STORAGE.md sections 4.3 and 15.3)",
   "store": {

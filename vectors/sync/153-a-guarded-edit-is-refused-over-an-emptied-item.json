@@ -1,5 +1,5 @@
 {
-  "v": 10,
+  "v": 11,
   "label": "an edit stating the body it replaced is refused when the item holds no body",
   "note": "a frontend showed the card at c1 and queued an update, c3 over c1, stating if_match c1; before the drain a pull at r2 carrying no body emptied the item, the base at r2 naming none, the body the server holds there unread. The body the producer read is not what the item holds: the edit is refused and stages nothing, which the drain parks naming both, c1 and none, rather than written over an edit nobody has read (SYNC.md §7; STORAGE §15.3)",
   "store": {

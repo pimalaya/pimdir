@@ -1,0 +1,1028 @@
+{
+  "v": 11,
+  "label": "a pending create beside a round parked on a mass absence derives no add",
+  "note": "the round lists one of the 20 based bindings in its scope, the 19 others absent: more than half of at least 20, so the round parks, drops nothing and stays open with its checkpoint (SYNC.md §5). A pending create of this source, staged with no origin, waits beside it: an Add is derived only once the last page of the round has landed, and a parked round's last page lands as a page before the last does, so no Add is pushed while the round stays open, a page of the round listed again possibly carrying the create's own arrival. The create is no member a listing names and is not counted among the based bindings. The next run lists the round again from its first page and, once it closes, pushes the add",
+  "store": {
+    "collections": [
+      {
+        "id": "INBOX",
+        "account": null,
+        "kind": "message/rfc822",
+        "conflict": "manual"
+      }
+    ],
+    "objects": {
+      "m1": {
+        "body": "fixtures/mail-basic.eml"
+      },
+      "m2": {
+        "body": "fixtures/mail-recent.eml"
+      }
+    },
+    "items": [
+      {
+        "collection": "INBOX",
+        "link_id": "basic-1@example.org",
+        "seq": 1,
+        "flags": [],
+        "object": null,
+        "level": 1,
+        "deleted": 0
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m02@example.org",
+        "seq": 2,
+        "flags": [],
+        "object": null,
+        "level": 1,
+        "deleted": 0
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m03@example.org",
+        "seq": 3,
+        "flags": [],
+        "object": null,
+        "level": 1,
+        "deleted": 0
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m04@example.org",
+        "seq": 4,
+        "flags": [],
+        "object": null,
+        "level": 1,
+        "deleted": 0
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m05@example.org",
+        "seq": 5,
+        "flags": [],
+        "object": null,
+        "level": 1,
+        "deleted": 0
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m06@example.org",
+        "seq": 6,
+        "flags": [],
+        "object": null,
+        "level": 1,
+        "deleted": 0
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m07@example.org",
+        "seq": 7,
+        "flags": [],
+        "object": null,
+        "level": 1,
+        "deleted": 0
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m08@example.org",
+        "seq": 8,
+        "flags": [],
+        "object": null,
+        "level": 1,
+        "deleted": 0
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m09@example.org",
+        "seq": 9,
+        "flags": [],
+        "object": null,
+        "level": 1,
+        "deleted": 0
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m10@example.org",
+        "seq": 10,
+        "flags": [],
+        "object": null,
+        "level": 1,
+        "deleted": 0
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m11@example.org",
+        "seq": 11,
+        "flags": [],
+        "object": null,
+        "level": 1,
+        "deleted": 0
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m12@example.org",
+        "seq": 12,
+        "flags": [],
+        "object": null,
+        "level": 1,
+        "deleted": 0
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m13@example.org",
+        "seq": 13,
+        "flags": [],
+        "object": null,
+        "level": 1,
+        "deleted": 0
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m14@example.org",
+        "seq": 14,
+        "flags": [],
+        "object": null,
+        "level": 1,
+        "deleted": 0
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m15@example.org",
+        "seq": 15,
+        "flags": [],
+        "object": null,
+        "level": 1,
+        "deleted": 0
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m16@example.org",
+        "seq": 16,
+        "flags": [],
+        "object": null,
+        "level": 1,
+        "deleted": 0
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m17@example.org",
+        "seq": 17,
+        "flags": [],
+        "object": null,
+        "level": 1,
+        "deleted": 0
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m18@example.org",
+        "seq": 18,
+        "flags": [],
+        "object": null,
+        "level": 1,
+        "deleted": 0
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m19@example.org",
+        "seq": 19,
+        "flags": [],
+        "object": null,
+        "level": 1,
+        "deleted": 0
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m20@example.org",
+        "seq": 20,
+        "flags": [],
+        "object": null,
+        "level": 1,
+        "deleted": 0
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "recent-1@example.org",
+        "seq": 21,
+        "flags": [
+          "\\Seen"
+        ],
+        "object": "m2",
+        "level": 2,
+        "deleted": 0
+      }
+    ],
+    "bindings": [
+      {
+        "collection": "INBOX",
+        "link_id": "basic-1@example.org",
+        "source": "imap",
+        "handle": "1",
+        "base_flags": [],
+        "base_object": null,
+        "base_revision": null,
+        "base_present": 1,
+        "round": null
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m02@example.org",
+        "source": "imap",
+        "handle": "2",
+        "base_flags": [],
+        "base_object": null,
+        "base_revision": null,
+        "base_present": 1,
+        "round": null
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m03@example.org",
+        "source": "imap",
+        "handle": "3",
+        "base_flags": [],
+        "base_object": null,
+        "base_revision": null,
+        "base_present": 1,
+        "round": null
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m04@example.org",
+        "source": "imap",
+        "handle": "4",
+        "base_flags": [],
+        "base_object": null,
+        "base_revision": null,
+        "base_present": 1,
+        "round": null
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m05@example.org",
+        "source": "imap",
+        "handle": "5",
+        "base_flags": [],
+        "base_object": null,
+        "base_revision": null,
+        "base_present": 1,
+        "round": null
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m06@example.org",
+        "source": "imap",
+        "handle": "6",
+        "base_flags": [],
+        "base_object": null,
+        "base_revision": null,
+        "base_present": 1,
+        "round": null
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m07@example.org",
+        "source": "imap",
+        "handle": "7",
+        "base_flags": [],
+        "base_object": null,
+        "base_revision": null,
+        "base_present": 1,
+        "round": null
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m08@example.org",
+        "source": "imap",
+        "handle": "8",
+        "base_flags": [],
+        "base_object": null,
+        "base_revision": null,
+        "base_present": 1,
+        "round": null
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m09@example.org",
+        "source": "imap",
+        "handle": "9",
+        "base_flags": [],
+        "base_object": null,
+        "base_revision": null,
+        "base_present": 1,
+        "round": null
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m10@example.org",
+        "source": "imap",
+        "handle": "10",
+        "base_flags": [],
+        "base_object": null,
+        "base_revision": null,
+        "base_present": 1,
+        "round": null
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m11@example.org",
+        "source": "imap",
+        "handle": "11",
+        "base_flags": [],
+        "base_object": null,
+        "base_revision": null,
+        "base_present": 1,
+        "round": null
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m12@example.org",
+        "source": "imap",
+        "handle": "12",
+        "base_flags": [],
+        "base_object": null,
+        "base_revision": null,
+        "base_present": 1,
+        "round": null
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m13@example.org",
+        "source": "imap",
+        "handle": "13",
+        "base_flags": [],
+        "base_object": null,
+        "base_revision": null,
+        "base_present": 1,
+        "round": null
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m14@example.org",
+        "source": "imap",
+        "handle": "14",
+        "base_flags": [],
+        "base_object": null,
+        "base_revision": null,
+        "base_present": 1,
+        "round": null
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m15@example.org",
+        "source": "imap",
+        "handle": "15",
+        "base_flags": [],
+        "base_object": null,
+        "base_revision": null,
+        "base_present": 1,
+        "round": null
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m16@example.org",
+        "source": "imap",
+        "handle": "16",
+        "base_flags": [],
+        "base_object": null,
+        "base_revision": null,
+        "base_present": 1,
+        "round": null
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m17@example.org",
+        "source": "imap",
+        "handle": "17",
+        "base_flags": [],
+        "base_object": null,
+        "base_revision": null,
+        "base_present": 1,
+        "round": null
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m18@example.org",
+        "source": "imap",
+        "handle": "18",
+        "base_flags": [],
+        "base_object": null,
+        "base_revision": null,
+        "base_present": 1,
+        "round": null
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m19@example.org",
+        "source": "imap",
+        "handle": "19",
+        "base_flags": [],
+        "base_object": null,
+        "base_revision": null,
+        "base_present": 1,
+        "round": null
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "m20@example.org",
+        "source": "imap",
+        "handle": "20",
+        "base_flags": [],
+        "base_object": null,
+        "base_revision": null,
+        "base_present": 1,
+        "round": null
+      },
+      {
+        "collection": "INBOX",
+        "link_id": "recent-1@example.org",
+        "source": "imap",
+        "handle": "\u0001recent-1@example.org",
+        "base_flags": null,
+        "base_object": null,
+        "base_revision": null,
+        "base_present": 0,
+        "round": null
+      }
+    ],
+    "sources": [
+      {
+        "collection": "INBOX",
+        "source": "imap",
+        "checkpoint": "c0",
+        "round": 0,
+        "round_open": false,
+        "round_since": null,
+        "round_until": null,
+        "round_cursor": null,
+        "round_checkpoint": null,
+        "round_band": false,
+        "covered": false,
+        "covered_since": null,
+        "covered_until": null
+      }
+    ],
+    "summaries": [
+      {
+        "table": "mail_summary",
+        "collection": "INBOX",
+        "link_id": "basic-1@example.org",
+        "row": {
+          "message_id": "basic-1@example.org",
+          "in_reply_to": [
+            "parent-1@example.org"
+          ],
+          "subject": "Stand-up notes",
+          "sender": "alice@example.org",
+          "sender_name": "Alice Example",
+          "date": "2026-08-01T10:00:00Z",
+          "size": 299,
+          "attachment": 0,
+          "invitation": null
+        }
+      },
+      {
+        "table": "mail_summary",
+        "collection": "INBOX",
+        "link_id": "recent-1@example.org",
+        "row": {
+          "message_id": "recent-1@example.org",
+          "in_reply_to": [],
+          "subject": "Today's agenda",
+          "sender": "alice@example.org",
+          "sender_name": "Alice Example",
+          "date": "2026-10-06T08:30:00Z",
+          "size": 241,
+          "attachment": 0,
+          "invitation": null
+        }
+      }
+    ]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "INBOX",
+    "source": "imap",
+    "options": {
+      "push": true,
+      "rights": {
+        "flags": true,
+        "content": true,
+        "add": true,
+        "remove": true
+      },
+      "conflict": "manual"
+    }
+  },
+  "remote": {
+    "pages": [
+      {
+        "items": [
+          {
+            "handle": "1",
+            "flags": [],
+            "revision": null,
+            "meta": {
+              "body": "fixtures/mail-basic.eml"
+            }
+          }
+        ],
+        "vanished": [],
+        "last": true,
+        "cursor": null,
+        "checkpoint": "c1"
+      }
+    ],
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "parked": {
+      "absent": 19,
+      "bound": 20
+    },
+    "store": {
+      "items": [
+        {
+          "collection": "INBOX",
+          "link_id": "basic-1@example.org",
+          "seq": 1,
+          "flags": [],
+          "object": null,
+          "level": 1,
+          "deleted": 0
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m02@example.org",
+          "seq": 2,
+          "flags": [],
+          "object": null,
+          "level": 1,
+          "deleted": 0
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m03@example.org",
+          "seq": 3,
+          "flags": [],
+          "object": null,
+          "level": 1,
+          "deleted": 0
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m04@example.org",
+          "seq": 4,
+          "flags": [],
+          "object": null,
+          "level": 1,
+          "deleted": 0
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m05@example.org",
+          "seq": 5,
+          "flags": [],
+          "object": null,
+          "level": 1,
+          "deleted": 0
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m06@example.org",
+          "seq": 6,
+          "flags": [],
+          "object": null,
+          "level": 1,
+          "deleted": 0
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m07@example.org",
+          "seq": 7,
+          "flags": [],
+          "object": null,
+          "level": 1,
+          "deleted": 0
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m08@example.org",
+          "seq": 8,
+          "flags": [],
+          "object": null,
+          "level": 1,
+          "deleted": 0
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m09@example.org",
+          "seq": 9,
+          "flags": [],
+          "object": null,
+          "level": 1,
+          "deleted": 0
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m10@example.org",
+          "seq": 10,
+          "flags": [],
+          "object": null,
+          "level": 1,
+          "deleted": 0
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m11@example.org",
+          "seq": 11,
+          "flags": [],
+          "object": null,
+          "level": 1,
+          "deleted": 0
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m12@example.org",
+          "seq": 12,
+          "flags": [],
+          "object": null,
+          "level": 1,
+          "deleted": 0
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m13@example.org",
+          "seq": 13,
+          "flags": [],
+          "object": null,
+          "level": 1,
+          "deleted": 0
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m14@example.org",
+          "seq": 14,
+          "flags": [],
+          "object": null,
+          "level": 1,
+          "deleted": 0
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m15@example.org",
+          "seq": 15,
+          "flags": [],
+          "object": null,
+          "level": 1,
+          "deleted": 0
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m16@example.org",
+          "seq": 16,
+          "flags": [],
+          "object": null,
+          "level": 1,
+          "deleted": 0
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m17@example.org",
+          "seq": 17,
+          "flags": [],
+          "object": null,
+          "level": 1,
+          "deleted": 0
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m18@example.org",
+          "seq": 18,
+          "flags": [],
+          "object": null,
+          "level": 1,
+          "deleted": 0
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m19@example.org",
+          "seq": 19,
+          "flags": [],
+          "object": null,
+          "level": 1,
+          "deleted": 0
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m20@example.org",
+          "seq": 20,
+          "flags": [],
+          "object": null,
+          "level": 1,
+          "deleted": 0
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "recent-1@example.org",
+          "seq": 21,
+          "flags": [
+            "\\Seen"
+          ],
+          "object": "m2",
+          "level": 2,
+          "deleted": 0
+        }
+      ],
+      "bindings": [
+        {
+          "collection": "INBOX",
+          "link_id": "basic-1@example.org",
+          "source": "imap",
+          "handle": "1",
+          "base_flags": [],
+          "base_object": null,
+          "base_revision": null,
+          "base_present": 1,
+          "round": 1
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m02@example.org",
+          "source": "imap",
+          "handle": "2",
+          "base_flags": [],
+          "base_object": null,
+          "base_revision": null,
+          "base_present": 1,
+          "round": null
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m03@example.org",
+          "source": "imap",
+          "handle": "3",
+          "base_flags": [],
+          "base_object": null,
+          "base_revision": null,
+          "base_present": 1,
+          "round": null
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m04@example.org",
+          "source": "imap",
+          "handle": "4",
+          "base_flags": [],
+          "base_object": null,
+          "base_revision": null,
+          "base_present": 1,
+          "round": null
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m05@example.org",
+          "source": "imap",
+          "handle": "5",
+          "base_flags": [],
+          "base_object": null,
+          "base_revision": null,
+          "base_present": 1,
+          "round": null
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m06@example.org",
+          "source": "imap",
+          "handle": "6",
+          "base_flags": [],
+          "base_object": null,
+          "base_revision": null,
+          "base_present": 1,
+          "round": null
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m07@example.org",
+          "source": "imap",
+          "handle": "7",
+          "base_flags": [],
+          "base_object": null,
+          "base_revision": null,
+          "base_present": 1,
+          "round": null
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m08@example.org",
+          "source": "imap",
+          "handle": "8",
+          "base_flags": [],
+          "base_object": null,
+          "base_revision": null,
+          "base_present": 1,
+          "round": null
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m09@example.org",
+          "source": "imap",
+          "handle": "9",
+          "base_flags": [],
+          "base_object": null,
+          "base_revision": null,
+          "base_present": 1,
+          "round": null
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m10@example.org",
+          "source": "imap",
+          "handle": "10",
+          "base_flags": [],
+          "base_object": null,
+          "base_revision": null,
+          "base_present": 1,
+          "round": null
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m11@example.org",
+          "source": "imap",
+          "handle": "11",
+          "base_flags": [],
+          "base_object": null,
+          "base_revision": null,
+          "base_present": 1,
+          "round": null
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m12@example.org",
+          "source": "imap",
+          "handle": "12",
+          "base_flags": [],
+          "base_object": null,
+          "base_revision": null,
+          "base_present": 1,
+          "round": null
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m13@example.org",
+          "source": "imap",
+          "handle": "13",
+          "base_flags": [],
+          "base_object": null,
+          "base_revision": null,
+          "base_present": 1,
+          "round": null
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m14@example.org",
+          "source": "imap",
+          "handle": "14",
+          "base_flags": [],
+          "base_object": null,
+          "base_revision": null,
+          "base_present": 1,
+          "round": null
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m15@example.org",
+          "source": "imap",
+          "handle": "15",
+          "base_flags": [],
+          "base_object": null,
+          "base_revision": null,
+          "base_present": 1,
+          "round": null
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m16@example.org",
+          "source": "imap",
+          "handle": "16",
+          "base_flags": [],
+          "base_object": null,
+          "base_revision": null,
+          "base_present": 1,
+          "round": null
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m17@example.org",
+          "source": "imap",
+          "handle": "17",
+          "base_flags": [],
+          "base_object": null,
+          "base_revision": null,
+          "base_present": 1,
+          "round": null
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m18@example.org",
+          "source": "imap",
+          "handle": "18",
+          "base_flags": [],
+          "base_object": null,
+          "base_revision": null,
+          "base_present": 1,
+          "round": null
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m19@example.org",
+          "source": "imap",
+          "handle": "19",
+          "base_flags": [],
+          "base_object": null,
+          "base_revision": null,
+          "base_present": 1,
+          "round": null
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "m20@example.org",
+          "source": "imap",
+          "handle": "20",
+          "base_flags": [],
+          "base_object": null,
+          "base_revision": null,
+          "base_present": 1,
+          "round": null
+        },
+        {
+          "collection": "INBOX",
+          "link_id": "recent-1@example.org",
+          "source": "imap",
+          "handle": "\u0001recent-1@example.org",
+          "base_flags": null,
+          "base_object": null,
+          "base_revision": null,
+          "base_present": 0,
+          "round": null
+        }
+      ],
+      "sources": [
+        {
+          "collection": "INBOX",
+          "source": "imap",
+          "checkpoint": "c0",
+          "round": 1,
+          "round_open": true,
+          "round_since": null,
+          "round_until": null,
+          "round_cursor": null,
+          "round_checkpoint": "c1",
+          "round_band": false,
+          "covered": false,
+          "covered_since": null,
+          "covered_until": null
+        }
+      ],
+      "summaries": [
+        {
+          "table": "mail_summary",
+          "collection": "INBOX",
+          "link_id": "basic-1@example.org",
+          "row": {
+            "message_id": "basic-1@example.org",
+            "in_reply_to": [
+              "parent-1@example.org"
+            ],
+            "subject": "Stand-up notes",
+            "sender": "alice@example.org",
+            "sender_name": "Alice Example",
+            "date": "2026-08-01T10:00:00Z",
+            "size": 299,
+            "attachment": 0,
+            "invitation": null
+          }
+        },
+        {
+          "table": "mail_summary",
+          "collection": "INBOX",
+          "link_id": "recent-1@example.org",
+          "row": {
+            "message_id": "recent-1@example.org",
+            "in_reply_to": [],
+            "subject": "Today's agenda",
+            "sender": "alice@example.org",
+            "sender_name": "Alice Example",
+            "date": "2026-10-06T08:30:00Z",
+            "size": 241,
+            "attachment": 0,
+            "invitation": null
+          }
+        }
+      ]
+    }
+  }
+}

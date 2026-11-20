@@ -1,5 +1,5 @@
 {
-  "v": 10,
+  "v": 11,
   "label": "an update under another key than the refused one is pushed, and its acceptance clears the refusal on the binding",
   "note": "an earlier edit was refused for good; the user edited the card again, so the Update carries another body and another key and is pushed. The write recording its acceptance rebases the binding and clears the refusal it kept (SYNC.md §5, §10)",
   "store": {

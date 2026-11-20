@@ -1,5 +1,5 @@
 {
-  "v": 10,
+  "v": 11,
   "label": "an ordinary local edit moves its binding's shared_object to the body the item takes, its sync base staying",
   "note": "a's edit c2 over the agreed c1 is a live upsert carrying a body: the item takes c2 and the binding's shared_object, what it last agreed with the shared item, moves to it, while base_object, what it last agreed with its remote, stays c1 at r1 until a sync pushes c2 (SYNC.md section 9, STORAGE.md section 4.3). b, another source, keeps its agreement point on c1 and owes c2",
   "store": {

@@ -1,0 +1,36 @@
+{
+  "v": 11,
+  "label": "prefer-remote pulling over an item another source changed is settled by the collection's prefer-existing",
+  "note": "the case of 181 under prefer-existing: b's prefer-remote pulls c2, and the fold finds the divergence, which the collection's policy settles by keeping the item's c3 and the incoming c2 as a retained item over b's handle, reported Overruled alone, the item's body not having moved. b's base moves to c2 at r2 and its shared_object to c3, the body the item settled on, so b owes c3, which a run pushing content pushes gated on r2, a revision whose body it read and kept; this run pushes nothing, its source pushing nothing (SYNC.md §5, §9). Nothing keeps c3 apart: it is the item's body, another source's fold and not b's own edit",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "prefer-existing" }],
+    "objects": { "c1": { "body": "fixtures/card-basic.vcf" }, "c2": { "body": "fixtures/card-basic-edited.vcf" }, "c3": { "body": "fixtures/card-basic-renamed.vcf" } },
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c3", "level": 2, "deleted": 0 }],
+    "bindings": [
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1, "shared_object": "c3" },
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "b", "handle": "b.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1, "shared_object": "c1" }
+    ],
+    "sources": [{ "collection": "Contacts", "source": "a", "checkpoint": "a1" }, { "collection": "Contacts", "source": "b", "checkpoint": "b1" }]
+  },
+  "run": { "verb": "sync", "collection": "Contacts", "source": "b", "options": { "push": false, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "prefer-remote" } },
+  "remote": {
+    "snapshot": { "items": [{ "handle": "b.vcf", "flags": [], "revision": "r2", "carries": true, "meta": { "body": "fixtures/card-basic-edited.vcf" } }], "vanished": [], "complete": true, "checkpoint": "b2" },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [{ "kind": "Overruled", "handle": "b.vcf", "link_id": "dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#b.vcf" }],
+    "store": {
+      "items": [
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c3", "level": 2, "deleted": 0, "conflicted": 0, "conflict_object": null },
+        { "collection": "Contacts", "link_id": "dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#b.vcf", "seq": 2, "flags": [], "object": "c2", "level": 2, "deleted": 1, "retained": true, "retained_by": "b" }
+      ],
+      "bindings": [
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1, "shared_object": "c3" },
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "b", "handle": "b.vcf", "base_flags": [], "base_object": "c2", "base_revision": "r2", "base_present": 1, "shared_object": "c3", "conflicted": 0 }
+      ],
+      "sources": [{ "collection": "Contacts", "source": "a", "checkpoint": "a1" }, { "collection": "Contacts", "source": "b", "checkpoint": "b2" }]
+    }
+  }
+}

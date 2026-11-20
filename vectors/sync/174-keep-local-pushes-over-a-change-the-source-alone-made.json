@@ -1,5 +1,5 @@
 {
-  "v": 10,
+  "v": 11,
   "label": "under keep-local a change the source alone made is a divergence: its body is kept and the store's pushed over it",
   "note": "the store is authoritative over this source, a copy written from other sources. Its server moved to r2 and its listing carries c3, while the store staged nothing: under prefer-local this is a pull, under keep-local a divergence settled as prefer-local settles one. In a write committed before the push the base adopts c3 at r2 and c3 is kept as a retained item under the key minted over the handle, reported Overruled; the store's body, the base's c1, is then pushed gated on r2, accepted at r3, the base moving back to c1 (SYNC.md sections 5 and 9)",
   "store": {

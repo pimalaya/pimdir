@@ -1,5 +1,5 @@
 {
-  "v": 10,
+  "v": 11,
   "label": "a delete another source stated propagates over an item conflict, which the retained item keeps",
   "note": "the store of vector 33 before b's server edit: the card diverged between a and b under manual, the item holding a's c3 and b's c2 as its conflict_object. a's server then removed the card, so a's binding went and the item is deleted. b binds it with no conflict of its own and projects a Tombstone, not a Conflict: the item's conflict is between bodies the store holds, and a delete elsewhere settles nothing, so the remove is pushed gated on b's revision, as any delete propagates. Accepted, b's binding goes and the item is retained with both bodies and its conflict, listed in the trash (SYNC.md §3, §9; STORAGE §11)",
   "store": {

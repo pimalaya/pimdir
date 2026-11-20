@@ -1,5 +1,5 @@
 {
-  "v": 10,
+  "v": 11,
   "label": "a move stages a pending create in a target its source syncs, bound under the provisional handle with no base",
   "note": "imap syncs INBOX and Archive. The move tombstones the INBOX placement, its binding and base kept so the remove is pushed against handle 10, and stages the Archive create as imap's pending create: the provisional handle, no base, the item sharing seq 1, the two rows agreeing on the summary, and the body (SYNC.md sections 2 and 7; STORAGE.md sections 9.1 and 15.2). A drain applying a queued move stages the same",
   "store": {
