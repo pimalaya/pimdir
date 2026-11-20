@@ -502,6 +502,10 @@ run owner/rename_queue_targets ":collection='Archive'" ":new_id='Archive-2026'"
 run owner/rename_collection ":collection='Archive'" ":new_id='Archive-2026'"
 expect "queue: a rename follows into a pending move" \
     "$(sql "SELECT target_collection FROM queue WHERE action = 'move';")" "Archive-2026"
+run queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='copy'" ":payload='{\"v\":1,\"seq\":6,\"to\":\"Archive-2026\"}'" ":target_collection='Archive-2026'" ":object_hash=NULL"
+expect "overlay: a target reads the moves and copies queued into it in append order, never a row queued on it" \
+    "$(run read/load_pending_arrivals ":collection='Archive-2026'" | cut -d'|' -f1,4,5 | tr '\n' ' ')$(run read/load_pending_arrivals ":collection='INBOX'" | wc -l)" \
+    "1|INBOX|move 3|INBOX|copy 0"
 
 # --- Removing a collection settles its pins (§14) ----------------------------
 

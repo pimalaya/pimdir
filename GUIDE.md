@@ -532,7 +532,7 @@ An intent whose effect is not a store mutation is at least once; the performer d
 
 An intent leaving a change behind, a `submit` asking for a `copy` its provider does not file itself, is replaced instead: `BEGIN IMMEDIATE`; `pin_object` on the body; `enqueue_action` of the `add` into `copy`, `\Seen` set; `cancel_action` on the intent; `record_receipt` for it, `seq` `NULL`; `release_pins` on its hash; `COMMIT`. The next drain applies the copy.
 
-Operators read `load_parked_actions` store-wide; a reader overlays `load_pending_actions` for read-your-writes, folding each row as the owner would apply it: a `set-flags` stating `base` as a change over the set it shows, nothing for a row that would park, and a row whose action or version it does not know listed as pending, folded into nothing.
+Operators read `load_parked_actions` store-wide; a reader overlays `load_pending_actions` for read-your-writes, with `load_pending_arrivals` for what other collections' moves and copies bring in and its pending creates shown apart, folding each row as the owner would apply it: a `set-flags` stating `base` as a change over the set it shows, nothing for a row that would park, and a row whose action or version it does not know listed as pending, folded into nothing.
 
 ## 14. A reader
 

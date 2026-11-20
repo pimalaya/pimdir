@@ -482,7 +482,7 @@ A mutation stages a local edit to one collection with no network, through the sa
   - Resolving its binding's conflict it is the decision: the base adopts `conflict_revision` and `conflict_object` together, as an `Edit` does, and the conflict clears, so the remove pushes gated on what the remote holds.
   - A diverging body not fetched yet (`conflict_object` `NULL`) is named by no resolution, so no `Remove` settles that conflict before the upgrade has read it (§6), and a base never pairs the observed revision with the old body.
   - Resolving the item's conflict (§9) it clears it, `items.conflicted` cleared and its `conflict_object` released, the item keeping its body under the tombstone. The engine states it to the write with a `Settle`, as for an `Edit` (STORAGE §14).
-  - On a pending create it withdraws the create: the binding goes and the item is retained (STORAGE §11).
+  - On a pending create it withdraws the create: the binding goes and the item is retained (STORAGE §11), `retained_by` the create's source, whose removal retired it.
   - On a delivered create (§2) it withdraws nothing, the source holding the member already: it tombstones it, binding and base kept, and the `Remove` is held until the page naming the member lands it, then pushed against the listed handle (§5, §6).
 - `Edit` stores a new body and repoints the placement, keeping the base. An edit whose object the base holds stages nothing for its source, though on a conflicted item it still settles the item's conflict (below). It MAY restate the sort key.
   - An edit carrying `if_match` (a queued `update` stating the body it replaced, STORAGE §15.3) MUST be refused, staging nothing, when the item holds another body or none.

@@ -1,7 +1,7 @@
 {
   "v": 10,
   "label": "an add stating the hash: key its own bytes give is staged under it",
-  "note": "the case of 176 stating hash:6978bdefb73bfcc5, the key c1's bytes give: the add is staged under it, a pending create under its provisional handle (SYNC.md section 7; STORAGE.md section 15.3)",
+  "note": "the case of 176 stating hash:6978bdefb73bfcc5, the key c1's bytes give: the add is staged under it, a pending create under its provisional handle whose shared_object is the body it carries, the item taking it (SYNC.md sections 7 and 9; STORAGE.md sections 4.3 and 15.3)",
   "store": {
     "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
     "objects": { "c1": { "body": "fixtures/card-empty-uid.vcf" } },
@@ -23,7 +23,7 @@
         { "collection": "Contacts", "link_id": "hash:6978bdefb73bfcc5", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0 }
       ],
       "bindings": [
-        { "collection": "Contacts", "link_id": "hash:6978bdefb73bfcc5", "source": "dav", "handle": "\u0001hash:6978bdefb73bfcc5", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }
+        { "collection": "Contacts", "link_id": "hash:6978bdefb73bfcc5", "source": "dav", "handle": "\u0001hash:6978bdefb73bfcc5", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0, "shared_object": "c1" }
       ]
     }
   }

@@ -249,6 +249,7 @@
 {"name": "storage/read/load_item_capabilities", "parameters": ["collection", "seq"], "slots": [], "columns": ["source", "capability", "support", "detail", "held"]},
 {"name": "storage/read/load_kind", "parameters": ["collection"], "slots": [], "columns": ["kind"]},
 {"name": "storage/read/load_pending_actions", "parameters": ["collection"], "slots": [], "columns": ["id", "created_at", "producer", "action", "payload", "target_collection", "object_hash", "attempts"]},
+{"name": "storage/read/load_pending_arrivals", "parameters": ["collection"], "slots": [], "columns": ["id", "created_at", "producer", "collection", "action", "payload", "object_hash", "attempts"]},
 {"name": "storage/read/load_performer", "parameters": ["account", "capability"], "slots": [], "columns": ["source"]},
 {"name": "storage/read/load_receipt", "parameters": ["id"], "slots": [], "columns": ["applied_at", "collection", "seq"]},
 {"name": "storage/read/load_receipt_refusals", "parameters": ["id"], "slots": [], "columns": ["collection", "source", "refusal", "refused_at"]},

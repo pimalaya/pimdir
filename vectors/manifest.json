@@ -221,8 +221,11 @@
     "vectors/sync/174-keep-local-pushes-over-a-change-the-source-alone-made.json": "9dd72d94644365ef3bfac0a19d1aeaf785e24213ced3136d90b395645f19d8e1",
     "vectors/sync/175-keep-local-records-an-unread-change-the-source-alone-made.json": "adc5d150448d30b98322c6fc3d0f580f6a2f2d9d29e985b0a3743b4201a33c7f",
     "vectors/sync/176-an-add-stating-another-bodys-hash-key-is-refused.json": "549b4f978024108bb15c68e40c34b17e1939954905d1986a485677b360ceefdb",
-    "vectors/sync/177-an-add-stating-its-own-hash-key-is-staged-under-it.json": "3e879d3acb31de727ceadb5a4d32328384916cbfbef07bb76e5a9bf80ef3dfe6",
+    "vectors/sync/177-an-add-stating-its-own-hash-key-is-staged-under-it.json": "bc621c7cf5b18f1a7483377e9f3bab44907f85eeb83b685d8e9bfe890b05a88c",
+    "vectors/sync/178-a-move-stages-the-targets-create-under-its-source.json": "5f938de3a5eafaaad0c0d7b1d5bfe221d20a390fb0056cdcb4d74b9c35b732b2",
+    "vectors/sync/179-flags-set-on-a-pending-create-ride-along.json": "a00b4d89c6b8b658ef41221a17b02bdd3bf4451981da03f3f0dd21e169be5df5",
     "vectors/sync/18-add-rejected-stays-pending.json": "14a0765a1f2cb6c74082fa68adc01bdfd13bfabc7eec2d65d8cd49abccf8c766",
+    "vectors/sync/180-an-ordinary-edit-moves-the-agreement-point.json": "be7d18982399d4d3b276c700b4338f5836714b3fc4ee0ed9696bc35ddd6a7274",
     "vectors/sync/19-delta-vanished-retains.json": "5453e87048e12864f3fe3e81a55dc0236f77c434c41ab18866bce98249c268f1",
     "vectors/sync/20-move-source-first-relocates.json": "9de9e9e1054505fa64a737c9ecae78f0e2ec5506c47825340f942548ef2e2f77",
     "vectors/sync/21-a-page-lands-a-pending-create.json": "a31bcecfdba63addb32bc09e70f4d99300a611293769a77e024083f0799db8e5",
@@ -336,5 +339,5 @@
       "/cases": 24
     }
   },
-  "sync": 177
+  "sync": 180
 }

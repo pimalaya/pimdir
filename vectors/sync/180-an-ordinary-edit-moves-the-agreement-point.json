@@ -1,0 +1,35 @@
+{
+  "v": 10,
+  "label": "an ordinary local edit moves its binding's shared_object to the body the item takes, its sync base staying",
+  "note": "a's edit c2 over the agreed c1 is a live upsert carrying a body: the item takes c2 and the binding's shared_object, what it last agreed with the shared item, moves to it, while base_object, what it last agreed with its remote, stays c1 at r1 until a sync pushes c2 (SYNC.md section 9, STORAGE.md section 4.3). b, another source, keeps its agreement point on c1 and owes c2",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
+    "objects": { "c1": { "body": "fixtures/card-basic.vcf" }, "c2": { "body": "fixtures/card-basic-edited.vcf" } },
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0 }],
+    "bindings": [
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1, "shared_object": "c1" },
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "b", "handle": "b.vcf", "base_flags": [], "base_object": "c1", "base_revision": "s1", "base_present": 1, "shared_object": "c1" }
+    ],
+    "sources": [
+      { "collection": "Contacts", "source": "a", "checkpoint": "a1" },
+      { "collection": "Contacts", "source": "b", "checkpoint": "b1" }
+    ]
+  },
+  "run": { "verb": "mutate", "collection": "Contacts", "source": "a", "mutation": { "kind": "Edit", "seq": 1, "object": "c2" } },
+  "remote": {
+    "snapshot": null,
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c2", "level": 2, "deleted": 0 }],
+      "bindings": [
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1, "shared_object": "c2" },
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "b", "handle": "b.vcf", "base_flags": [], "base_object": "c1", "base_revision": "s1", "base_present": 1, "shared_object": "c1" }
+      ]
+    }
+  }
+}

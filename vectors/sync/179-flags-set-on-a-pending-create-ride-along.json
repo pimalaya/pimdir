@@ -1,0 +1,26 @@
+{
+  "v": 10,
+  "label": "flags set on a pending create apply to it, the create staying a create",
+  "note": "the Archive item is imap's pending create, staged and not pushed. A SetFlags on it replaces its flags and leaves it a create, no base and its provisional handle, so its Add carries the new set when pushed (SYNC.md sections 5 and 7). A drain applying a queued set-flags on it does the same",
+  "store": {
+    "collections": [{ "id": "Archive", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },
+    "items": [{ "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": "m1", "level": 2, "deleted": 0 }],
+    "bindings": [{ "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }],
+    "sources": [{ "collection": "Archive", "source": "imap", "checkpoint": "a0" }]
+  },
+  "run": { "verb": "mutate", "collection": "Archive", "source": "imap", "mutation": { "kind": "SetFlags", "seq": 1, "flags": ["\\Flagged"] } },
+  "remote": {
+    "snapshot": null,
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [{ "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Flagged"], "object": "m1", "level": 2, "deleted": 0 }],
+      "bindings": [{ "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }]
+    }
+  }
+}
