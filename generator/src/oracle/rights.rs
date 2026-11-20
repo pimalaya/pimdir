@@ -71,7 +71,7 @@ impl Oracle<'_> {
 
         for item in &model.items {
             let rows = item
-                .binding
+                .bindings
                 .iter()
                 .flat_map(|binding| {
                     joined(

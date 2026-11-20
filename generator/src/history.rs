@@ -10,13 +10,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    body::Card,
-    engine::Run,
-    model::{Collection, Kind, Model},
+    body::{Card, Mail, fnv1a64},
+    engine::{Push, Run},
+    model::{Collection, Kind, Model, synced_by},
     name::ObjectName,
     profile::Draw,
     queue::{Action, RowState},
-    remote::Remote,
+    remote::{Policy, Remote},
 };
 
 /// One step of a history.
@@ -40,6 +40,16 @@ pub struct History {
 /// The page size of a first round, small so seven members span three.
 pub const PAGE: usize = 3;
 
+/// The address books [`History::sources`] shares between two sources: the
+/// conflict policy of each, and whether `b`'s edit agrees with the one `a`
+/// folded.
+const SHARED: [(&str, &str, bool); 4] = [
+    ("work/shared", "manual", false),
+    ("work/incoming", "prefer-incoming", false),
+    ("work/existing", "prefer-existing", false),
+    ("work/agreeing", "manual", true),
+];
+
 impl History {
     /// One source and one mailbox (README.md, "Events and histories"): a
     /// first round in pages, an upgrade, remote changes, local changes
@@ -54,9 +64,8 @@ impl History {
             kind: Some(Kind::Mail),
             name: String::from("INBOX"),
             role: Some(String::from("inbox")),
-            source: Some(String::from("work-imap")),
-            checkpoint: None,
-            rounds: 0,
+            sources: synced_by(&[&String::from("work-imap")]),
+            conflict: String::from("manual"),
         });
         let mut remote = Remote::new("work-imap", "work/INBOX");
         for index in 0..7 {
@@ -183,9 +192,8 @@ impl History {
             kind: Some(Kind::Contact),
             name: String::from("Contacts"),
             role: Some(String::from("default")),
-            source: Some(String::from("work-carddav")),
-            checkpoint: None,
-            rounds: 0,
+            sources: synced_by(&[&String::from("work-carddav")]),
+            conflict: String::from("manual"),
         });
         let mut remote = Remote::dav("work-carddav", "work/contacts");
         let mut cards = Vec::new();
@@ -261,8 +269,8 @@ impl History {
 
         let (seq, _) = model.bound_card("work/contacts", "r3.vcf");
         let diverging = model.items[model.bound_index("work/contacts", "r3.vcf")]
-            .binding
-            .as_ref()
+            .bindings
+            .first()
             .and_then(|binding| binding.conflict_object.clone());
         let id = model.enqueue(
             "cardamum",
@@ -325,9 +333,8 @@ impl History {
                 kind: Some(Kind::Mail),
                 name: String::from(name),
                 role: Some(String::from(role)),
-                source: Some(String::from("work-imap")),
-                checkpoint: None,
-                rounds: 0,
+                sources: synced_by(&[&String::from("work-imap")]),
+                conflict: String::from("manual"),
             });
             remotes.insert(String::from(id), Remote::new("work-imap", id));
         }
@@ -419,6 +426,454 @@ impl History {
 
         Self { steps }
     }
+
+    /// One source and one address book whose remote refuses and rejects
+    /// (README.md, "Events and histories"): a create refused for good and
+    /// held while it stands, an edit rejected once and pushed again, the
+    /// create edited and pushed under its new key, an add stating a
+    /// `hash:` key its body does not give parked beside one stating its
+    /// own, and a run with nothing left to do.
+    pub fn refusals(seed: u64) -> Self {
+        let mut draw = Draw::new(seed);
+        let mut model = Model::new();
+        model.declare(Collection {
+            id: String::from("work/contacts"),
+            account: Some(String::from("work")),
+            kind: Some(Kind::Contact),
+            name: String::from("Contacts"),
+            role: Some(String::from("default")),
+            sources: synced_by(&[&String::from("work-carddav")]),
+            conflict: String::from("manual"),
+        });
+        let mut remote = Remote::dav("work-carddav", "work/contacts");
+        let mut cards = Vec::new();
+        for _ in 0..3 {
+            let card = draw.card();
+            remote.deliver(card.file(), BTreeSet::new());
+            cards.push(card);
+        }
+
+        let mut steps = vec![Step {
+            label: String::from("an address book declared, never synced"),
+            run: None,
+            model: model.clone(),
+        }];
+        let mut record = |label: &str, run: Option<Run>, model: &Model| {
+            steps.push(Step {
+                label: String::from(label),
+                run,
+                model: model.clone(),
+            });
+        };
+
+        let run = model.sync(&mut remote, PAGE);
+        record("a first round", Some(run), &model);
+
+        let created = draw.card();
+        let link_id = created.uid.clone().unwrap_or_default();
+        let id = model.enqueue(
+            "cardamum",
+            "work/contacts",
+            Action::Add {
+                link_id: link_id.clone(),
+                flags: BTreeSet::new(),
+                filed: created.file(),
+            },
+        );
+        model.drain(id);
+        let refused = Push::Add {
+            handle: format!("\u{1}{link_id}"),
+            link_id: link_id.clone(),
+            flags: BTreeSet::new(),
+            origin: None,
+            object: ObjectName::of(&created.file().bytes),
+        };
+        remote.refuse.insert(
+            refused.key("work/contacts"),
+            String::from("the address book takes no contact of this kind"),
+        );
+        let (seq, object) = model.bound_card("work/contacts", "r1.vcf");
+        let edited = Card {
+            name: String::from("Edited Here"),
+            ..cards[0].clone()
+        };
+        let id = model.enqueue(
+            "cardamum",
+            "work/contacts",
+            Action::Update {
+                seq,
+                filed: edited.file(),
+                if_match: Some(object),
+                resolves: None,
+            },
+        );
+        model.drain(id);
+        let base_revision = model.items[model.bound_index("work/contacts", "r1.vcf")]
+            .bindings
+            .first()
+            .and_then(|binding| binding.base_revision.clone());
+        let rejected = Push::Update {
+            handle: String::from("r1.vcf"),
+            object: ObjectName::of(&edited.file().bytes),
+            if_match: base_revision,
+        };
+        remote.reject.insert(rejected.key("work/contacts"));
+        record(
+            "a create and an edit the remote will turn down",
+            None,
+            &model,
+        );
+
+        let run = model.sync(&mut remote, PAGE);
+        record("the create refused, the edit rejected", Some(run), &model);
+        let run = model.sync(&mut remote, PAGE);
+        record("the create held, the edit pushed again", Some(run), &model);
+
+        let seq = model.items[model.bound_index("work/contacts", &format!("\u{1}{link_id}"))].seq;
+        let id = model.enqueue(
+            "cardamum",
+            "work/contacts",
+            Action::Update {
+                seq,
+                filed: Card {
+                    org: Some(String::from("A Kind It Takes")),
+                    ..created.clone()
+                }
+                .file(),
+                if_match: None,
+                resolves: None,
+            },
+        );
+        model.drain(id);
+        record("the refused create edited", None, &model);
+        let run = model.sync(&mut remote, PAGE);
+        record(
+            "the edited create pushed under its new key",
+            Some(run),
+            &model,
+        );
+
+        let mut anonymous = draw.card();
+        anonymous.uid = None;
+        let stranger = draw.card().file();
+        let id = model.enqueue(
+            "x-importer",
+            "work/contacts",
+            Action::Add {
+                link_id: format!("hash:{}", fnv1a64(&stranger.bytes)),
+                flags: BTreeSet::new(),
+                filed: anonymous.file(),
+            },
+        );
+        model.drain(id);
+        let id = model.enqueue(
+            "x-importer",
+            "work/contacts",
+            Action::Add {
+                link_id: format!("hash:{}", fnv1a64(&anonymous.file().bytes)),
+                flags: BTreeSet::new(),
+                filed: anonymous.file(),
+            },
+        );
+        model.drain(id);
+        record(
+            "an add stating another body's hash: key, one stating its own",
+            None,
+            &model,
+        );
+        let run = model.sync(&mut remote, PAGE);
+        record("the card keyed by its hash pushed", Some(run), &model);
+        let run = model.sync(&mut remote, PAGE);
+        record("a delta with nothing left to do", Some(run), &model);
+
+        Self { steps }
+    }
+
+    /// One mailbox on a server without UIDPLUS (README.md, "Events and
+    /// histories"): an add accepted with no handle, recorded delivered and
+    /// landed by the listing naming its member.
+    pub fn appends(seed: u64) -> Self {
+        let mut draw = Draw::new(seed);
+        let mut model = Model::new();
+        model.declare(Collection {
+            id: String::from("work/Sent"),
+            account: Some(String::from("work")),
+            kind: Some(Kind::Mail),
+            name: String::from("Sent"),
+            role: Some(String::from("sent")),
+            sources: synced_by(&[&String::from("work-imap")]),
+            conflict: String::from("manual"),
+        });
+        let mut remote = Remote::new("work-imap", "work/Sent");
+        remote.uidplus = false;
+        for _ in 0..3 {
+            remote.deliver(draw.message(false).file(), set(&["\\Seen"]));
+        }
+
+        let mut steps = vec![Step {
+            label: String::from("a mailbox on a server without UIDPLUS"),
+            run: None,
+            model: model.clone(),
+        }];
+        let mut record = |label: &str, run: Option<Run>, model: &Model| {
+            steps.push(Step {
+                label: String::from(label),
+                run,
+                model: model.clone(),
+            });
+        };
+
+        let run = model.sync(&mut remote, PAGE);
+        record("a first round", Some(run), &model);
+        let message = draw.message(false);
+        let id = model.enqueue(
+            "himalaya",
+            "work/Sent",
+            Action::Add {
+                link_id: message.message_id.clone().unwrap_or_default(),
+                flags: set(&["\\Seen"]),
+                filed: message.file(),
+            },
+        );
+        model.drain(id);
+        record("a sent copy filed", None, &model);
+        let run = model.sync(&mut remote, PAGE);
+        record("the append accepted with no handle", Some(run), &model);
+        let run = model.sync(&mut remote, PAGE);
+        record("the listing lands it", Some(run), &model);
+        let run = model.sync(&mut remote, PAGE);
+        record("a delta with nothing left to do", Some(run), &model);
+
+        Self { steps }
+    }
+
+    /// One address book per conflict policy (README.md, "Events and
+    /// histories"): under `PreferRemote` an edit on both sides pulled and
+    /// the local edit kept; under `PreferLocal` the server's body kept and
+    /// the local one pushed over it, or recorded while unread; under
+    /// `KeepLocal` a change the server alone made kept and pushed over, or
+    /// recorded while unread; each followed by a run with nothing to do.
+    pub fn policies(seed: u64) -> Self {
+        let mut draw = Draw::new(seed);
+        let mut model = Model::new();
+        let mut steps = vec![Step {
+            label: String::from("an empty store"),
+            run: None,
+            model: model.clone(),
+        }];
+        let mut record = |label: String, run: Option<Run>, model: &Model| {
+            steps.push(Step {
+                label,
+                run,
+                model: model.clone(),
+            });
+        };
+
+        let books = [
+            ("work/remote-wins", Policy::PreferRemote, false, true),
+            ("work/local-wins", Policy::PreferLocal, true, true),
+            ("work/local-unread", Policy::PreferLocal, false, true),
+            ("work/keep-local", Policy::KeepLocal, true, false),
+            ("work/keep-unread", Policy::KeepLocal, false, false),
+        ];
+        for (id, policy, carries, local_edit) in books {
+            model.declare(Collection {
+                id: String::from(id),
+                account: Some(String::from("work")),
+                kind: Some(Kind::Contact),
+                name: String::from(id),
+                role: None,
+                sources: synced_by(&[&format!("dav-{id}")]),
+                conflict: String::from("manual"),
+            });
+            let mut remote = Remote::dav(&format!("dav-{id}"), id);
+            remote.policy = policy;
+            let mut cards = Vec::new();
+            for _ in 0..2 {
+                let card = draw.card();
+                remote.deliver(card.file(), BTreeSet::new());
+                cards.push(card);
+            }
+            let run = model.sync(&mut remote, PAGE);
+            record(format!("{id}: a first round"), Some(run), &model);
+
+            remote.carries = carries;
+            remote.edit(
+                "r1.vcf",
+                Card {
+                    name: String::from("Their Version"),
+                    ..cards[0].clone()
+                }
+                .file(),
+            );
+            if local_edit {
+                let (seq, object) = model.bound_card(id, "r1.vcf");
+                let id_row = model.enqueue(
+                    "cardamum",
+                    id,
+                    Action::Update {
+                        seq,
+                        filed: Card {
+                            name: String::from("Our Version"),
+                            ..cards[0].clone()
+                        }
+                        .file(),
+                        if_match: Some(object),
+                        resolves: None,
+                    },
+                );
+                model.drain(id_row);
+            }
+            record(format!("{id}: a body edited on the server"), None, &model);
+            let run = model.sync(&mut remote, PAGE);
+            record(format!("{id}: settled by its policy"), Some(run), &model);
+            let run = model.sync(&mut remote, PAGE);
+            record(format!("{id}: nothing left to do"), Some(run), &model);
+        }
+
+        Self { steps }
+    }
+
+    /// Two sources on one collection (SYNC §9). On each address book of
+    /// `SHARED`: `a` names four cards, one keyed `hash:`; `b` joins one
+    /// holding the same body, one holding another, and names one of its
+    /// own, each lacking what the other holds offered it but the `hash:`
+    /// one; `a` pulls an edit `b` then owes, `b`'s server edits the card too,
+    /// its pull diverging from the item or agreeing with it, then edits it
+    /// again; `a`'s server deletes a card, which `b` then removes. On a
+    /// mailbox: `b` joins a message `a` holds and mints another reusing its
+    /// `Message-ID`, and a flag one server sets reaches the other.
+    pub fn sources(seed: u64) -> Self {
+        let mut draw = Draw::new(seed);
+        let mut model = Model::new();
+        let mut steps = vec![Step {
+            label: String::from("an empty store"),
+            run: None,
+            model: model.clone(),
+        }];
+        let mut record = |label: String, run: Option<Run>, model: &Model| {
+            steps.push(Step {
+                label,
+                run,
+                model: model.clone(),
+            });
+        };
+
+        for (id, conflict, agreeing) in SHARED {
+            let (a, b) = (format!("{id}-a"), format!("{id}-b"));
+            model.declare(Collection {
+                id: String::from(id),
+                account: Some(String::from("work")),
+                kind: Some(Kind::Contact),
+                name: String::from(id),
+                role: None,
+                sources: synced_by(&[&a, &b]),
+                conflict: String::from(conflict),
+            });
+            let mut ra = Remote::dav(&a, id);
+            let mut rb = Remote::dav(&b, id);
+            rb.policy = Policy::PreferRemote;
+            let cards: Vec<Card> = (0..5).map(|_| draw.card()).collect();
+            let nameless = Card {
+                uid: None,
+                ..cards[4].clone()
+            };
+            for card in [&cards[0], &cards[1], &cards[2], &nameless] {
+                ra.deliver(card.file(), BTreeSet::new());
+            }
+            let theirs = Card {
+                name: String::from("Their Copy"),
+                ..cards[1].clone()
+            };
+            for card in [&cards[0], &theirs, &cards[3]] {
+                rb.deliver(card.file(), BTreeSet::new());
+            }
+
+            let run = model.sync(&mut ra, PAGE);
+            record(format!("{id}: a's first round"), Some(run), &model);
+            let run = model.sync(&mut rb, PAGE);
+            record(format!("{id}: b joins a's cards"), Some(run), &model);
+            let run = model.sync(&mut ra, PAGE);
+            record(format!("{id}: a takes what b named"), Some(run), &model);
+
+            let ours = Card {
+                name: String::from("Edited At A"),
+                ..cards[0].clone()
+            };
+            ra.edit("r1.vcf", ours.file());
+            let run = model.sync(&mut ra, PAGE);
+            record(format!("{id}: a pulls an edit b owes"), Some(run), &model);
+
+            let other = match agreeing {
+                true => ours,
+                false => Card {
+                    name: String::from("Edited At B"),
+                    ..cards[0].clone()
+                },
+            };
+            rb.edit("r1.vcf", other.file());
+            let run = model.sync(&mut rb, PAGE);
+            record(format!("{id}: b's edit meets the item"), Some(run), &model);
+            let again = Card {
+                name: String::from("Edited Again At B"),
+                ..cards[0].clone()
+            };
+            rb.edit("r1.vcf", again.file());
+            let run = model.sync(&mut rb, PAGE);
+            record(
+                format!("{id}: b's server edits it again"),
+                Some(run),
+                &model,
+            );
+
+            ra.expunge("r3.vcf");
+            let run = model.sync(&mut ra, PAGE);
+            record(
+                format!("{id}: a's server deletes a card"),
+                Some(run),
+                &model,
+            );
+            let run = model.sync(&mut rb, PAGE);
+            record(format!("{id}: b removes it"), Some(run), &model);
+        }
+
+        let id = "work/INBOX";
+        model.declare(Collection {
+            id: String::from(id),
+            account: Some(String::from("work")),
+            kind: Some(Kind::Mail),
+            name: String::from("INBOX"),
+            role: Some(String::from("inbox")),
+            sources: synced_by(&["imap-a", "imap-b"]),
+            conflict: String::from("manual"),
+        });
+        let mut ra = Remote::new("imap-a", id);
+        ra.carries = true;
+        let mut rb = Remote::new("imap-b", id);
+        let messages: Vec<Mail> = (0..2).map(|_| draw.message(false)).collect();
+        ra.deliver(messages[0].file(), set(&["\\Answered"]));
+        ra.deliver(messages[1].file(), BTreeSet::new());
+        let reused = Mail {
+            subject: String::from("Another Message Entirely"),
+            ..messages[0].clone()
+        };
+        rb.deliver(messages[0].file(), set(&["\\Seen"]));
+        rb.deliver(reused.file(), BTreeSet::new());
+
+        let run = model.sync(&mut ra, PAGE);
+        record(format!("{id}: a's first round"), Some(run), &model);
+        let run = model.sync(&mut rb, PAGE);
+        record(format!("{id}: b joins and mints"), Some(run), &model);
+        let run = model.sync(&mut ra, PAGE);
+        record(format!("{id}: a takes b's flag"), Some(run), &model);
+        rb.set_flags("1", set(&["\\Answered", "\\Flagged", "\\Seen"]));
+        let run = model.sync(&mut rb, PAGE);
+        record(format!("{id}: b pulls a flag"), Some(run), &model);
+        let run = model.sync(&mut ra, PAGE);
+        record(format!("{id}: a pushes it"), Some(run), &model);
+
+        Self { steps }
+    }
 }
 
 impl Model {
@@ -430,8 +885,8 @@ impl Model {
             .find(|item| {
                 item.collection == collection
                     && item
-                        .binding
-                        .as_ref()
+                        .bindings
+                        .first()
                         .is_some_and(|binding| binding.handle == handle)
             })
             .expect("a bound handle");
@@ -444,8 +899,8 @@ impl Model {
             .position(|item| {
                 item.collection == collection
                     && item
-                        .binding
-                        .as_ref()
+                        .bindings
+                        .first()
                         .is_some_and(|binding| binding.handle == handle)
             })
             .expect("a bound handle")
@@ -469,16 +924,20 @@ pub fn drained(model: &Model) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::{env, fs, process};
+    use std::{collections::BTreeSet, env, fs, process};
 
     use rusqlite::types::Value;
 
     use crate::{
-        engine::{Event, Push},
-        history::{History, PAGE, drained},
+        body::Card,
+        engine::{Answer, Event, Push, Run},
+        history::{History, PAGE, SHARED, drained, set},
         model::{Item, Model, State},
+        name::ObjectName,
         oracle,
-        queue::RowState,
+        profile::Draw,
+        queue::{Action, Outcome, RowState},
+        remote::Remote,
         spec::Spec,
         store::Store,
         writer,
@@ -491,7 +950,15 @@ mod tests {
     #[test]
     fn every_step_leaves_a_store_the_statements_write_and_read_back() {
         let spec = Spec::load_default().unwrap();
-        let histories = [history(), History::cards(13), History::moves(17)];
+        let histories = [
+            history(),
+            History::cards(13),
+            History::moves(17),
+            History::refusals(19),
+            History::appends(23),
+            History::policies(29),
+            History::sources(31),
+        ];
         for (index, step) in histories
             .iter()
             .flat_map(|history| history.steps.iter())
@@ -538,15 +1005,15 @@ mod tests {
         );
         assert!(run.pushes.is_empty());
 
-        let collection = &step.model.collections["work/INBOX"];
-        assert_eq!(collection.rounds, 1);
+        let sync = &step.model.collections["work/INBOX"].sources["work-imap"];
+        assert_eq!(sync.rounds, 1);
         assert_eq!(
-            collection.checkpoint.as_deref(),
+            sync.checkpoint.as_deref(),
             run.pages[0].checkpoint.as_deref().map(str::as_bytes)
         );
         for item in &step.model.items {
             assert_eq!((item.level, item.object.is_none()), (1, true));
-            assert_eq!(item.binding.as_ref().unwrap().round, Some(1));
+            assert_eq!(item.bindings.first().unwrap().round, Some(1));
         }
     }
 
@@ -561,7 +1028,7 @@ mod tests {
             .iter()
             .filter(|item| item.object.is_some())
         {
-            let binding = item.binding.as_ref().unwrap();
+            let binding = item.bindings.first().unwrap();
             assert_eq!(item.level, 2);
             assert_eq!(binding.base_object, item.object);
         }
@@ -589,8 +1056,8 @@ mod tests {
             .items
             .iter()
             .find(|item| {
-                item.binding
-                    .as_ref()
+                item.bindings
+                    .first()
                     .is_some_and(|binding| binding.handle == "6")
             })
             .unwrap();
@@ -611,8 +1078,8 @@ mod tests {
                 history.steps[4].model.items.iter().any(|before| {
                     before.seq == item.seq
                         && before
-                            .binding
-                            .as_ref()
+                            .bindings
+                            .first()
                             .is_some_and(|binding| binding.handle == handle)
                 })
             });
@@ -650,8 +1117,8 @@ mod tests {
             .items
             .iter()
             .find(|item| {
-                item.binding
-                    .as_ref()
+                item.bindings
+                    .first()
                     .is_some_and(|binding| binding.handle == "5")
             })
             .unwrap();
@@ -673,8 +1140,8 @@ mod tests {
             .items
             .iter()
             .find(|item| {
-                item.binding
-                    .as_ref()
+                item.bindings
+                    .first()
                     .is_some_and(|binding| binding.handle == handle)
             })
             .cloned()
@@ -694,7 +1161,7 @@ mod tests {
         );
         assert_eq!(run.events.len(), 5);
         for item in &step.model.items {
-            let binding = item.binding.as_ref().unwrap();
+            let binding = item.bindings.first().unwrap();
             assert_eq!(item.level, 2);
             assert_eq!(binding.base_object, item.object);
             assert!(binding.base_revision.is_some());
@@ -717,7 +1184,7 @@ mod tests {
             pulled.summary.get("fn"),
             Value::Text(String::from("Edited On The Server"))
         );
-        assert_eq!(pulled.binding.as_ref().unwrap().base_object, pulled.object);
+        assert_eq!(pulled.bindings.first().unwrap().base_object, pulled.object);
         assert_eq!(
             pulled.sort_key, "edited on the server",
             "a pull restates the sort key"
@@ -735,10 +1202,10 @@ mod tests {
         assert_eq!(handle, "r2.vcf");
         assert_eq!(
             if_match,
-            &card(before, "r2.vcf").binding.unwrap().base_revision
+            &card(before, "r2.vcf").bindings[0].clone().base_revision
         );
         let pushed = card(&step.model, "r2.vcf");
-        let binding = pushed.binding.as_ref().unwrap();
+        let binding = pushed.bindings.first().unwrap();
         assert_eq!(binding.base_object.as_ref(), Some(object));
         assert_eq!(binding.base_revision, run.outcomes[0].revision);
         assert!(run.outcomes[0].revision.is_some());
@@ -753,7 +1220,7 @@ mod tests {
         assert!(run.pushes.is_empty());
 
         let item = card(&step.model, "r3.vcf");
-        let binding = item.binding.as_ref().unwrap();
+        let binding = item.bindings.first().unwrap();
         assert!(binding.conflicted);
         assert!(binding.conflict_object.is_some() && binding.conflict_revision.is_some());
         assert_eq!(
@@ -774,8 +1241,8 @@ mod tests {
                 .iter()
                 .all(|row| matches!(row.state, RowState::Applied(_)))
         );
-        let conflicted = card(&history.steps[5].model, "r3.vcf").binding.unwrap();
-        let settled = card(resolved, "r3.vcf").binding.unwrap();
+        let conflicted = card(&history.steps[5].model, "r3.vcf").bindings[0].clone();
+        let settled = card(resolved, "r3.vcf").bindings[0].clone();
         assert!(!settled.conflicted);
         assert_eq!(settled.base_revision, conflicted.conflict_revision);
         assert_eq!(settled.base_object, conflicted.conflict_object);
@@ -822,7 +1289,7 @@ mod tests {
         let moved = card(model, "1");
         assert_eq!(moved.state, State::Tombstone);
         let create = placed(model, "work/Archive", &moved.link_id).unwrap();
-        let binding = create.binding.as_ref().unwrap();
+        let binding = create.bindings.first().unwrap();
         assert_eq!(binding.handle, format!("\u{1}{}", moved.link_id));
         assert!(!binding.base_present);
         assert_eq!(
@@ -860,7 +1327,7 @@ mod tests {
         );
         assert_eq!(step.model.purges, 1);
         let delivered = placed(&step.model, "work/Archive", &moved.link_id).unwrap();
-        let binding = delivered.binding.as_ref().unwrap();
+        let binding = delivered.bindings.first().unwrap();
         assert!(
             binding.base_present && binding.base_flags.is_none() && binding.base_object.is_none()
         );
@@ -877,7 +1344,7 @@ mod tests {
         let run = step.run.as_ref().unwrap();
 
         let landed = placed(&step.model, "work/Archive", &moved.link_id).unwrap();
-        let binding = landed.binding.as_ref().unwrap();
+        let binding = landed.bindings.first().unwrap();
         assert!(!binding.handle.starts_with('\u{1}'));
         assert_eq!(binding.base_object, landed.object);
         assert!(run.events.contains(&Event::Created(binding.handle.clone())));
@@ -930,5 +1397,682 @@ mod tests {
                 quiet.label
             );
         }
+    }
+
+    #[test]
+    fn a_refused_create_is_recorded_held_and_released_by_an_edit() {
+        let history = History::refusals(19);
+        let reason = "the address book takes no contact of this kind";
+
+        let run = history.steps[3].run.as_ref().unwrap();
+        let names: Vec<&str> = run.pushes.iter().map(|(push, _)| push.name()).collect();
+        assert_eq!(names, ["add", "update"]);
+        assert_eq!(
+            run.outcomes[0].answer,
+            Answer::Refused(String::from(reason))
+        );
+        assert_eq!(run.outcomes[1].answer, Answer::Rejected);
+        let (create, key) = (&run.pushes[0].0, &run.pushes[0].1);
+        assert!(run.events.contains(&Event::Refused {
+            handle: String::from(create.handle()),
+            reason: String::from(reason),
+        }));
+        let held = card(&history.steps[3].model, create.handle());
+        let refusal = held.bindings.first().unwrap().refusal.clone().unwrap();
+        assert_eq!((refusal.reason.as_str(), &refusal.key), (reason, key));
+        let rejected = card(&history.steps[3].model, "r1.vcf");
+        assert_ne!(
+            rejected.bindings.first().unwrap().base_object,
+            rejected.object
+        );
+
+        let run = history.steps[4].run.as_ref().unwrap();
+        let names: Vec<&str> = run.pushes.iter().map(|(push, _)| push.name()).collect();
+        assert_eq!(names, ["update"], "the refused create is held");
+        assert!(run.events.contains(&Event::Refused {
+            handle: String::from(create.handle()),
+            reason: String::from(reason),
+        }));
+        assert_eq!(run.outcomes[0].answer, Answer::Accepted);
+
+        let run = history.steps[6].run.as_ref().unwrap();
+        assert_eq!(run.pushes.len(), 1);
+        assert_ne!(&run.pushes[0].1, key, "an edited create is another change");
+        assert_eq!(run.outcomes[0].answer, Answer::Accepted);
+        let landed = card(
+            &history.steps[6].model,
+            run.outcomes[0].assigned.as_ref().unwrap(),
+        );
+        assert!(landed.bindings.first().unwrap().refusal.is_none());
+    }
+
+    #[test]
+    fn an_add_stating_a_hash_key_its_body_does_not_give_parks() {
+        let history = History::refusals(19);
+        let rows: Vec<&RowState> = history.steps[7]
+            .model
+            .queue
+            .iter()
+            .filter(|row| row.producer == "x-importer")
+            .map(|row| &row.state)
+            .collect();
+        assert!(matches!(rows[0], RowState::Parked(reason) if reason.contains("hash:")));
+        assert!(matches!(rows[1], RowState::Applied(Some(_))));
+
+        let run = history.steps[8].run.as_ref().unwrap();
+        let Push::Add { link_id, .. } = &run.pushes[0].0 else {
+            panic!("an add");
+        };
+        assert!(link_id.starts_with("hash:"));
+        assert!(history.steps[9].run.as_ref().unwrap().pushes.is_empty());
+        assert!(history.steps[9].run.as_ref().unwrap().events.is_empty());
+    }
+
+    #[test]
+    fn an_add_accepted_with_no_handle_is_delivered_then_landed() {
+        let history = History::appends(23);
+        let run = history.steps[3].run.as_ref().unwrap();
+        assert_eq!(run.outcomes[0].answer, Answer::Accepted);
+        assert_eq!(run.outcomes[0].assigned, None);
+        assert!(
+            run.events.is_empty(),
+            "a delivered create reports no Created"
+        );
+        let (
+            Push::Add {
+                handle, link_id, ..
+            },
+            _,
+        ) = &run.pushes[0]
+        else {
+            panic!("an add");
+        };
+        let delivered = card(&history.steps[3].model, handle);
+        let binding = delivered.bindings.first().unwrap();
+        assert!(binding.base_present && binding.base_flags.is_none());
+
+        let run = history.steps[4].run.as_ref().unwrap();
+        assert!(
+            run.pushes.is_empty(),
+            "a delivered create is pushed no second time"
+        );
+        let landed = placed(&history.steps[4].model, "work/Sent", link_id).unwrap();
+        let binding = landed.bindings.first().unwrap();
+        assert!(!binding.handle.starts_with('\u{1}'));
+        assert_eq!(run.events, [Event::Created(binding.handle.clone())]);
+        let quiet = history.steps[5].run.as_ref().unwrap();
+        assert!(quiet.pushes.is_empty() && quiet.events.is_empty());
+    }
+
+    fn card_in(model: &Model, collection: &str, handle: &str) -> Item {
+        model
+            .items
+            .iter()
+            .find(|item| {
+                item.collection == collection
+                    && item
+                        .bindings
+                        .first()
+                        .is_some_and(|binding| binding.handle == handle)
+            })
+            .cloned()
+            .unwrap()
+    }
+
+    fn settled(history: &History, book: usize) -> (&Model, &Model, &Run) {
+        let step = 1 + 4 * book + 2;
+        let run = history.steps[step].run.as_ref().unwrap();
+        (
+            &history.steps[step - 1].model,
+            &history.steps[step].model,
+            run,
+        )
+    }
+
+    fn retained_kept(model: &Model, collection: &str) -> Item {
+        model
+            .items
+            .iter()
+            .find(|item| item.collection == collection && item.link_id.starts_with("dup:"))
+            .cloned()
+            .unwrap()
+    }
+
+    #[test]
+    fn prefer_remote_pulls_and_keeps_the_local_edit() {
+        let history = History::policies(29);
+        let (before, after, run) = settled(&history, 0);
+        let local = card_in(before, "work/remote-wins", "r1.vcf");
+        assert!(run.pushes.is_empty());
+        assert_eq!(run.events[0], Event::ContentChanged(String::from("r1.vcf")));
+        let Event::Overruled { link_id, .. } = &run.events[1] else {
+            panic!("an overruled body");
+        };
+        assert_eq!(*link_id, format!("dup:{}#r1.vcf", local.link_id));
+
+        let pulled = card_in(after, "work/remote-wins", "r1.vcf");
+        assert_eq!(
+            (pulled.object.is_none(), pulled.level),
+            (true, 1),
+            "a member carrying no body empties the item"
+        );
+        let kept = retained_kept(after, "work/remote-wins");
+        assert_eq!(kept.object, local.object);
+        assert!(matches!(kept.state, State::Retained { by: Some(_) }));
+        assert_ne!(kept.seq, local.seq);
+    }
+
+    #[test]
+    fn prefer_local_keeps_the_server_body_and_pushes_its_own_on_the_observed_revision() {
+        let history = History::policies(29);
+        let (before, after, run) = settled(&history, 1);
+        let local = card_in(before, "work/local-wins", "r1.vcf");
+        assert_eq!(run.events.len(), 1);
+        assert!(matches!(run.events[0], Event::Overruled { .. }));
+        let Push::Update {
+            object, if_match, ..
+        } = &run.pushes[0].0
+        else {
+            panic!("an update");
+        };
+        assert_eq!(Some(object.clone()), local.object);
+        let kept = retained_kept(after, "work/local-wins");
+        assert_eq!(
+            kept.summary.get("fn"),
+            Value::Text(String::from("Their Version"))
+        );
+        assert_ne!(
+            *if_match,
+            local.bindings.first().unwrap().base_revision,
+            "gated on the observed revision"
+        );
+        let pushed = card_in(after, "work/local-wins", "r1.vcf");
+        assert_eq!(pushed.bindings.first().unwrap().base_object, local.object);
+    }
+
+    #[test]
+    fn an_unread_server_body_is_recorded_whatever_the_policy() {
+        let history = History::policies(29);
+        for book in [2, 4] {
+            let (_, after, run) = settled(&history, book);
+            assert_eq!(
+                run.events,
+                [Event::Conflicted(String::from("r1.vcf"))],
+                "book {book}"
+            );
+            assert!(run.pushes.is_empty());
+            let binding = card_in(
+                after,
+                [
+                    "work/remote-wins",
+                    "work/local-wins",
+                    "work/local-unread",
+                    "work/keep-local",
+                    "work/keep-unread",
+                ][book],
+                "r1.vcf",
+            )
+            .bindings[0]
+                .clone();
+            assert!(binding.conflicted && binding.conflict_object.is_none());
+        }
+    }
+
+    #[test]
+    fn keep_local_pushes_over_a_change_the_server_alone_made() {
+        let history = History::policies(29);
+        let (before, after, run) = settled(&history, 3);
+        let local = card_in(before, "work/keep-local", "r1.vcf");
+        assert_eq!(
+            local.bindings.first().unwrap().base_object,
+            local.object,
+            "no local edit"
+        );
+        assert!(matches!(run.events[..], [Event::Overruled { .. }]));
+        let Push::Update { object, .. } = &run.pushes[0].0 else {
+            panic!("an update");
+        };
+        assert_eq!(Some(object.clone()), local.object);
+        assert_eq!(
+            card_in(after, "work/keep-local", "r1.vcf").object,
+            local.object
+        );
+        for book in 0..5 {
+            let quiet = history.steps[1 + 4 * book + 3].run.as_ref().unwrap();
+            assert!(
+                quiet.pushes.is_empty() && quiet.events.is_empty(),
+                "book {book}"
+            );
+        }
+    }
+
+    fn shared(history: &History, book: usize, step: usize) -> (&Model, &Run) {
+        let step = &history.steps[1 + 8 * book + step];
+        (&step.model, step.run.as_ref().unwrap())
+    }
+
+    fn held_by<'a>(model: &'a Model, book: usize, source: &str, handle: &str) -> &'a Item {
+        let (id, _, _) = SHARED[book];
+        let source = format!("{id}-{source}");
+        model
+            .items
+            .iter()
+            .find(|item| {
+                item.collection == id
+                    && item
+                        .bound(&source)
+                        .is_some_and(|binding| binding.handle == handle)
+            })
+            .unwrap()
+    }
+
+    fn base(item: &Item, book: usize, source: &str) -> Option<ObjectName> {
+        let source = format!("{}-{source}", SHARED[book].0);
+        item.bound(&source).unwrap().base_object.clone()
+    }
+
+    fn kept<'a>(model: &'a Model, item: &Item, handle: &str) -> &'a Item {
+        let link_id = format!("dup:{}#{handle}", item.link_id);
+        model
+            .items
+            .iter()
+            .find(|kept| kept.collection == item.collection && kept.link_id == link_id)
+            .unwrap()
+    }
+
+    fn pushed<'a>(run: &'a Run, name: &str, handle: &str) -> Option<&'a Push> {
+        run.pushes
+            .iter()
+            .map(|(push, _)| push)
+            .find(|push| push.name() == name && push.handle() == handle)
+    }
+
+    #[test]
+    fn a_second_source_joins_what_it_shares_and_is_offered_the_rest() {
+        let history = History::sources(31);
+        let (model, run) = shared(&history, 0, 1);
+
+        let same = held_by(model, 0, "a", "r1.vcf");
+        let binding = same.bound("work/shared-b").unwrap();
+        assert_eq!(binding.handle, "r1.vcf");
+        assert_eq!(binding.base_object, same.object);
+        assert_eq!(binding.shared_object, same.object);
+        assert!(
+            !model
+                .items
+                .iter()
+                .any(|item| item.link_id.starts_with("dup:"))
+        );
+
+        let own = held_by(model, 0, "b", "r3.vcf");
+        assert_eq!(own.bindings.len(), 1);
+
+        let offered = held_by(model, 0, "a", "r3.vcf");
+        let handle = format!("\u{1}{}", offered.link_id);
+        assert!(pushed(run, "add", &handle).is_some());
+        let assigned = run.outcomes[0].assigned.clone().unwrap();
+        let binding = offered.bound("work/shared-b").unwrap();
+        assert_eq!(binding.handle, assigned);
+        assert!(binding.base_present);
+
+        let (after, run) = shared(&history, 0, 2);
+        assert!(pushed(run, "add", &format!("\u{1}{}", own.link_id)).is_some());
+        assert_eq!(held_by(after, 0, "b", "r3.vcf").bindings.len(), 2);
+        let nameless = held_by(after, 0, "a", "r4.vcf");
+        assert!(nameless.link_id.starts_with("hash:"));
+        assert_eq!(nameless.bindings.len(), 1);
+    }
+
+    #[test]
+    fn a_body_diverging_on_joining_is_settled_by_the_collection_policy() {
+        let history = History::sources(31);
+
+        let (model, run) = shared(&history, 0, 1);
+        let item = held_by(model, 0, "a", "r2.vcf");
+        assert!(item.conflicted);
+        assert_eq!(item.object, base(item, 0, "a"));
+        assert_eq!(item.conflict_object, base(item, 0, "b"));
+        assert_eq!(item.bound("work/shared-b").unwrap().shared_object, None);
+        assert!(
+            run.events
+                .contains(&Event::Conflicted(String::from("r2.vcf")))
+        );
+        let (_, next) = shared(&history, 0, 2);
+        assert!(pushed(run, "update", "r2.vcf").is_none());
+        assert!(pushed(next, "update", "r2.vcf").is_none());
+
+        let (before, _) = shared(&history, 1, 0);
+        let (model, run) = shared(&history, 1, 1);
+        let item = held_by(model, 1, "a", "r2.vcf");
+        assert!(!item.conflicted);
+        assert_eq!(item.object, base(item, 1, "b"));
+        let loser = kept(model, item, "r2.vcf");
+        assert_eq!(loser.object, held_by(before, 1, "a", "r2.vcf").object);
+        assert_eq!(
+            loser.state,
+            State::Retained {
+                by: Some(String::from("work/incoming-b"))
+            }
+        );
+        assert!(run.events.contains(&Event::Overruled {
+            handle: String::from("r2.vcf"),
+            link_id: loser.link_id.clone(),
+        }));
+        let (_, next) = shared(&history, 1, 2);
+        let Some(Push::Update { object, .. }) = pushed(next, "update", "r2.vcf") else {
+            panic!("a owes the body the item adopted");
+        };
+        assert_eq!(Some(object), item.object.as_ref());
+
+        let (model, run) = shared(&history, 2, 1);
+        let item = held_by(model, 2, "a", "r2.vcf");
+        assert!(!item.conflicted);
+        let loser = kept(model, item, "r2.vcf");
+        assert_ne!(loser.object, item.object);
+        let binding = item.bound("work/existing-b").unwrap();
+        assert_eq!(binding.shared_object, item.object);
+        let Some(Push::Update { object, .. }) = pushed(run, "update", "r2.vcf") else {
+            panic!("b pushes the body the item kept");
+        };
+        assert_eq!(Some(object), item.object.as_ref());
+    }
+
+    #[test]
+    fn a_change_one_source_pulls_is_owed_by_the_other() {
+        let history = History::sources(31);
+        for (book, (id, _, _)) in SHARED.iter().enumerate() {
+            let (before, _) = shared(&history, book, 2);
+            let (model, run) = shared(&history, book, 3);
+            let item = held_by(model, book, "a", "r1.vcf");
+            assert!(
+                run.events
+                    .contains(&Event::ContentChanged(String::from("r1.vcf")))
+            );
+            assert_eq!(item.object, base(item, book, "a"));
+            assert_ne!(item.object, base(item, book, "b"));
+            let source = format!("{id}-b");
+            assert_eq!(
+                item.bound(&source).unwrap().shared_object,
+                held_by(before, book, "a", "r1.vcf")
+                    .bound(&source)
+                    .unwrap()
+                    .shared_object
+            );
+        }
+
+        let (model, _) = shared(&history, 1, 5);
+        let adopted = held_by(model, 1, "a", "r1.vcf").object.clone();
+        let (_, run) = shared(&history, 1, 6);
+        let Some(Push::Update { object, .. }) = pushed(run, "update", "r1.vcf") else {
+            panic!("a owes the edit b folded");
+        };
+        assert_eq!(Some(object), adopted.as_ref());
+    }
+
+    #[test]
+    fn a_pull_diverging_from_the_item_is_settled_by_the_collection_policy() {
+        let history = History::sources(31);
+
+        let (before, _) = shared(&history, 0, 3);
+        let (model, run) = shared(&history, 0, 4);
+        let was = held_by(before, 0, "a", "r1.vcf");
+        let item = held_by(model, 0, "a", "r1.vcf");
+        assert!(item.conflicted);
+        assert_eq!(item.object, was.object);
+        assert_eq!(item.conflict_object, base(item, 0, "b"));
+        assert_eq!(
+            item.bound("work/shared-b").unwrap().shared_object,
+            was.bound("work/shared-b").unwrap().shared_object
+        );
+        assert_eq!(run.events, [Event::Conflicted(String::from("r1.vcf"))]);
+        assert!(run.pushes.is_empty());
+        let (_, next) = shared(&history, 0, 6);
+        assert!(pushed(next, "update", "r1.vcf").is_none());
+
+        let (before, _) = shared(&history, 1, 3);
+        let (model, run) = shared(&history, 1, 4);
+        let item = held_by(model, 1, "a", "r1.vcf");
+        assert_eq!(item.object, base(item, 1, "b"));
+        let loser = kept(model, item, "r1.vcf");
+        assert_eq!(loser.object, held_by(before, 1, "a", "r1.vcf").object);
+        let overruled = run
+            .events
+            .iter()
+            .filter(|event| matches!(event, Event::Overruled { .. }))
+            .count();
+        assert_eq!(overruled, 1);
+
+        let (before, _) = shared(&history, 2, 3);
+        let (model, run) = shared(&history, 2, 4);
+        let item = held_by(model, 2, "a", "r1.vcf");
+        assert_eq!(item.object, held_by(before, 2, "a", "r1.vcf").object);
+        let loser = kept(model, item, "r1.vcf");
+        assert_ne!(loser.object, item.object);
+        let Some(Push::Update { object, .. }) = pushed(run, "update", "r1.vcf") else {
+            panic!("b pushes the body the item kept");
+        };
+        assert_eq!(Some(object), item.object.as_ref());
+        assert_eq!(base(item, 2, "b"), item.object);
+    }
+
+    #[test]
+    fn a_delete_one_source_finds_is_pushed_by_the_other() {
+        let history = History::sources(31);
+        for (book, (id, _, _)) in SHARED.iter().enumerate() {
+            let (model, run) = shared(&history, book, 6);
+            assert!(
+                run.events
+                    .contains(&Event::Vanished(String::from("r3.vcf")))
+            );
+            let item = held_by(model, book, "b", "r4.vcf");
+            assert_eq!(item.state, State::Tombstone);
+            assert_eq!(item.bindings.len(), 1);
+
+            let (after, run) = shared(&history, book, 7);
+            assert!(pushed(run, "remove", "r4.vcf").is_some());
+            let item = after
+                .items
+                .iter()
+                .find(|other| other.collection == item.collection && other.link_id == item.link_id)
+                .unwrap();
+            assert!(item.bindings.is_empty());
+            assert_eq!(
+                item.state,
+                State::Retained {
+                    by: Some(format!("{id}-b"))
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn an_offered_create_binds_only_on_an_outcome_the_write_records() {
+        let history = History::sources(31);
+        let (first, _) = shared(&history, 0, 0);
+        let mut model = first.clone();
+        let mut remote = Remote::dav("work/shared-b", "work/shared");
+        let run = model.clone().sync(&mut remote.clone(), PAGE);
+        let keys: Vec<(String, String)> = run
+            .pushes
+            .iter()
+            .map(|(push, key)| (String::from(push.handle()), key.clone()))
+            .collect();
+        assert_eq!(keys.len(), 3);
+        let reason = String::from("the address book takes no contact of this kind");
+        remote.refuse.insert(keys[0].1.clone(), reason.clone());
+        remote.reject.insert(keys[1].1.clone());
+
+        let run = model.sync(&mut remote, PAGE);
+        let refused = model
+            .items
+            .iter()
+            .find(|item| {
+                item.bound("work/shared-b")
+                    .is_some_and(|b| b.handle == keys[0].0)
+            })
+            .unwrap();
+        let binding = refused.bound("work/shared-b").unwrap();
+        assert!(!binding.base_present && binding.base_object.is_none());
+        assert_eq!(binding.refusal.as_ref().unwrap().key, keys[0].1);
+        assert!(model.items.iter().all(|item| {
+            item.bound("work/shared-b")
+                .is_none_or(|binding| binding.handle != keys[1].0)
+        }));
+        assert_eq!(run.outcomes[1].answer, Answer::Rejected);
+
+        let run = model.sync(&mut remote, PAGE);
+        assert!(pushed(&run, "add", &keys[0].0).is_none());
+        assert!(run.events.contains(&Event::Refused {
+            handle: keys[0].0.clone(),
+            reason,
+        }));
+        assert!(pushed(&run, "add", &keys[1].0).is_some());
+    }
+
+    #[test]
+    fn a_pull_agreeing_with_the_item_settles_without_a_conflict() {
+        let history = History::sources(31);
+        let (model, run) = shared(&history, 3, 4);
+        let item = held_by(model, 3, "b", "r1.vcf");
+        assert!(!item.conflicted);
+        assert_eq!(item.object, base(item, 3, "a"));
+        assert_eq!(item.object, base(item, 3, "b"));
+        assert_eq!(
+            item.bound("work/agreeing-b").unwrap().shared_object,
+            item.object
+        );
+        assert!(run.pushes.is_empty());
+        assert!(
+            model
+                .items
+                .iter()
+                .filter(|item| item.collection == "work/agreeing")
+                .all(|item| !item.link_id.starts_with("dup:"))
+        );
+    }
+
+    #[test]
+    fn a_server_edit_over_an_item_conflict_is_recorded_on_its_binding() {
+        let history = History::sources(31);
+        let (before, _) = shared(&history, 0, 4);
+        let (model, run) = shared(&history, 0, 5);
+        let was = held_by(before, 0, "b", "r1.vcf");
+        let item = held_by(model, 0, "b", "r1.vcf");
+        assert!(item.conflicted);
+        assert_eq!(item.object, was.object);
+        assert_eq!(item.conflict_object, was.conflict_object);
+        let binding = item.bound("work/shared-b").unwrap();
+        assert!(binding.conflicted && binding.conflict_object.is_some());
+        assert_ne!(binding.conflict_object, item.conflict_object);
+        assert_eq!(run.events, [Event::Conflicted(String::from("r1.vcf"))]);
+        assert!(run.pushes.is_empty());
+
+        for book in 1..SHARED.len() {
+            let (model, run) = shared(&history, book, 5);
+            let item = held_by(model, book, "b", "r1.vcf");
+            assert!(!item.conflicted);
+            assert_eq!(item.object, base(item, book, "b"));
+            assert_eq!(run.events, [Event::ContentChanged(String::from("r1.vcf"))]);
+        }
+    }
+
+    fn inbox(history: &History, step: usize) -> (&Model, &Run) {
+        let step = &history.steps[1 + 8 * SHARED.len() + step];
+        (&step.model, step.run.as_ref().unwrap())
+    }
+
+    fn message<'a>(model: &'a Model, source: &str, handle: &str) -> &'a Item {
+        model
+            .items
+            .iter()
+            .find(|item| {
+                item.collection == "work/INBOX"
+                    && item
+                        .bound(source)
+                        .is_some_and(|binding| binding.handle == handle)
+            })
+            .unwrap()
+    }
+
+    #[test]
+    fn a_message_joins_on_agreeing_and_is_minted_apart_on_disagreeing() {
+        let history = History::sources(31);
+        let (model, run) = inbox(&history, 1);
+        let joined = message(model, "imap-a", "1");
+        assert!(joined.object.is_some() && !joined.conflicted);
+        let binding = joined.bound("imap-b").unwrap();
+        assert_eq!(binding.handle, "1");
+        assert_eq!(binding.base_object, joined.object);
+        assert_eq!(joined.flags, Some(set(&["\\Answered", "\\Seen"])));
+
+        let minted = message(model, "imap-b", "2");
+        assert_eq!(minted.link_id, format!("dup:{}#2", joined.link_id));
+        assert_eq!(minted.bindings.len(), 1);
+        assert!(minted.object.is_none());
+        let offered = message(model, "imap-a", "2");
+        assert!(pushed(run, "add", &format!("\u{1}{}", offered.link_id)).is_some());
+
+        let (_, run) = inbox(&history, 2);
+        assert!(run.pushes.iter().all(|(push, _)| push.name() != "add"));
+        let Some(Push::SetFlags { add, remove, .. }) = pushed(run, "set-flags", "1") else {
+            panic!("a owes the flag b joined with");
+        };
+        assert_eq!((add, remove), (&set(&["\\Seen"]), &BTreeSet::new()));
+
+        let (_, run) = inbox(&history, 3);
+        assert_eq!(run.events, [Event::FlagsChanged(String::from("1"))]);
+        let (model, run) = inbox(&history, 4);
+        let Some(Push::SetFlags { add, .. }) = pushed(run, "set-flags", "1") else {
+            panic!("a owes the flag b pulled");
+        };
+        assert_eq!(add, &set(&["\\Flagged"]));
+        let binding = message(model, "imap-a", "1").bound("imap-a").unwrap();
+        assert_eq!(
+            binding.base_flags,
+            Some(set(&["\\Answered", "\\Flagged", "\\Seen"]))
+        );
+    }
+
+    #[test]
+    fn a_resolution_runs_through_the_binding_whose_conflict_it_names() {
+        let history = History::sources(31);
+        let (before, _) = shared(&history, 0, 5);
+        let item = held_by(before, 0, "b", "r1.vcf");
+        let binding = item.bound("work/shared-b").unwrap().clone();
+        let filed = Card {
+            uid: Some(item.link_id.clone()),
+            ..Draw::new(1).card()
+        }
+        .file();
+        let update = |resolves: Vec<ObjectName>| Action::Update {
+            seq: item.seq,
+            filed: filed.clone(),
+            if_match: item.object.clone(),
+            resolves: Some(resolves),
+        };
+        let item_conflict = item.conflict_object.clone().unwrap();
+        let binding_conflict = binding.conflict_object.clone().unwrap();
+
+        let mut model = before.clone();
+        let row = model.enqueue(
+            "cardamum",
+            "work/shared",
+            update(vec![item_conflict.clone()]),
+        );
+        assert!(matches!(model.drain(row), Outcome::Parked(_)));
+
+        let mut model = before.clone();
+        let row = model.enqueue(
+            "cardamum",
+            "work/shared",
+            update(vec![item_conflict, binding_conflict.clone()]),
+        );
+        assert!(matches!(model.drain(row), Outcome::Applied(_)));
+        let item = held_by(&model, 0, "b", "r1.vcf");
+        assert!(!item.conflicted);
+        let settled = item.bound("work/shared-b").unwrap();
+        assert!(!settled.conflicted);
+        assert_eq!(settled.base_object, Some(binding_conflict));
+        assert_eq!(settled.base_revision, binding.conflict_revision);
     }
 }

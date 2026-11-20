@@ -28,7 +28,7 @@ use crate::{
     error::Result,
     model::{Binding, Collection, Item, Kind, MARKS, Model, Refusal, State, Table},
     name::ObjectName,
-    queue::RowState,
+    queue::{Action, RowState},
     spec::Spec,
     store::Store,
 };
@@ -226,7 +226,7 @@ impl Oracle<'_> {
         let sources: BTreeSet<&String> = model
             .items
             .iter()
-            .filter_map(|item| item.binding.as_ref().map(|binding| &binding.source))
+            .flat_map(|item| item.bindings.iter().map(|binding| &binding.source))
             .collect();
         let rows = sources
             .into_iter()
@@ -250,16 +250,21 @@ impl Oracle<'_> {
         );
         let account = text(collection.account.as_deref());
         self.expect("load_account", &key, vec![vec![account]]);
+        let conflict = Value::Text(collection.conflict.clone());
+        self.expect("storage/owner/load_conflict", &key, vec![vec![conflict]]);
         self.expect("load_generation", &key, vec![vec![Value::Integer(1)]]);
         let coverage = collection
-            .source
+            .sources
             .iter()
-            .map(|source| {
+            .map(|(source, sync)| {
                 let mut row = vec![Value::Text(source.clone())];
                 row.extend([
                     Value::Null,
                     Value::Null,
-                    covered(collection),
+                    match sync.rounds {
+                        0 => Value::Null,
+                        _ => Value::Text(String::from(INSTANT)),
+                    },
                     Value::Null,
                     Value::Null,
                     Value::Null,
@@ -478,7 +483,7 @@ impl Oracle<'_> {
         self.expect("load_addresses", &by_link, rows);
 
         let bindings = item
-            .binding
+            .bindings
             .iter()
             .map(|binding| {
                 vec![
@@ -498,7 +503,7 @@ impl Oracle<'_> {
             .collect();
         self.expect("list_item_bindings", &by_link, bindings);
 
-        if let Some(binding) = &item.binding {
+        for binding in &item.bindings {
             let mut params = by_link.to_vec();
             params.push(("source", Value::Text(binding.source.clone())));
             let rows = vec![vec![Value::Text(binding.handle.clone())]];
@@ -794,7 +799,7 @@ impl Oracle<'_> {
                 .items
                 .iter()
                 .filter(|item| account_of(item) == account)
-                .filter_map(|item| item.binding.as_ref().map(|binding| (item, binding)))
+                .flat_map(|item| item.bindings.iter().map(move |binding| (item, binding)))
                 .filter(|(_, binding)| binding.conflicted)
                 .collect();
             bound.sort_by(|(a, x), (b, y)| {
@@ -823,7 +828,7 @@ impl Oracle<'_> {
                 .items
                 .iter()
                 .filter(|item| &item.collection == id)
-                .filter_map(|item| item.binding.as_ref().map(|binding| (item, binding)))
+                .flat_map(|item| item.bindings.iter().map(move |binding| (item, binding)))
                 .filter_map(|(item, binding)| {
                     binding
                         .refusal
@@ -880,6 +885,31 @@ impl Oracle<'_> {
                 &[("collection", Value::Text(id.clone()))],
                 rows,
             );
+
+            let arrivals = model
+                .queue
+                .iter()
+                .filter(|row| row.action.target() == Some(id.as_str()))
+                .filter(|row| row.state == RowState::Pending)
+                .filter(|row| matches!(row.action, Action::Move { .. } | Action::Copy { .. }))
+                .map(|row| {
+                    vec![
+                        Value::Integer(row.id),
+                        instant(),
+                        Value::Text(row.producer.clone()),
+                        Value::Text(row.collection.clone()),
+                        Value::Text(String::from(row.action.name())),
+                        Value::Text(row.action.payload()),
+                        hash(&row.action.body().map(ObjectName::of)),
+                        Value::Integer(0),
+                    ]
+                })
+                .collect();
+            self.expect(
+                "load_pending_arrivals",
+                &[("collection", Value::Text(id.clone()))],
+                arrivals,
+            );
         }
 
         let mut parked = Vec::new();
@@ -930,7 +960,7 @@ impl Oracle<'_> {
                 .iter()
                 .filter(|item| Some(item.seq) == seq)
                 .filter(|item| model.collections[&item.collection].account.as_ref() == account)
-                .filter_map(|item| item.binding.as_ref().map(|binding| (item, binding)))
+                .flat_map(|item| item.bindings.iter().map(move |binding| (item, binding)))
                 .filter_map(|(item, binding)| {
                     binding.refusal.as_ref().map(|refusal| {
                         vec![
@@ -1178,9 +1208,11 @@ fn cell(item: &Item, column: &str, table: Option<Table>) -> Value {
 /// The instant a collection's source last closed a round, as a marker, or
 /// `NULL` before it closed one.
 fn covered(collection: &Collection) -> Value {
-    match collection.rounds {
-        0 => Value::Null,
-        _ => Value::Text(String::from(INSTANT)),
+    let all =
+        !collection.sources.is_empty() && collection.sources.values().all(|sync| sync.rounds > 0);
+    match all {
+        false => Value::Null,
+        true => Value::Text(String::from(INSTANT)),
     }
 }
 

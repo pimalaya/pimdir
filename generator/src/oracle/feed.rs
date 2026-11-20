@@ -65,7 +65,10 @@ impl Oracle<'_> {
         self.last().ordered = false;
 
         let cursor = vec![
-            stamp(),
+            match model.collections.is_empty() && model.purges == 0 {
+                true => Value::Integer(0),
+                false => stamp(),
+            },
             Value::Integer(model.purges),
             Value::Text(String::from(STORE_ID)),
             Value::Integer(1),

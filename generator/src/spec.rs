@@ -8,7 +8,7 @@
 
 use std::{
     collections::BTreeMap,
-    fs,
+    env, fs,
     path::{Path, PathBuf},
 };
 
@@ -54,9 +54,13 @@ pub struct Statement {
 }
 
 impl Spec {
-    /// The tree above this crate's manifest.
+    /// The tree `PIMDIR_GENERATOR_TREE` names, else the one above this
+    /// crate's manifest.
     pub fn default_root() -> PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
+        match env::var_os("PIMDIR_GENERATOR_TREE") {
+            Some(tree) => PathBuf::from(tree),
+            None => Path::new(env!("CARGO_MANIFEST_DIR")).join(".."),
+        }
     }
 
     /// Loads the tree above this crate's manifest.

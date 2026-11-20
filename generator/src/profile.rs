@@ -4,7 +4,10 @@
 //! cases it must hold; the seed chooses its surface (names, subjects,
 //! dates, counts within bounds).
 
-use std::{collections::BTreeSet, fs};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs,
+};
 
 use rusqlite::types::Value;
 use serde_json::{Value as Json, json};
@@ -14,8 +17,8 @@ use crate::{
     error::{Error, Result},
     fixture,
     model::{
-        Capability, Collection, Item, Kind, Model, Placement, Reference, Refusal, State, Summary,
-        Table,
+        Capability, Collection, Item, Kind, Model, Placement, Reference, Refusal, SourceState,
+        State, Summary, Table,
     },
     name::ObjectName,
     queue::{Action, Outcome, RowState},
@@ -131,9 +134,8 @@ impl Draw {
             kind: None,
             name: String::from("home/x-vlist"),
             role: None,
-            source: None,
-            checkpoint: None,
-            rounds: 0,
+            sources: BTreeMap::new(),
+            conflict: String::from("manual"),
         });
 
         self.mail(&mut model);
@@ -162,9 +164,8 @@ impl Draw {
             kind: Some(Kind::File),
             name: String::from("attachments"),
             role: Some(String::from("attachments")),
-            source: None,
-            checkpoint: None,
-            rounds: 0,
+            sources: BTreeMap::new(),
+            conflict: String::from("manual"),
         });
 
         for fixture in fixture::load(spec)? {
@@ -218,6 +219,7 @@ impl Draw {
                     held: false,
                     handle: None,
                     revision: None,
+                    source: None,
                 };
                 model.file(STAND_INS, filed, placement);
                 model.references.push(Reference {
@@ -267,6 +269,7 @@ impl Draw {
             held: true,
             handle: None,
             revision: None,
+            source: None,
         };
         model.file("lab/folder:saved", filed, placement);
         Ok(())
@@ -451,6 +454,7 @@ impl Draw {
                 held: true,
                 handle: None,
                 revision: None,
+                source: None,
             };
             model.file("home/folder:0f", document.file(), placement);
         }
@@ -463,7 +467,7 @@ impl Draw {
                 item.collection == "work/contacts"
                     && item.state == State::Live
                     && item.object.is_some()
-                    && item.binding.is_some()
+                    && !item.bindings.is_empty()
             })
             .collect();
 
@@ -475,16 +479,16 @@ impl Draw {
         item.conflict_object = Some(name.clone());
 
         let binding = model.items[cards[1]]
-            .binding
-            .as_mut()
+            .bindings
+            .first_mut()
             .expect("a bound card");
         binding.conflicted = true;
         binding.conflict_revision = Some(String::from("\"etag-diverged\""));
         binding.conflict_object = Some(name);
 
         let binding = model.items[cards[2]]
-            .binding
-            .as_mut()
+            .bindings
+            .first_mut()
             .expect("a bound card");
         binding.conflicted = true;
         binding.conflict_revision = Some(String::from("\"etag-unread\""));
@@ -694,13 +698,13 @@ impl Draw {
                 .nth(skip)
                 .map(|item| (item.seq, item.flags.clone(), item.object.clone()))
         };
-        let known = |item: &Item| item.flags.is_some() && item.binding.is_some();
+        let known = |item: &Item| item.flags.is_some() && !item.bindings.is_empty();
         let unknown = |item: &Item| item.flags.is_none();
         let free = |item: &Item| {
             !item.conflicted
                 && item
-                    .binding
-                    .as_ref()
+                    .bindings
+                    .first()
                     .is_some_and(|binding| !binding.conflicted)
         };
         let any = |_: &Item| true;
@@ -794,7 +798,7 @@ impl Draw {
                 .items
                 .iter_mut()
                 .find(|item| item.collection == "work/Sent Items" && item.seq == seq)
-                .and_then(|item| item.binding.as_mut());
+                .and_then(|item| item.bindings.first_mut());
             if let Some(binding) = created {
                 binding.refusal = Some(Refusal {
                     reason: String::from("the server takes appends into its drafts folder alone"),
@@ -1124,6 +1128,7 @@ impl Draw {
             held,
             handle: Some(self.next().to_string()),
             revision: None,
+            source: None,
         }
     }
 
@@ -1134,6 +1139,7 @@ impl Draw {
             held,
             handle: Some(format!("{handle}.ics")),
             revision: Some(format!("\"etag-{handle}\"")),
+            source: None,
         }
     }
 
@@ -1202,9 +1208,16 @@ fn collection(
         kind: Some(kind),
         name: String::from(name),
         role: role.map(String::from),
-        source: source.map(String::from),
-        checkpoint: source.map(|_| b"c1".to_vec()),
-        rounds: 0,
+        sources: source
+            .map(|source| {
+                let sync = SourceState {
+                    checkpoint: Some(b"c1".to_vec()),
+                    rounds: 0,
+                };
+                BTreeMap::from([(String::from(source), sync)])
+            })
+            .unwrap_or_default(),
+        conflict: String::from("manual"),
     }
 }
 

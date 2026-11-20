@@ -18,7 +18,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
 };
 
-use crate::body::Filed;
+use crate::{body::Filed, engine::Answer};
 
 /// One member a remote holds.
 #[derive(Clone, Debug)]
@@ -33,6 +33,20 @@ pub struct Member {
     pub changed: u64,
     /// The order it arrived in, the recency a round lists by.
     pub arrival: u64,
+}
+
+/// A source's conflict policy against its own remote (SYNC §5).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Policy {
+    /// A divergence recorded for a person.
+    #[default]
+    Manual,
+    /// The remote body pulled, the local edit kept.
+    PreferRemote,
+    /// The local body pushed over the remote one, which is kept.
+    PreferLocal,
+    /// `PreferLocal` over a change the source alone made too.
+    KeepLocal,
 }
 
 /// One source's side of one collection.
@@ -52,6 +66,19 @@ pub struct Remote {
     pub modseq: u64,
     /// The next number it names a member by.
     pub next: u64,
+    /// How the source settles a revision its base lacks against its own
+    /// remote (SYNC §5).
+    pub policy: Policy,
+    /// Whether its pages carry the bodies they list; a mail listing never
+    /// does.
+    pub carries: bool,
+    /// Whether an append names the member it made (an IMAP server with
+    /// UIDPLUS, RFC 4315); a mutable remote always does.
+    pub uidplus: bool,
+    /// The changes it refuses for good, by key, with the reason it gives.
+    pub refuse: BTreeMap<String, String>,
+    /// The changes it rejects once, by key, a precondition failing.
+    pub reject: BTreeSet<String>,
 }
 
 /// A member as a page lists it.
@@ -97,6 +124,11 @@ impl Remote {
             vanished: BTreeMap::new(),
             modseq: 1,
             next: 1,
+            uidplus: true,
+            policy: Policy::Manual,
+            carries: false,
+            refuse: BTreeMap::new(),
+            reject: BTreeSet::new(),
         }
     }
 
@@ -104,6 +136,7 @@ impl Remote {
     pub fn dav(source: &str, collection: &str) -> Self {
         Self {
             mutable: true,
+            carries: true,
             ..Self::new(source, collection)
         }
     }
@@ -129,6 +162,17 @@ impl Remote {
             },
         );
         (handle, revision)
+    }
+
+    /// What it answers the change keyed `key` (SYNC §4).
+    pub fn answer(&mut self, key: &str) -> Answer {
+        if let Some(reason) = self.refuse.get(key) {
+            return Answer::Refused(reason.clone());
+        }
+        match self.reject.remove(key) {
+            true => Answer::Rejected,
+            false => Answer::Accepted,
+        }
     }
 
     /// Changes a member's flags, as another client does.
@@ -220,7 +264,7 @@ impl Remote {
                 flags: member.flags.clone(),
                 revision: member.revision.clone(),
                 meta: member.filed.bytes.clone(),
-                carries: self.mutable,
+                carries: self.carries,
             })
             .collect();
         items.sort_by(|a, b| a.handle.cmp(&b.handle));

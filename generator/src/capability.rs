@@ -106,7 +106,7 @@ impl Model {
                 };
                 let current = current.unwrap_or_default();
                 let changed: Vec<&String> = left.symmetric_difference(&current).collect();
-                for binding in item.binding.iter() {
+                for binding in item.bindings.iter() {
                     for capability in self.flag_needs(&binding.source, changed.iter().copied()) {
                         needed.push((binding.source.clone(), String::from(collection), capability));
                     }
@@ -115,7 +115,7 @@ impl Model {
             Action::Remove { seq, .. } => {
                 let item = self.live_item(collection, *seq)?;
                 let kind = self.collections[collection].kind?;
-                for binding in item.binding.iter().filter(|binding| binding.base_present) {
+                for binding in item.bindings.iter().filter(|binding| binding.base_present) {
                     let mut caps = vec![verb(kind, "remove")];
                     if scheduled(&item.addresses) {
                         caps.push(String::from("calendar.scheduling"));
@@ -128,7 +128,7 @@ impl Model {
             Action::Update { seq, filed, .. } => {
                 let item = self.live_item(collection, *seq)?;
                 let kind = self.collections[collection].kind?;
-                for binding in item.binding.iter() {
+                for binding in item.bindings.iter() {
                     let mut caps = vec![verb(kind, "update")];
                     if scheduled(&filed.addresses) {
                         caps.push(String::from("calendar.scheduling"));
@@ -148,7 +148,7 @@ impl Model {
                     Action::Move { .. } => "move",
                     _ => "copy",
                 };
-                for binding in item.binding.iter().filter(|binding| binding.base_present) {
+                for binding in item.bindings.iter().filter(|binding| binding.base_present) {
                     needed.push((
                         binding.source.clone(),
                         String::from(collection),
@@ -187,15 +187,15 @@ impl Model {
     /// bindings'.
     pub fn syncing(&self, collection: &str) -> BTreeSet<String> {
         let mut sources: BTreeSet<String> = self.collections[collection]
-            .source
-            .iter()
+            .sources
+            .keys()
             .cloned()
             .collect();
         sources.extend(
             self.items
                 .iter()
                 .filter(|item| item.collection == collection)
-                .filter_map(|item| item.binding.as_ref().map(|binding| binding.source.clone())),
+                .flat_map(|item| item.bindings.iter().map(|binding| binding.source.clone())),
         );
         sources
     }

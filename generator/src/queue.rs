@@ -17,7 +17,7 @@ use std::collections::BTreeSet;
 use serde_json::{Value as Json, json};
 
 use crate::{
-    body::Filed,
+    body::{Filed, fnv1a64},
     model::{Binding, Item, Model, State},
     name::ObjectName,
 };
@@ -364,14 +364,17 @@ impl Model {
                     return Outcome::Parked(reason);
                 }
                 let item = &mut self.items[index];
-                match &item.binding {
-                    Some(binding) if binding.base_present => item.state = State::Tombstone,
-                    Some(binding) => {
-                        let by = Some(binding.source.clone());
-                        item.binding = None;
+                let based = item.bindings.iter().any(|binding| binding.base_present);
+                let by = item.bindings.first().map(|binding| binding.source.clone());
+                match (based, by) {
+                    (true, _) => {
+                        item.bindings.retain(|binding| binding.base_present);
+                        item.state = State::Tombstone;
+                    }
+                    (false, by) => {
+                        item.bindings.clear();
                         item.state = State::Retained { by };
                     }
-                    None => item.state = State::Retained { by: None },
                 }
                 Outcome::Applied(Some(item.seq))
             }
@@ -397,7 +400,8 @@ impl Model {
                 item.sort_key = filed.sort_key.clone();
                 item.conflicted = false;
                 item.conflict_object = None;
-                if let Some(binding) = item.binding.as_mut() {
+                let acting = acting(item, resolves.is_some());
+                if let Some(binding) = acting.and_then(|at| item.bindings.get_mut(at)) {
                     if binding.conflicted {
                         binding.base_object = binding.conflict_object.take();
                         binding.base_revision = binding.conflict_revision.take();
@@ -419,13 +423,16 @@ impl Model {
         flags: &BTreeSet<String>,
         filed: &Filed,
     ) -> Outcome {
+        if link_id.starts_with("hash:") && link_id != format!("hash:{}", fnv1a64(&filed.bytes)) {
+            return Outcome::Parked(String::from("a hash: key its body does not give"));
+        }
         if self.live(collection).any(|item| item.link_id == link_id) {
             return Outcome::Parked(String::from("a live item holds the key"));
         }
         let seq = self.seq_for(collection, link_id, &filed.summary);
         let name = ObjectName::of(&filed.bytes);
         self.objects.insert(name.clone(), filed.bytes.clone());
-        let binding = self.created(collection, link_id);
+        let binding = self.created(collection, link_id, Some(&name));
         self.items.push(Item {
             collection: String::from(collection),
             link_id: String::from(link_id),
@@ -439,7 +446,7 @@ impl Model {
             conflict_object: None,
             summary: filed.summary.clone(),
             addresses: filed.addresses.clone(),
-            binding,
+            bindings: binding.into_iter().collect(),
         });
         Outcome::Applied(Some(seq))
     }
@@ -469,7 +476,7 @@ impl Model {
             link_id = format!("dup:{link_id}#{handle}");
         }
         let seq = self.seq_for(to, &link_id, &source.summary);
-        let binding = self.created(to, &link_id);
+        let binding = self.created(to, &link_id, source.object.as_ref());
         self.items.push(Item {
             collection: String::from(to),
             link_id,
@@ -477,7 +484,7 @@ impl Model {
             state: State::Live,
             conflicted: false,
             conflict_object: None,
-            binding,
+            bindings: binding.into_iter().collect(),
             ..source
         });
         if moves {
@@ -486,10 +493,18 @@ impl Model {
         Outcome::Applied(Some(seq))
     }
 
-    fn created(&self, collection: &str, link_id: &str) -> Option<Binding> {
+    /// The pending create the collection's source binds a new item by: its
+    /// provisional handle, no base, and as its shared body the one the
+    /// write carries, a live upsert moving it there (SYNC §9).
+    fn created(
+        &self,
+        collection: &str,
+        link_id: &str,
+        body: Option<&ObjectName>,
+    ) -> Option<Binding> {
         self.collections[collection]
-            .source
-            .clone()
+            .source()
+            .cloned()
             .map(|source| Binding {
                 source,
                 handle: format!("\u{1}{link_id}"),
@@ -497,7 +512,7 @@ impl Model {
                 base_object: None,
                 base_revision: None,
                 base_present: false,
-                shared_object: None,
+                shared_object: body.cloned(),
                 conflicted: false,
                 conflict_revision: None,
                 conflict_object: None,
@@ -517,21 +532,17 @@ impl Model {
     /// local one (STORAGE §15.3).
     fn bound(&self, collection: &str, seq: i64) -> Option<usize> {
         let index = self.found(collection, seq)?;
-        let synced = self.collections[collection].source.is_some();
-        match (&self.items[index].binding, synced) {
-            (Some(_), _) => Some(index),
-            (None, false) => Some(index),
+        let synced = self.collections[collection].source().is_some();
+        match (self.items[index].bindings.is_empty(), synced) {
+            (false, _) => Some(index),
+            (true, false) => Some(index),
             _ => None,
         }
     }
 
     fn conflict(&self, index: usize) -> bool {
         let item = &self.items[index];
-        item.conflicted
-            || item
-                .binding
-                .as_ref()
-                .is_some_and(|binding| binding.conflicted)
+        item.conflicted || item.bindings.iter().any(|binding| binding.conflicted)
     }
 
     /// Why an `update` or a `remove` stating no resolution parks: a body
@@ -553,7 +564,10 @@ impl Model {
         if item.conflicted {
             met.push(item.conflict_object.as_ref());
         }
-        if let Some(binding) = item.binding.as_ref().filter(|binding| binding.conflicted) {
+        if let Some(binding) = acting(item, resolves.is_some())
+            .map(|at| &item.bindings[at])
+            .filter(|binding| binding.conflicted)
+        {
             met.push(binding.conflict_object.as_ref());
         }
         match (met.is_empty(), resolves) {
@@ -568,6 +582,15 @@ impl Model {
     }
 }
 
+/// The binding an `update` or a `remove` runs through: for a resolution, one
+/// whose conflict it names, else the item's first (STORAGE §15.2).
+fn acting(item: &Item, resolving: bool) -> Option<usize> {
+    resolving
+        .then(|| item.bindings.iter().position(|binding| binding.conflicted))
+        .flatten()
+        .or_else(|| (!item.bindings.is_empty()).then_some(0))
+}
+
 #[cfg(test)]
 mod tests {
     use std::{env, fs, process};
@@ -576,6 +599,7 @@ mod tests {
 
     use crate::{
         model::{Model, State},
+        name::ObjectName,
         oracle,
         profile::Profile,
         queue::{Action, RowState},
@@ -697,6 +721,46 @@ mod tests {
                 .all(|item| item.seq != moved),
             "a move queued on another collection is that collection's to fold"
         );
+    }
+
+    #[test]
+    fn a_drained_write_moves_its_binding_shared_body_onto_the_body_it_carries() {
+        let mut model = structure();
+        model.drain_all();
+
+        for row in &model.queue {
+            let (Action::Update { seq, filed, .. }, RowState::Applied(_)) =
+                (&row.action, &row.state)
+            else {
+                continue;
+            };
+            let item = model
+                .items
+                .iter()
+                .find(|item| item.collection == row.collection && item.seq == *seq)
+                .unwrap();
+            if item.object == Some(ObjectName::of(&filed.bytes)) {
+                let binding = item.bindings.first().unwrap();
+                assert_eq!(binding.shared_object, item.object, "an update");
+            }
+        }
+        let creates: Vec<_> = model
+            .items
+            .iter()
+            .filter(|item| {
+                item.bindings
+                    .first()
+                    .is_some_and(|binding| !binding.base_present)
+            })
+            .collect();
+        assert!(!creates.is_empty());
+        for item in creates {
+            assert_eq!(
+                item.bindings.first().unwrap().shared_object,
+                item.object,
+                "a pending create"
+            );
+        }
     }
 
     #[test]

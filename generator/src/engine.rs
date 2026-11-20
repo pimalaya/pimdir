@@ -1,27 +1,28 @@
 //! # The engine
 //!
-//! The model of SYNC's verbs over one source and one collection: a first
-//! round in pages, deltas, the flag axis merged over `(local, base,
-//! remote)`, the content axis of a mutable kind (a remote revision pulled,
-//! a local body pushed gated on its base revision, both a conflict
-//! recorded under `Manual`), stated removals and a closed round's absences
-//! dropped, the consumer's tombstones, creates and changes pushed, and an
-//! upgrade fetching bodies (SYNC §3 to §6). A run answers what it listed,
-//! fetched and pushed, the outcomes and the events, and leaves the model
-//! as the store stands after it.
+//! The model of SYNC's verbs over one source and one collection at a time:
+//! a first round in pages, deltas, the flag axis merged over `(local, base,
+//! remote)`, the content axis of a mutable kind under the source's policy,
+//! stated removals and a closed round's absences dropped, moves and copies
+//! by origins, destinations, deliveries and landings, the consumer's
+//! tombstones, creates and changes pushed and answered accepted, rejected
+//! or refused, and an upgrade fetching bodies (SYNC §3 to §6). A run
+//! answers what it listed, fetched and pushed, the outcomes and the
+//! events, and leaves the model as the store stands after it.
 //!
 //! The model runs only what it states exactly: one source per collection,
-//! no scope, every right, every push accepted, the `Manual` policy, no
-//! move, copy, landing nor refusal, which later parts add (README.md,
-//! "Limits").
+//! no scope, every right, no head, no rekey, which later parts add
+//! (README.md, "Limits").
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use rusqlite::types::Value;
+
 use crate::{
     body::Filed,
-    model::{Model, Placement, State, Summary, Table},
+    model::{Address, Binding, Item, Model, Placement, Refusal, State, Summary, Table, key},
     name::ObjectName,
-    remote::{Listed, Page, Remote},
+    remote::{Listed, Page, Policy, Remote},
 };
 
 /// One change a run pushes (SYNC §4).
@@ -160,12 +161,25 @@ pub fn change_key(fields: &[String]) -> String {
 pub struct Outcome {
     /// The handle pushed for.
     pub handle: String,
+    /// What the remote answered.
+    pub answer: Answer,
     /// The handle an accepted add was assigned.
     pub assigned: Option<String>,
     /// The revision a mutable member holds once accepted.
     pub revision: Option<String>,
     /// Whether an accepted relocating `Remove` relocated the member.
     pub relocated: Option<bool>,
+}
+
+/// What a remote answers one change (SYNC §4).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Answer {
+    /// Taken.
+    Accepted,
+    /// Failed on a precondition a later listing moves past.
+    Rejected,
+    /// Refused for good as it stands, for this reason.
+    Refused(String),
 }
 
 /// What a run reports (SYNC §5).
@@ -181,8 +195,22 @@ pub enum Event {
     Conflicted(String),
     /// A member removed or found absent, dropped.
     Vanished(String),
-    /// An add accepted under its assigned handle.
+    /// An add accepted under its assigned handle, or a create landed.
     Created(String),
+    /// A body a policy did not adopt, kept as the retained item it names.
+    Overruled {
+        /// The handle of the binding that settled it.
+        handle: String,
+        /// The retained item's key.
+        link_id: String,
+    },
+    /// A change refused this run, or held for a refusal standing.
+    Refused {
+        /// The handle it was pushed for.
+        handle: String,
+        /// The reason the remote gave.
+        reason: String,
+    },
 }
 
 /// One verb run over one collection and the script it ran against.
@@ -230,14 +258,20 @@ impl Model {
         let collection = String::from(collection);
         let remote = &remotes[&collection];
         let source = remote.source.clone();
-        let first = self.collections[&collection].rounds == 0;
-        let pages = match (&self.collections[&collection].checkpoint, first) {
+        let state = self.collections[&collection]
+            .sources
+            .get(&source)
+            .cloned()
+            .unwrap_or_default();
+        let first = state.rounds == 0;
+        let pages = match (&state.checkpoint, first) {
             (Some(checkpoint), false) => {
                 vec![remote.delta(&String::from_utf8_lossy(checkpoint))]
             }
             _ => remote.round(size),
         };
-        let round = self.collections[&collection].rounds + 1;
+        let round = state.rounds + 1;
+        let policy = remotes[&collection].policy;
         let mut events = Vec::new();
         let mut listed: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
 
@@ -247,39 +281,46 @@ impl Model {
                 let filed = remotes[&collection].members[&member.handle].filed.clone();
                 let index = match self.bound_handle(&collection, &source, &member.handle) {
                     Some(index) => {
-                        self.refresh(index, member, &filed, &mut events);
+                        self.refresh(index, member, &filed, &source, policy, &mut events);
                         index
                     }
                     None => match self.landing(&collection, &source, &filed) {
                         Some(index) => {
-                            self.land(index, member);
+                            self.land(index, member, &source);
                             events.push(Event::Created(member.handle.clone()));
                             index
                         }
-                        None => {
-                            if member.carries {
-                                self.objects
-                                    .insert(ObjectName::of(&member.meta), member.meta.clone());
+                        None => match self.joining(&collection, &source, &filed) {
+                            Some(index) => {
+                                self.join(index, member, &filed, &source, &mut events);
+                                index
                             }
-                            let placement = Placement {
-                                flags: Some(member.flags.clone()),
-                                held: member.carries,
-                                handle: Some(member.handle.clone()),
-                                revision: member.revision.clone(),
-                            };
-                            events.push(Event::Added(member.handle.clone()));
-                            self.file(&collection, filed, placement)
-                        }
+                            None => {
+                                if member.carries {
+                                    self.objects
+                                        .insert(ObjectName::of(&member.meta), member.meta.clone());
+                                }
+                                let placement = Placement {
+                                    flags: Some(member.flags.clone()),
+                                    held: member.carries,
+                                    handle: Some(member.handle.clone()),
+                                    revision: member.revision.clone(),
+                                    source: Some(source.clone()),
+                                };
+                                events.push(Event::Added(member.handle.clone()));
+                                self.file(&collection, filed, placement)
+                            }
+                        },
                     },
                 };
                 if first {
-                    let binding = self.items[index].binding.as_mut().expect("a bound item");
+                    let binding = self.items[index].bound_mut(&source).expect("a bound item");
                     binding.round = Some(round);
                 }
             }
             for handle in &page.vanished {
                 if let Some(index) = self.bound_handle(&collection, &source, handle) {
-                    self.drop_deleted(index);
+                    self.drop_deleted(index, &source);
                     events.push(Event::Vanished(handle.clone()));
                 }
             }
@@ -290,7 +331,7 @@ impl Model {
                 .items
                 .iter()
                 .filter(|item| item.collection == collection)
-                .filter_map(|item| item.binding.as_ref())
+                .filter_map(|item| item.bound(&source))
                 .filter(|binding| {
                     binding.source == source
                         && binding.base_present
@@ -301,14 +342,29 @@ impl Model {
                 .collect();
             for handle in absent {
                 if let Some(index) = self.bound_handle(&collection, &source, &handle) {
-                    self.drop_deleted(index);
+                    self.drop_deleted(index, &source);
                     events.push(Event::Vanished(handle));
                 }
             }
         }
 
         let mutable = remotes[&collection].mutable;
-        let pushes = self.derive(&collection, &source, &listed, mutable);
+        let pushes: Vec<Push> = self
+            .derive(&collection, &source, &listed, mutable)
+            .into_iter()
+            .filter(|push| {
+                let held = self
+                    .refusal_on(&collection, &source, push.handle())
+                    .filter(|refusal| refusal.key == push.key(&collection));
+                if let Some(refusal) = &held {
+                    events.push(Event::Refused {
+                        handle: String::from(push.handle()),
+                        reason: refusal.reason.clone(),
+                    });
+                }
+                held.is_none()
+            })
+            .collect();
         let mut outcomes = Vec::new();
         for push in &pushes {
             outcomes.push(self.push(remotes, &collection, push, &mut events));
@@ -318,7 +374,10 @@ impl Model {
         let entry = self
             .collections
             .get_mut(&collection)
-            .expect("a declared collection");
+            .expect("a declared collection")
+            .sources
+            .entry(source.clone())
+            .or_default();
         if let Some(checkpoint) = checkpoint {
             entry.checkpoint = Some(checkpoint.into_bytes());
         }
@@ -366,7 +425,7 @@ impl Model {
             let item = &mut self.items[index];
             item.object = Some(name.clone());
             item.level = 2;
-            let binding = item.binding.as_mut().expect("a bound item");
+            let binding = item.bound_mut(&source).expect("a bound item");
             binding.base_object = Some(name.clone());
             binding.shared_object = Some(name);
         }
@@ -387,9 +446,8 @@ impl Model {
         self.items.iter().position(|item| {
             item.collection == collection
                 && item
-                    .binding
-                    .as_ref()
-                    .is_some_and(|binding| binding.source == source && binding.handle == handle)
+                    .bound(source)
+                    .is_some_and(|binding| binding.handle == handle)
         })
     }
 
@@ -397,85 +455,342 @@ impl Model {
     /// delivered create under the member's hint, its message agreeing
     /// (SYNC §6). A minted create is landed by no listing.
     fn landing(&self, collection: &str, source: &str, filed: &Filed) -> Option<usize> {
-        let key = filed.hint.clone()?;
+        let key = key(filed);
         let provisional = format!("\u{1}{key}");
         self.items.iter().position(|item| {
             item.collection == collection
                 && item.link_id == key
                 && agrees(&item.summary, &filed.summary)
-                && item.binding.as_ref().is_some_and(|binding| {
+                && item.bound(source).is_some_and(|binding| {
                     binding.source == source && binding.handle == provisional
                 })
         })
     }
 
+    /// The item a member of a source binding none of it joins: the live one
+    /// holding its key, which other sources bind or none does, its summary
+    /// agreeing (SYNC §6).
+    fn joining(&self, collection: &str, source: &str, filed: &Filed) -> Option<usize> {
+        let key = key(filed);
+        self.items.iter().position(|item| {
+            item.collection == collection
+                && item.link_id == key
+                && item.state == State::Live
+                && item.bound(source).is_none()
+                && agrees(&item.summary, &filed.summary)
+        })
+    }
+
+    /// Joins a member to the item holding its key: a binding of this
+    /// source, the flags folded with no base, and the body absorbed (SYNC
+    /// §9): filling an item holding none, the shared body standing for an
+    /// immutable kind, an agreeing body taken as the base, a diverging one
+    /// settled by the collection's policy.
+    fn join(
+        &mut self,
+        index: usize,
+        member: &Listed,
+        filed: &Filed,
+        source: &str,
+        events: &mut Vec<Event>,
+    ) {
+        let carried = member.carries.then(|| ObjectName::of(&member.meta));
+        if let Some(name) = &carried {
+            self.objects.insert(name.clone(), member.meta.clone());
+        }
+        let mutable = self.items[index].summary.table != Table::Mail;
+        let item = &mut self.items[index];
+        item.flags = Some(merge(item.flags.as_ref(), None, &member.flags));
+        item.bind(Binding {
+            source: String::from(source),
+            handle: member.handle.clone(),
+            base_flags: Some(member.flags.clone()),
+            base_object: None,
+            base_revision: member.revision.clone(),
+            base_present: true,
+            shared_object: None,
+            conflicted: false,
+            conflict_revision: None,
+            conflict_object: None,
+            refusal: None,
+            round: None,
+        });
+        events.push(Event::Added(member.handle.clone()));
+
+        let agreed = match (&item.object, &carried) {
+            (None, Some(_)) => {
+                item.object = carried.clone();
+                item.level = 2;
+                item.summary = filed.summary.clone();
+                item.addresses = filed.addresses.clone();
+                item.sort_key = filed.sort_key.clone();
+                carried
+            }
+            (Some(object), _) if !mutable => Some(object.clone()),
+            (Some(object), Some(incoming)) if object == incoming => carried,
+            (None, None) => None,
+            _ => {
+                self.diverge(index, member, filed, carried, source, events);
+                return;
+            }
+        };
+        let binding = item.bound_mut(source).expect("a joined item");
+        binding.base_object = agreed.clone();
+        binding.shared_object = agreed;
+    }
+
+    /// An upsert diverging from the shared item (SYNC §9): recorded on the
+    /// item as `manual` records it, whatever the policy, when either body is
+    /// one nobody has read; else the collection's policy adopts the
+    /// incoming body or keeps the item's, the body not adopted kept as a
+    /// retained item over the member's handle. The binding's base moves to
+    /// the incoming body; its shared body only to the one the item settles
+    /// on, and not while the item is conflicted.
+    fn diverge(
+        &mut self,
+        index: usize,
+        member: &Listed,
+        filed: &Filed,
+        carried: Option<ObjectName>,
+        source: &str,
+        events: &mut Vec<Event>,
+    ) {
+        let item = &self.items[index];
+        let policy = self.collections[&item.collection].conflict.clone();
+        let unread = carried.is_none() || item.object.is_none();
+        let settled = match (unread, policy.as_str()) {
+            (false, "prefer-incoming") => {
+                let kept = Kept {
+                    object: item.object.clone(),
+                    flags: item.flags.clone(),
+                    summary: item.summary.clone(),
+                    addresses: item.addresses.clone(),
+                    sort_key: item.sort_key.clone(),
+                };
+                let item = &mut self.items[index];
+                item.object = carried.clone();
+                item.level = 2;
+                item.summary = filed.summary.clone();
+                item.addresses = filed.addresses.clone();
+                item.sort_key = filed.sort_key.clone();
+                events.push(Event::ContentChanged(member.handle.clone()));
+                Some(kept)
+            }
+            (false, "prefer-existing") => Some(Kept {
+                object: carried.clone(),
+                flags: item.flags.clone(),
+                summary: filed.summary.clone(),
+                addresses: filed.addresses.clone(),
+                sort_key: filed.sort_key.clone(),
+            }),
+            _ => {
+                let item = &mut self.items[index];
+                item.conflicted = true;
+                item.conflict_object = carried.clone();
+                events.push(Event::Conflicted(member.handle.clone()));
+                None
+            }
+        };
+
+        let item = &mut self.items[index];
+        let shared = settled.is_some().then(|| item.object.clone()).flatten();
+        let binding = item.bound_mut(source).expect("a bound item");
+        binding.base_object = carried;
+        binding.base_revision = member.revision.clone();
+        if shared.is_some() {
+            binding.shared_object = shared;
+        }
+        if let Some(kept) = settled {
+            let link_id = self.keep(index, &member.handle, kept, source);
+            events.push(Event::Overruled {
+                handle: member.handle.clone(),
+                link_id,
+            });
+        }
+    }
+
     /// Lands a create on the member naming it: its binding moved to the
     /// listed handle, the base set to the listed flags and the staged body,
     /// the staged flags kept (SYNC §6).
-    fn land(&mut self, index: usize, member: &Listed) {
+    fn land(&mut self, index: usize, member: &Listed, source: &str) {
         let item = &mut self.items[index];
-        let binding = item.binding.as_mut().expect("a bound create");
+        let object = item.object.clone();
+        let binding = item.bound_mut(source).expect("a bound create");
         binding.handle = member.handle.clone();
         binding.base_present = true;
         binding.base_flags = Some(member.flags.clone());
-        binding.base_object = item.object.clone();
+        binding.base_object = object.clone();
         binding.base_revision = member.revision.clone();
-        binding.shared_object = item.object.clone();
+        binding.shared_object = object;
     }
 
     /// A listed member over its binding: the flag axis, then for a mutable
-    /// kind the content axis under `Manual` (SYNC §5).
-    fn refresh(&mut self, index: usize, member: &Listed, filed: &Filed, events: &mut Vec<Event>) {
+    /// kind the content axis under the source's policy (SYNC §5): a divergence
+    /// recorded, pulled keeping the local edit, or kept and pushed over; a
+    /// body nobody has read recorded whatever the policy.
+    fn refresh(
+        &mut self,
+        index: usize,
+        member: &Listed,
+        filed: &Filed,
+        source: &str,
+        policy: Policy,
+        events: &mut Vec<Event>,
+    ) {
         let item = &mut self.items[index];
-        let binding = item.binding.as_mut().expect("a bound item");
-        let merged = merge(
-            item.flags.as_ref(),
-            binding.base_flags.as_ref(),
-            &member.flags,
-        );
+        let flags = item.flags.clone();
+        let binding = item.bound_mut(source).expect("a bound item");
+        let merged = merge(flags.as_ref(), binding.base_flags.as_ref(), &member.flags);
         binding.base_flags = Some(member.flags.clone());
-        if item.flags.as_ref() != Some(&merged) {
+        let base_revision = binding.base_revision.clone();
+        if flags.as_ref() != Some(&merged) {
             item.flags = Some(merged);
             events.push(Event::FlagsChanged(member.handle.clone()));
         }
 
-        if member.revision.is_none() || member.revision == binding.base_revision {
+        if member.revision.is_none() || member.revision == base_revision {
             return;
         }
         let carried = member.carries.then(|| ObjectName::of(&member.meta));
+        if let Some(name) = &carried {
+            self.objects.insert(name.clone(), member.meta.clone());
+        }
+        let item = &self.items[index];
+        let binding = item.bound(source).expect("a bound item");
         let edited = item.object.is_some() && item.object != binding.base_object;
+        let conflicted = binding.conflicted || item.conflicted;
 
-        if edited || binding.conflicted {
-            binding.conflicted = true;
-            binding.conflict_revision = member.revision.clone();
-            binding.conflict_object = carried.clone();
-            events.push(Event::Conflicted(member.handle.clone()));
-        } else {
-            item.object = carried.clone();
-            item.level = if carried.is_some() { 2 } else { 1 };
-            item.summary = filed.summary.clone();
-            item.addresses = filed.addresses.clone();
-            item.sort_key = filed.sort_key.clone();
-            binding.base_object = carried.clone();
-            binding.base_revision = member.revision.clone();
-            if carried.is_some() {
-                binding.shared_object = carried.clone();
+        let settle = match (policy, edited, conflicted) {
+            (_, _, true) => Settle::Record,
+            (Policy::Manual, true, _) => Settle::Record,
+            (Policy::PreferRemote, true, _) => Settle::PullKeepingLocal,
+            (Policy::PreferLocal, true, _) | (Policy::KeepLocal, _, _) if item.object.is_some() => {
+                match carried {
+                    Some(_) => Settle::KeepRemote,
+                    None => Settle::Record,
+                }
             }
-            events.push(Event::ContentChanged(member.handle.clone()));
+            _ => Settle::Pull,
+        };
+
+        match settle {
+            Settle::Record => {
+                let binding = self.items[index].bound_mut(source).expect("a bound item");
+                binding.conflicted = true;
+                binding.conflict_revision = member.revision.clone();
+                binding.conflict_object = carried;
+                events.push(Event::Conflicted(member.handle.clone()));
+            }
+            Settle::Pull | Settle::PullKeepingLocal => {
+                let item = &self.items[index];
+                let binding = item.bound(source).expect("a bound item");
+                let agreed = binding
+                    .shared_object
+                    .clone()
+                    .or_else(|| binding.base_object.clone());
+                let fills = item.object.is_none() && binding.base_object.is_none();
+                let changed = item.object != agreed;
+                if !fills && carried != binding.base_object && changed && carried != item.object {
+                    self.diverge(index, member, filed, carried, source, events);
+                    return;
+                }
+                let dropped = settle == Settle::PullKeepingLocal && !changed;
+                let kept = dropped.then(|| {
+                    let item = &self.items[index];
+                    Kept {
+                        object: item.object.clone(),
+                        flags: item.flags.clone(),
+                        summary: item.summary.clone(),
+                        addresses: item.addresses.clone(),
+                        sort_key: item.sort_key.clone(),
+                    }
+                });
+                let item = &mut self.items[index];
+                item.object = carried.clone();
+                item.level = if carried.is_some() { 2 } else { 1 };
+                item.summary = filed.summary.clone();
+                item.addresses = filed.addresses.clone();
+                item.sort_key = filed.sort_key.clone();
+                let binding = item.bound_mut(source).expect("a bound item");
+                binding.base_object = carried.clone();
+                binding.base_revision = member.revision.clone();
+                if carried.is_some() {
+                    binding.shared_object = carried;
+                }
+                events.push(Event::ContentChanged(member.handle.clone()));
+                if let Some(kept) = kept {
+                    let link_id = self.keep(index, &member.handle, kept, source);
+                    events.push(Event::Overruled {
+                        handle: member.handle.clone(),
+                        link_id,
+                    });
+                }
+            }
+            Settle::KeepRemote => {
+                let item = &self.items[index];
+                let kept = Kept {
+                    object: carried.clone(),
+                    flags: item.flags.clone(),
+                    summary: filed.summary.clone(),
+                    addresses: filed.addresses.clone(),
+                    sort_key: filed.sort_key.clone(),
+                };
+                let link_id = self.keep(index, &member.handle, kept, source);
+                let binding = self.items[index].bound_mut(source).expect("a bound item");
+                binding.base_object = carried;
+                binding.base_revision = member.revision.clone();
+                events.push(Event::Overruled {
+                    handle: member.handle.clone(),
+                    link_id,
+                });
+            }
         }
-        if let Some(name) = carried {
-            self.objects.insert(name, member.meta.clone());
+    }
+
+    /// Keeps a body a policy did not adopt as a retained item, keyed by
+    /// minting over the binding's handle, minted again while held, a `seq`
+    /// of its own, retained by the binding's source (SYNC §9, STORAGE §9).
+    fn keep(&mut self, index: usize, handle: &str, kept: Kept, source: &str) -> String {
+        let item = &self.items[index];
+        let collection = item.collection.clone();
+        let source = item.bound(source).map(|binding| binding.source.clone());
+        let mut link_id = format!("dup:{}#{handle}", item.link_id);
+        while self.holds(&collection, &link_id) {
+            link_id = format!("dup:{link_id}#{handle}");
         }
+        let seq = self.seq_for(&collection, &link_id, &kept.summary);
+        self.items.push(Item {
+            collection,
+            link_id: link_id.clone(),
+            seq,
+            flags: kept.flags,
+            level: if kept.object.is_some() { 2 } else { 1 },
+            object: kept.object,
+            sort_key: kept.sort_key,
+            state: State::Retained { by: source },
+            conflicted: false,
+            conflict_object: None,
+            summary: kept.summary,
+            addresses: kept.addresses,
+            bindings: Vec::new(),
+        });
+        link_id
     }
 
     /// A `Deleted` drop: the binding goes, and with it the item's last, so
     /// the item is retained, or purged when its identity is held live in
     /// another collection of the account with its body, a message only by
     /// a row agreeing with it (STORAGE §10, §11.1).
-    fn drop_deleted(&mut self, index: usize) {
+    fn drop_deleted(&mut self, index: usize, source: &str) {
         let item = &mut self.items[index];
-        let by = item.binding.take().map(|binding| binding.source);
-        item.state = State::Retained { by };
+        item.bindings.retain(|binding| binding.source != source);
+        if !item.bindings.is_empty() {
+            item.state = State::Tombstone;
+            return;
+        }
+        item.state = State::Retained {
+            by: Some(String::from(source)),
+        };
 
         let item = &self.items[index];
         let account = &self.collections[&item.collection].account;
@@ -505,7 +820,7 @@ impl Model {
                 item.collection != collection
                     && item.link_id == link_id
                     && item.state == State::Live
-                    && item.binding.as_ref().is_some_and(|binding| {
+                    && item.bound(source).is_some_and(|binding| {
                         binding.source == source && binding.handle == provisional
                     })
             })
@@ -523,7 +838,7 @@ impl Model {
         object: &ObjectName,
     ) -> Option<(String, String)> {
         self.items.iter().find_map(|item| {
-            let binding = item.binding.as_ref()?;
+            let binding = item.bound(source)?;
             (item.collection != collection
                 && item.link_id == link_id
                 && binding.source == source
@@ -553,11 +868,10 @@ impl Model {
             .iter()
             .filter(|item| item.collection == collection)
         {
-            let Some(binding) = item
-                .binding
-                .as_ref()
-                .filter(|binding| binding.source == source)
-            else {
+            let Some(binding) = item.bound(source) else {
+                if let Some(push) = self.offer(collection, source, item) {
+                    pushes.push(push);
+                }
                 continue;
             };
             let provisional = binding.handle.starts_with('\u{1}');
@@ -580,7 +894,7 @@ impl Model {
                         });
                     }
                 }
-                (State::Live, true) if binding.conflicted => {}
+                (State::Live, true) if binding.conflicted || item.conflicted => {}
                 (State::Live, true)
                     if mutable && item.object.is_some() && item.object != binding.base_object =>
                 {
@@ -612,6 +926,23 @@ impl Model {
         pushes
     }
 
+    /// The `Add` a source lacking a live item owes it, offered only when
+    /// the store holds its body and its key asserts an identity, a `hash:`
+    /// key asserting none (SYNC §3, §9).
+    fn offer(&self, collection: &str, source: &str, item: &Item) -> Option<Push> {
+        let object = item.object.as_ref()?;
+        if item.state != State::Live || item.link_id.starts_with("hash:") {
+            return None;
+        }
+        Some(Push::Add {
+            handle: format!("\u{1}{}", item.link_id),
+            link_id: item.link_id.clone(),
+            flags: item.flags.clone().unwrap_or_default(),
+            origin: self.origin(collection, source, &item.link_id, object),
+            object: object.clone(),
+        })
+    }
+
     /// Pushes one change to the collection's remote, which accepts it, and
     /// writes its outcome (SYNC §5, "Push discipline").
     fn push(
@@ -622,15 +953,50 @@ impl Model {
         events: &mut Vec<Event>,
     ) -> Outcome {
         let source = remotes[collection].source.clone();
-        let index = self
+        let offered = self
             .bound_handle(collection, &source, push.handle())
-            .expect("a pushed placement");
+            .is_none();
+        let index = match offered {
+            false => self
+                .bound_handle(collection, &source, push.handle())
+                .expect("a pushed placement"),
+            true => self.bind_offer(collection, &source, push),
+        };
+        let key = push.key(collection);
+        let answer = remotes.get_mut(collection).expect("a remote").answer(&key);
         let mut outcome = Outcome {
             handle: String::from(push.handle()),
+            answer: answer.clone(),
             assigned: None,
             revision: None,
             relocated: None,
         };
+        match answer {
+            Answer::Accepted => {}
+            Answer::Rejected => {
+                if offered {
+                    self.items[index]
+                        .bindings
+                        .retain(|binding| binding.source != source);
+                }
+                return outcome;
+            }
+            Answer::Refused(reason) => {
+                let binding = self.items[index].bound_mut(&source).expect("a bound item");
+                binding.refusal = Some(Refusal {
+                    reason: reason.clone(),
+                    key,
+                });
+                events.push(Event::Refused {
+                    handle: String::from(push.handle()),
+                    reason,
+                });
+                return outcome;
+            }
+        }
+        if let Some(binding) = self.items[index].bound_mut(&source) {
+            binding.refusal = None;
+        }
 
         match push {
             Push::SetFlags {
@@ -644,7 +1010,7 @@ impl Model {
                 remote.set_flags(handle, left);
                 let item = &mut self.items[index];
                 let flags = item.flags.clone();
-                item.binding.as_mut().expect("a bound item").base_flags = flags;
+                item.bound_mut(&source).expect("a bound item").base_flags = flags;
             }
             Push::Remove {
                 handle,
@@ -662,23 +1028,23 @@ impl Model {
                     let provisional = format!("\u{1}{link_id}");
                     let delivered = self.items.iter_mut().find(|item| {
                         &item.collection == to
-                            && item.binding.as_ref().is_some_and(|binding| {
+                            && item.bound(&source).is_some_and(|binding| {
                                 binding.source == source && binding.handle == provisional
                             })
                     });
-                    if let Some(binding) = delivered.and_then(|item| item.binding.as_mut())
+                    if let Some(binding) = delivered.and_then(|item| item.bound_mut(&source))
                         && !binding.base_present
                     {
                         binding.base_present = true;
                     }
                 }
-                self.drop_deleted(index);
+                self.drop_deleted(index, &source);
             }
             Push::Update { handle, object, .. } => {
                 let filed = self.filed(index, object);
                 let remote = remotes.get_mut(collection).expect("a remote");
                 outcome.revision = remote.edit(handle, filed);
-                let binding = self.items[index].binding.as_mut().expect("a bound item");
+                let binding = self.items[index].bound_mut(&source).expect("a bound item");
                 binding.base_object = Some(object.clone());
                 binding.base_revision = outcome.revision.clone();
                 binding.shared_object = Some(object.clone());
@@ -687,7 +1053,11 @@ impl Model {
                 let filed = self.filed(index, object);
                 let remote = remotes.get_mut(collection).expect("a remote");
                 let (assigned, revision) = remote.deliver(filed, flags.clone());
-                let binding = self.items[index].binding.as_mut().expect("a bound item");
+                let binding = self.items[index].bound_mut(&source).expect("a bound item");
+                if !remote.uidplus && !remote.mutable {
+                    binding.base_present = true;
+                    return outcome;
+                }
                 binding.handle = assigned.clone();
                 binding.base_present = true;
                 binding.base_flags = Some(flags.clone());
@@ -702,17 +1072,92 @@ impl Model {
         outcome
     }
 
+    /// Binds an offered create to the source pushing its `Add`, as its own
+    /// pending create under the provisional handle the `Add` was pushed
+    /// under, no base: the write recording the push's outcome binds it
+    /// (SYNC §5, STORAGE §14).
+    fn bind_offer(&mut self, collection: &str, source: &str, push: &Push) -> usize {
+        let Push::Add { link_id, .. } = push else {
+            panic!("only an add is offered");
+        };
+        let index = self
+            .items
+            .iter()
+            .position(|item| {
+                item.collection == collection
+                    && &item.link_id == link_id
+                    && item.state == State::Live
+            })
+            .expect("an offered item");
+        self.items[index].bind(Binding {
+            source: String::from(source),
+            handle: String::from(push.handle()),
+            base_flags: None,
+            base_object: None,
+            base_revision: None,
+            base_present: false,
+            shared_object: None,
+            conflicted: false,
+            conflict_revision: None,
+            conflict_object: None,
+            refusal: None,
+            round: None,
+        });
+        index
+    }
+    fn refusal_on(&self, collection: &str, source: &str, handle: &str) -> Option<Refusal> {
+        let index = self.bound_handle(collection, source, handle)?;
+        self.items[index].bound(source)?.refusal.clone()
+    }
+
     fn filed(&self, index: usize, object: &ObjectName) -> Filed {
         let item = &self.items[index];
         Filed {
             bytes: self.objects[object].clone(),
-            hint: None,
+            hint: declared(&item.summary),
             summary: item.summary.clone(),
             addresses: item.addresses.clone(),
             sort_key: item.sort_key.clone(),
             fallback: None,
         }
     }
+}
+
+/// The hint a body declares, read back from the summary derived from it:
+/// a message's `Message-ID`, a resource's usable `UID` (Annex A).
+fn declared(summary: &Summary) -> Option<String> {
+    let column = match summary.table {
+        Table::Mail => "message_id",
+        Table::File => return None,
+        _ => "uid",
+    };
+    match summary.get(column) {
+        Value::Text(hint) if !hint.trim_matches([' ', '\t']).is_empty() => Some(hint),
+        _ => None,
+    }
+}
+
+/// How a run settles a remote revision its base does not hold.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Settle {
+    /// Pulled.
+    Pull,
+    /// Pulled, the local edit kept as a retained item.
+    PullKeepingLocal,
+    /// The member's body kept as a retained item, the base moved onto it,
+    /// the store's body pushed over it.
+    KeepRemote,
+    /// Recorded in conflict on the binding.
+    Record,
+}
+
+/// A body a policy keeps, and what the retained item holding it shows.
+struct Kept {
+    object: Option<ObjectName>,
+    flags: Option<BTreeSet<String>>,
+    summary: Summary,
+    addresses: Vec<Address>,
+    sort_key: String,
 }
 
 /// Whether two summaries name one message: another kind always does, a

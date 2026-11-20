@@ -66,6 +66,12 @@ pub fn materialise(model: &Model, store: &Store) -> Result<()> {
             "storage/owner/set_collection_name",
             &[("collection", &id), ("account", &account), ("name", &name)],
         )?;
+        let conflict = Value::Text(collection.conflict.clone());
+        run(
+            store,
+            "storage/owner/set_conflict",
+            &[("conflict", &conflict), ("collection", &id)],
+        )?;
         if let Some(role) = &collection.role {
             let role = Value::Text(role.clone());
             run(
@@ -74,12 +80,9 @@ pub fn materialise(model: &Model, store: &Store) -> Result<()> {
                 &[("collection", &id), ("role", &role)],
             )?;
         }
-        if let Some(source) = &collection.source {
+        for (source, sync) in &collection.sources {
             let source = Value::Text(source.clone());
-            let checkpoint = collection
-                .checkpoint
-                .clone()
-                .map_or(Value::Null, Value::Blob);
+            let checkpoint = sync.checkpoint.clone().map_or(Value::Null, Value::Blob);
             run(
                 store,
                 "storage/owner/upsert_checkpoint",
@@ -247,7 +250,7 @@ fn write_item(store: &Store, item: &Item) -> Result<()> {
 
     write_summary(store, item, &collection, &link_id)?;
 
-    if let Some(binding) = &item.binding {
+    for binding in &item.bindings {
         let source = Value::Text(binding.source.clone());
         let (base_flags_known, base_marks, base_others) = flag_columns(binding.base_flags.as_ref());
         run(
@@ -320,49 +323,48 @@ fn write_item(store: &Store, item: &Item) -> Result<()> {
 /// the coverage stand as the model holds them (STORAGE §4.3, SYNC §5). The
 /// checkpoint the declaration wrote is kept, a round closing with none.
 fn write_rounds(store: &Store, model: &Model, collection: &Collection) -> Result<()> {
-    let Some(source) = &collection.source else {
-        return Ok(());
-    };
     let id = Value::Text(collection.id.clone());
-    let source = Value::Text(source.clone());
 
-    for round in 1..=collection.rounds {
-        run(
-            store,
-            "storage/owner/open_round",
-            &[
-                ("collection", &id),
-                ("source", &source),
-                ("since", &Value::Null),
-                ("until", &Value::Null),
-                ("band", &Value::Integer(0)),
-            ],
-        )?;
-        let handles: Vec<Value> = model
-            .items
-            .iter()
-            .filter(|item| item.collection == collection.id)
-            .filter_map(|item| item.binding.as_ref())
-            .filter(|binding| binding.round == Some(round))
-            .map(|binding| Value::Text(binding.handle.clone()))
-            .collect();
-        store.bind_slot("handles", &handles)?;
-        run(
-            store,
-            "storage/owner/stamp_bindings",
-            &[("collection", &id), ("source", &source)],
-        )?;
-        run(
-            store,
-            "storage/owner/close_round",
-            &[
-                ("checkpoint", &Value::Null),
-                ("since", &Value::Null),
-                ("until", &Value::Null),
-                ("collection", &id),
-                ("source", &source),
-            ],
-        )?;
+    for (name, sync) in &collection.sources {
+        let source = Value::Text(name.clone());
+        for round in 1..=sync.rounds {
+            run(
+                store,
+                "storage/owner/open_round",
+                &[
+                    ("collection", &id),
+                    ("source", &source),
+                    ("since", &Value::Null),
+                    ("until", &Value::Null),
+                    ("band", &Value::Integer(0)),
+                ],
+            )?;
+            let handles: Vec<Value> = model
+                .items
+                .iter()
+                .filter(|item| item.collection == collection.id)
+                .flat_map(|item| item.bindings.iter())
+                .filter(|binding| &binding.source == name && binding.round == Some(round))
+                .map(|binding| Value::Text(binding.handle.clone()))
+                .collect();
+            store.bind_slot("handles", &handles)?;
+            run(
+                store,
+                "storage/owner/stamp_bindings",
+                &[("collection", &id), ("source", &source)],
+            )?;
+            run(
+                store,
+                "storage/owner/close_round",
+                &[
+                    ("checkpoint", &Value::Null),
+                    ("since", &Value::Null),
+                    ("until", &Value::Null),
+                    ("collection", &id),
+                    ("source", &source),
+                ],
+            )?;
+        }
     }
 
     Ok(())
