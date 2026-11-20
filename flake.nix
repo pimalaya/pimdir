@@ -54,6 +54,22 @@
         ];
       };
 
+      # The generator's crate, with the canonical text it loads from the
+      # directory above it and STORAGE.md, whose Annex A revision it follows.
+      generator = lib.fileset.toSource {
+        root = ./.;
+        fileset = lib.fileset.unions [
+          ./generator/Cargo.toml
+          ./generator/Cargo.lock
+          ./generator/src
+          ./migrations
+          ./queries
+          ./payloads
+          ./vectors
+          ./STORAGE.md
+        ];
+      };
+
       python = pkgs: pkgs.python3.withPackages (ps: [
         ps.blake3
         ps.jsonschema
@@ -132,6 +148,17 @@
           bash ${./checks/frozen.sh} ${format} ${./checks/frozen.sha256} | tee $out
         '';
 
+        # The generator's own tests: its known answers, and the stores it
+        # writes through the canonical statements alone.
+        generator = pkgs.rustPlatform.buildRustPackage {
+          pname = "pimdir-generator";
+          version = "0.1.0";
+          src = generator;
+          cargoRoot = "generator";
+          buildAndTestSubdir = "generator";
+          cargoLock.lockFile = ./generator/Cargo.lock;
+        };
+
         # Every markdown file outside cairn/, and every file a link names, so
         # the whole source rather than a fileset.
         references = pkgs.runCommand "pimdir-references" { nativeBuildInputs = [ pkgs.perl ]; } ''
@@ -150,6 +177,10 @@
             pkgs.sqlite
             pkgs.perl
             (python pkgs)
+            pkgs.cargo
+            pkgs.rustc
+            pkgs.clippy
+            pkgs.rustfmt
           ];
         };
       });

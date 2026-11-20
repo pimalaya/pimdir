@@ -21,6 +21,7 @@ Nothing is stored but the seed: a failing case is the triple above, about 40 byt
 - **No parser.** The generator never reads a body to learn what it says. A body is rendered from the model, so its Annex A derivation is the model's value by construction (below), or taken whole from vectors/fixtures/, whose derivation vectors/summaries.json pins and checks/vectors.py proves on a second path.
 - **The PRNG is owned and pinned by algorithm**: PCG32 (XSH RR, 64-bit state), checked against its published sequence for seed 42 and stream 54. No `rand`, whose `StdRng` is reproducible within a major only.
 - **Closed model.** An event the model cannot predict exactly is not generated. Every class left out is listed under "Limits" with the plan line that will add it, so a passing campaign never claims more than the model covers.
+- **Plain names.** The crate is unpublished test tooling, so its public types take no domain prefix and are namespaced by their module (`spec::Spec`, `store::Store`, `rng::Rng`), as the family's toolkit crates are (the owner's call of 2026-11-20, which the owner may still reverse).
 
 ## The model
 
@@ -146,7 +147,7 @@ A failure needing several engine events (a crash and its rerun, a drain then a s
 
 ## Checks
 
-`nix flake check` gains a `generator` check building the crate with `rustPlatform.buildRustPackage` from its Cargo.lock and running its tests: the PCG32 and base32 known answers, the digests of digests.json, and the self-check on the structure and quirks profiles at the pinned seeds, with a sample of the count profile. The development shell gains cargo, rustc, clippy and rustfmt. The crate holds no `//` comment but `// SAFETY:` and follows the family's layout rules.
+`nix flake check` runs the `generator` check, which builds the crate with `rustPlatform.buildRustPackage` from its Cargo.lock and runs its tests: the PCG32 sequence, the base32 cases and object names of vectors/objects.json, every statement prepared against a fresh store to the parameters and columns queries/signatures.json states, the fresh store's `store_meta`, pragmas, modes and lock, and the Annex A revision STORAGE.md states; as the steps land, the digests of digests.json and the self-check on the structure and quirks profiles at the pinned seeds, with a sample of the count profile. The development shell carries cargo, rustc, clippy and rustfmt (`nix develop --command cargo test` in generator/). The crate holds no `//` comment but `// SAFETY:` and follows the family's layout rules.
 
 ## Limits
 
