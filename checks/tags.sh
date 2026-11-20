@@ -63,7 +63,7 @@ part() {
     fi
 }
 
-named="$(fixtures vectors/summaries.json vectors/sync/*.json vectors/search/store.json)"
+named="$(fixtures vectors/summaries.json vectors/sync/*.json vectors/search/store.json vectors/search/refresh.json)"
 unnamed="$(comm -23 <(find vectors/fixtures -type f | sort) <(echo "$named"))"
 
 part STORAGE.md migrations/storage queries/storage payloads vectors/objects.json vectors/summaries.json \
@@ -72,7 +72,7 @@ part STORAGE.md migrations/storage queries/storage payloads vectors/objects.json
 part SYNC.md vectors/sync vectors/schema/sync.schema.json $(fixtures vectors/sync/*.json)
 part SEARCH.md migrations/search queries/search vectors/search vectors/schema/search-store.schema.json \
     vectors/schema/search-queries.schema.json vectors/schema/search-chunks.schema.json \
-    $(fixtures vectors/search/store.json)
+    vectors/schema/search-refresh.schema.json $(fixtures vectors/search/store.json vectors/search/refresh.json)
 part conventions/gtd.md conventions/gtd
 
 if [ "$failures" -gt 0 ]; then

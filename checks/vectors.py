@@ -1291,6 +1291,7 @@ check("vectors/sync/: numbered from 1, no gap, no number twice", numbers, list(r
 FORMATS = {
     "objects.json": "objects", "summaries.json": "summaries", "search/store.json": "search-store",
     "search/queries.json": "search-queries", "search/chunks.json": "search-chunks",
+    "search/refresh.json": "search-refresh",
     "payloads.json": "payloads", "manifest.json": "manifest", "versions.json": "versions",
 }
 for path in sorted(root.rglob("*.json")):
@@ -3415,9 +3416,80 @@ for case in chunk_cases:
             derived.append({"ord": len(derived), "field": field, "start": start, "end": end})
     check(f"chunks {case['label']!r}", derived, case["chunks"])
 
+# The refresh cases (SEARCH.md section 11, STORAGE.md section 4.5): the feed
+# each step leaves is re-derived from the stamping rules, over a model of
+# the store holding each item's collection, link id and state, and every hit
+# names an item the step leaves searchable. A put stamps its item; a remove
+# stamps the item it retains; a purge and an erase stamp nothing and count
+# as purges; a rename restamps every item under the new id, stamps the
+# collection and counts as a purge; a coverage moving stamps its collection.
+refresh = json.loads((search / "refresh.json").read_text())
+for case in refresh["cases"]:
+    label = f"refresh {case['label']!r}"
+    collections = {c["id"]: c["account"] for c in case["store"]["collections"]}
+    model = {}
+    for item in case["store"]["items"]:
+        require(f"{label}: {item['link_id']} in a known collection", item["collection"] in collections)
+        if "fixture" in item:
+            require(f"{label}: {item['fixture']} exists", (root / item["fixture"]).is_file())
+        model[(item["collection"], item["seq"])] = {"link_id": item["link_id"], "live": True}
+    for number, step in enumerate(case["steps"], 1):
+        where = f"{label} step {number}"
+        write = step["write"]
+        items, touched, purged = set(), set(), False
+        if write["kind"] == "put":
+            item = write["item"]
+            require(f"{where}: {item['collection']} is held", item["collection"] in collections)
+            if "fixture" in item:
+                require(f"{where}: {item['fixture']} exists", (root / item["fixture"]).is_file())
+            held = model.get((item["collection"], item["seq"]))
+            require(f"{where}: a put keeps the link id of the seq it names",
+                    held is None or (held["link_id"] == item["link_id"] and held["live"]))
+            model[(item["collection"], item["seq"])] = {"link_id": item["link_id"], "live": True}
+            items.add((item["collection"], item["link_id"]))
+        elif write["kind"] in ("remove", "purge", "erase"):
+            key = (write["collection"], write["seq"])
+            held = model.get(key)
+            require(f"{where}: {write['kind']} names a held item", held is not None)
+            if held is None:
+                continue
+            if write["kind"] == "remove":
+                require(f"{where}: a remove names a live item", held["live"])
+                held["live"] = False
+                items.add((write["collection"], held["link_id"]))
+            else:
+                require(f"{where}: a {write['kind']} names a retained item", not held["live"])
+                del model[key]
+                purged = True
+        elif write["kind"] == "rename":
+            require(f"{where}: {write['collection']} is held and {write['to']} is not",
+                    write["collection"] in collections and write["to"] not in collections)
+            collections[write["to"]] = collections.pop(write["collection"], None)
+            for (collection, seq) in list(model):
+                if collection == write["collection"]:
+                    model[(write["to"], seq)] = model.pop((collection, seq))
+                    items.add((write["to"], model[(write["to"], seq)]["link_id"]))
+            touched.add(write["to"])
+            purged = True
+        elif write["kind"] == "cover":
+            require(f"{where}: {write['collection']} is held", write["collection"] in collections)
+            touched.add(write["collection"])
+        check(f"{where}: the items the feed lists", sorted(map(tuple, step["changed"]["items"])), sorted(items))
+        check(f"{where}: the collections the feed lists", sorted(step["changed"]["collections"]), sorted(touched))
+        check(f"{where}: whether the purge count moves", step["changed"]["purged"], purged)
+        live = {(collections[collection], seq) for (collection, seq), held in model.items() if held["live"]}
+        for query in step["queries"]:
+            try:
+                parse(query["query"])
+            except Refused as refused:
+                failures.append(f"{where}: {query['query']!r} is refused ({refused.code})")
+            for hit in query["hits"]:
+                require(f"{where}: {query['query']!r} hit {hit} names a searchable item", tuple(hit) in live)
+
 # Every fixture is a body some case names (summaries.json, a sync case, the
-# search store), so none lies under vectors/fixtures/ that no rule reads.
-named = {match for path in [root / "summaries.json", *sync_cases, search / "store.json"]
+# search store, a refresh case), so none lies under vectors/fixtures/ that no
+# rule reads.
+named = {match for path in [root / "summaries.json", *sync_cases, search / "store.json", search / "refresh.json"]
          for match in re.findall(r'"(fixtures/[^"]+)"', path.read_text())}
 for path in sorted((root / "fixtures").iterdir()):
     require(f"vectors/fixtures/{path.name}: a fixture no case names", f"fixtures/{path.name}" in named)
@@ -3432,7 +3504,7 @@ print(
     f"{len(objects['objects'])} object names, "
     f"{len(summaries['cases'])} summaries over {len(fixtures)} fixtures, "
     f"{sum('hint' in case for case in summaries['cases'])} minted link ids, "
-    f"{len(sync_cases)} sync cases, {len(queries['cases'])} search cases, {len(chunk_cases)} chunk cases, "
+    f"{len(sync_cases)} sync cases, {len(queries['cases'])} search cases, {sum(len(case['steps']) for case in refresh['cases'])} refresh steps, {len(chunk_cases)} chunk cases, "
     f"{len(writers['cases'])} task writer cases, {len(payload_cases)} payloads and {enqueued} scenario payloads check, "
     f"every file the manifest's"
 )

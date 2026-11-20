@@ -117,12 +117,14 @@
     "vectors/schema/payloads.schema.json": "cfeeaef33d63945aa2cd4ee9bce53b9b298595dccbea94b0a1f256e4c1959e8d",
     "vectors/schema/search-chunks.schema.json": "0d98341ffd6455327e176688d4affe359b04dc0317d2a3bb920d4fcc6a0d653c",
     "vectors/schema/search-queries.schema.json": "791f24559af3a2bae391fee9f3e1ec6ee57b404aeac870a38eff09676faa4ff8",
+    "vectors/schema/search-refresh.schema.json": "9566432d60262e93c77533812096543bf26c9f0242d95e81aaf2a48f0aa221cc",
     "vectors/schema/search-store.schema.json": "ffd9e3bb85ed36c8bf8962d6bd5c8feb26755a2dfe357224650dbc380bc6145a",
     "vectors/schema/summaries.schema.json": "5dcd70af3d37d44420d5b5289ba5643a6e8905f0c9dc63d285e91a57287f4a54",
     "vectors/schema/sync.schema.json": "7378c893d606b0f556b631edf3210206a5de0e61fa8ff990ebeefd2c712a96a8",
     "vectors/schema/versions.schema.json": "189ca52345b56a64626844d8805ebaea10356ae5ecae651a8c9675610a500705",
     "vectors/search/chunks.json": "6fc4e98bdf1306f7d5a2635fa2db4c3d96dc8856fbd61df49bc2f67d4d44de3a",
     "vectors/search/queries.json": "08b8eb1feb84d25515dc27dbc75fa100d200512b71006ad351b5e67739759ff5",
+    "vectors/search/refresh.json": "51d4e6b9164c96e79ef936089276c9a9d7a80db8b9b25ab2da36654b18f8f5c6",
     "vectors/search/store.json": "e9456aad4a57e745c978d401e4b1300c3b383ac020b209d5bec7a15b6d6b855a",
     "vectors/summaries.json": "6a4eaead0970b91f76d2db33b53215ba35975e171f8c373b45e313d09298aad8",
     "vectors/sync/01-remote-flag-pulled.json": "af93fe758817c663b92ebcee7574d07da6974e6a3d6a88998e2265ae5c63a2e1",
@@ -313,6 +315,9 @@
     "vectors/search/queries.json": {
       "/cases": 221,
       "/occurrences": 8
+    },
+    "vectors/search/refresh.json": {
+      "/cases": 1
     },
     "vectors/search/store.json": {
       "/collections": 11,

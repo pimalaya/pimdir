@@ -1,0 +1,111 @@
+{
+  "v": 1,
+  "note": "a refresh driven by the change feed (STORAGE.md section 4.5, SEARCH.md section 4): each case builds its store as store.json's are built and indexes it, then applies its steps in order, each as an owner would write it. After each step the feed lists, above the cursor read before it, the items and the collections stated in changed, and the purge count moves when purged says so; a refresh then answers each query as stated, as an index rebuilt from the store as it then stands does. A missing stamp leaves the index answering the earlier store.",
+  "cases": [
+    {
+      "label": "every kind of write an owner makes",
+      "store": {
+        "collections": [
+          { "id": "work/INBOX", "account": "work", "kind": "message/rfc822" },
+          { "id": "work/Archive", "account": "work", "kind": "message/rfc822" },
+          { "id": "home/Contacts", "account": "home", "kind": "text/vcard" }
+        ],
+        "items": [
+          { "collection": "work/INBOX", "seq": 1, "link_id": "basic-1@example.org", "flags": [], "fixture": "fixtures/mail-basic.eml" },
+          { "collection": "work/Archive", "seq": 2, "link_id": "budget-1@example.net", "flags": [], "summary": { "table": "mail_summary", "row": { "message_id": "budget-1@example.net", "in_reply_to": [], "subject": "Budget draft", "sender": "dan@example.net", "sender_name": "Dan", "date": "2026-08-10T08:00:00Z", "size": 4096, "attachment": null, "invitation": null }, "addresses": [{ "role": "from", "position": 0, "address": "dan@example.net", "name": "Dan" }], "sort_key": "2026-08-10T08:00:00Z" } },
+          { "collection": "home/Contacts", "seq": 3, "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "flags": [], "fixture": "fixtures/card-basic.vcf" }
+        ],
+        "references": []
+      },
+      "steps": [
+        {
+          "note": "an insert takes the next stamp",
+          "write": { "kind": "put", "item": { "collection": "work/INBOX", "seq": 4, "link_id": "reply-1@example.org", "flags": [], "fixture": "fixtures/mail-reply.eml" } },
+          "changed": { "items": [["work/INBOX", "reply-1@example.org"]], "collections": [], "purged": false },
+          "queries": [
+            { "query": "id:reply-1@example.org", "hits": [["work", 4]] }
+          ]
+        },
+        {
+          "note": "a flag added to a placement, the body unchanged",
+          "write": { "kind": "put", "item": { "collection": "work/INBOX", "seq": 1, "link_id": "basic-1@example.org", "flags": ["\\Seen"], "fixture": "fixtures/mail-basic.eml" } },
+          "changed": { "items": [["work/INBOX", "basic-1@example.org"]], "collections": [], "purged": false },
+          "queries": [
+            { "query": "is:read", "hits": [["work", 1]] },
+            { "query": "is:unread kind:mail", "hits": [["work", 2], ["work", 4]] }
+          ]
+        },
+        {
+          "note": "a body replaced under the same link id",
+          "write": { "kind": "put", "item": { "collection": "home/Contacts", "seq": 3, "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "flags": [], "fixture": "fixtures/card-basic-renamed.vcf" } },
+          "changed": { "items": [["home/Contacts", "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40"]], "collections": [], "purged": false },
+          "queries": [
+            { "query": "smith", "hits": [["home", 3]] },
+            { "query": "jane", "hits": [["home", 3]] }
+          ]
+        },
+        {
+          "note": "a summary row changed under an unchanged item: its object, flags, level and sort key stay, so no trigger draws a stamp and the writer requests one (stamp_item)",
+          "write": { "kind": "put", "item": { "collection": "work/Archive", "seq": 2, "link_id": "budget-1@example.net", "flags": [], "summary": { "table": "mail_summary", "row": { "message_id": "budget-1@example.net", "in_reply_to": [], "subject": "Budget final", "sender": "dan@example.net", "sender_name": "Dan", "date": "2026-08-10T08:00:00Z", "size": 4096, "attachment": null, "invitation": null }, "addresses": [{ "role": "from", "position": 0, "address": "dan@example.net", "name": "Dan" }], "sort_key": "2026-08-10T08:00:00Z" } } },
+          "changed": { "items": [["work/Archive", "budget-1@example.net"]], "collections": [], "purged": false },
+          "queries": [
+            { "query": "subject:final", "hits": [["work", 2]] },
+            { "query": "subject:draft", "hits": [] }
+          ]
+        },
+        {
+          "note": "a source's coverage moving restamps its collection and none of its items",
+          "write": { "kind": "cover", "collection": "work/INBOX", "source": "mirror", "covered_since": "2026-08-01T00:00:00Z", "covered_until": null },
+          "changed": { "items": [], "collections": ["work/INBOX"], "purged": false },
+          "queries": [
+            { "query": "collection:work/INBOX", "hits": [["work", 1], ["work", 4]] }
+          ]
+        },
+        {
+          "note": "a rename restamps every item under the new id and counts as a purge, the old keys gone",
+          "write": { "kind": "rename", "collection": "work/Archive", "to": "work/Saved" },
+          "changed": { "items": [["work/Saved", "budget-1@example.net"]], "collections": ["work/Saved"], "purged": true },
+          "queries": [
+            { "query": "collection:work/Saved", "hits": [["work", 2]] },
+            { "query": "collection:work/Archive", "hits": [] },
+            { "query": "subject:final", "hits": [["work", 2]] }
+          ]
+        },
+        {
+          "note": "an item every source dropped is retained: stamped, and no longer searched",
+          "write": { "kind": "remove", "collection": "work/INBOX", "seq": 1 },
+          "changed": { "items": [["work/INBOX", "basic-1@example.org"]], "collections": [], "purged": false },
+          "queries": [
+            { "query": "subject:notes", "hits": [] },
+            { "query": "is:read", "hits": [] }
+          ]
+        },
+        {
+          "note": "a purged item cannot carry a stamp and counts as a purge",
+          "write": { "kind": "purge", "collection": "work/INBOX", "seq": 1 },
+          "changed": { "items": [], "collections": [], "purged": true },
+          "queries": [
+            { "query": "id:basic-1@example.org", "hits": [] }
+          ]
+        },
+        {
+          "note": "the card dropped, then erased (STORAGE section 11.5): its purge and the collected body count as purges",
+          "write": { "kind": "remove", "collection": "home/Contacts", "seq": 3 },
+          "changed": { "items": [["home/Contacts", "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40"]], "collections": [], "purged": false },
+          "queries": [
+            { "query": "smith", "hits": [] }
+          ]
+        },
+        {
+          "write": { "kind": "erase", "collection": "home/Contacts", "seq": 3 },
+          "changed": { "items": [], "collections": [], "purged": true },
+          "queries": [
+            { "query": "smith", "hits": [] },
+            { "query": "kind:contact", "hits": [] },
+            { "query": "kind:mail", "hits": [["work", 2], ["work", 4]] }
+          ]
+        }
+      ]
+    }
+  ]
+}

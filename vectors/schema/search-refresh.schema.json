@@ -1,0 +1,608 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pimalaya/pimdir/vectors/schema/search-refresh.schema.json",
+  "$comment": "SPDX-License-Identifier: MIT OR Apache-2.0",
+  "title": "The refresh cases (SEARCH.md section 11), vectors/search/refresh.json",
+  "type": "object",
+  "required": [
+    "v",
+    "cases"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "const": 1 },
+    "note": {
+      "type": "string"
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "label",
+          "store",
+          "steps"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "store": {
+            "type": "object",
+            "required": [
+              "collections",
+              "items",
+              "references"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "collections": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/collection"
+                }
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/item"
+                }
+              },
+              "references": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/reference"
+                }
+              }
+            }
+          },
+          "steps": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/$defs/step"
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "step": {
+      "type": "object",
+      "required": [
+        "write",
+        "changed",
+        "queries"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "note": {
+          "type": "string"
+        },
+        "write": {
+          "$ref": "#/$defs/write"
+        },
+        "changed": {
+          "type": "object",
+          "required": [
+            "items",
+            "collections",
+            "purged"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ],
+                "items": false,
+                "minItems": 2
+              }
+            },
+            "collections": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              }
+            },
+            "purged": {
+              "type": "boolean"
+            }
+          }
+        },
+        "queries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "query",
+              "hits"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "query": {
+                "type": "string"
+              },
+              "note": {
+                "type": "string"
+              },
+              "hits": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  ],
+                  "items": false,
+                  "minItems": 2
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "write": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "required": [
+            "item"
+          ],
+          "properties": {
+            "kind": {
+              "const": "put"
+            },
+            "item": {
+              "$ref": "#/$defs/item"
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "required": [
+            "collection",
+            "seq"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "remove",
+                "purge",
+                "erase"
+              ]
+            },
+            "collection": {
+              "type": "string"
+            },
+            "seq": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "required": [
+            "collection",
+            "to"
+          ],
+          "properties": {
+            "kind": {
+              "const": "rename"
+            },
+            "collection": {
+              "type": "string"
+            },
+            "to": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "required": [
+            "collection",
+            "source",
+            "covered_since",
+            "covered_until"
+          ],
+          "properties": {
+            "kind": {
+              "const": "cover"
+            },
+            "collection": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            },
+            "covered_since": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "covered_until": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "maybe": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "table",
+        "row",
+        "addresses",
+        "sort_key"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "table": {
+          "enum": [
+            "mail_summary",
+            "file_summary"
+          ]
+        },
+        "row": {
+          "type": "object"
+        },
+        "addresses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "role",
+              "position",
+              "address",
+              "name"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "role": {
+                "enum": [
+                  "from",
+                  "to",
+                  "cc",
+                  "bcc",
+                  "email",
+                  "organizer",
+                  "attendee",
+                  "contact"
+                ]
+              },
+              "position": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "address": {
+                "type": "string"
+              },
+              "name": {
+                "$ref": "#/$defs/maybe"
+              }
+            }
+          }
+        },
+        "sort_key": {
+          "type": "string"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "table": {
+                "const": "mail_summary"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "row": {
+                "$ref": "#/$defs/mail_summary"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "table": {
+                "const": "file_summary"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "row": {
+                "$ref": "#/$defs/file_summary"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "mail_summary": {
+      "type": "object",
+      "required": [
+        "message_id",
+        "in_reply_to",
+        "subject",
+        "sender",
+        "sender_name",
+        "date",
+        "size",
+        "attachment",
+        "invitation"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "message_id": {
+          "$ref": "#/$defs/maybe"
+        },
+        "in_reply_to": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "subject": {
+          "type": "string"
+        },
+        "sender": {
+          "$ref": "#/$defs/maybe"
+        },
+        "sender_name": {
+          "$ref": "#/$defs/maybe"
+        },
+        "date": {
+          "$ref": "#/$defs/maybe"
+        },
+        "size": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "attachment": {
+          "enum": [
+            0,
+            1,
+            null
+          ]
+        },
+        "invitation": {
+          "$ref": "#/$defs/maybe"
+        }
+      }
+    },
+    "file_summary": {
+      "type": "object",
+      "required": [
+        "name",
+        "media_type",
+        "size",
+        "part"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "media_type": {
+          "$ref": "#/$defs/maybe"
+        },
+        "size": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "part": {
+          "$ref": "#/$defs/maybe"
+        }
+      }
+    },
+    "collection": {
+      "type": "object",
+      "required": [
+        "id",
+        "account",
+        "kind"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "account": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "enum": [
+            "message/rfc822",
+            "text/vcard",
+            "text/calendar",
+            "application/octet-stream"
+          ]
+        },
+        "role": {
+          "type": "string"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "source",
+              "covered_since",
+              "covered_until",
+              "covered_at"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "source": {
+                "type": "string"
+              },
+              "covered_since": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "covered_until": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "covered_at": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "item": {
+      "type": "object",
+      "required": [
+        "collection",
+        "seq",
+        "link_id",
+        "flags"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "collection": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "link_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "flags": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[!-~]+$"
+          }
+        },
+        "fixture": {
+          "type": "string",
+          "pattern": "^fixtures/"
+        },
+        "unreadable": {
+          "const": true
+        },
+        "summary": {
+          "$ref": "#/$defs/summary"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "fixture"
+          ]
+        },
+        {
+          "required": [
+            "summary"
+          ]
+        }
+      ],
+      "dependentRequired": {
+        "unreadable": [
+          "fixture"
+        ]
+      }
+    },
+    "reference": {
+      "type": "object",
+      "required": [
+        "from_kind",
+        "from_link_id",
+        "to_kind",
+        "to_link_id",
+        "role",
+        "origin"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "from_kind": {
+          "type": "string"
+        },
+        "from_link_id": {
+          "type": "string"
+        },
+        "to_kind": {
+          "type": "string"
+        },
+        "to_link_id": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "origin": {
+          "enum": [
+            "auto",
+            "user"
+          ]
+        }
+      }
+    }
+  }
+}

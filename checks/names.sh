@@ -373,9 +373,9 @@ if [ "$stated" != "$(const sync)" ]; then
     echo "SYNC.md §11 states \`v\` [$stated] for vectors/sync/, its schema holds [$(const sync)]" >&2
     failures=$((failures + 1))
 fi
-stated="$(sed -n 's/.*`v` \([0-9]*\) for queries.json, `v` \([0-9]*\) for store.json and `v` \([0-9]*\) for chunks.json.*/\1 \2 \3/p' "$root/SEARCH.md")"
-if [ "$stated" != "$(const search-queries) $(const search-store) $(const search-chunks)" ]; then
-    echo "SEARCH.md §11 states \`v\` [$stated] for queries.json, store.json and chunks.json, their schemas hold [$(const search-queries) $(const search-store) $(const search-chunks)]" >&2
+stated="$(sed -n 's/.*`v` \([0-9]*\) for queries.json, `v` \([0-9]*\) for store.json, `v` \([0-9]*\) for chunks.json and `v` \([0-9]*\) for refresh.json.*/\1 \2 \3 \4/p' "$root/SEARCH.md")"
+if [ "$stated" != "$(const search-queries) $(const search-store) $(const search-chunks) $(const search-refresh)" ]; then
+    echo "SEARCH.md §11 states \`v\` [$stated] for queries.json, store.json, chunks.json and refresh.json, their schemas hold [$(const search-queries) $(const search-store) $(const search-chunks) $(const search-refresh)]" >&2
     failures=$((failures + 1))
 fi
 
@@ -425,6 +425,7 @@ words="
     mail contact contacts calendar journal task file search pimdir vtodo read
     write load mutate upgrade drain enqueue submit cancel purge rename move
     update capture report stop link links names hashes ids filename time bytes
+    put cover erase
     $(: the query language of SEARCH.md §8 and its examples)
     and or not before after today yesterday relevance simple sep
     $(: platform calls, protocol words and libraries)
