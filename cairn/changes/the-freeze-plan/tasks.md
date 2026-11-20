@@ -75,7 +75,7 @@ change: the-freeze-plan
 
 ## 8. Release mechanics
 
-- [ ] pimalaya/nix release workflow: refuse a tag whose version is not the crate's; mark a tag holding `-` a pre-release
+- [x] pimalaya/nix release workflow: refuse a tag whose version is not the crate's; mark a tag holding `-` a pre-release
 - [ ] The freeze checklist of cairn/log/2026-11-13-the-freeze-gate-is-rehearsed.md read against the current drafts (search-draft-14)
 - [ ] io-pimdir passing the tree to freeze, tests/pending_vectors.txt empty, checks/io-pimdir.rev naming it
 - [ ] Ready: the owner runs the freeze commit and the tags
