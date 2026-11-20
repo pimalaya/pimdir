@@ -9,7 +9,12 @@
 //! and its binding, and settling the refcounts.
 //!
 //! Every `seq` the store draws is held to the model's: a disagreement is
-//! the model and the statements reading STORAGE §9.1 two ways.
+//! the model and the statements reading STORAGE §9.1 two ways. A history
+//! leaves gaps and shared seqs whose first holder a purge took: a seq the
+//! counter passed already is written as the model holds it, and one above
+//! it drawn past the gap. The purges a history counted are restored by
+//! creating and deleting as many empty scratch collections, the one write
+//! counting in `purges` that leaves no row (STORAGE §4.5).
 
 use std::{
     collections::BTreeSet,
@@ -176,6 +181,20 @@ pub fn materialise(model: &Model, store: &Store) -> Result<()> {
 
     for row in &model.queue {
         write_row(store, model, row)?;
+    }
+
+    for count in 0..model.purges {
+        let scratch = Value::Text(format!("\u{1}purged-{count}"));
+        run(
+            store,
+            "storage/queue/ensure_collection",
+            &[("collection", &scratch), ("account", &Value::Null)],
+        )?;
+        run(
+            store,
+            "storage/owner/delete_collection",
+            &[("collection", &scratch)],
+        )?;
     }
 
     store.run("storage/owner/recompute_refcounts", &[])?;
@@ -444,13 +463,31 @@ fn draw_seq(store: &Store, item: &Item) -> Result<i64> {
         }
     }
 
-    let rows = store.run("storage/owner/bump_next_seq", &[])?;
-    match rows.first().and_then(|row| row.first()) {
-        Some(Value::Integer(seq)) => Ok(*seq),
-        _ => Err(Error::Disagreement {
-            what: String::from("bump_next_seq"),
-            detail: String::from("it answered no seq"),
-        }),
+    let meta = store.run("storage/read/load_store_meta", &[])?;
+    let at = store
+        .spec()
+        .statement("storage/read/load_store_meta")?
+        .columns
+        .iter()
+        .position(|column| column == "next_seq");
+    if let Some(Value::Integer(next)) = at.and_then(|at| meta.first().map(|row| &row[at]))
+        && item.seq < *next
+    {
+        return Ok(item.seq);
+    }
+
+    loop {
+        let rows = store.run("storage/owner/bump_next_seq", &[])?;
+        match rows.first().and_then(|row| row.first()) {
+            Some(Value::Integer(seq)) if *seq >= item.seq => return Ok(*seq),
+            Some(Value::Integer(_)) => {}
+            _ => {
+                return Err(Error::Disagreement {
+                    what: String::from("bump_next_seq"),
+                    detail: String::from("it answered no seq"),
+                });
+            }
+        }
     }
 }
 

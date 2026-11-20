@@ -272,6 +272,9 @@ pub struct Model {
     pub objects: BTreeMap<ObjectName, Vec<u8>>,
     /// The next `seq` to draw, `store_meta.next_seq`.
     pub next_seq: i64,
+    /// The rows purged, objects collected and collections deleted or
+    /// renamed, `store_meta.purges` (STORAGE §4.5).
+    pub purges: i64,
     /// The queue's rows, applied ones included, by id.
     pub queue: Vec<Row>,
     /// What each source declares it can do (STORAGE §15.6).

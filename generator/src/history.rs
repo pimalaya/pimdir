@@ -7,7 +7,7 @@
 //! through the oracle; each run's pushes, outcomes and events are what its
 //! engine must answer.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     body::Card,
@@ -304,6 +304,121 @@ impl History {
 
         Self { steps }
     }
+
+    /// One source over two mailboxes of one account (README.md, "Events
+    /// and histories"): a move whose source syncs first, relocating into
+    /// the target's create, which the target's listing lands; a copy
+    /// pushed by a server-side copy from its origin; a move whose target
+    /// syncs first, the source then deleting what moved; and runs with
+    /// nothing left to do.
+    pub fn moves(seed: u64) -> Self {
+        let mut draw = Draw::new(seed);
+        let mut model = Model::new();
+        let mut remotes = BTreeMap::new();
+        for (id, name, role) in [
+            ("work/INBOX", "INBOX", "inbox"),
+            ("work/Archive", "Archive", "archive"),
+        ] {
+            model.declare(Collection {
+                id: String::from(id),
+                account: Some(String::from("work")),
+                kind: Some(Kind::Mail),
+                name: String::from(name),
+                role: Some(String::from(role)),
+                source: Some(String::from("work-imap")),
+                checkpoint: None,
+                rounds: 0,
+            });
+            remotes.insert(String::from(id), Remote::new("work-imap", id));
+        }
+        for index in 0..5 {
+            let flags = if index % 2 == 0 {
+                set(&["\\Seen"])
+            } else {
+                BTreeSet::new()
+            };
+            let inbox = remotes.get_mut("work/INBOX").expect("an inbox");
+            inbox.deliver(draw.message(false).file(), flags);
+        }
+        let archive = remotes.get_mut("work/Archive").expect("an archive");
+        archive.deliver(draw.message(false).file(), set(&["\\Seen"]));
+
+        let mut steps = vec![Step {
+            label: String::from("two mailboxes declared, never synced"),
+            run: None,
+            model: model.clone(),
+        }];
+        let mut record = |label: &str, run: Option<Run>, model: &Model| {
+            steps.push(Step {
+                label: String::from(label),
+                run,
+                model: model.clone(),
+            });
+        };
+
+        let run = model.sync_in(&mut remotes, "work/INBOX", PAGE);
+        record("the inbox's first round", Some(run), &model);
+        let run = model.sync_in(&mut remotes, "work/Archive", PAGE);
+        record("the archive's first round", Some(run), &model);
+        let handles: Vec<String> = ["1", "2", "3", "4", "5"].map(String::from).to_vec();
+        let run = model.upgrade(&remotes["work/INBOX"], &handles);
+        record("the inbox's bodies fetched", Some(run), &model);
+
+        let (seq, _) = model.bound_seq("work/INBOX", "1");
+        let id = model.enqueue(
+            "himalaya",
+            "work/INBOX",
+            Action::Move {
+                seq,
+                to: String::from("work/Archive"),
+            },
+        );
+        model.drain(id);
+        let (seq, _) = model.bound_seq("work/INBOX", "2");
+        let id = model.enqueue(
+            "himalaya",
+            "work/INBOX",
+            Action::Copy {
+                seq,
+                to: String::from("work/Archive"),
+            },
+        );
+        model.drain(id);
+        record("a move and a copy into the archive, drained", None, &model);
+
+        let run = model.sync_in(&mut remotes, "work/INBOX", PAGE);
+        record("the source syncs first and relocates", Some(run), &model);
+        let run = model.sync_in(&mut remotes, "work/Archive", PAGE);
+        record(
+            "the target lands the relocation and copies",
+            Some(run),
+            &model,
+        );
+
+        let (seq, _) = model.bound_seq("work/INBOX", "3");
+        let id = model.enqueue(
+            "himalaya",
+            "work/INBOX",
+            Action::Move {
+                seq,
+                to: String::from("work/Archive"),
+            },
+        );
+        model.drain(id);
+        record("another move, drained", None, &model);
+
+        let run = model.sync_in(&mut remotes, "work/Archive", PAGE);
+        record("the target syncs first and copies", Some(run), &model);
+        let run = model.sync_in(&mut remotes, "work/INBOX", PAGE);
+        record("the source deletes what moved", Some(run), &model);
+
+        let run = model.sync_in(&mut remotes, "work/Archive", PAGE);
+        record("the archive with nothing left to do", Some(run), &model);
+        let run = model.sync_in(&mut remotes, "work/INBOX", PAGE);
+        record("the inbox with nothing left to do", Some(run), &model);
+
+        Self { steps }
+    }
 }
 
 impl Model {
@@ -376,7 +491,7 @@ mod tests {
     #[test]
     fn every_step_leaves_a_store_the_statements_write_and_read_back() {
         let spec = Spec::load_default().unwrap();
-        let histories = [history(), History::cards(13)];
+        let histories = [history(), History::cards(13), History::moves(17)];
         for (index, step) in histories
             .iter()
             .flat_map(|history| history.steps.iter())
@@ -691,5 +806,129 @@ mod tests {
         assert_eq!(retained, 2);
         assert!(history.steps[8].run.as_ref().unwrap().pushes.is_empty());
         assert!(history.steps[8].run.as_ref().unwrap().events.is_empty());
+    }
+
+    fn placed<'a>(model: &'a Model, collection: &str, link_id: &str) -> Option<&'a Item> {
+        model
+            .items
+            .iter()
+            .find(|item| item.collection == collection && item.link_id == link_id)
+    }
+
+    #[test]
+    fn a_move_staged_tombstones_its_source_and_creates_in_its_target() {
+        let history = History::moves(17);
+        let model = &history.steps[4].model;
+        let moved = card(model, "1");
+        assert_eq!(moved.state, State::Tombstone);
+        let create = placed(model, "work/Archive", &moved.link_id).unwrap();
+        let binding = create.binding.as_ref().unwrap();
+        assert_eq!(binding.handle, format!("\u{1}{}", moved.link_id));
+        assert!(!binding.base_present);
+        assert_eq!(
+            create.seq, moved.seq,
+            "a message filed twice shares its seq"
+        );
+    }
+
+    #[test]
+    fn a_source_syncing_first_relocates_into_the_target_create() {
+        let history = History::moves(17);
+        let moved = card(&history.steps[4].model, "1");
+        let step = &history.steps[5];
+        let run = step.run.as_ref().unwrap();
+        assert_eq!(run.pushes.len(), 1);
+        let Push::Remove {
+            handle,
+            to,
+            link_id,
+            ..
+        } = &run.pushes[0].0
+        else {
+            panic!("a remove");
+        };
+        assert_eq!(
+            (handle.as_str(), to.as_deref()),
+            ("1", Some("work/Archive"))
+        );
+        assert_eq!(link_id, &moved.link_id);
+        assert_eq!(run.outcomes[0].relocated, Some(true));
+
+        assert!(
+            placed(&step.model, "work/INBOX", &moved.link_id).is_none(),
+            "the source row is purged"
+        );
+        assert_eq!(step.model.purges, 1);
+        let delivered = placed(&step.model, "work/Archive", &moved.link_id).unwrap();
+        let binding = delivered.binding.as_ref().unwrap();
+        assert!(
+            binding.base_present && binding.base_flags.is_none() && binding.base_object.is_none()
+        );
+        assert!(binding.handle.starts_with('\u{1}'));
+    }
+
+    #[test]
+    fn the_target_lands_the_relocation_and_copies_from_its_origin() {
+        let history = History::moves(17);
+        let before = &history.steps[4].model;
+        let moved = card(before, "1");
+        let copied = card(before, "2");
+        let step = &history.steps[6];
+        let run = step.run.as_ref().unwrap();
+
+        let landed = placed(&step.model, "work/Archive", &moved.link_id).unwrap();
+        let binding = landed.binding.as_ref().unwrap();
+        assert!(!binding.handle.starts_with('\u{1}'));
+        assert_eq!(binding.base_object, landed.object);
+        assert!(run.events.contains(&Event::Created(binding.handle.clone())));
+        assert!(!run.events.contains(&Event::Added(binding.handle.clone())));
+
+        assert_eq!(run.pushes.len(), 1);
+        let Push::Add { origin, .. } = &run.pushes[0].0 else {
+            panic!("an add");
+        };
+        assert_eq!(
+            origin,
+            &Some((String::from("work/INBOX"), String::from("2")))
+        );
+        assert!(run.outcomes[0].assigned.is_some());
+        assert_eq!(
+            placed(&step.model, "work/INBOX", &copied.link_id)
+                .unwrap()
+                .state,
+            State::Live
+        );
+    }
+
+    #[test]
+    fn a_target_syncing_first_copies_and_the_source_then_deletes() {
+        let history = History::moves(17);
+        let moved = card(&history.steps[7].model, "3");
+        let run = history.steps[8].run.as_ref().unwrap();
+        let Push::Add { origin, .. } = &run.pushes[0].0 else {
+            panic!("an add");
+        };
+        assert_eq!(
+            origin,
+            &Some((String::from("work/INBOX"), String::from("3")))
+        );
+
+        let step = &history.steps[9];
+        let run = step.run.as_ref().unwrap();
+        let Push::Remove { to, .. } = &run.pushes[0].0 else {
+            panic!("a remove");
+        };
+        assert_eq!(to, &None, "a create landed leaves no destination");
+        assert!(placed(&step.model, "work/INBOX", &moved.link_id).is_none());
+        assert_eq!(step.model.purges, 2);
+
+        for quiet in &history.steps[10..] {
+            let run = quiet.run.as_ref().unwrap();
+            assert!(
+                run.pushes.is_empty() && run.events.is_empty(),
+                "{}",
+                quiet.label
+            );
+        }
     }
 }

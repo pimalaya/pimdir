@@ -66,7 +66,7 @@ impl Oracle<'_> {
 
         let cursor = vec![
             stamp(),
-            Value::Integer(0),
+            Value::Integer(model.purges),
             Value::Text(String::from(STORE_ID)),
             Value::Integer(1),
         ];

@@ -19,7 +19,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     body::Filed,
-    model::{Model, Placement, State},
+    model::{Model, Placement, State, Summary, Table},
     name::ObjectName,
     remote::{Listed, Page, Remote},
 };
@@ -35,6 +35,9 @@ pub enum Push {
         link_id: String,
         /// Its flags.
         flags: BTreeSet<String>,
+        /// The binding it copies from server-side, its collection and
+        /// handle (SYNC §3).
+        origin: Option<(String, String)>,
         /// Its body.
         object: ObjectName,
     },
@@ -42,6 +45,8 @@ pub enum Push {
     Remove {
         /// Its handle.
         handle: String,
+        /// The collection it relocates into, its destination.
+        to: Option<String>,
         /// The tombstone's key.
         link_id: String,
         /// The revision it is gated on, a mutable kind's base revision.
@@ -103,14 +108,27 @@ impl Push {
             Self::Add {
                 link_id,
                 flags: set,
+                origin,
                 object,
                 ..
             } => {
                 fields.extend([String::from("add"), String::from("1"), link_id.clone()]);
                 fields.extend(flags(set));
-                fields.extend([String::from("0"), String::from("1"), object.0.clone()]);
+                match origin {
+                    Some((collection, handle)) => {
+                        fields.extend([String::from("1"), collection.clone(), handle.clone()]);
+                    }
+                    None => fields.push(String::from("0")),
+                }
+                fields.extend([String::from("1"), object.0.clone()]);
             }
-            Self::Remove { .. } => fields.extend([String::from("remove"), String::from("0")]),
+            Self::Remove { to, .. } => {
+                fields.push(String::from("remove"));
+                match to {
+                    Some(to) => fields.extend([String::from("1"), to.clone()]),
+                    None => fields.push(String::from("0")),
+                }
+            }
             Self::SetFlags { add, remove, .. } => {
                 fields.push(String::from("set-flags"));
                 fields.extend(flags(add));
@@ -146,6 +164,8 @@ pub struct Outcome {
     pub assigned: Option<String>,
     /// The revision a mutable member holds once accepted.
     pub revision: Option<String>,
+    /// Whether an accepted relocating `Remove` relocated the member.
+    pub relocated: Option<bool>,
 }
 
 /// What a run reports (SYNC §5).
@@ -187,10 +207,28 @@ pub struct Run {
 }
 
 impl Model {
-    /// Syncs `remote`'s collection: a round of pages of `size` when its
-    /// source never closed one, else a delta from its checkpoint.
+    /// Syncs `remote`'s collection alone: [`Model::sync_in`] over the one
+    /// remote.
     pub fn sync(&mut self, remote: &mut Remote, size: usize) -> Run {
         let collection = remote.collection.clone();
+        let mut remotes = BTreeMap::from([(collection.clone(), remote.clone())]);
+        let run = self.sync_in(&mut remotes, &collection, size);
+        *remote = remotes.remove(&collection).expect("the remote synced");
+        run
+    }
+
+    /// Syncs `collection` against its remote among `remotes`, the other
+    /// collections of the source's account being where a relocation goes:
+    /// a round of pages of `size` when its source never closed one, else a
+    /// delta from its checkpoint.
+    pub fn sync_in(
+        &mut self,
+        remotes: &mut BTreeMap<String, Remote>,
+        collection: &str,
+        size: usize,
+    ) -> Run {
+        let collection = String::from(collection);
+        let remote = &remotes[&collection];
         let source = remote.source.clone();
         let first = self.collections[&collection].rounds == 0;
         let pages = match (&self.collections[&collection].checkpoint, first) {
@@ -206,26 +244,33 @@ impl Model {
         for page in &pages {
             for member in &page.items {
                 listed.insert(member.handle.clone(), member.flags.clone());
-                let filed = &remote.members[&member.handle].filed;
+                let filed = remotes[&collection].members[&member.handle].filed.clone();
                 let index = match self.bound_handle(&collection, &source, &member.handle) {
                     Some(index) => {
-                        self.refresh(index, member, filed, &mut events);
+                        self.refresh(index, member, &filed, &mut events);
                         index
                     }
-                    None => {
-                        if member.carries {
-                            self.objects
-                                .insert(ObjectName::of(&member.meta), member.meta.clone());
+                    None => match self.landing(&collection, &source, &filed) {
+                        Some(index) => {
+                            self.land(index, member);
+                            events.push(Event::Created(member.handle.clone()));
+                            index
                         }
-                        let placement = Placement {
-                            flags: Some(member.flags.clone()),
-                            held: member.carries,
-                            handle: Some(member.handle.clone()),
-                            revision: member.revision.clone(),
-                        };
-                        events.push(Event::Added(member.handle.clone()));
-                        self.file(&collection, filed.clone(), placement)
-                    }
+                        None => {
+                            if member.carries {
+                                self.objects
+                                    .insert(ObjectName::of(&member.meta), member.meta.clone());
+                            }
+                            let placement = Placement {
+                                flags: Some(member.flags.clone()),
+                                held: member.carries,
+                                handle: Some(member.handle.clone()),
+                                revision: member.revision.clone(),
+                            };
+                            events.push(Event::Added(member.handle.clone()));
+                            self.file(&collection, filed, placement)
+                        }
+                    },
                 };
                 if first {
                     let binding = self.items[index].binding.as_mut().expect("a bound item");
@@ -241,32 +286,32 @@ impl Model {
         }
 
         if first {
-            let absent: Vec<usize> = (0..self.items.len())
-                .filter(|index| {
-                    let item = &self.items[*index];
-                    item.collection == collection
-                        && item.binding.as_ref().is_some_and(|binding| {
-                            binding.source == source
-                                && binding.base_present
-                                && !binding.handle.starts_with('\u{1}')
-                                && binding.round != Some(round)
-                        })
+            let absent: Vec<String> = self
+                .items
+                .iter()
+                .filter(|item| item.collection == collection)
+                .filter_map(|item| item.binding.as_ref())
+                .filter(|binding| {
+                    binding.source == source
+                        && binding.base_present
+                        && !binding.handle.starts_with('\u{1}')
+                        && binding.round != Some(round)
                 })
+                .map(|binding| binding.handle.clone())
                 .collect();
-            for index in absent {
-                let handle = self.items[index]
-                    .binding
-                    .as_ref()
-                    .map(|binding| binding.handle.clone());
-                self.drop_deleted(index);
-                events.extend(handle.map(Event::Vanished));
+            for handle in absent {
+                if let Some(index) = self.bound_handle(&collection, &source, &handle) {
+                    self.drop_deleted(index);
+                    events.push(Event::Vanished(handle));
+                }
             }
         }
 
-        let pushes = self.derive(&collection, &source, &listed, remote.mutable);
+        let mutable = remotes[&collection].mutable;
+        let pushes = self.derive(&collection, &source, &listed, mutable);
         let mut outcomes = Vec::new();
         for push in &pushes {
-            outcomes.push(self.push(remote, push, &mut events));
+            outcomes.push(self.push(remotes, &collection, push, &mut events));
         }
 
         let checkpoint = pages.iter().find_map(|page| page.checkpoint.clone());
@@ -348,6 +393,36 @@ impl Model {
         })
     }
 
+    /// The create of this source a member's arrival lands: a pending or a
+    /// delivered create under the member's hint, its message agreeing
+    /// (SYNC §6). A minted create is landed by no listing.
+    fn landing(&self, collection: &str, source: &str, filed: &Filed) -> Option<usize> {
+        let key = filed.hint.clone()?;
+        let provisional = format!("\u{1}{key}");
+        self.items.iter().position(|item| {
+            item.collection == collection
+                && item.link_id == key
+                && agrees(&item.summary, &filed.summary)
+                && item.binding.as_ref().is_some_and(|binding| {
+                    binding.source == source && binding.handle == provisional
+                })
+        })
+    }
+
+    /// Lands a create on the member naming it: its binding moved to the
+    /// listed handle, the base set to the listed flags and the staged body,
+    /// the staged flags kept (SYNC §6).
+    fn land(&mut self, index: usize, member: &Listed) {
+        let item = &mut self.items[index];
+        let binding = item.binding.as_mut().expect("a bound create");
+        binding.handle = member.handle.clone();
+        binding.base_present = true;
+        binding.base_flags = Some(member.flags.clone());
+        binding.base_object = item.object.clone();
+        binding.base_revision = member.revision.clone();
+        binding.shared_object = item.object.clone();
+    }
+
     /// A listed member over its binding: the flag axis, then for a mutable
     /// kind the content axis under `Manual` (SYNC §5).
     fn refresh(&mut self, index: usize, member: &Listed, filed: &Filed, events: &mut Vec<Event>) {
@@ -394,17 +469,77 @@ impl Model {
     }
 
     /// A `Deleted` drop: the binding goes, and with it the item's last, so
-    /// the item is retained (STORAGE §10, §11).
+    /// the item is retained, or purged when its identity is held live in
+    /// another collection of the account with its body, a message only by
+    /// a row agreeing with it (STORAGE §10, §11.1).
     fn drop_deleted(&mut self, index: usize) {
         let item = &mut self.items[index];
         let by = item.binding.take().map(|binding| binding.source);
         item.state = State::Retained { by };
+
+        let item = &self.items[index];
+        let account = &self.collections[&item.collection].account;
+        let held = self.items.iter().any(|other| {
+            other.collection != item.collection
+                && &self.collections[&other.collection].account == account
+                && other.link_id == item.link_id
+                && other.state == State::Live
+                && match &item.object {
+                    Some(object) => other.object.as_ref() == Some(object),
+                    None => agrees(&other.summary, &item.summary),
+                }
+        });
+        if held {
+            self.items.remove(index);
+            self.purges += 1;
+        }
+    }
+
+    /// Where a tombstone's remove relocates: the collection holding a
+    /// pending or delivered create of this source under its key (SYNC §3).
+    fn destination(&self, collection: &str, source: &str, link_id: &str) -> Option<String> {
+        let provisional = format!("\u{1}{link_id}");
+        self.items
+            .iter()
+            .find(|item| {
+                item.collection != collection
+                    && item.link_id == link_id
+                    && item.state == State::Live
+                    && item.binding.as_ref().is_some_and(|binding| {
+                        binding.source == source && binding.handle == provisional
+                    })
+            })
+            .map(|item| item.collection.clone())
+    }
+
+    /// What a create copies from: this source's based binding of its
+    /// identity in another collection, under a handle no listing gave
+    /// provisionally, holding its body as the base (SYNC §3).
+    fn origin(
+        &self,
+        collection: &str,
+        source: &str,
+        link_id: &str,
+        object: &ObjectName,
+    ) -> Option<(String, String)> {
+        self.items.iter().find_map(|item| {
+            let binding = item.binding.as_ref()?;
+            (item.collection != collection
+                && item.link_id == link_id
+                && binding.source == source
+                && binding.base_present
+                && !binding.handle.starts_with('\u{1}')
+                && binding.base_object.as_ref() == Some(object))
+            .then(|| (item.collection.clone(), binding.handle.clone()))
+        })
     }
 
     /// The changes the run's placements owe, in handle byte order (SYNC
-    /// §3, §5): a tombstone's `Remove`, a pending create's `Add`, a local
-    /// body off its base an `Update`, a flag set off what the source holds
-    /// a `SetFlags`, one change a handle, a conflict owing none.
+    /// §3, §5): a tombstone's `Remove`, relocating into its destination,
+    /// a pending create's `Add`, by copy from its origin, a local body off
+    /// its base an `Update`, a flag set off what the source holds a
+    /// `SetFlags`, one change a handle; a conflict and a delivered create
+    /// owe none.
     fn derive(
         &self,
         collection: &str,
@@ -425,9 +560,12 @@ impl Model {
             else {
                 continue;
             };
+            let provisional = binding.handle.starts_with('\u{1}');
             match (&item.state, binding.base_present) {
+                (_, true) if provisional => {}
                 (State::Tombstone, true) => pushes.push(Push::Remove {
                     handle: binding.handle.clone(),
+                    to: self.destination(collection, source, &item.link_id),
                     link_id: item.link_id.clone(),
                     if_match: binding.base_revision.clone(),
                 }),
@@ -437,6 +575,7 @@ impl Model {
                             handle: binding.handle.clone(),
                             link_id: item.link_id.clone(),
                             flags: item.flags.clone().unwrap_or_default(),
+                            origin: self.origin(collection, source, &item.link_id, object),
                             object: object.clone(),
                         });
                     }
@@ -473,18 +612,24 @@ impl Model {
         pushes
     }
 
-    /// Pushes one change to `remote`, which accepts it, and writes its
-    /// outcome (SYNC §5, "Push discipline").
-    fn push(&mut self, remote: &mut Remote, push: &Push, events: &mut Vec<Event>) -> Outcome {
-        let collection = remote.collection.clone();
-        let source = remote.source.clone();
+    /// Pushes one change to the collection's remote, which accepts it, and
+    /// writes its outcome (SYNC §5, "Push discipline").
+    fn push(
+        &mut self,
+        remotes: &mut BTreeMap<String, Remote>,
+        collection: &str,
+        push: &Push,
+        events: &mut Vec<Event>,
+    ) -> Outcome {
+        let source = remotes[collection].source.clone();
         let index = self
-            .bound_handle(&collection, &source, push.handle())
+            .bound_handle(collection, &source, push.handle())
             .expect("a pushed placement");
         let mut outcome = Outcome {
             handle: String::from(push.handle()),
             assigned: None,
             revision: None,
+            relocated: None,
         };
 
         match push {
@@ -493,6 +638,7 @@ impl Model {
                 add,
                 remove,
             } => {
+                let remote = remotes.get_mut(collection).expect("a remote");
                 let held = remote.members[handle].flags.clone();
                 let left = held.difference(remove).chain(add.iter()).cloned().collect();
                 remote.set_flags(handle, left);
@@ -500,12 +646,37 @@ impl Model {
                 let flags = item.flags.clone();
                 item.binding.as_mut().expect("a bound item").base_flags = flags;
             }
-            Push::Remove { handle, .. } => {
+            Push::Remove {
+                handle,
+                to,
+                link_id,
+                ..
+            } => {
+                let remote = remotes.get_mut(collection).expect("a remote");
+                let member = remote.members.get(handle).cloned();
                 remote.expunge(handle);
+                if let (Some(to), Some(member)) = (to, member) {
+                    let target = remotes.get_mut(to).expect("a target remote");
+                    target.deliver(member.filed, member.flags);
+                    outcome.relocated = Some(true);
+                    let provisional = format!("\u{1}{link_id}");
+                    let delivered = self.items.iter_mut().find(|item| {
+                        &item.collection == to
+                            && item.binding.as_ref().is_some_and(|binding| {
+                                binding.source == source && binding.handle == provisional
+                            })
+                    });
+                    if let Some(binding) = delivered.and_then(|item| item.binding.as_mut())
+                        && !binding.base_present
+                    {
+                        binding.base_present = true;
+                    }
+                }
                 self.drop_deleted(index);
             }
             Push::Update { handle, object, .. } => {
                 let filed = self.filed(index, object);
+                let remote = remotes.get_mut(collection).expect("a remote");
                 outcome.revision = remote.edit(handle, filed);
                 let binding = self.items[index].binding.as_mut().expect("a bound item");
                 binding.base_object = Some(object.clone());
@@ -514,6 +685,7 @@ impl Model {
             }
             Push::Add { flags, object, .. } => {
                 let filed = self.filed(index, object);
+                let remote = remotes.get_mut(collection).expect("a remote");
                 let (assigned, revision) = remote.deliver(filed, flags.clone());
                 let binding = self.items[index].binding.as_mut().expect("a bound item");
                 binding.handle = assigned.clone();
@@ -541,6 +713,15 @@ impl Model {
             fallback: None,
         }
     }
+}
+
+/// Whether two summaries name one message: another kind always does, a
+/// message by its subject, date and sender (STORAGE §9).
+fn agrees(held: &Summary, member: &Summary) -> bool {
+    held.table != Table::Mail
+        || ["subject", "date", "sender"]
+            .iter()
+            .all(|column| held.get(column) == member.get(column))
 }
 
 /// The flag axis: a flag both sides carry, or one side added over the
@@ -660,16 +841,23 @@ mod tests {
                 checked += 1;
 
                 let typed_push = match push["kind"].as_str().unwrap() {
-                    "Add" if push["origin"].is_null() && text("link_id").is_some() => {
+                    "Add" if text("link_id").is_some() && text("object").is_some() => {
                         Some(Push::Add {
                             handle,
                             link_id: text("link_id").unwrap(),
                             flags: flags(&push["flags"]).unwrap_or_default(),
+                            origin: push["origin"].as_object().map(|origin| {
+                                (
+                                    String::from(origin["collection"].as_str().unwrap()),
+                                    String::from(origin["handle"].as_str().unwrap()),
+                                )
+                            }),
                             object: ObjectName(object(push["object"].as_str().unwrap())),
                         })
                     }
-                    "Remove" if push["to"].is_null() => Some(Push::Remove {
+                    "Remove" => Some(Push::Remove {
                         handle,
+                        to: text("to"),
                         link_id: text("link_id").unwrap_or_default(),
                         if_match: text("if_match"),
                     }),
