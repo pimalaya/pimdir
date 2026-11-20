@@ -26,10 +26,10 @@ change: the-freeze-plan
 
 ## 3. io-pimdir's differential tests
 
-- [ ] Readers against the oracle on generated stores, queued rows of every producer included
+- [x] Readers against the oracle on generated stores, queued rows of every producer included
 - [ ] The engine replaying generated scripts through scripted connectors: no loss, convergence, queue order
 - [ ] A crash injected at every step of a replay, the store reopened and the run finished
-- [ ] The search index refreshed after each event equal to a rebuild
+- [x] The search index refreshed after each event equal to a rebuild
 - [ ] The count and bytes profiles under the scale tests
 
 ## 4. The seams in the standard
