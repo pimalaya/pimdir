@@ -95,7 +95,9 @@ Where the work stopped, for the next session. Every lane's findings are in cairn
 - [ ] io-pimdir G20: `retained_by` of a removed item no source binds; G21: the oracle and automatic `sender` references (a MAY)
 - [ ] The full-size count profile rerun in release with the collection hierarchy (bytes passes)
 - [ ] The flaky crash failure seen once in five runs: not reproduced in 13 runs, likely a half-edited tree; watch for it
-- [ ] ical-rs release with the bounded zone walk (ical a125d24), io-pimdir on it with `EXTRACTOR` moved, the hostile-zone search case out of tests/pending_vectors.txt (checks/implementation.sh is red until then)
-- [ ] Consumers after an io-pimdir release: neverest maps one-way to `KeepLocal`; cardamum and calendula pass no `hash:` key and use `PimdirEnqueued::link_id`; Android follows `PimdirWritten`, `PimdirRekeyReport`, `PimdirLoaded::folded` and may use the canonical collection statements
+- [x] ical-rs release with the bounded zone walk (ical a125d24), io-pimdir on it with `EXTRACTOR` moved, the hostile-zone search case out of tests/pending_vectors.txt (checks/implementation.sh is red until then)
+- [x] Consumers after an io-pimdir release (io-pimdir 0.19.0, 2026-11-20; Android Java side left to its session): neverest maps one-way to `KeepLocal`; cardamum and calendula pass no `hash:` key and use `PimdirEnqueued::link_id`; Android follows `PimdirWritten`, `PimdirRekeyReport`, `PimdirLoaded::folded` and may use the canonical collection statements
 - [ ] Owner decisions pending: `KeepLocal` over flags and remote deletes; the source a copy or move stages its target's create under; `alt:` keys stated by a producer; the `pimdir` binary's schema `$id` after 1.0; promoting the attachments collection id and `enumerated` to MUST
 - [ ] Sections 6 (API review), 7 (campaigns) and 8 (freeze checklist) not started
+- [ ] The replay harness gains cuts, head answers and rekey so the rekeys, crashes, heads and bodies histories replay through io-pimdir (a trial saw possible divergences at bodies steps 4, 9, 14, 26 and 33)
+- [ ] The other io-* crates move to cargo-006's client, server and std features at their next breaking release
