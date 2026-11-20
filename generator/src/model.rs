@@ -10,7 +10,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use rusqlite::types::Value;
 
-use crate::{body::Filed, body::Person, name::ObjectName, queue::Row};
+use crate::{
+    body::{Filed, Person},
+    name::ObjectName,
+    queue::Row,
+};
 
 /// The kind a collection declares (STORAGE §13).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -266,6 +270,46 @@ pub struct Model {
     pub next_seq: i64,
     /// The queue's rows, applied ones included, by id.
     pub queue: Vec<Row>,
+    /// What each source declares it can do (STORAGE §15.6).
+    pub capabilities: Vec<Capability>,
+    /// The performer chosen per account and capability.
+    pub performers: BTreeMap<(Option<String>, String), String>,
+    /// The references between items (STORAGE §14.2).
+    pub references: Vec<Reference>,
+}
+
+/// One row a source declares (STORAGE §15.6, Annex B).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Capability {
+    /// The account the source syncs for.
+    pub account: Option<String>,
+    /// The source.
+    pub source: String,
+    /// The collection it overrides the source-wide row in, if any.
+    pub collection: Option<String>,
+    /// The capability's name.
+    pub name: String,
+    /// `full`, `partial` or `none`.
+    pub support: String,
+    /// What a person reads about it.
+    pub detail: Option<String>,
+}
+
+/// A reference from one item to another (STORAGE §14.2).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Reference {
+    /// The kind of the collection holding its start.
+    pub from_kind: Kind,
+    /// The key of its start.
+    pub from_link_id: String,
+    /// The kind of the collection holding its end.
+    pub to_kind: Kind,
+    /// The key of its end.
+    pub to_link_id: String,
+    /// Its role.
+    pub role: String,
+    /// `auto` for a rule's, `user` for a person's.
+    pub origin: String,
 }
 
 /// The prefixes a writer derives keys under (STORAGE §9).

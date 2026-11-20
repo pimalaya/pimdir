@@ -87,6 +87,45 @@ pub fn materialise(model: &Model, store: &Store) -> Result<()> {
         }
     }
 
+    let sources: BTreeSet<&String> = model.capabilities.iter().map(|row| &row.source).collect();
+    for source in sources {
+        let source_value = Value::Text(source.clone());
+        run(
+            store,
+            "storage/owner/delete_capabilities",
+            &[("source", &source_value)],
+        )?;
+        for row in model
+            .capabilities
+            .iter()
+            .filter(|row| &row.source == source)
+        {
+            run(
+                store,
+                "storage/owner/set_capability",
+                &[
+                    ("account", &text(row.account.as_deref())),
+                    ("source", &source_value),
+                    ("collection", &text(row.collection.as_deref())),
+                    ("capability", &Value::Text(row.name.clone())),
+                    ("support", &Value::Text(row.support.clone())),
+                    ("detail", &text(row.detail.as_deref())),
+                ],
+            )?;
+        }
+    }
+    for ((account, capability), source) in &model.performers {
+        run(
+            store,
+            "storage/owner/set_performer",
+            &[
+                ("account", &text(account.as_deref())),
+                ("capability", &Value::Text(capability.clone())),
+                ("source", &Value::Text(source.clone())),
+            ],
+        )?;
+    }
+
     for (name, bytes) in &model.objects {
         let hash = Value::Text(name.0.clone());
         let size = Value::Integer(bytes.len() as i64);
@@ -99,6 +138,36 @@ pub fn materialise(model: &Model, store: &Store) -> Result<()> {
 
     for item in &model.items {
         write_item(store, item)?;
+    }
+
+    for reference in &model.references {
+        let answered = run_rows(
+            store,
+            "storage/owner/add_reference",
+            &[
+                (
+                    "from_kind",
+                    &Value::Text(String::from(reference.from_kind.media_type())),
+                ),
+                ("from_link_id", &Value::Text(reference.from_link_id.clone())),
+                (
+                    "to_kind",
+                    &Value::Text(String::from(reference.to_kind.media_type())),
+                ),
+                ("to_link_id", &Value::Text(reference.to_link_id.clone())),
+                ("role", &Value::Text(reference.role.clone())),
+                ("origin", &Value::Text(reference.origin.clone())),
+            ],
+        )?;
+        if answered.is_empty() {
+            return Err(Error::Disagreement {
+                what: format!(
+                    "the reference {} to {}",
+                    reference.from_link_id, reference.to_link_id
+                ),
+                detail: String::from("add_reference records nothing the model holds"),
+            });
+        }
     }
 
     for row in &model.queue {

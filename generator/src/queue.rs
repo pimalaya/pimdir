@@ -73,6 +73,14 @@ pub enum Action {
         /// The target collection.
         to: String,
     },
+    /// `set-performer`: the source performing an intent capability for the
+    /// account of the collection it is queued on.
+    SetPerformer {
+        /// The capability.
+        capability: String,
+        /// The source chosen, none withdrawing the choice.
+        source: Option<String>,
+    },
     /// An intent of Annex B.2, which the store's drain does not perform.
     Intent {
         /// Its name.
@@ -104,6 +112,7 @@ impl Action {
             Self::Update { .. } => "update",
             Self::Move { .. } => "move",
             Self::Copy { .. } => "copy",
+            Self::SetPerformer { .. } => "set-performer",
             Self::Intent { action, .. } | Self::Raw { action, .. } => action,
         }
     }
@@ -157,6 +166,13 @@ impl Action {
             }
             Self::Move { seq, to } | Self::Copy { seq, to } => {
                 json!({ "v": 1, "seq": seq, "to": to })
+            }
+            Self::SetPerformer { capability, source } => {
+                let mut value = json!({ "v": 1, "capability": capability });
+                if let Some(source) = source {
+                    value["source"] = json!(source);
+                }
+                value
             }
             Self::Intent { payload, .. } | Self::Raw { payload, .. } => payload.clone(),
         };
@@ -287,12 +303,27 @@ impl Model {
     /// Applies `action` queued on `collection` as the owner's drain does,
     /// with no network (STORAGE §15.2, §15.3; SYNC §7).
     pub fn apply(&mut self, collection: &str, action: &Action) -> Outcome {
-        match action {
-            Action::Raw { malformed, .. } => match malformed {
+        if let Action::Raw { malformed, .. } = action {
+            return match malformed {
                 true => Outcome::Parked(String::from("malformed payload")),
                 false => Outcome::Skipped,
-            },
-            Action::Intent { .. } => Outcome::Skipped,
+            };
+        }
+        if let Some(reason) = self.backstop(collection, action) {
+            return Outcome::Parked(reason);
+        }
+
+        match action {
+            Action::Raw { .. } | Action::Intent { .. } => Outcome::Skipped,
+            Action::SetPerformer { capability, source } => {
+                let account = self.collections[collection].account.clone();
+                let key = (account, capability.clone());
+                match source {
+                    Some(source) => self.performers.insert(key, source.clone()),
+                    None => self.performers.remove(&key),
+                };
+                Outcome::Applied(None)
+            }
             Action::Add {
                 link_id,
                 flags,
@@ -627,6 +658,55 @@ mod tests {
                 .all(|item| item.seq != moved),
             "a move queued on another collection is that collection's to fold"
         );
+    }
+
+    #[test]
+    fn the_backstop_parks_by_what_the_sources_declare() {
+        let model = structure();
+        let shown = model.overlay("work/calendar");
+
+        let scheduled = model
+            .queue
+            .iter()
+            .filter(|row| row.collection == "work/calendar" && row.state == RowState::Pending)
+            .find_map(|row| match &row.action {
+                Action::Remove { seq, .. } => Some(*seq),
+                _ => None,
+            })
+            .unwrap();
+        assert!(
+            shown.iter().any(|item| item.seq == scheduled),
+            "a remove of a scheduled series parks where the source cannot schedule"
+        );
+
+        let copied = model
+            .queue
+            .iter()
+            .find(|row| matches!(row.action, Action::Copy { .. }))
+            .unwrap();
+        assert!(
+            matches!(&copied.state, RowState::Parked(reason) if reason.contains("mail.message.copy"))
+        );
+
+        let task = model
+            .queue
+            .iter()
+            .find(|row| row.collection == "work/holidays")
+            .unwrap();
+        assert!(
+            matches!(task.state, RowState::Applied(Some(_))),
+            "a source stating no calendar.component.vtodo row refuses no task"
+        );
+
+        let performers: Vec<&RowState> = model
+            .queue
+            .iter()
+            .filter(|row| matches!(row.action, Action::SetPerformer { .. }))
+            .map(|row| &row.state)
+            .collect();
+        assert!(matches!(performers[0], RowState::Applied(None)));
+        assert!(matches!(performers[1], RowState::Parked(_)));
+        assert_eq!(performers[2], &RowState::Pending);
     }
 
     #[test]

@@ -10,10 +10,13 @@ use rusqlite::types::Value;
 use serde_json::{Value as Json, json};
 
 use crate::{
-    body::{Card, Document, Event, Journal, Mail, Person, Task, Time},
+    body::{Card, Document, Event, Filed, Journal, Mail, Person, Task, Time},
     error::{Error, Result},
     fixture,
-    model::{Collection, Item, Kind, Model, Placement, Refusal, State},
+    model::{
+        Capability, Collection, Item, Kind, Model, Placement, Reference, Refusal, State, Summary,
+        Table,
+    },
     name::ObjectName,
     queue::{Action, Outcome, RowState},
     rng::Rng,
@@ -36,6 +39,9 @@ impl Profile {
         }
     }
 }
+
+/// The lab account's attachments collection (STORAGE §14.3).
+const STAND_INS: &str = "lab/\u{1}attachments";
 
 const FIRST: [&str; 12] = [
     "Alice", "Bob", "Carol", "Dave", "Erin", "Frank", "Gina", "Hugo", "Ines", "Jules", "Karim",
@@ -77,13 +83,14 @@ impl Draw {
             ("home/INBOX", Some("home"), "INBOX", Some("inbox")),
         ];
         for (id, account, name, role) in mailboxes {
+            let source = format!("{}-imap", account.unwrap_or("local"));
             model.declare(collection(
                 id,
                 account,
                 Kind::Mail,
                 name,
                 role,
-                Some("imap"),
+                Some(&source),
             ));
         }
         model.declare(collection(
@@ -92,7 +99,7 @@ impl Draw {
             Kind::Contact,
             "Contacts",
             Some("default"),
-            Some("carddav"),
+            Some("work-carddav"),
         ));
         model.declare(collection(
             "work/calendar",
@@ -100,7 +107,15 @@ impl Draw {
             Kind::Calendar,
             "Calendar",
             Some("default"),
-            Some("caldav"),
+            Some("work-caldav"),
+        ));
+        model.declare(collection(
+            "work/holidays",
+            Some("work"),
+            Kind::Calendar,
+            "Holidays",
+            None,
+            Some("work-caldav"),
         ));
         model.declare(collection(
             "home/folder:0f",
@@ -126,18 +141,29 @@ impl Draw {
         self.files(&mut model);
         self.fixtures(&mut model, spec)?;
         self.conflicts(&mut model);
+        self.capabilities(&mut model);
+        self.references(&mut model);
         self.queue(&mut model, spec)?;
         Ok(model)
     }
 
     fn fixtures(&mut self, model: &mut Model, spec: &Spec) -> Result<()> {
         for (id, kind, source) in [
-            ("lab/INBOX", Kind::Mail, "imap"),
-            ("lab/contacts", Kind::Contact, "carddav"),
-            ("lab/calendar", Kind::Calendar, "caldav"),
+            ("lab/INBOX", Kind::Mail, "lab-imap"),
+            ("lab/contacts", Kind::Contact, "lab-carddav"),
+            ("lab/calendar", Kind::Calendar, "lab-caldav"),
         ] {
             model.declare(collection(id, Some("lab"), kind, id, None, Some(source)));
         }
+        model.declare(Collection {
+            id: String::from(STAND_INS),
+            account: Some(String::from("lab")),
+            kind: Some(Kind::File),
+            name: String::from("attachments"),
+            role: Some(String::from("attachments")),
+            source: None,
+            checkpoint: None,
+        });
 
         for fixture in fixture::load(spec)? {
             let (collection, placement) = match fixture.filed.summary.table.kind() {
@@ -146,8 +172,8 @@ impl Draw {
                 _ => ("lab/calendar", self.mutable_placement(true)),
             };
             let index = model.file(collection, fixture.filed, placement);
-            let link_id = &model.items[index].link_id;
-            if *link_id != fixture.link_id {
+            let link_id = model.items[index].link_id.clone();
+            if link_id != fixture.link_id {
                 return Err(Error::Disagreement {
                     what: format!("the key of {}", fixture.path),
                     detail: format!(
@@ -156,8 +182,91 @@ impl Draw {
                     ),
                 });
             }
+
+            let derived = ["alt:", "dup:", "hash:"]
+                .iter()
+                .any(|prefix| link_id.starts_with(prefix));
+            if derived || fixture.attachments.is_empty() || fixture.attachments.len() > 10 {
+                continue;
+            }
+            let message = link_id.clone();
+            for attachment in fixture.attachments {
+                let mut summary = Summary::new(Table::File);
+                summary.set("name", Value::Text(attachment.name.clone()));
+                summary.set(
+                    "media_type",
+                    attachment
+                        .media_type
+                        .clone()
+                        .map_or(Value::Null, Value::Text),
+                );
+                summary.set("size", attachment.size.map_or(Value::Null, Value::Integer));
+                summary.set("part", Value::Text(attachment.part.clone()));
+                let key = format!("part:{message}#{}", attachment.part);
+                let filed = Filed {
+                    bytes: Vec::new(),
+                    hint: None,
+                    summary,
+                    addresses: Vec::new(),
+                    sort_key: String::from(attachment.name.to_lowercase().trim()),
+                    fallback: Some(key.clone()),
+                };
+                let placement = Placement {
+                    flags: Some(BTreeSet::new()),
+                    held: false,
+                    handle: None,
+                    revision: None,
+                };
+                model.file(STAND_INS, filed, placement);
+                model.references.push(Reference {
+                    from_kind: Kind::Mail,
+                    from_link_id: message.clone(),
+                    to_kind: Kind::File,
+                    to_link_id: key,
+                    role: String::from("attachment"),
+                    origin: String::from("auto"),
+                });
+            }
         }
 
+        let saved = model
+            .items
+            .iter()
+            .find(|item| item.collection == STAND_INS)
+            .map(|item| {
+                (
+                    item.link_id.clone(),
+                    item.summary.clone(),
+                    item.sort_key.clone(),
+                )
+            })
+            .expect("a stand-in");
+        model.declare(collection(
+            "lab/folder:saved",
+            Some("lab"),
+            Kind::File,
+            "Saved",
+            None,
+            None,
+        ));
+        let (key, mut summary, sort_key) = saved;
+        let bytes = self.bytes(48);
+        summary.set("size", Value::Integer(bytes.len() as i64));
+        let filed = Filed {
+            bytes,
+            hint: None,
+            summary,
+            addresses: Vec::new(),
+            sort_key,
+            fallback: Some(key),
+        };
+        let placement = Placement {
+            flags: Some(BTreeSet::new()),
+            held: true,
+            handle: None,
+            revision: None,
+        };
+        model.file("lab/folder:saved", filed, placement);
         Ok(())
     }
 
@@ -379,6 +488,199 @@ impl Draw {
         binding.conflict_revision = Some(String::from("\"etag-unread\""));
     }
 
+    fn capabilities(&mut self, model: &mut Model) {
+        let mail = [
+            "mail.message.add",
+            "mail.message.copy",
+            "mail.message.move",
+            "mail.message.remove",
+            "mail.flags.seen",
+            "mail.flags.flagged",
+            "mail.flags.answered",
+            "mail.flags.draft",
+            "mail.flags.keywords",
+            "mail.submit",
+            "mail.submit.copy",
+        ];
+        let contacts = [
+            "contacts.card.add",
+            "contacts.card.update",
+            "contacts.card.remove",
+            "contacts.card.move",
+            "contacts.card.copy",
+        ];
+        let calendar = [
+            "calendar.item.add",
+            "calendar.item.update",
+            "calendar.item.remove",
+            "calendar.item.move",
+            "calendar.item.copy",
+            "calendar.occurrence.update",
+            "calendar.scheduling",
+            "calendar.online-meeting",
+            "calendar.reply",
+            "calendar.reply.occurrence",
+            "calendar.cancel",
+            "calendar.cancel.occurrence",
+        ];
+        let collections = [
+            "collection.create",
+            "collection.rename",
+            "collection.delete",
+        ];
+        let gaps: [(&str, &str, &str); 7] = [
+            (
+                "work-imap",
+                "mail.message.copy",
+                "the server offers no copy",
+            ),
+            ("work-imap", "mail.flags.junk", "junk is a folder there"),
+            ("work-imap", "collection.create", "the account is paired"),
+            (
+                "work-caldav",
+                "calendar.scheduling",
+                "the server notifies nobody",
+            ),
+            (
+                "work-caldav",
+                "calendar.online-meeting",
+                "no meeting provider",
+            ),
+            (
+                "work-caldav",
+                "calendar.reply.occurrence",
+                "replies to a whole series",
+            ),
+            (
+                "work-caldav",
+                "calendar.cancel.occurrence",
+                "cancels a whole series",
+            ),
+        ];
+
+        let sources = [
+            ("work", "work-imap", &mail[..]),
+            ("home", "home-imap", &mail[..]),
+            ("work", "work-carddav", &contacts[..]),
+            ("work", "work-caldav", &calendar[..]),
+        ];
+        for (account, source, names) in sources {
+            for name in names.iter().chain(collections.iter()) {
+                let gap = gaps
+                    .iter()
+                    .find(|(at, gap, _)| *at == source && gap == name);
+                model.capabilities.push(Capability {
+                    account: Some(String::from(account)),
+                    source: String::from(source),
+                    collection: None,
+                    name: String::from(*name),
+                    support: String::from(if gap.is_some() { "none" } else { "full" }),
+                    detail: gap.map(|(_, _, detail)| String::from(*detail)),
+                });
+            }
+        }
+        for (source, collection, name, support, detail) in [
+            (
+                "work-imap",
+                "work/INBOX",
+                "mail.flags.keywords",
+                "partial",
+                Some("keywords become labels"),
+            ),
+            (
+                "work-imap",
+                "work/Empty",
+                "mail.message.add",
+                "none",
+                Some("a reserved folder"),
+            ),
+            ("work-imap", "work/Empty", "mail.flags.junk", "full", None),
+            (
+                "work-caldav",
+                "work/calendar",
+                "calendar.component.vtodo",
+                "full",
+                None,
+            ),
+        ] {
+            model.capabilities.push(Capability {
+                account: Some(String::from("work")),
+                source: String::from(source),
+                collection: Some(String::from(collection)),
+                name: String::from(name),
+                support: String::from(support),
+                detail: detail.map(String::from),
+            });
+        }
+        model.performers.insert(
+            (Some(String::from("work")), String::from("mail.submit")),
+            String::from("work-imap"),
+        );
+    }
+
+    fn references(&mut self, model: &mut Model) {
+        let first = |collection: &str| {
+            model
+                .items
+                .iter()
+                .find(|item| {
+                    item.collection == collection
+                        && !["alt:", "dup:", "hash:"]
+                            .iter()
+                            .any(|prefix| item.link_id.starts_with(prefix))
+                })
+                .map(|item| item.link_id.clone())
+                .expect("an item of its own key")
+        };
+        let card = first("work/contacts");
+        let message = first("work/INBOX");
+        let retained = model
+            .items
+            .iter()
+            .find(|item| {
+                matches!(item.state, State::Retained { .. }) && item.collection == "work/Archive"
+            })
+            .map(|item| item.link_id.clone())
+            .expect("a retained message");
+        let event = first("work/calendar");
+        for (from_kind, from, to_kind, to, role, origin) in [
+            (
+                Kind::Contact,
+                card.clone(),
+                Kind::Mail,
+                message.clone(),
+                "related",
+                "user",
+            ),
+            (
+                Kind::Mail,
+                message.clone(),
+                Kind::Contact,
+                card.clone(),
+                "sender",
+                "auto",
+            ),
+            (Kind::Contact, card, Kind::Mail, retained, "related", "user"),
+            (
+                Kind::Calendar,
+                event,
+                Kind::Mail,
+                message,
+                "x-generator-note",
+                "user",
+            ),
+        ] {
+            model.references.push(Reference {
+                from_kind,
+                from_link_id: from,
+                to_kind,
+                to_link_id: to,
+                role: String::from(role),
+                origin: String::from(origin),
+            });
+        }
+    }
+
     fn queue(&mut self, model: &mut Model, spec: &Spec) -> Result<()> {
         let pick = |model: &Model, collection: &str, skip: usize, test: &dyn Fn(&Item) -> bool| {
             model
@@ -443,7 +745,8 @@ impl Draw {
         model.enqueue("himalaya", "work/INBOX", Action::Move { seq, to });
         let (seq, ..) = pick(model, "work/INBOX", 3, &known).expect("a message");
         let to = String::from("home/INBOX");
-        model.enqueue("himalaya", "work/INBOX", Action::Copy { seq, to });
+        let id = model.enqueue("himalaya", "work/INBOX", Action::Copy { seq, to });
+        model.drain(id);
         let (seq, ..) = pick(model, "work/INBOX", 4, &known).expect("a message");
         let to = String::from("work/INBOX");
         let id = model.enqueue("himalaya", "work/INBOX", Action::Move { seq, to });
@@ -509,7 +812,7 @@ impl Draw {
             let rcpts: Vec<&String> = mail.to.iter().map(|person| &person.address).collect();
             let payload = json!({
                 "v": 1,
-                "source": "imap",
+                "source": "work-imap",
                 "from": mail.from.address,
                 "rcpts": rcpts,
                 "subject": mail.subject,
@@ -542,7 +845,7 @@ impl Draw {
                 );
             }
         }
-        let payload = json!({ "v": 1, "source": "imap", "name": "Projects" });
+        let payload = json!({ "v": 1, "source": "work-imap", "name": "Projects" });
         model.enqueue(
             "himalaya",
             "work/INBOX",
@@ -644,7 +947,8 @@ impl Draw {
             },
         );
         let (seq, ..) = pick(model, "work/calendar", 0, &any).expect("an event");
-        let payload = json!({ "v": 1, "source": "caldav", "seq": seq, "partstat": "ACCEPTED" });
+        let payload =
+            json!({ "v": 1, "source": "work-caldav", "seq": seq, "partstat": "ACCEPTED" });
         model.enqueue(
             "calendula",
             "work/calendar",
@@ -654,6 +958,60 @@ impl Draw {
                 body: None,
             },
         );
+
+        let (seq, ..) = pick(model, "work/calendar", 0, &|item: &Item| {
+            item.addresses
+                .iter()
+                .any(|address| address.role == "attendee")
+        })
+        .expect("a scheduled series");
+        model.enqueue(
+            "calendula",
+            "work/calendar",
+            Action::Remove {
+                seq,
+                if_match: None,
+            },
+        );
+
+        let task = Task {
+            uid: Some(self.uid()),
+            summary: self.phrase(2),
+            due: None,
+            status: None,
+            priority: None,
+            categories: Vec::new(),
+            created: None,
+            run: self.run.clone(),
+        };
+        let link_id = task.uid.clone().unwrap_or_default();
+        let id = model.enqueue(
+            "unfog",
+            "work/holidays",
+            Action::Add {
+                link_id,
+                flags: BTreeSet::new(),
+                filed: task.file(),
+            },
+        );
+        model.drain(id);
+        for (collection, capability, source, drained) in [
+            ("work/calendar", "calendar.reply", Some("work-caldav"), true),
+            ("work/INBOX", "mail.submit", Some("work-caldav"), true),
+            ("work/INBOX", "mail.submit", Some("work-imap"), false),
+        ] {
+            let id = model.enqueue(
+                "himalaya",
+                collection,
+                Action::SetPerformer {
+                    capability: String::from(capability),
+                    source: source.map(String::from),
+                },
+            );
+            if drained {
+                model.drain(id);
+            }
+        }
 
         let (seq, ..) = pick(model, "home/folder:0f", 0, &any).expect("a file");
         let keep = BTreeSet::from([String::from("$keep")]);

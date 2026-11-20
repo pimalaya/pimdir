@@ -12,6 +12,11 @@
 //! self-check of README.md, holding the writer to the statements and the
 //! model to the store.
 
+pub mod feed;
+mod links;
+mod rights;
+mod search;
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     iter,
@@ -59,6 +64,15 @@ pub const INSTANTS: [&str; 6] = [
     "round_started_at",
 ];
 
+/// The marker the model states for an instant SQLite stamps.
+pub const INSTANT: &str = "instant";
+
+/// The marker the model states for a change stamp (STORAGE §4.5).
+pub const STAMP: &str = "stamp";
+
+/// The marker the model states for the store's id.
+pub const STORE_ID: &str = "store id";
+
 /// Every expectation the model states over the reads it covers.
 pub fn expectations(model: &Model, spec: &Spec) -> Result<Vec<Expectation>> {
     let mut oracle = Oracle {
@@ -78,6 +92,10 @@ pub fn expectations(model: &Model, spec: &Spec) -> Result<Vec<Expectation>> {
     oracle.people();
     oracle.conflicts();
     oracle.queue();
+    oracle.rights();
+    oracle.links();
+    oracle.feed();
+    oracle.searches()?;
     Ok(oracle.out)
 }
 
@@ -352,7 +370,7 @@ impl Oracle<'_> {
                         .iter()
                         .map(|column| match column.as_str() {
                             "retained_at" => match item.state {
-                                State::Retained { .. } => Value::Text(String::from("instant")),
+                                State::Retained { .. } => Value::Text(String::from(INSTANT)),
                                 _ => Value::Null,
                             },
                             "retained_by" => match &item.state {
@@ -823,7 +841,7 @@ impl Oracle<'_> {
                         Value::Text(binding.handle.clone()),
                         Value::Text(refusal.reason.clone()),
                         Value::Text(refusal.key.clone()),
-                        Value::Text(String::from("instant")),
+                        Value::Text(String::from(INSTANT)),
                     ]
                 })
                 .collect();
@@ -837,7 +855,7 @@ impl Oracle<'_> {
 
     fn queue(&mut self) {
         let model = self.model;
-        let instant = || Value::Text(String::from("instant"));
+        let instant = || Value::Text(String::from(INSTANT));
 
         for id in model.collections.keys() {
             let rows = model
@@ -1078,26 +1096,33 @@ fn seen_bit(item: &Item) -> i64 {
 }
 
 fn same_row(columns: &[String], got: &[Value], want: &[Value]) -> bool {
-    got.len() == want.len()
-        && columns
-            .iter()
-            .zip(got.iter().zip(want))
-            .all(|(column, (got, want))| match (column.as_str(), got, want) {
-                ("flags" | "base_flags", Value::Text(got), Value::Text(want)) => {
-                    flag_set(got) == flag_set(want)
-                }
-                (column, Value::Text(got), Value::Text(_)) if INSTANTS.contains(&column) => {
-                    is_instant(got)
-                }
-                _ => got == want,
-            })
+    got.len() == want.len() && columns.len() == got.len() && got == want
 }
 
-/// Writes a flag set's text in one order, so rows compare as sets do.
+/// Writes a flag set's text in one order, so rows compare as sets do, and
+/// a value no model can predict (an instant SQLite stamps, a change stamp,
+/// the store's id) as the marker the model states for it, once its shape
+/// is checked.
 fn normalise(columns: &[String], row: &mut [Value]) {
     for (column, value) in columns.iter().zip(row.iter_mut()) {
-        if let ("flags" | "base_flags", Value::Text(text)) = (column.as_str(), &*value) {
-            *value = Value::Text(flag_set(text).join(" "));
+        let marker = match (column.as_str(), &*value) {
+            ("flags" | "base_flags", Value::Text(text)) => Some(flag_set(text).join(" ")),
+            (column, Value::Text(text)) if INSTANTS.contains(&column) && is_instant(text) => {
+                Some(String::from(INSTANT))
+            }
+            ("changed", Value::Integer(stamp)) if *stamp > 0 => Some(String::from(STAMP)),
+            ("store_id", Value::Text(text))
+                if text.len() == 32
+                    && text
+                        .bytes()
+                        .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f')) =>
+            {
+                Some(String::from(STORE_ID))
+            }
+            _ => None,
+        };
+        if let Some(marker) = marker {
+            *value = Value::Text(marker);
         }
     }
 }
@@ -1171,6 +1196,15 @@ mod tests {
 
     use crate::{name::ObjectName, oracle, profile::Profile, spec::Spec, store::Store, writer};
 
+    /// The read statements no oracle point answers by itself: the list
+    /// slots' own, and the open's, which the store's tests hold.
+    const INFRASTRUCTURE: [&str; 4] = [
+        "storage/read/bind_param",
+        "storage/read/clear_param",
+        "storage/read/create_param",
+        "storage/read/load_store_meta",
+    ];
+
     fn scratch(seed: u64) -> PathBuf {
         let dir = env::temp_dir().join(format!("pimdir-generator-oracle-{}-{seed}", process::id()));
         let _ = fs::remove_dir_all(&dir);
@@ -1195,7 +1229,20 @@ mod tests {
                 .iter()
                 .map(|expectation| expectation.statement.as_str())
                 .collect();
-            assert!(statements.len() >= 40, "seed {seed}: {statements:?}");
+            let uncovered: Vec<&String> = spec
+                .statements
+                .keys()
+                .filter(|name| name.starts_with("storage/read/"))
+                .filter(|name| !INFRASTRUCTURE.contains(&name.as_str()))
+                .filter(|name| !statements.contains(name.as_str()))
+                .collect();
+            assert!(
+                uncovered.is_empty(),
+                "seed {seed}: no expectation for {uncovered:?}"
+            );
+
+            let faults = oracle::feed::order(&store).unwrap();
+            assert!(faults.is_empty(), "seed {seed}: {faults:#?}");
 
             for (name, bytes) in &model.objects {
                 let file = fs::read(dir.join(name.path())).unwrap();

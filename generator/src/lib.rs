@@ -19,6 +19,7 @@
 //!   canonical text, a store, object names, instants, PCG32, failures.
 
 pub mod body;
+pub mod capability;
 pub mod error;
 pub mod fixture;
 pub mod model;

@@ -28,6 +28,21 @@ pub struct Fixture {
     pub link_id: String,
     /// The body and its derivation.
     pub filed: Filed,
+    /// The parts a message's stand-ins name (STORAGE §14.3).
+    pub attachments: Vec<Attachment>,
+}
+
+/// A part of a message an owner stands a file for.
+#[derive(Clone, Debug)]
+pub struct Attachment {
+    /// Its section in the message.
+    pub part: String,
+    /// Its file name.
+    pub name: String,
+    /// Its media type.
+    pub media_type: Option<String>,
+    /// Its decoded size.
+    pub size: Option<i64>,
 }
 
 /// Every fixture summaries.json pins a row for, once each, from its first
@@ -110,9 +125,22 @@ pub fn load(spec: &Spec) -> Result<Vec<Fixture>> {
             Some(link_id.clone())
         };
 
+        let attachments = case["attachments"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|part| Attachment {
+                part: String::from(part["part"].as_str().unwrap_or_default()),
+                name: String::from(part["name"].as_str().unwrap_or_default()),
+                media_type: part["media_type"].as_str().map(String::from),
+                size: part["size"].as_i64(),
+            })
+            .collect();
+
         fixtures.push(Fixture {
             path: String::from(fixture),
             link_id,
+            attachments,
             filed: Filed {
                 bytes,
                 hint,
