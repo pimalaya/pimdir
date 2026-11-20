@@ -16,6 +16,7 @@
 use std::{
     cmp::Reverse,
     collections::{BTreeMap, BTreeSet},
+    mem,
 };
 
 use rusqlite::types::Value;
@@ -246,6 +247,27 @@ impl Remote {
         member.revision = Some(revision.clone());
         member.changed = self.modseq;
         Some(revision)
+    }
+
+    /// Renumbers every member, as a server bumping its `UIDVALIDITY` or
+    /// restored from a backup (SYNC §8): the members in arrival order take
+    /// the handles from `from` on, and the removals it stated are forgotten,
+    /// the new handle space naming none of them.
+    pub fn renumber(&mut self, from: u64) {
+        let mut members: Vec<Member> = mem::take(&mut self.members).into_values().collect();
+        members.sort_by_key(|member| member.arrival);
+        self.vanished.clear();
+        self.modseq += 1;
+        self.next = from;
+        for mut member in members {
+            let handle = match self.mutable {
+                true => format!("r{}.vcf", self.next),
+                false => self.next.to_string(),
+            };
+            self.next += 1;
+            member.changed = self.modseq;
+            self.members.insert(handle, member);
+        }
     }
 
     /// Loses a member unannounced, as a server whose deletion no delta

@@ -77,6 +77,13 @@ pub fn materialise(model: &Model, store: &Store) -> Result<()> {
             "storage/owner/set_conflict",
             &[("conflict", &conflict), ("collection", &id)],
         )?;
+        for _ in 1..collection.generation {
+            run(
+                store,
+                "storage/owner/bump_generation",
+                &[("collection", &id)],
+            )?;
+        }
         if let Some(role) = &collection.role {
             let role = Value::Text(role.clone());
             run(

@@ -202,6 +202,7 @@ pub(crate) fn declare(
             .map(|source| (source, SourceState::default()))
             .collect(),
         conflict: String::from("manual"),
+        generation: 1,
     });
 }
 

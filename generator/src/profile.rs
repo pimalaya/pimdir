@@ -161,6 +161,7 @@ impl Draw {
             role: None,
             sources: BTreeMap::new(),
             conflict: String::from("manual"),
+            generation: 1,
         });
 
         self.mail(&mut model);
@@ -191,6 +192,7 @@ impl Draw {
             role: Some(String::from("attachments")),
             sources: BTreeMap::new(),
             conflict: String::from("manual"),
+            generation: 1,
         });
 
         for fixture in fixture::load(spec)? {
@@ -1252,6 +1254,7 @@ fn collection(
             })
             .unwrap_or_default(),
         conflict: String::from("manual"),
+        generation: 1,
     }
 }
 

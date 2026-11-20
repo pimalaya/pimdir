@@ -256,7 +256,7 @@ impl Oracle<'_> {
                 Value::Null,
                 Value::Null,
                 Value::Null,
-                Value::Integer(1),
+                Value::Integer(collection.generation),
                 text(collection.role.as_deref()),
             ];
             row.extend(covered(collection));
@@ -317,7 +317,8 @@ impl Oracle<'_> {
         self.expect("load_account", &key, vec![vec![account]]);
         let conflict = Value::Text(collection.conflict.clone());
         self.expect("storage/owner/load_conflict", &key, vec![vec![conflict]]);
-        self.expect("load_generation", &key, vec![vec![Value::Integer(1)]]);
+        let generation = Value::Integer(collection.generation);
+        self.expect("load_generation", &key, vec![vec![generation]]);
         let instant = |held: bool| match held {
             false => Value::Null,
             true => Value::Text(String::from(INSTANT)),

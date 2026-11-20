@@ -60,6 +60,8 @@ pub struct Collection {
     /// Its cross-source conflict policy, `manual`, `prefer-incoming` or
     /// `prefer-existing` (STORAGE §13).
     pub conflict: String,
+    /// Its handle-space epoch, from 1, bumped by a rekey (STORAGE §12).
+    pub generation: i64,
 }
 
 impl Collection {
