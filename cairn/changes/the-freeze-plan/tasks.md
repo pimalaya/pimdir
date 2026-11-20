@@ -34,9 +34,9 @@ change: the-freeze-plan
 
 ## 4. The seams in the standard
 
-- [ ] Vectors of a refresh driven by the change feed (STORAGE §4.5): stamps after each kind of write, a summary row changed under an unchanged item, a rename, a purge, an erasure
-- [ ] Every SHOULD and MAY of STORAGE, SYNC and SEARCH listed with the consumers relying on it; each promoted, documented or kept with a reason
-- [ ] The overlay of STORAGE:961 decided among them
+- [x] Vectors of a refresh driven by the change feed (STORAGE §4.5): stamps after each kind of write, a summary row changed under an unchanged item, a rename, a purge, an erasure
+- [x] Every SHOULD and MAY of STORAGE, SYNC and SEARCH listed with the consumers relying on it; each promoted, documented or kept with a reason
+- [x] The overlay of STORAGE:961 decided among them
 
 ## 5. Owner decisions
 
