@@ -484,6 +484,7 @@ impl Model {
                 conflict_revision: None,
                 conflict_object: None,
                 refusal: None,
+                round: None,
             })
     }
 

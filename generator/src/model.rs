@@ -58,6 +58,8 @@ pub struct Collection {
     pub source: Option<String>,
     /// The checkpoint that source last recorded.
     pub checkpoint: Option<Vec<u8>>,
+    /// The rounds its source closed, the last one's id (STORAGE §4.3).
+    pub rounds: i64,
 }
 
 /// The table a summary row lives in (STORAGE §4.3).
@@ -188,6 +190,8 @@ pub struct Binding {
     pub conflict_object: Option<ObjectName>,
     /// The refusal standing on the binding (SYNC §5).
     pub refusal: Option<Refusal>,
+    /// The id of the last round that listed its handle.
+    pub round: Option<i64>,
 }
 
 /// A change a remote refused for good (STORAGE §13).
@@ -378,6 +382,7 @@ impl Model {
             conflict_revision: None,
             conflict_object: None,
             refusal: None,
+            round: None,
         });
 
         self.items.push(Item {

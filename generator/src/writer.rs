@@ -23,7 +23,7 @@ use rusqlite::{ToSql, types::Value};
 
 use crate::{
     error::{Error, Result},
-    model::{Item, Model, State, Table, split_flags},
+    model::{Collection, Item, Model, State, Table, split_flags},
     name::ObjectName,
     queue::{Row, RowState},
     store::{Store, create_private_dir},
@@ -138,6 +138,10 @@ pub fn materialise(model: &Model, store: &Store) -> Result<()> {
 
     for item in &model.items {
         write_item(store, item)?;
+    }
+
+    for collection in model.collections.values() {
+        write_rounds(store, model, collection)?;
     }
 
     for reference in &model.references {
@@ -285,6 +289,59 @@ fn write_item(store: &Store, item: &Item) -> Result<()> {
                 ("collection", &collection),
                 ("link_id", &link_id),
                 ("source", &text(by.as_deref())),
+            ],
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Replays the rounds a collection's source closed, each opened, its
+/// handles stamped and closed in turn, so the round ids, the stamps and
+/// the coverage stand as the model holds them (STORAGE §4.3, SYNC §5). The
+/// checkpoint the declaration wrote is kept, a round closing with none.
+fn write_rounds(store: &Store, model: &Model, collection: &Collection) -> Result<()> {
+    let Some(source) = &collection.source else {
+        return Ok(());
+    };
+    let id = Value::Text(collection.id.clone());
+    let source = Value::Text(source.clone());
+
+    for round in 1..=collection.rounds {
+        run(
+            store,
+            "storage/owner/open_round",
+            &[
+                ("collection", &id),
+                ("source", &source),
+                ("since", &Value::Null),
+                ("until", &Value::Null),
+                ("band", &Value::Integer(0)),
+            ],
+        )?;
+        let handles: Vec<Value> = model
+            .items
+            .iter()
+            .filter(|item| item.collection == collection.id)
+            .filter_map(|item| item.binding.as_ref())
+            .filter(|binding| binding.round == Some(round))
+            .map(|binding| Value::Text(binding.handle.clone()))
+            .collect();
+        store.bind_slot("handles", &handles)?;
+        run(
+            store,
+            "storage/owner/stamp_bindings",
+            &[("collection", &id), ("source", &source)],
+        )?;
+        run(
+            store,
+            "storage/owner/close_round",
+            &[
+                ("checkpoint", &Value::Null),
+                ("since", &Value::Null),
+                ("until", &Value::Null),
+                ("collection", &id),
+                ("source", &source),
             ],
         )?;
     }

@@ -57,14 +57,14 @@ const WORDS: [&str; 24] = [
 ];
 const DOMAINS: [&str; 3] = ["example.org", "example.com", "example.net"];
 
-struct Draw {
+pub(crate) struct Draw {
     rng: Rng,
     run: String,
     counter: u32,
 }
 
 impl Draw {
-    fn new(seed: u64) -> Self {
+    pub(crate) fn new(seed: u64) -> Self {
         Self {
             rng: Rng::new(seed, 0x7069_6d64_6972),
             run: format!("structure-{seed}"),
@@ -133,6 +133,7 @@ impl Draw {
             role: None,
             source: None,
             checkpoint: None,
+            rounds: 0,
         });
 
         self.mail(&mut model);
@@ -163,6 +164,7 @@ impl Draw {
             role: Some(String::from("attachments")),
             source: None,
             checkpoint: None,
+            rounds: 0,
         });
 
         for fixture in fixture::load(spec)? {
@@ -1054,7 +1056,7 @@ impl Draw {
         Ok(())
     }
 
-    fn message(&mut self, cc: bool) -> Mail {
+    pub(crate) fn message(&mut self, cc: bool) -> Mail {
         let domain = self.pick(&DOMAINS);
         Mail {
             message_id: Some(format!("{}.{}@{domain}", self.phrase(1), self.next())),
@@ -1198,6 +1200,7 @@ fn collection(
         role: role.map(String::from),
         source: source.map(String::from),
         checkpoint: source.map(|_| b"c1".to_vec()),
+        rounds: 0,
     }
 }
 

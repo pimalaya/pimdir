@@ -26,7 +26,7 @@ use rusqlite::{ToSql, types::Value};
 
 use crate::{
     error::Result,
-    model::{Binding, Item, Kind, MARKS, Model, Refusal, State, Table},
+    model::{Binding, Collection, Item, Kind, MARKS, Model, Refusal, State, Table},
     name::ObjectName,
     queue::RowState,
     spec::Spec,
@@ -194,7 +194,7 @@ impl Oracle<'_> {
                 text(collection.role.as_deref()),
                 Value::Null,
                 Value::Null,
-                Value::Null,
+                covered(collection),
             ]
         };
 
@@ -259,7 +259,7 @@ impl Oracle<'_> {
                 row.extend([
                     Value::Null,
                     Value::Null,
-                    Value::Null,
+                    covered(collection),
                     Value::Null,
                     Value::Null,
                     Value::Null,
@@ -1172,6 +1172,15 @@ fn cell(item: &Item, column: &str, table: Option<Table>) -> Value {
             Some(table) if table == item.summary.table => item.summary.get(column),
             _ => Value::Null,
         },
+    }
+}
+
+/// The instant a collection's source last closed a round, as a marker, or
+/// `NULL` before it closed one.
+fn covered(collection: &Collection) -> Value {
+    match collection.rounds {
+        0 => Value::Null,
+        _ => Value::Text(String::from(INSTANT)),
     }
 }
 
