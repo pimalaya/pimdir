@@ -6,10 +6,14 @@
 //! canonical, iCalendar and vCard values needing no escape. Each renderer
 //! answers the bytes and what Annex A derives from them, never by parsing.
 
+use std::io;
+
 use rusqlite::types::Value;
 
 use crate::{
     model::{Address, Summary, Table},
+    name::{ObjectName, base32},
+    rng::Rng,
     time::Instant,
 };
 
@@ -30,6 +34,62 @@ pub struct Filed {
     /// The key a writer gives content stating no hint, where the kind's
     /// fallback is not derived from the bytes (a file's `file:` key).
     pub fallback: Option<String>,
+}
+
+/// A body too large to hold, rendered from its seed each time it is read
+/// and never held whole (README.md, "Profiles"): `head`, then the base64 of
+/// `lines` lines of 57 pseudo-random bytes, 76 columns each, then `tail`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Stream {
+    /// What precedes the encoded bytes.
+    pub head: Vec<u8>,
+    /// The seed the bytes are drawn from.
+    pub seed: u64,
+    /// How many lines the encoding takes.
+    pub lines: usize,
+    /// What follows them.
+    pub tail: Vec<u8>,
+}
+
+/// The lines a [`Stream`] renders at once.
+const BLOCK: usize = 16_384;
+
+impl Stream {
+    /// Its length in bytes.
+    pub fn size(&self) -> usize {
+        self.head.len() + self.lines * 78 - 2 * usize::from(self.lines > 0) + self.tail.len()
+    }
+
+    /// Renders it, block by block, into `write`.
+    pub fn render(&self, mut write: impl FnMut(&[u8]) -> io::Result<()>) -> io::Result<()> {
+        write(&self.head)?;
+        let mut rng = Rng::new(self.seed, 0x7374_7265_616d);
+        let mut block = Vec::with_capacity(BLOCK * 78);
+        for line in 0..self.lines {
+            if line > 0 {
+                block.extend_from_slice(b"\r\n");
+            }
+            let raw: Vec<u8> = (0..57).map(|_| rng.next_u32() as u8).collect();
+            block.extend_from_slice(base64(&raw).as_bytes());
+            if block.len() >= BLOCK * 78 {
+                write(&block)?;
+                block.clear();
+            }
+        }
+        write(&block)?;
+        write(&self.tail)
+    }
+
+    /// Its name, digested as it renders.
+    pub fn name(&self) -> ObjectName {
+        let mut hasher = blake3::Hasher::new();
+        self.render(|chunk| {
+            hasher.update(chunk);
+            Ok(())
+        })
+        .expect("a digest never fails");
+        ObjectName(base32(hasher.finalize().as_bytes()))
+    }
 }
 
 /// A person a body names.
@@ -121,7 +181,36 @@ impl Mail {
             }
         };
         let bytes = format!("{head}{body}").into_bytes();
+        let size = bytes.len();
+        self.derive(bytes, size)
+    }
 
+    /// Renders the message carrying an attachment too large to hold, the
+    /// base64 of `lines` lines of pseudo-random bytes drawn from `seed`
+    /// (README.md, "Profiles"): the row derived as [`Mail::file`] derives
+    /// it, its `bytes` empty, and the body as a [`Stream`].
+    pub fn stream(&self, name: &str, seed: u64, lines: usize) -> (Filed, Stream) {
+        let boundary = format!("part-{}", self.run);
+        let mut held = self.clone();
+        held.attachment = Some((String::from(name), Vec::new()));
+        let head = held.file().bytes;
+        let text = String::from_utf8_lossy(&head);
+        let cut = text
+            .find("Content-Transfer-Encoding: base64\r\n\r\n")
+            .expect("a base64 part")
+            + "Content-Transfer-Encoding: base64\r\n\r\n".len();
+        let stream = Stream {
+            head: head[..cut].to_vec(),
+            seed,
+            lines,
+            tail: format!("\r\n--{boundary}--\r\n").into_bytes(),
+        };
+        let filed = held.derive(Vec::new(), stream.size());
+        (filed, stream)
+    }
+
+    /// The row its rendering derives, the body `size` bytes long.
+    fn derive(&self, bytes: Vec<u8>, size: usize) -> Filed {
         let date = self.date.map(|date| date.rfc3339());
         let mut summary = Summary::new(Table::Mail);
         summary.set("message_id", text_or_null(self.message_id.as_deref()));
@@ -129,7 +218,7 @@ impl Mail {
         summary.set("sender", Value::Text(self.from.address.clone()));
         summary.set("sender_name", text_or_null(self.from.name.as_deref()));
         summary.set("date", text_or_null(date.as_deref()));
-        summary.set("size", Value::Integer(bytes.len() as i64));
+        summary.set("size", Value::Integer(size as i64));
         summary.set(
             "attachment",
             Value::Integer(i64::from(self.attachment.is_some())),

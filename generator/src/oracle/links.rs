@@ -10,7 +10,7 @@ use rusqlite::types::Value;
 
 use crate::{
     model::{Item, Kind, Reference, State},
-    oracle::{INSTANT, Oracle, PAGE, pages, text},
+    oracle::{INSTANT, Oracle, pages, text},
 };
 
 impl Oracle<'_> {
@@ -175,12 +175,12 @@ impl Oracle<'_> {
             }
             listed.sort_by(|(a, m), (b, n)| (&n.sort_key, b.seq).cmp(&(&m.sort_key, a.seq)));
             let mut after = (Value::Null, Value::Null);
-            for page in pages(&listed) {
+            for page in pages(&listed, self.page) {
                 let params = [
                     ("account", text(account.as_deref())),
                     ("after_key", after.0.clone()),
                     ("after_seq", after.1.clone()),
-                    ("limit", Value::Integer(PAGE)),
+                    ("limit", Value::Integer(self.page)),
                 ];
                 let rows = page
                     .iter()

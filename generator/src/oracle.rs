@@ -25,7 +25,7 @@ use std::{
 use rusqlite::{ToSql, types::Value};
 
 use crate::{
-    error::Result,
+    error::{Error, Result},
     model::{Binding, Collection, Item, Kind, MARKS, Model, Refusal, Scope, State, Table},
     name::ObjectName,
     queue::{Action, RowState},
@@ -78,32 +78,74 @@ pub fn expectations(model: &Model, spec: &Spec) -> Result<Vec<Expectation>> {
     let mut oracle = Oracle {
         model,
         spec,
+        page: PAGE,
         out: Vec::new(),
+        store: None,
+        disagreements: Vec::new(),
+        failure: None,
     };
-    oracle.collections()?;
-    for id in model.collections.keys() {
-        oracle.collection(id)?;
-    }
-    for item in &model.items {
-        oracle.item(item)?;
-    }
-    oracle.identities();
-    oracle.mail()?;
-    oracle.people();
-    oracle.conflicts();
-    oracle.queue();
-    oracle.rights();
-    oracle.links();
-    oracle.feed();
-    oracle.searches()?;
+    oracle.state()?;
     Ok(oracle.out)
+}
+
+/// Runs every expectation the model states on `store` as it is stated,
+/// none held but the one stated last, pages `page` rows long: a store of
+/// the count profile, whose expectations would not fit in memory at once.
+/// Names each one the store does not meet, as [`check`] does.
+pub fn check_model(store: &Store, model: &Model, spec: &Spec, page: i64) -> Result<Vec<String>> {
+    let mut oracle = Oracle {
+        model,
+        spec,
+        page,
+        out: Vec::new(),
+        store: Some(store),
+        disagreements: Vec::new(),
+        failure: None,
+    };
+    oracle.state()?;
+    oracle.flush();
+    match oracle.failure {
+        Some(error) => Err(error),
+        None => Ok(oracle.disagreements),
+    }
+}
+
+impl Oracle<'_> {
+    fn state(&mut self) -> Result<()> {
+        let model = self.model;
+        let oracle = self;
+        oracle.collections()?;
+        for id in model.collections.keys() {
+            oracle.collection(id)?;
+        }
+        for item in &model.items {
+            oracle.item(item)?;
+        }
+        oracle.identities();
+        oracle.mail()?;
+        oracle.people();
+        oracle.conflicts();
+        oracle.queue();
+        oracle.rights();
+        oracle.links();
+        oracle.feed();
+        oracle.searches()?;
+        Ok(())
+    }
 }
 
 /// Runs every expectation on `store`, naming each one it does not meet.
 pub fn check(store: &Store, expectations: &[Expectation]) -> Result<Vec<String>> {
     let mut disagreements = Vec::new();
-
     for expectation in expectations {
+        disagreements.extend(check_one(store, expectation)?);
+    }
+    Ok(disagreements)
+}
+
+/// Runs one expectation on `store`, naming it when it is not met.
+fn check_one(store: &Store, expectation: &Expectation) -> Result<Option<String>> {
+    {
         if let Some((slot, values)) = &expectation.slot {
             store.bind_slot(slot, values)?;
         }
@@ -129,24 +171,48 @@ pub fn check(store: &Store, expectations: &[Expectation]) -> Result<Vec<String>>
                 .zip(&want)
                 .all(|(got, want)| same_row(columns, got, want));
         if !same {
-            disagreements.push(format!(
+            return Ok(Some(format!(
                 "{} at {:?} {:?}: the store answers {:?}, the model {:?}",
                 expectation.statement, expectation.params, expectation.slot, rows, want
-            ));
+            )));
         }
     }
 
-    Ok(disagreements)
+    Ok(None)
 }
 
 struct Oracle<'a> {
     model: &'a Model,
     spec: &'a Spec,
+    /// The rows a listing's page holds.
+    page: i64,
     out: Vec<Expectation>,
+    /// The store each expectation runs on as it is stated, if any.
+    store: Option<&'a Store<'a>>,
+    disagreements: Vec<String>,
+    failure: Option<Error>,
 }
 
 impl Oracle<'_> {
+    /// Runs the expectation stated last on the store, if one runs them as
+    /// they are stated, and lets it go.
+    fn flush(&mut self) {
+        let Some(store) = self.store else {
+            return;
+        };
+        for expectation in self.out.drain(..) {
+            if self.failure.is_some() {
+                break;
+            }
+            match check_one(store, &expectation) {
+                Ok(found) => self.disagreements.extend(found),
+                Err(error) => self.failure = Some(error),
+            }
+        }
+    }
+
     fn expect(&mut self, statement: &str, params: &[(&str, Value)], rows: Vec<Vec<Value>>) {
+        self.flush();
         self.out.push(Expectation {
             statement: match statement.contains('/') {
                 true => String::from(statement),
@@ -357,12 +423,12 @@ impl Oracle<'_> {
                 if descending { order.reverse() } else { order }
             });
             let mut after = (Value::Null, Value::Null);
-            for page in pages(&sorted) {
+            for page in pages(&sorted, self.page) {
                 let params = [
                     ("collection", Value::Text(String::from(id))),
                     ("after_key", after.0.clone()),
                     ("after_seq", after.1.clone()),
-                    ("limit", Value::Integer(PAGE)),
+                    ("limit", Value::Integer(self.page)),
                 ];
                 let rows = page.iter().map(|item| row(item, &columns, table)).collect();
                 self.expect(name, &params, rows);
@@ -376,11 +442,11 @@ impl Oracle<'_> {
         let mut by_link = live.clone();
         by_link.sort_by(|a, b| a.link_id.cmp(&b.link_id));
         let mut after = Value::Null;
-        for page in pages(&by_link) {
+        for page in pages(&by_link, self.page) {
             let params = [
                 ("collection", Value::Text(String::from(id))),
                 ("after", after.clone()),
-                ("limit", Value::Integer(PAGE)),
+                ("limit", Value::Integer(self.page)),
             ];
             let rows = page.iter().map(|item| row(item, &columns, None)).collect();
             self.expect("list_items_page", &params, rows);
@@ -393,11 +459,11 @@ impl Oracle<'_> {
         let mut by_seq = deleted.clone();
         by_seq.sort_by_key(|item| item.seq);
         let mut after = Value::Null;
-        for page in pages(&by_seq) {
+        for page in pages(&by_seq, self.page) {
             let params = [
                 ("collection", Value::Text(String::from(id))),
                 ("after", after.clone()),
-                ("limit", Value::Integer(PAGE)),
+                ("limit", Value::Integer(self.page)),
             ];
             let rows = page
                 .iter()
@@ -414,7 +480,7 @@ impl Oracle<'_> {
                                 _ => Value::Null,
                             },
                             "size" => match &item.object {
-                                Some(name) => Value::Integer(model.objects[name].len() as i64),
+                                Some(name) => Value::Integer(model.object_size(name) as i64),
                                 None => Value::Null,
                             },
                             column => cell(item, column, None),
@@ -557,13 +623,29 @@ impl Oracle<'_> {
             (account.is_none(), account, item.collection.clone())
         };
 
-        let links: BTreeSet<&String> = model.items.iter().map(|item| &item.link_id).collect();
-        for link_id in links {
-            let mut holders: Vec<&Item> = placed
-                .iter()
-                .copied()
-                .filter(|item| item.link_id == *link_id)
-                .collect();
+        let mut by_link: BTreeMap<&String, Vec<&Item>> = model
+            .items
+            .iter()
+            .map(|item| (&item.link_id, Vec::new()))
+            .collect();
+        let mut by_object: BTreeMap<&ObjectName, Vec<&Item>> = model
+            .objects
+            .keys()
+            .chain(model.streams.keys())
+            .map(|name| (name, Vec::new()))
+            .collect();
+        for item in &placed {
+            by_link.entry(&item.link_id).or_default().push(item);
+            if let Some(holders) = item
+                .object
+                .as_ref()
+                .and_then(|name| by_object.get_mut(name))
+            {
+                holders.push(item);
+            }
+        }
+
+        for (link_id, mut holders) in by_link {
             holders.sort_by_key(order);
             let rows = holders
                 .iter()
@@ -582,10 +664,9 @@ impl Oracle<'_> {
             self.expect("list_link_placements", &params, rows);
         }
 
-        for hash in model.objects.keys() {
-            let rows = placed
+        for (hash, holders) in by_object {
+            let rows = holders
                 .iter()
-                .filter(|item| item.object.as_ref() == Some(hash))
                 .map(|item| {
                     vec![
                         Value::Text(item.collection.clone()),
@@ -640,7 +721,7 @@ impl Oracle<'_> {
             .filter(|item| matches!(item.state, State::Retained { .. }))
             .filter_map(|item| item.object.as_ref())
             .collect();
-        let bytes: usize = retained.iter().map(|name| model.objects[*name].len()).sum();
+        let bytes: usize = retained.iter().map(|name| model.object_size(name)).sum();
         self.expect(
             "retained_bytes",
             &[],
@@ -683,6 +764,7 @@ impl Oracle<'_> {
         let columns = self.columns("list_mail_page_filtered")?;
 
         for set in sets {
+            let members: BTreeSet<&String> = set.iter().copied().collect();
             let slot = (
                 String::from("collections"),
                 set.iter().map(|id| Value::Text((*id).clone())).collect(),
@@ -691,7 +773,7 @@ impl Oracle<'_> {
                 let matching: Vec<&Item> = model
                     .items
                     .iter()
-                    .filter(|item| item.state == State::Live && set.contains(&&item.collection))
+                    .filter(|item| item.state == State::Live && members.contains(&item.collection))
                     .filter(|item| seen.is_none_or(|seen| seen_bit(item) == seen))
                     .filter(|item| {
                         attachment.is_none_or(|wanted| {
@@ -739,7 +821,7 @@ impl Oracle<'_> {
                     ))
                 });
                 let mut after = (Value::Null, Value::Null, Value::Null);
-                for page in pages(&sorted) {
+                for page in pages(&sorted, self.page) {
                     let params = [
                         ("since", since.clone()),
                         ("after_key", after.0.clone()),
@@ -747,7 +829,7 @@ impl Oracle<'_> {
                         ("after_collection", after.2.clone()),
                         ("seen", seen.clone()),
                         ("attachment", attachment.clone()),
-                        ("limit", Value::Integer(PAGE)),
+                        ("limit", Value::Integer(self.page)),
                     ];
                     let rows = page
                         .iter()
@@ -1066,7 +1148,7 @@ impl Oracle<'_> {
                         ))
                 });
                 let mut after = (Value::Null, Value::Null, Value::Null, Value::Null);
-                for page in pages(&rows) {
+                for page in pages(&rows, self.page) {
                     let params = [
                         ("address", Value::Text(address.clone())),
                         ("role", text(role.map(String::as_str))),
@@ -1074,7 +1156,7 @@ impl Oracle<'_> {
                         ("after_seq", after.1.clone()),
                         ("after_collection", after.2.clone()),
                         ("after_role", after.3.clone()),
-                        ("limit", Value::Integer(PAGE)),
+                        ("limit", Value::Integer(self.page)),
                     ];
                     let rows = page
                         .iter()
@@ -1144,8 +1226,8 @@ impl Oracle<'_> {
     }
 }
 
-fn pages<T>(rows: &[T]) -> impl Iterator<Item = &[T]> {
-    rows.chunks(PAGE as usize).chain([&[][..]])
+fn pages<T>(rows: &[T], page: i64) -> impl Iterator<Item = &[T]> {
+    rows.chunks(page as usize).chain([&[][..]])
 }
 
 fn seen_bit(item: &Item) -> i64 {

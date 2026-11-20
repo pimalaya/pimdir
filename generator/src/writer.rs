@@ -17,9 +17,9 @@
 //! counting in `purges` that leaves no row (STORAGE §4.5).
 
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     fs::{self, File, OpenOptions},
-    io::Write,
+    io::{self, Write},
     path::Path,
     process,
 };
@@ -37,7 +37,12 @@ use crate::{
 /// Writes `model` into `store`, which holds nothing yet.
 pub fn materialise(model: &Model, store: &Store) -> Result<()> {
     for (name, bytes) in &model.objects {
-        write_blob(&store.dir, name, bytes)?;
+        write_blob(&store.dir, name, |file| file.write_all(bytes))?;
+    }
+    for (name, stream) in &model.streams {
+        write_blob(&store.dir, name, |file| {
+            stream.render(|chunk| file.write_all(chunk))
+        })?;
     }
 
     store.begin()?;
@@ -134,9 +139,9 @@ pub fn materialise(model: &Model, store: &Store) -> Result<()> {
         )?;
     }
 
-    for (name, bytes) in &model.objects {
+    for name in model.objects.keys().chain(model.streams.keys()) {
         let hash = Value::Text(name.0.clone());
-        let size = Value::Integer(bytes.len() as i64);
+        let size = Value::Integer(model.object_size(name) as i64);
         run(
             store,
             "storage/queue/store_object",
@@ -148,8 +153,18 @@ pub fn materialise(model: &Model, store: &Store) -> Result<()> {
         write_item(store, item)?;
     }
 
+    let mut stamped: Stamps = BTreeMap::new();
+    for item in &model.items {
+        for binding in &item.bindings {
+            if let Some(round) = binding.round {
+                let key = (item.collection.as_str(), binding.source.as_str(), round);
+                let handle = Value::Text(binding.handle.clone());
+                stamped.entry(key).or_default().push(handle);
+            }
+        }
+    }
     for collection in model.collections.values() {
-        write_rounds(store, model, collection)?;
+        write_rounds(store, &stamped, collection)?;
     }
 
     for reference in &model.references {
@@ -322,7 +337,10 @@ fn write_item(store: &Store, item: &Item) -> Result<()> {
 /// handles stamped and closed in turn, so the round ids, the stamps and
 /// the coverage stand as the model holds them (STORAGE §4.3, SYNC §5). The
 /// checkpoint the declaration wrote is kept, a round closing with none.
-fn write_rounds(store: &Store, model: &Model, collection: &Collection) -> Result<()> {
+/// The handles each round stamped, by collection, source and round id.
+type Stamps<'a> = BTreeMap<(&'a str, &'a str, i64), Vec<Value>>;
+
+fn write_rounds(store: &Store, stamped: &Stamps, collection: &Collection) -> Result<()> {
     let id = Value::Text(collection.id.clone());
 
     for (name, sync) in &collection.sources {
@@ -342,15 +360,9 @@ fn write_rounds(store: &Store, model: &Model, collection: &Collection) -> Result
                     ("band", &Value::Integer(0)),
                 ],
             )?;
-            let handles: Vec<Value> = model
-                .items
-                .iter()
-                .filter(|item| item.collection == collection.id)
-                .flat_map(|item| item.bindings.iter())
-                .filter(|binding| &binding.source == name && binding.round == Some(round))
-                .map(|binding| Value::Text(binding.handle.clone()))
-                .collect();
-            store.bind_slot("handles", &handles)?;
+            let key = (collection.id.as_str(), name.as_str(), round);
+            let handles = stamped.get(&key).map_or(&[][..], Vec::as_slice);
+            store.bind_slot("handles", handles)?;
             run(
                 store,
                 "storage/owner/stamp_bindings",
@@ -628,7 +640,11 @@ fn text(text: Option<&str>) -> Value {
     text.map_or(Value::Null, |text| Value::Text(String::from(text)))
 }
 
-fn write_blob(dir: &Path, name: &ObjectName, bytes: &[u8]) -> Result<()> {
+fn write_blob(
+    dir: &Path,
+    name: &ObjectName,
+    render: impl FnOnce(&mut File) -> io::Result<()>,
+) -> Result<()> {
     let io = |path: &Path| {
         let path = path.to_path_buf();
         move |source| Error::Io { path, source }
@@ -648,7 +664,7 @@ fn write_blob(dir: &Path, name: &ObjectName, bytes: &[u8]) -> Result<()> {
         .create_new(true)
         .open(&temporary)
         .map_err(io(&temporary))?;
-    file.write_all(bytes).map_err(io(&temporary))?;
+    render(&mut file).map_err(io(&temporary))?;
     file.sync_all().map_err(io(&temporary))?;
 
     let linked = fs::hard_link(&temporary, &target);

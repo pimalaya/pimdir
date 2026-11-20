@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use rusqlite::types::Value;
 
 use crate::{
-    body::{Filed, Person},
+    body::{Filed, Person, Stream, fnv1a64},
     name::ObjectName,
     queue::Row,
     time::Instant,
@@ -391,6 +391,8 @@ pub struct Model {
     pub items: Vec<Item>,
     /// The bodies by name.
     pub objects: BTreeMap<ObjectName, Vec<u8>>,
+    /// The bodies too large to hold, by name, rendered when written.
+    pub streams: BTreeMap<ObjectName, Stream>,
     /// The next `seq` to draw, `store_meta.next_seq`.
     pub next_seq: i64,
     /// The rows purged, objects collected and collections deleted or
@@ -481,6 +483,22 @@ impl Model {
         }
 
         let seq = self.seq_for(collection, &link_id, &filed.summary);
+        self.place(collection, link_id, seq, handle, filed, placement)
+    }
+
+    /// Files a body under a key and a `seq` the caller settled as
+    /// [`Model::file`] would, the binding under `handle`: a profile filing
+    /// fresh identities at scale, which a scan of every held key per item
+    /// would not finish.
+    pub fn place(
+        &mut self,
+        collection: &str,
+        link_id: String,
+        seq: i64,
+        handle: String,
+        filed: Filed,
+        placement: Placement,
+    ) -> usize {
         let object = ObjectName::of(&filed.bytes);
         if placement.held {
             self.objects.insert(object.clone(), filed.bytes.clone());
@@ -583,6 +601,34 @@ impl Model {
         self.next_seq += 1;
         seq
     }
+
+    /// The size of a body held or streamed.
+    pub fn object_size(&self, name: &ObjectName) -> usize {
+        match self.objects.get(name) {
+            Some(bytes) => bytes.len(),
+            None => self.streams[name].size(),
+        }
+    }
+
+    /// Gives the item at `index` a body too large to hold, named `name`
+    /// ([`Stream::name`]), its bindings based on it as on a body held.
+    pub fn hold_stream(&mut self, index: usize, name: ObjectName, stream: Stream) {
+        let item = &mut self.items[index];
+        item.object = Some(name.clone());
+        item.level = 2;
+        for binding in &mut item.bindings {
+            binding.base_object = Some(name.clone());
+            binding.shared_object = Some(name.clone());
+        }
+        self.streams.insert(name, stream);
+    }
+
+    /// Draws the next `seq`, for an identity no item holds (STORAGE §9.1).
+    pub fn fresh_seq(&mut self) -> i64 {
+        let seq = self.next_seq;
+        self.next_seq += 1;
+        seq
+    }
 }
 
 /// The marks of a flag set and its other flags (STORAGE §13).
@@ -626,6 +672,6 @@ pub(crate) fn fallback(filed: &Filed) -> String {
             )
         }
         Table::File => filed.fallback.clone().unwrap_or_default(),
-        _ => format!("hash:{}", crate::body::fnv1a64(&filed.bytes)),
+        _ => format!("hash:{}", fnv1a64(&filed.bytes)),
     }
 }

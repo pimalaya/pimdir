@@ -27,11 +27,18 @@ use crate::{
     time::Instant,
 };
 
+mod bytes;
+mod count;
+
 /// A profile a seed is drawn under.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Profile {
     /// Every case of the catalogue once, small (README.md, "Profiles").
     Structure,
+    /// 100,000 to 200,000 small items in hundreds of collections.
+    Count,
+    /// A few hundred large bodies, one past 25 MB and one past 100 MB.
+    Bytes,
 }
 
 impl Profile {
@@ -39,8 +46,26 @@ impl Profile {
     pub fn generate(&self, spec: &Spec, seed: u64) -> Result<Model> {
         match self {
             Self::Structure => Draw::new(seed).structure(spec),
+            Self::Count => {
+                let mut draw = Draw::new(seed);
+                let items = 100_000 + draw.rng.below(100_001) as usize;
+                Ok(draw.count(items))
+            }
+            Self::Bytes => Ok(Draw::new(seed).large(1)),
         }
     }
+}
+
+/// The count profile at `items` items, for a test that cannot afford the
+/// profile's own size.
+pub fn count(seed: u64, items: usize) -> Model {
+    Draw::new(seed).count(items)
+}
+
+/// The bytes profile with every size divided by `scale`, for a test that
+/// cannot afford the profile's own.
+pub fn bytes(seed: u64, scale: usize) -> Model {
+    Draw::new(seed).large(scale)
 }
 
 /// The lab account's attachments collection (STORAGE §14.3).

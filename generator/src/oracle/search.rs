@@ -15,7 +15,7 @@ use rusqlite::types::Value;
 use crate::{
     error::Result,
     model::{Item, Kind, State, Table},
-    oracle::{Oracle, PAGE, pages, row, seen_bit, text},
+    oracle::{Oracle, pages, row, seen_bit, text},
     time::Instant,
 };
 
@@ -152,13 +152,13 @@ impl Oracle<'_> {
                     if descending { order.reverse() } else { order }
                 });
                 let mut after = (Value::Null, Value::Null, Value::Null);
-                for page in pages(&hits) {
+                for page in pages(&hits, self.page) {
                     let mut params = vec![
                         ("after_key", after.0.clone()),
                         ("after_seq", after.1.clone()),
                         ("after_collection", after.2.clone()),
                         ("pattern", Value::Text(String::from(pattern))),
-                        ("limit", Value::Integer(PAGE)),
+                        ("limit", Value::Integer(self.page)),
                     ];
                     if *kind == Kind::Mail {
                         params.push(("attachment", Value::Null));
