@@ -158,6 +158,8 @@ Left out at first, each with the plan line adding it:
 - crashes inside the generator's own writes: never, the writer being the test's fixture, not its subject;
 - the index file itself: the generator never writes index.db, which is the implementation's to build.
 
+Where it stands (2026-11-20): the structure profile holds the surface layer of the four kinds and the cases its model keys so far (a message filed in two mailboxes sharing a `seq` and a body, a `Message-ID` reused by another message, one held twice in a mailbox, none, an undated message, an attachment, a listed message holding no body and no known flags, keywords beside `\Seen` and `\seen`, a card with no `UID` and one with a reserved prefix, UTC, floating, all-day and recurring events, tasks, a journal, files, an undeclared collection, an empty one). Still to come before its line is ticked: the fixtures of vectors/fixtures/, tombstones, retained rows, conflicts, the queue, references and stand-ins. The self-check compares the store's answers with the model's, so a value both take from the model (a sort key, a summary column) is held to Annex A by another test: the renderers derive, for bodies stating a fixture's fields, the rows vectors/summaries.json pins for that fixture.
+
 ## Build order
 
 1. The model and the structure profile's entities (plan 2, "The model").

@@ -46,6 +46,13 @@ pub enum Error {
     },
     /// The owner lock of a store is held by another handle.
     Locked(PathBuf),
+    /// The store answered other than the model predicts.
+    Disagreement {
+        /// What was compared.
+        what: String,
+        /// The two answers.
+        detail: String,
+    },
 }
 
 impl fmt::Display for Error {
@@ -65,6 +72,7 @@ impl fmt::Display for Error {
                 write!(f, "Cannot bind statement {statement}: {detail}")
             }
             Self::Locked(path) => write!(f, "Cannot take the owner lock of {}", path.display()),
+            Self::Disagreement { what, detail } => write!(f, "Disagreement on {what}: {detail}"),
         }
     }
 }

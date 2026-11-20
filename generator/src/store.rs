@@ -83,6 +83,7 @@ impl<'a> Store<'a> {
             checked: RefCell::new(BTreeSet::new()),
             _lock: lock,
         };
+        create_private_dir(&dir.join("objects"))?;
         store.run("storage/read/create_param", &[])?;
         Ok(store)
     }
@@ -178,6 +179,11 @@ impl<'a> Store<'a> {
             .map_err(|source| sql("COMMIT", source))
     }
 
+    /// The canonical text the store is written through.
+    pub fn spec(&self) -> &Spec {
+        self.spec
+    }
+
     /// Reads a pragma's one value, for the checks of the store's shape.
     pub fn pragma(&self, name: &str) -> Result<Value> {
         self.conn
@@ -194,7 +200,7 @@ fn sql(statement: &str, source: rusqlite::Error) -> Error {
 }
 
 #[cfg(unix)]
-fn create_private_dir(dir: &Path) -> Result<()> {
+pub(crate) fn create_private_dir(dir: &Path) -> Result<()> {
     use std::os::unix::fs::DirBuilderExt;
 
     fs::DirBuilder::new()
@@ -207,7 +213,7 @@ fn create_private_dir(dir: &Path) -> Result<()> {
 }
 
 #[cfg(not(unix))]
-fn create_private_dir(dir: &Path) -> Result<()> {
+pub(crate) fn create_private_dir(dir: &Path) -> Result<()> {
     fs::create_dir(dir).map_err(|source| Error::Io {
         path: dir.to_path_buf(),
         source,

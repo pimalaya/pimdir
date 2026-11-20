@@ -1,0 +1,387 @@
+//! # The model
+//!
+//! The truth a history moves, as plain values: the collections, items,
+//! bindings, objects and sources a store holds, keyed and numbered by the
+//! rules of STORAGE §9 and §9.1 as a writer applies them. It holds no SQL:
+//! [`crate::writer`] turns it into a store and [`crate::oracle`] into what
+//! each read of that store answers.
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use rusqlite::types::Value;
+
+use crate::{body::Filed, body::Person, name::ObjectName};
+
+/// The kind a collection declares (STORAGE §13).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Kind {
+    /// `message/rfc822`.
+    Mail,
+    /// `text/vcard`.
+    Contact,
+    /// `text/calendar`.
+    Calendar,
+    /// `application/octet-stream`.
+    File,
+}
+
+impl Kind {
+    /// The media type `collections.kind` holds.
+    pub fn media_type(&self) -> &'static str {
+        match self {
+            Self::Mail => "message/rfc822",
+            Self::Contact => "text/vcard",
+            Self::Calendar => "text/calendar",
+            Self::File => "application/octet-stream",
+        }
+    }
+}
+
+/// One collection.
+#[derive(Clone, Debug)]
+pub struct Collection {
+    /// Its id, namespaced by account where the store holds several.
+    pub id: String,
+    /// Its account, `None` in a single-account store.
+    pub account: Option<String>,
+    /// Its declared kind, `None` while undeclared (`''`).
+    pub kind: Option<Kind>,
+    /// Its display name.
+    pub name: String,
+    /// The role its source states, or none.
+    pub role: Option<String>,
+    /// The one source syncing it, or none for a local collection.
+    pub source: Option<String>,
+    /// The checkpoint that source last recorded.
+    pub checkpoint: Option<Vec<u8>>,
+}
+
+/// The table a summary row lives in (STORAGE §4.3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Table {
+    /// `mail_summary`.
+    Mail,
+    /// `contact_summary`.
+    Contact,
+    /// `event_summary`.
+    Event,
+    /// `task_summary`.
+    Task,
+    /// `journal_summary`.
+    Journal,
+    /// `file_summary`.
+    File,
+}
+
+impl Table {
+    /// The kind of the collection an item of this table is filed in.
+    pub fn kind(&self) -> Kind {
+        match self {
+            Self::Mail => Kind::Mail,
+            Self::Contact => Kind::Contact,
+            Self::Event | Self::Task | Self::Journal => Kind::Calendar,
+            Self::File => Kind::File,
+        }
+    }
+
+    /// The suffix of its statements' names, `mail` for
+    /// `upsert_mail_summary`.
+    pub fn stem(&self) -> &'static str {
+        match self {
+            Self::Mail => "mail",
+            Self::Contact => "contact",
+            Self::Event => "event",
+            Self::Task => "task",
+            Self::Journal => "journal",
+            Self::File => "file",
+        }
+    }
+}
+
+/// A summary row of Annex A, its columns by name, and the lists it
+/// derives.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Summary {
+    /// Its table.
+    pub table: Table,
+    /// Its columns but `item`, by name.
+    pub columns: BTreeMap<String, Value>,
+    /// A message's `In-Reply-To` ids, in document order.
+    pub in_reply_to: Vec<String>,
+    /// A task's categories, in document order.
+    pub categories: Vec<String>,
+}
+
+impl Summary {
+    /// An empty row of `table`.
+    pub fn new(table: Table) -> Self {
+        Self {
+            table,
+            columns: BTreeMap::new(),
+            in_reply_to: Vec::new(),
+            categories: Vec::new(),
+        }
+    }
+
+    /// Sets the column `name`.
+    pub fn set(&mut self, name: &str, value: Value) {
+        self.columns.insert(String::from(name), value);
+    }
+
+    /// The column `name`, `NULL` when the row does not state it.
+    pub fn get(&self, name: &str) -> Value {
+        self.columns.get(name).cloned().unwrap_or(Value::Null)
+    }
+}
+
+/// One row of `item_address` (STORAGE Annex A.6).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Address {
+    /// Its role.
+    pub role: String,
+    /// Its 0-based position within the role.
+    pub position: i64,
+    /// The canonical address.
+    pub address: String,
+    /// The display name, or none.
+    pub name: Option<String>,
+}
+
+impl Address {
+    /// The row naming `person` at `position` under `role`.
+    pub fn of(role: &str, position: usize, person: &Person) -> Self {
+        Self {
+            role: String::from(role),
+            position: position as i64,
+            address: person.address.clone(),
+            name: person.name.clone(),
+        }
+    }
+}
+
+/// One source's binding of an item, after a sync that agreed on it.
+#[derive(Clone, Debug)]
+pub struct Binding {
+    /// The source.
+    pub source: String,
+    /// The handle it knows the item by.
+    pub handle: String,
+    /// The base flag set, `None` unknown.
+    pub base_flags: Option<BTreeSet<String>>,
+    /// The base body.
+    pub base_object: Option<ObjectName>,
+    /// The base revision.
+    pub base_revision: Option<String>,
+    /// The body last agreed with the shared item.
+    pub shared_object: Option<ObjectName>,
+}
+
+/// One item, its row of `items` and what hangs off it.
+#[derive(Clone, Debug)]
+pub struct Item {
+    /// Its collection.
+    pub collection: String,
+    /// Its key (STORAGE §9).
+    pub link_id: String,
+    /// Its public id (STORAGE §9.1).
+    pub seq: i64,
+    /// Its flag set, `None` unknown.
+    pub flags: Option<BTreeSet<String>>,
+    /// Its body, `None` when not held.
+    pub object: Option<ObjectName>,
+    /// Its level, 1 meta or 2 full.
+    pub level: i64,
+    /// Its sort key.
+    pub sort_key: String,
+    /// Whether it is a tombstone.
+    pub deleted: bool,
+    /// Its summary row.
+    pub summary: Summary,
+    /// Its address rows.
+    pub addresses: Vec<Address>,
+    /// The binding of its collection's source, if one syncs it.
+    pub binding: Option<Binding>,
+}
+
+/// How an item is placed in a collection.
+#[derive(Clone, Debug, Default)]
+pub struct Placement {
+    /// Its flag set, `None` unknown.
+    pub flags: Option<BTreeSet<String>>,
+    /// Whether the store holds its body.
+    pub held: bool,
+    /// The handle its source knows it by, for a synced collection.
+    pub handle: Option<String>,
+    /// The revision its source states.
+    pub revision: Option<String>,
+}
+
+/// The truth of one store.
+#[derive(Clone, Debug, Default)]
+pub struct Model {
+    /// The collections by id.
+    pub collections: BTreeMap<String, Collection>,
+    /// The items in the order they were filed, the order seqs were drawn.
+    pub items: Vec<Item>,
+    /// The bodies by name.
+    pub objects: BTreeMap<ObjectName, Vec<u8>>,
+    /// The next `seq` to draw, `store_meta.next_seq`.
+    pub next_seq: i64,
+}
+
+/// The prefixes a writer derives keys under (STORAGE §9).
+pub const RESERVED: [&str; 6] = ["alt:", "hash:", "dup:", "part:", "file:", "esc:"];
+
+/// The system flags `marks` holds, each by its exact bytes (STORAGE §13).
+pub const MARKS: [(&str, i64); 5] = [
+    ("\\Seen", 1),
+    ("\\Answered", 2),
+    ("\\Flagged", 4),
+    ("\\Draft", 8),
+    ("\\Deleted", 16),
+];
+
+impl Model {
+    /// An empty store's truth.
+    pub fn new() -> Self {
+        Self {
+            next_seq: 1,
+            ..Self::default()
+        }
+    }
+
+    /// Declares a collection.
+    pub fn declare(&mut self, collection: Collection) {
+        self.collections.insert(collection.id.clone(), collection);
+    }
+
+    /// Files a body in `collection` as a writer naming it does: the key
+    /// from the hint, escaped, or the fallback, minted over the handle
+    /// while held (STORAGE §9), the `seq` shared or drawn (§9.1).
+    pub fn file(&mut self, collection: &str, filed: Filed, placement: Placement) -> &Item {
+        let base = match &filed.hint {
+            Some(hint) if RESERVED.iter().any(|prefix| hint.starts_with(prefix)) => {
+                format!("esc:{hint}")
+            }
+            Some(hint) => hint.clone(),
+            None => fallback(&filed),
+        };
+        let handle = placement
+            .handle
+            .clone()
+            .unwrap_or_else(|| format!("\u{1}{base}"));
+        let mut link_id = base;
+        while self.holds(collection, &link_id) {
+            link_id = format!("dup:{link_id}#{handle}");
+        }
+
+        let seq = self.seq_for(collection, &link_id, &filed.summary);
+        let object = ObjectName::of(&filed.bytes);
+        if placement.held {
+            self.objects.insert(object.clone(), filed.bytes.clone());
+        }
+        let object = placement.held.then_some(object);
+
+        let source = self.collections[collection].source.clone();
+        let binding = source.map(|source| Binding {
+            source,
+            handle,
+            base_flags: placement.flags.clone(),
+            base_object: object.clone(),
+            base_revision: placement.revision.clone(),
+            shared_object: object.clone(),
+        });
+
+        self.items.push(Item {
+            collection: String::from(collection),
+            link_id,
+            seq,
+            flags: placement.flags,
+            level: if object.is_some() { 2 } else { 1 },
+            object,
+            sort_key: filed.sort_key,
+            deleted: false,
+            summary: filed.summary,
+            addresses: filed.addresses,
+            binding,
+        });
+        &self.items[self.items.len() - 1]
+    }
+
+    /// Whether a row of `collection` holds `link_id`, whatever its state.
+    pub fn holds(&self, collection: &str, link_id: &str) -> bool {
+        self.items
+            .iter()
+            .any(|item| item.collection == collection && item.link_id == link_id)
+    }
+
+    /// The live items of `collection`, in filing order.
+    pub fn live(&self, collection: &str) -> impl Iterator<Item = &Item> {
+        self.items
+            .iter()
+            .filter(move |item| item.collection == collection && !item.deleted)
+    }
+
+    fn seq_for(&mut self, collection: &str, link_id: &str, summary: &Summary) -> i64 {
+        let derived = ["alt:", "hash:", "dup:"]
+            .iter()
+            .any(|prefix| link_id.starts_with(prefix));
+        let kind = self.collections[collection].kind;
+
+        if !derived {
+            let agrees = |held: &Summary| {
+                summary.table != Table::Mail
+                    || ["subject", "date", "sender"]
+                        .iter()
+                        .all(|column| held.get(column) == summary.get(column))
+            };
+            let shared = self
+                .items
+                .iter()
+                .filter(|item| item.link_id == link_id)
+                .filter(|item| self.collections[&item.collection].kind == kind)
+                .filter(|item| agrees(&item.summary))
+                .map(|item| item.seq)
+                .min();
+            if let Some(seq) = shared {
+                return seq;
+            }
+        }
+
+        let seq = self.next_seq;
+        self.next_seq += 1;
+        seq
+    }
+}
+
+/// The marks of a flag set and its other flags (STORAGE §13).
+pub fn split_flags(flags: &BTreeSet<String>) -> (i64, Vec<String>) {
+    let mut marks = 0;
+    let mut others = Vec::new();
+    for flag in flags {
+        match MARKS.iter().find(|(name, _)| name == flag) {
+            Some((_, bit)) => marks |= bit,
+            None => others.push(flag.clone()),
+        }
+    }
+    (marks, others)
+}
+
+fn fallback(filed: &Filed) -> String {
+    match filed.summary.table {
+        Table::Mail => {
+            let text = |column: &str| match filed.summary.get(column) {
+                Value::Text(text) => text,
+                _ => String::new(),
+            };
+            format!(
+                "alt:{}|{}|{}",
+                text("subject"),
+                text("date"),
+                text("sender")
+            )
+        }
+        Table::File => filed.fallback.clone().unwrap_or_default(),
+        _ => format!("hash:{}", crate::body::fnv1a64(&filed.bytes)),
+    }
+}

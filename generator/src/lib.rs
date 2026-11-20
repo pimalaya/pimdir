@@ -9,15 +9,23 @@
 //! canonical statements under queries/ and migrations/ alone, loaded from
 //! the tree above the crate ([`spec`]), so the standard tests itself.
 //!
-//! - [`rng`]: the PCG32 generator every choice is drawn from.
-//! - [`name`]: a body's object name and path (STORAGE §5).
-//! - [`spec`]: the canonical statements and migrations, held to
-//!   queries/signatures.json.
-//! - [`store`]: a store created and written through them.
-//! - [`error`]: what each of them fails with.
+//! - [`profile`]: a seed drawn into a [`model::Model`].
+//! - [`model`]: the truth a store holds, keyed and numbered as STORAGE §9
+//!   says.
+//! - [`body`]: the bodies the model renders, with what Annex A derives.
+//! - [`writer`]: a model written into a [`store::Store`].
+//! - [`oracle`]: what each read answers over it, and the self-check.
+//! - [`spec`], [`store`], [`name`], [`time`], [`rng`], [`error`]: the
+//!   canonical text, a store, object names, instants, PCG32, failures.
 
+pub mod body;
 pub mod error;
+pub mod model;
 pub mod name;
+pub mod oracle;
+pub mod profile;
 pub mod rng;
 pub mod spec;
 pub mod store;
+pub mod time;
+pub mod writer;
