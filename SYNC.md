@@ -1,6 +1,6 @@
 # Pimdir sync specification
 
-Status: sync-draft-14, requiring storage-draft-14, released together with it
+Status: sync-draft-15, requiring storage-draft-15, released together with it and the search part
 
 The sync part of the pimdir standard: how one or more sources reconcile through a store ([STORAGE.md](./STORAGE.md)), so the store is an offline replica of each source and every source sees every other's changes. It fixes what an engine derives from the store's rows and a source's answers, and what it writes back.
 
@@ -617,7 +617,7 @@ A batch is cut between candidates, never inside one, and a rekey is never cut. T
 
 **The write keys another message apart.** A `Links` load answers this source's holders alone, so a page before the last, a head and an upgrade name a member without seeing an item another source binds under the same hint, and cannot apply §6's rule for another message reusing a `Message-ID`. The write applies it whichever step named the member (STORAGE §14), and an engine whose load showed the row mints the member the same way first, so both name it alike.
 
-**The version of the sync state.** An engine records its version, this part's (`sync-draft-14` now), in `store_meta.sync_version` with `set_sync_version` (STORAGE §14), in the transaction of its first write to a store naming none. A store naming none holds no sync state yet.
+**The version of the sync state.** An engine records its version, this part's (`sync-draft-15` now), in `store_meta.sync_version` with `set_sync_version` (STORAGE §14), in the transaction of its first write to a store naming none. A store naming none holds no sync state yet.
 
 While this part is a draft, an engine MUST refuse a store whose `sync_version` names another version than its own draft's, naming both, and run no verb on it: a draft's sync state is read under that draft alone, as a draft's store is (STORAGE §4.2). Once this part is released, an engine MUST refuse sync state a draft wrote, or a major above its own; sync state of a major below its own it reads as that major defines it, and records its own version only in the write converting what the majors between them changed.
 
@@ -647,7 +647,7 @@ Every case pins two rules: no `Remove` is pushed but for a tombstone the store h
 
 ## 12. Conformance
 
-An implementation offering sync conforms by one profile or both, stated as STORAGE §17 says (`sync-draft-14 engine`, `sync-draft-14 connector (IMAP)`), and MUST meet every section its row names and pass the vectors it names.
+An implementation offering sync conforms by one profile or both, stated as STORAGE §17 says (`sync-draft-15 engine`, `sync-draft-15 connector (IMAP)`), and MUST meet every section its row names and pass the vectors it names.
 
 | Profile | What it does | Owes | Vectors |
 | --- | --- | --- | --- |

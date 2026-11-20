@@ -91,13 +91,13 @@ The history follows [Cairn](https://github.com/pimalaya/cairn), the documents th
 
 ## Status
 
-Draft: **storage-draft-14**, **sync-draft-14** and **search-draft-14**, each named by a git tag. An implementation states the version of each part it conforms to.
+Draft: **storage-draft-15**, **sync-draft-15** and **search-draft-15**, each named by a git tag. An implementation states the version of each part it conforms to.
 
 A released part is versioned `<part>-vX.Y.Z`: STORAGE's major is the store schema version, SEARCH's the index schema version, SYNC's a breaking change to the connector seam or the engine.
 
 While STORAGE is a draft, a store opens only under the exact draft that wrote it, every other draft and every release refusing it: a program built on a draft is reinstalled over a new store, never upgraded.
 
-STORAGE and SYNC are released together, as `storage-v1.0.0` and `sync-v1.0.0` tagged at one commit, once the reference implementation passes every check and vector at the drafts to be released: the sync state a store holds follows the sync part, so neither freezes without the other. SEARCH is released later, its index being derived and rebuilt. Until then, schema version 1 is edited in place; after it, every schema change is a migration, stating which older readers and producers may still open the store.
+The three parts are released together, as `storage-v1.0.0`, `sync-v1.0.0` and `search-v1.0.0` tagged at one commit, once the reference implementation passes every check and vector at the drafts to be released: the sync state a store holds follows the sync part, and the query language people type and the answers the search vectors pin bind every program offering search, so no part freezes without the others. Until then, schema version 1 is edited in place; after it, every schema change is a migration, stating which older readers and producers may still open the store.
 
 At a release, checks/tags.sh runs with `--released`, which fails on a part whose version has no tag, and checks/frozen.sha256 gains the digests of the bytes that version froze, which checks/frozen.sh holds from then on.
 
