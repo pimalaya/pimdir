@@ -15,14 +15,16 @@ change: the-freeze-plan
 ## 2. The generator
 
 - [x] D1 decided (2026-11-20, a Rust crate here); pim-corpus's name, PRNG and manifest format settled with it
-- [ ] The model: accounts, sources, collections, the four kinds, the structure cases of pim-corpus/proposal.md enumerated
-- [ ] The scenario catalogue, read from himalaya, cardamum, calendula, neverest and the Android app: every queued action each issues, every sync sequence neverest runs
-- [ ] The writer: a store from the canonical statements of queries/ alone, checked by checks/schema.sh's rules
-- [ ] The scripted remote states, for scripted connectors
-- [ ] The oracle: reads, counts, overlay, search answers after each event
+- [x] The model: accounts, sources, collections, the four kinds, the structure cases of pim-corpus/proposal.md enumerated
+- [x] The scenario catalogue, read from himalaya, cardamum, calendula, neverest and the Android app: every queued action each issues, every sync sequence neverest runs
+- [x] The writer: a store from the canonical statements of queries/ alone, checked by checks/schema.sh's rules
+- [x] The scripted remote states, for scripted connectors
+- [x] The oracle: reads, counts, overlay, change feed, engine runs
+- [ ] The oracle: search answers
 - [ ] Shrinking: a failing seed reduced and written as a vector
-- [ ] Profiles: structure, count (100k items), bytes (large bodies), quirks
-- [ ] Its own checks in `nix flake check`
+- [x] Profiles: structure, count (100k items), bytes (large bodies)
+- [ ] Profile: quirks
+- [x] Its own checks in `nix flake check`
 
 ## 3. io-pimdir's differential tests
 
@@ -30,7 +32,7 @@ change: the-freeze-plan
 - [x] The engine replaying generated scripts through scripted connectors: no loss, convergence, queue order
 - [x] A crash injected at every step of a replay, the store reopened and the run finished
 - [x] The search index refreshed after each event equal to a rebuild
-- [ ] The count and bytes profiles under the scale tests
+- [x] The count and bytes profiles under the scale tests (debug sizes; the full sizes, release only, not yet run to the end)
 
 ## 4. The seams in the standard
 
@@ -44,12 +46,12 @@ change: the-freeze-plan
 - [x] D2 landed: SYNC text, vectors 174 and 175, io-pimdir (neverest mapping waits for an io-pimdir release)
 - [x] D3 decided (2026-11-20): search inside io-pimdir 1.0, SEARCH released with the other parts
 - [x] D4 decided (2026-11-20): outside
-- [ ] D4 stated in the `pimdir` binary's help and README
+- [x] D4 stated in the `pimdir` binary's help and README
 - [x] D5 decided (2026-11-20): two campaigns in a row with no spec break
 
 ## 5b. Search in v1
 
-- [ ] README.md, every Status line and AGENTS.md: the three parts release together
+- [x] README.md, every Status line and AGENTS.md: the three parts release together
 - [ ] The query language reviewed once: grammar, every form and every refusal listed, each refusal coded
 - [ ] Query vectors: every form of the grammar, run over generator stores, not one fixed store
 - [ ] Extraction vectors per kind: MIME parts, charsets, attachments; vCard fields; iCalendar fields, time zones, all-day items, recurrence expansion up to its bound; Unicode normalisation and case
@@ -81,3 +83,19 @@ change: the-freeze-plan
 - [ ] The freeze checklist of cairn/log/2026-11-13-the-freeze-gate-is-rehearsed.md read against the current drafts (search-draft-14)
 - [ ] io-pimdir passing the tree to freeze, tests/pending_vectors.txt empty, checks/io-pimdir.rev naming it
 - [ ] Ready: the owner runs the freeze commit and the tags
+
+## Left on 2026-11-20
+
+Where the work stopped, for the next session. Every lane's findings are in cairn/log/ (entries of 2026-11-20) and in io-pimdir's tests/generated (`known()` lists and `#[ignore]` reasons).
+
+- [ ] Plan 5b, all but the release wording: the query language review and grammar-form coverage check, extraction vectors per kind, threads/snippets/coverage vectors, page tokens across a refresh (rule decided: a cursor names a position, sort key and seq)
+- [ ] Two readings to pin: a mutable revival whose member carries another body keeps the old one (vector 108 covers the bodiless case alone); a fill settling an item conflict takes the adopted body's summary (vectors 114, 115 to state it)
+- [ ] The generator follows G15 (seq order, STORAGE §9.1) and SYNC §5's next-run debt; then the replay's known findings G14 to G17 are lifted in io-pimdir tests/generated
+- [ ] Generator readings G18 (a move or copy out of an unsynced collection parks) and G19 (a move of a bodiless based item passes)
+- [ ] io-pimdir G20: `retained_by` of a removed item no source binds; G21: the oracle and automatic `sender` references (a MAY)
+- [ ] The full-size count profile rerun in release with the collection hierarchy (bytes passes)
+- [ ] The flaky crash failure seen once in five runs: not reproduced in 13 runs, likely a half-edited tree; watch for it
+- [ ] ical-rs release with the bounded zone walk (ical a125d24), io-pimdir on it with `EXTRACTOR` moved, the hostile-zone search case out of tests/pending_vectors.txt (checks/implementation.sh is red until then)
+- [ ] Consumers after an io-pimdir release: neverest maps one-way to `KeepLocal`; cardamum and calendula pass no `hash:` key and use `PimdirEnqueued::link_id`; Android follows `PimdirWritten`, `PimdirRekeyReport`, `PimdirLoaded::folded` and may use the canonical collection statements
+- [ ] Owner decisions pending: `KeepLocal` over flags and remote deletes; the source a copy or move stages its target's create under; `alt:` keys stated by a producer; the `pimdir` binary's schema `$id` after 1.0; promoting the attachments collection id and `enumerated` to MUST
+- [ ] Sections 6 (API review), 7 (campaigns) and 8 (freeze checklist) not started
