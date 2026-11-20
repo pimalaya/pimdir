@@ -284,6 +284,7 @@ The level is `Full` only when a body is present, whatever the row claims. An unk
    - When those absent are more than half of this source's based bindings in the round's scope and these number at least 20, or when the round named no member at all (no binding carries its id) and any is absent, park unless the run carries `accept_absences`: drop nothing, land the page as one before the last with `set_round_cursor` and a `NULL` cursor, skip `close_round`, and report the counts. The next run lists the round again from its first page.
    - Delta: the changed and vanished handles, plus every projected placement that is not `Clean`.
    - A `Created` placement is a candidate with no remote side. It derives nothing before the round's last page has landed, nor, carrying no origin, when its `date` lies outside the run's scope.
+   - Derive each candidate's change from its placement and member as the run merges them, before the write folds it into the shared item (§12): what the fold leaves the binding owing, the item's body a collection policy kept over the member's, is the next run's to push.
 6. **Walk both sides in handle order.** Per candidate:
    - flags, merged element-wise over local, base and remote:
      - a flag is kept when both sides carry it or one side added it over the base, dropped when either side removed it from the base, the union when there is no base;
@@ -395,7 +396,7 @@ These sizes are safe on a slow network and under every provider's limits; raise 
 
    A fetched body over a placement with no local edit becomes `base_object`, with its revision as `base_revision`; one over a local edit is the both-changed case when the revision moved. A local edit over a base naming a revision and no body is upgraded even at `Full`: the fetched body at the base revision becomes `base_object`, the local body stays, and the next sync pushes it. A conflict's fetched body lands in the binding's `conflict_object`, or clears the conflict when it equals the placement's own. Otherwise the source's policy settles it now: under `PreferLocal`, content pushes allowed, keep the fetched body as a retained item keyed over the handle and reported `Overruled`, adopt it with its revision as the base and clear the conflict, so the next sync pushes the local body gated on that revision; under `PreferRemote` adopt it as the item's body and base, the local edit kept as §12 step 3 keeps one; under `Manual` leave it recorded.
 
-   An item conflict's missing body lands in `items.conflict_object` under `manual`. Under a `prefer-` policy it settles the conflict as §12 settles a carried body: adopted or kept, the conflict cleared, the other body kept as a retained item keyed over this binding's handle and reported `Overruled`, unless the item holds no body either, which then waits, recorded as `manual` records it, for the fill that reads its own (§12).
+   An item conflict's missing body equal to the item's own is no divergence: clear the item's conflict, whatever the policy, the binding taking the body as its base and `shared_object`. Differing, it lands in `items.conflict_object` under `manual`. Under a `prefer-` policy it settles the conflict as §12 settles a carried body: adopted or kept, the conflict cleared, the other body kept as a retained item keyed over this binding's handle and reported `Overruled`, unless the item holds no body either, which then waits, recorded as `manual` records it, for the fill that reads its own (§12).
 
 **Mutate** stages an edit through the write of §5 and no direct row edit. The queue's kinds map onto it: `set-flags` to `SetFlags` with its `base`, `remove` to `Remove` and `update` to `Edit`, each with its `if_match` and `resolves`, `move` and `copy` to `Move` and `Copy`, `add` to `Add`.
 
@@ -434,7 +435,7 @@ When a batch from one source folds into an item other sources bind:
 
 1. Adopt a known flag set, sort key and summary over the shared one; leave the shared value alone for an unknown one. A tombstone adopts no content. Merge the level as a maximum, under the rule that `Full` needs a body; a pull without a body writes `Meta`.
 2. For a mutable kind, read three facts before applying the upsert:
-   - the source changed: the incoming body differs from the base the binding held before this upsert;
+   - the source changed: the incoming body differs from the base the binding held before this upsert, or the source bound none of the item before it, a member joining it;
    - the item changed: the shared body differs from `shared_object`, or from `base_object` until the source has folded once;
    - the two disagree: the incoming body differs from the shared one.
 

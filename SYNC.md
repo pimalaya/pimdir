@@ -238,6 +238,8 @@ A sync reconciles one collection against one listing: a delta from the checkpoin
 
 A `Created` placement is a candidate with no remote side. The engine MUST walk both sides in handle order. Every member a page carries is named in the page's write on §6's identity rules: minting decided against the whole collection, and a pending create landed rather than minted.
 
+**A candidate's change is derived before its write.** The axes below derive each candidate's change from its placement and its member as the run merges them, before the write folds the candidate into the shared item (§9). What that fold leaves the binding owing, the item's body a collection's policy kept over the member's, is pushed by the source's next run, never by this one.
+
 **The scope.** A source MAY sync a mail collection under a scope `[since, until)`, `until` open in the usual case. A member is in scope when its summary `date` (STORAGE Annex A.1) falls in it, or when it has no usable `date` (rare, small and never lost: a draft before sending, a server's own notice).
 
 The `Date` header always decides. A received date is never stored and never decides.
@@ -461,7 +463,7 @@ A fetch carrying no body writes the level the payload supports, never lower than
 
 Otherwise the source's policy then settles it as a carried body (§5): under `Manual` it stays recorded; under `PreferLocal` or `KeepLocal`, content pushes allowed, the fetched body is kept as a retained item, reported `Overruled`, and the base adopts it with its revision, the conflict cleared, so the next sync pushes the local body gated on that revision; under `PreferRemote` the item adopts it as its body and the base, the local edit kept as §9 keeps it.
 
-An item conflict holding no `conflict_object`, recorded before its incoming body was read (§9), is revisited by the upgrade of every binding of the item whose base names a revision and no body. The body fetched is then settled by the collection's `conflict` policy as a carried one would have been:
+An item conflict holding no `conflict_object`, recorded before its incoming body was read (§9), is revisited by the upgrade of every binding of the item whose base names a revision and no body. A body fetched equal to the item's own is no divergence, whatever the policy: the item's conflict clears and the binding takes that body as its base and its `shared_object`, as a binding's own conflict clears on its own body (§5). A body fetched differing from it is settled by the collection's `conflict` policy as a carried one would have been:
 
 - under `manual` it MUST land in `items.conflict_object`, never in the item's own object;
 - under `prefer-incoming` the item adopts it, and under `prefer-existing` keeps its own, the conflict cleared either way and the body not adopted kept and reported (§9), when the item holds a body; one holding none waits, recorded as `manual` records it, for the fill that reads its own (§9).
@@ -556,7 +558,7 @@ The cross-source comparison MUST be made from `shared_object`, falling back to t
 
 **Cross-source content**, mutable kinds only. Three facts are read before the upsert is applied:
 
-- the source changed when the incoming body differs from the base its binding held before this upsert, not the base the upsert carries;
+- the source changed when the incoming body differs from the base its binding held before this upsert, not the base the upsert carries, and always when it bound none of the item before it, a member joining it (§6);
 - the item changed when the shared body differs from `shared_object`;
 - the two disagree when the incoming body differs from the shared one.
 
@@ -575,7 +577,7 @@ An upsert leaving a conflicted binding counts as the source having changed its b
 
 - An upsert carrying a body over an item holding none, from a binding whose base names no body, **fills** the item: the item adopts the body without measuring a divergence, the pull that emptied it being the one this body was read for. An item conflict standing stays, its `conflict_object` kept, until the policy settles it (below).
 - A divergence where either body is unread, the incoming one not carried or the item holding none, MUST be recorded as `manual` records one, whatever the policy: the shared body stays, none when the item holds none, the item is flagged, and its `conflict_object` holds the incoming body when the upsert carries it, else waits for the upgrade to fetch it (§6). No policy chooses between a body and one nobody has read.
-- Once the missing body is read, the policy applies: the incoming one when the upgrade fetches it (§6), the item's own when a fill lands it (above). `manual` keeps the conflict, a fetched incoming body landing in `conflict_object`; `prefer-incoming` adopts the incoming body and `prefer-existing` keeps the item's, the conflict cleared and the body not adopted kept as below, keyed over the handle of the binding whose upgrade fetched it or whose upsert filled the item.
+- Once the missing body is read, one equal to the other is no divergence and the conflict clears (§6); else the policy applies: the incoming one when the upgrade fetches it (§6), the item's own when a fill lands it (above). `manual` keeps the conflict, a fetched incoming body landing in `conflict_object`; `prefer-incoming` adopts the incoming body and `prefer-existing` keeps the item's, the conflict cleared and the body not adopted kept as below, keyed over the handle of the binding whose upgrade fetched it or whose upsert filled the item.
 
 **A policy's loser is kept.** A body a policy does not adopt MUST be kept:
 

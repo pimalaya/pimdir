@@ -1,7 +1,7 @@
 {
   "v": 11,
   "label": "a full upgrade of a local edit over a base naming a revision and no body reads that body into the base",
-  "note": "the store of 132. The placement is Full, holding c2, yet its base names r2 and no body, which its push waits for, so the upgrade fetches it. The fetch answers r2, the base's revision: the server body c1 lands as base_object, and the local edit c2 stays the item's body, now an edit over a body read, which the next sync pushes gated on r2 (SYNC.md §5, §6)",
+  "note": "the store of 132. The placement is Full, holding c2, yet its base names r2 and no body, which its push waits for, so the upgrade fetches it. The fetch answers r2, the base's revision: the server body c1 lands as base_object, and the local edit c2 stays the item's body, now an edit over a body read, which the next sync pushes gated on r2. Neither the item nor the binding is conflicted: a body read for a base naming no body, the item standing in no conflict, moves the base, the revision being the base's, and settles nothing under the collection's policy, which an item conflict waiting for that body alone meets (SYNC.md §5, §6)",
   "store": {
     "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
     "objects": { "c1": { "body": "fixtures/card-basic.vcf" }, "c2": { "body": "fixtures/card-basic-edited.vcf" } },
@@ -21,9 +21,9 @@
     "outcomes": [],
     "events": [],
     "store": {
-      "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c2", "level": 2, "deleted": 0 }],
+      "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c2", "level": 2, "deleted": 0, "conflicted": 0, "conflict_object": null }],
       "bindings": [
-        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r2", "base_present": 1 }
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r2", "base_present": 1, "conflicted": 0, "conflict_revision": null, "conflict_object": null }
       ],
       "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d1" }]
     }

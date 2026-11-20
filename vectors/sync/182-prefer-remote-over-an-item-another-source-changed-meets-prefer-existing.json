@@ -1,7 +1,7 @@
 {
   "v": 11,
   "label": "prefer-remote pulling over an item another source changed is settled by the collection's prefer-existing",
-  "note": "the case of 181 under prefer-existing: b's prefer-remote pulls c2, and the fold finds the divergence, which the collection's policy settles by keeping the item's c3 and the incoming c2 as a retained item over b's handle, reported Overruled alone, the item's body not having moved. b's base moves to c2 at r2 and its shared_object to c3, the body the item settled on, so b owes c3, which a run pushing content pushes gated on r2, a revision whose body it read and kept; this run pushes nothing, its source pushing nothing (SYNC.md §5, §9). Nothing keeps c3 apart: it is the item's body, another source's fold and not b's own edit",
+  "note": "the case of 181 under prefer-existing: b's prefer-remote pulls c2, and the fold finds the divergence, which the collection's policy settles by keeping the item's c3 and the incoming c2 as a retained item over b's handle, reported Overruled alone, the item's body not having moved. b's base moves to c2 at r2 and its shared_object to c3, the body the item settled on, so b owes c3, which b's next run pushes gated on r2, a revision whose body it read and kept: a candidate's change is derived before the write folds it, so this run, which pulled, pushes nothing (SYNC.md §5, §9). Nothing keeps c3 apart: it is the item's body, another source's fold and not b's own edit",
   "store": {
     "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "prefer-existing" }],
     "objects": { "c1": { "body": "fixtures/card-basic.vcf" }, "c2": { "body": "fixtures/card-basic-edited.vcf" }, "c3": { "body": "fixtures/card-basic-renamed.vcf" } },
@@ -12,7 +12,7 @@
     ],
     "sources": [{ "collection": "Contacts", "source": "a", "checkpoint": "a1" }, { "collection": "Contacts", "source": "b", "checkpoint": "b1" }]
   },
-  "run": { "verb": "sync", "collection": "Contacts", "source": "b", "options": { "push": false, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "prefer-remote" } },
+  "run": { "verb": "sync", "collection": "Contacts", "source": "b", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "prefer-remote" } },
   "remote": {
     "snapshot": { "items": [{ "handle": "b.vcf", "flags": [], "revision": "r2", "carries": true, "meta": { "body": "fixtures/card-basic-edited.vcf" } }], "vanished": [], "complete": true, "checkpoint": "b2" },
     "fetch": {}

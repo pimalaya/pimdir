@@ -1,0 +1,30 @@
+{
+  "v": 11,
+  "label": "an upgrade reading a joined member's body equal to the item's clears the item's conflict",
+  "note": "the store 187 left: b joined the card at s1 without its body, recorded as the item's conflict with no conflict_object. b's base names s1 and no body, so its upgrade fetches the body, c1, the item's own. A body read equal to the item's is no divergence, whatever the collection's policy: the item's conflict clears, and b's base takes c1 at s1 and its shared_object c1, as a binding's own conflict clears on its own body (SYNC.md §5, §6, §9). Nothing is kept: no body was lost. Under manual, landing c1 in conflict_object would leave a conflict between two equal bodies for a person to settle, on every card a second address book shares",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
+    "objects": { "c1": { "body": "fixtures/card-basic.vcf" } },
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0, "conflicted": 1, "conflict_object": null }],
+    "bindings": [
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1, "shared_object": "c1" },
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "b", "handle": "b.vcf", "base_flags": [], "base_object": null, "base_revision": "s1", "base_present": 1, "shared_object": null }
+    ],
+    "sources": [{ "collection": "Contacts", "source": "a", "checkpoint": "a1" }, { "collection": "Contacts", "source": "b", "checkpoint": "b1" }]
+  },
+  "run": { "verb": "upgrade", "collection": "Contacts", "source": "b", "tier": "Full", "handles": ["b.vcf"] },
+  "remote": { "snapshot": null, "fetch": { "b.vcf": { "Full": { "body": "fixtures/card-basic.vcf", "revision": "s1" } } } },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0, "conflicted": 0, "conflict_object": null }],
+      "bindings": [
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1, "shared_object": "c1" },
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "b", "handle": "b.vcf", "base_flags": [], "base_object": "c1", "base_revision": "s1", "base_present": 1, "shared_object": "c1", "conflicted": 0 }
+      ],
+      "sources": [{ "collection": "Contacts", "source": "a", "checkpoint": "a1" }, { "collection": "Contacts", "source": "b", "checkpoint": "b1" }]
+    }
+  }
+}

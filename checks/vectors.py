@@ -2014,6 +2014,21 @@ for path in sync_cases:
         for binding in after.get("bindings", []):
             if binding["source"] == run["source"] and binding.get("conflicted") == 1:
                 require(f"{label}: binding {binding['handle']} under {policy} is settled once its diverging body is read", binding.get("conflict_object") is None)
+    # An item conflict waiting for an unread body clears once an upgrade reads
+    # one equal to the item's, whatever the policy (SYNC.md sections 6 and 9).
+    if run.get("verb") == "upgrade":
+        fixture = {object_label: spec["body"] for object_label, spec in store.get("objects", {}).items()}
+        for binding in store.get("bindings", []):
+            if binding["collection"] != run["collection"] or binding["source"] != run["source"]:
+                continue
+            item = next((i for i in store.get("items", []) if i["collection"] == binding["collection"]
+                         and i["link_id"] == binding["link_id"]), {})
+            fetched = remote.get("fetch", {}).get(binding["handle"], {}).get("Full", {})
+            if item.get("conflicted") == 1 and item.get("conflict_object") is None and binding.get("base_object") is None \
+                    and fetched.get("body") is not None and fetched.get("body") == fixture.get(item.get("object")):
+                after_item = after_items.get((binding["collection"], binding["link_id"]), {})
+                require(f"{label}: {binding['handle']}'s body read equal to the item's clears the item's conflict",
+                        after_item.get("conflicted") == 0 and after_item.get("conflict_object") is None)
     # An Update gated on another revision than the base the binding held, a
     # policy's push over the server's body or a revived row's, is gated on one
     # whose body the run read, a member carrying it or a fetch answering it,

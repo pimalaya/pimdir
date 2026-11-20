@@ -173,7 +173,7 @@
     "vectors/sync/130-a-fetch-meeting-a-failing-file-under-its-name-files-it-again.json": "553fe87975563f29319ad19c523b0025b41ad80bb26a8516a1d6d4f6c27b8e51",
     "vectors/sync/131-a-resolution-naming-both-conflicts-settles-both.json": "aecefc3052d93a4c8ee38591235de5e7c483133d3e4c03c3ac149d673d113b00",
     "vectors/sync/132-an-edit-over-an-unread-base-waits-for-its-body.json": "67a02d27027fa39c14c85b2b5c05c6a0b5fe9855b3af3b31a9d4604440656989",
-    "vectors/sync/133-an-upgrade-reads-the-unread-base-under-an-edit.json": "655cd889c45a58f4f1ff5cf33824e2b9e7a8493578a849fa5a99fe50fe170bf4",
+    "vectors/sync/133-an-upgrade-reads-the-unread-base-under-an-edit.json": "820f69e6fce3d07d1094a1abbe31e255bf063417429eaaccccf3caa0ca8d16e6",
     "vectors/sync/134-a-capped-round-finds-no-member-absent.json": "5d27bf79d7ba95942fdca595513f0d1ecae8116ab27eecc356da5e310fe1f1e2",
     "vectors/sync/135-a-bodiless-copy-to-another-source-is-refused.json": "ab31edd7689928abbc815404af49358e00b1e6f4421cd5046526687b6e1fa11e",
     "vectors/sync/136-a-delivered-create-waits-for-its-arrival.json": "aa08c43731b2a7ddbbe4d7aaabf5b0de352554fd47e27cd9a682b8020a1c4f43",
@@ -227,11 +227,13 @@
     "vectors/sync/18-add-rejected-stays-pending.json": "834af39298de153483ba653b81059c6514de5aefacf51ef093a677d729112508",
     "vectors/sync/180-an-ordinary-edit-moves-the-agreement-point.json": "eb4254ec6704684d0e1986c8fde1eb905c2f81c1f64692c2438dffae62db7350",
     "vectors/sync/181-prefer-remote-over-an-item-another-source-changed-meets-prefer-incoming.json": "5029331c120229091c202e8eb9934d1bed0dfb044580ed128ae2287d257e85a5",
-    "vectors/sync/182-prefer-remote-over-an-item-another-source-changed-meets-prefer-existing.json": "679108e1f0e122c26e398b4943f3d68bc8055bed438f3aa6db3b5a411a0017eb",
+    "vectors/sync/182-prefer-remote-over-an-item-another-source-changed-meets-prefer-existing.json": "a260253d5b692678062bd99fe55e41ca34ac138a5d3bb311e84557fd4c0c89a6",
     "vectors/sync/183-prefer-remote-over-an-item-another-source-changed-meets-manual.json": "486791034b1bacc6225b339e7a6262203b7f46def131135dfa3f3d2ea1f95120",
     "vectors/sync/184-a-member-joining-an-item-reports-added-alone.json": "0204cb2632b04997fd76ae18b802a23a95ad3ec2773f2943a57ab7f868e297cd",
     "vectors/sync/185-a-member-joining-with-a-diverging-body-meets-prefer-incoming.json": "f3308152a2910f323d8d619bf3b65a4351b42278f12029a941b7c2cf770cae8c",
     "vectors/sync/186-a-pending-create-beside-a-parked-round-derives-no-add.json": "32e61bf415bb4d8bc59442b935b43e95618d6245f70be5c0bed1034b7f3383f1",
+    "vectors/sync/187-a-member-joining-without-its-body-records-the-divergence.json": "c552170ed9a8026550312ad62ba3729bdcb3a0839b4b303a58a903a6850de07d",
+    "vectors/sync/188-an-upgrade-reading-a-joined-body-equal-to-the-items-clears-the-conflict.json": "d8afadd0af67144ce7c6229fe944005478e7a9ea74543c2be6bf57a31872e375",
     "vectors/sync/19-delta-vanished-retains.json": "6f23942ec9b35aa6b9aeafeaaa3fa1616da547870d0fe8dfc5f9957852a81805",
     "vectors/sync/20-move-source-first-relocates.json": "21729b1c61a5085e531c817866cf1471944a0d22bf4df5ce4a89289cb7edf40d",
     "vectors/sync/21-a-page-lands-a-pending-create.json": "6e6d36fb5836347ca11426072acfd4cad17924e268516fd3ffeee1ca0009cc80",
@@ -345,5 +347,5 @@
       "/cases": 24
     }
   },
-  "sync": 186
+  "sync": 188
 }
