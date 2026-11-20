@@ -163,6 +163,8 @@
 {"name": "storage/owner/set_collection_account", "parameters": ["account", "collection"], "slots": [], "columns": []},
 {"name": "storage/owner/set_collection_kind", "parameters": ["collection", "account", "kind"], "slots": [], "columns": []},
 {"name": "storage/owner/set_collection_name", "parameters": ["collection", "account", "name"], "slots": [], "columns": []},
+{"name": "storage/owner/set_collection_parent", "parameters": ["parent", "collection"], "slots": [], "columns": []},
+{"name": "storage/owner/set_collection_presentation", "parameters": ["color", "description", "sort_order", "collection"], "slots": [], "columns": []},
 {"name": "storage/owner/set_collection_role", "parameters": ["role", "collection"], "slots": [], "columns": []},
 {"name": "storage/owner/set_conflict", "parameters": ["conflict", "collection"], "slots": [], "columns": []},
 {"name": "storage/owner/set_coverage", "parameters": ["since", "until", "collection", "source"], "slots": [], "columns": []},

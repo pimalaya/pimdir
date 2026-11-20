@@ -586,6 +586,53 @@ expect "role: a calendar is the default one" "$(sql "SELECT role FROM collection
 run owner/set_collection_role ":collection='Cal'" ":role=NULL"
 expect "role: a source no longer saying it clears it" "$(sql "SELECT count(*) FROM collections WHERE id = 'Cal' AND role IS NOT NULL;")" "0"
 
+# --- A parent and a presentation are what a source states (§14) ------------
+
+fresh
+collection INBOX work
+collection Projects work
+collection Q1 work
+collection Other home
+run owner/set_collection_parent ":collection='Projects'" ":parent='INBOX'"
+run owner/set_collection_parent ":collection='Q1'" ":parent='Projects'"
+expect "parent: the setter records it, and the reader lists it" \
+    "$(run read/list_collections_by_account ":account='work'" | grep '^Q1|' | cut -d'|' -f5)" "Projects"
+run owner/set_collection_parent ":collection='INBOX'" ":parent='Q1'"
+expect "parent: a collection under its own child is refused, the row unchanged" \
+    "$(sql "SELECT ifnull(parent, '-') FROM collections WHERE id = 'INBOX';")" "-"
+run owner/set_collection_parent ":collection='INBOX'" ":parent='INBOX'"
+expect "parent: a collection under itself is refused" \
+    "$(sql "SELECT ifnull(parent, '-') FROM collections WHERE id = 'INBOX';")" "-"
+run owner/set_collection_parent ":collection='Q1'" ":parent='Other'"
+expect "parent: a parent of another account is refused, the row unchanged" \
+    "$(sql "SELECT parent FROM collections WHERE id = 'Q1';")" "Projects"
+run owner/set_collection_parent ":collection='Q1'" ":parent='Nowhere'"
+expect "parent: an unknown parent is refused" \
+    "$(sql "SELECT parent FROM collections WHERE id = 'Q1';")" "Projects"
+cursor="$(run read/load_change_cursor | cut -d'|' -f1)"
+run owner/set_collection_parent ":collection='Q1'" ":parent=NULL"
+expect "parent: NULL moves it to the top, stamped in the feed" \
+    "$(sql "SELECT ifnull(parent, '-') FROM collections WHERE id = 'Q1';")|$(run read/list_collections_changed_since ":since=$cursor" ":limit=10" | cut -d'|' -f1)" "-|Q1"
+run owner/rename_collection ":collection='INBOX'" ":new_id='Inbox'"
+expect "parent: a renamed parent is followed by its key" \
+    "$(sql "SELECT parent FROM collections WHERE id = 'Projects';")" "Inbox"
+run owner/delete_collection ":collection='Inbox'"
+expect "parent: a deleted parent leaves its children at the top" \
+    "$(sql "SELECT ifnull(parent, '-') FROM collections WHERE id = 'Projects';")" "-"
+cursor="$(run read/load_change_cursor | cut -d'|' -f1)"
+run owner/set_collection_presentation ":collection='Projects'" ":color='#3a87ad'" ":description='Work in flight'" ":sort_order=2"
+run owner/set_collection_presentation ":collection='Q1'" ":color=NULL" ":description=NULL" ":sort_order=1"
+expect "presentation: the setter records it, stamped in the feed" \
+    "$(run read/list_collections_changed_since ":since=$cursor" ":limit=10" | cut -d'|' -f1 | sort | tr '\n' ' ')" "Projects Q1 "
+expect "presentation: the reader lists it, ordered by sort_order" \
+    "$(run read/list_collections_by_account ":account='work'" | cut -d'|' -f1,6,7,8 | tr '\n' ' ')" "Q1|||1 Projects|#3a87ad|Work in flight|2 "
+run owner/set_collection_presentation ":collection='Projects'" ":color=NULL" ":description=NULL" ":sort_order=NULL"
+expect "presentation: a source stating none clears it" \
+    "$(sql "SELECT count(*) FROM collections WHERE id = 'Projects' AND (color IS NOT NULL OR description IS NOT NULL OR sort_order IS NOT NULL);")" "0"
+run owner/set_collection_presentation ":collection='Nowhere'" ":color='red'" ":description=NULL" ":sort_order=NULL"
+expect "presentation: an undeclared collection is not declared by it" \
+    "$(sql "SELECT count(*) FROM collections WHERE id = 'Nowhere';")" "0"
+
 # --- Closed vocabularies are held by the schema (§13) -----------------------
 
 fresh

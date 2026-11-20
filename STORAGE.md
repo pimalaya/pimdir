@@ -741,6 +741,10 @@ The owner writes a role only from what a source states (an IMAP special-use attr
 
 What a reader makes of a collection with no role (a name it recognises, a choice of the user's) is its own.
 
+A collection's `parent` places it in its account's hierarchy, `NULL` at the top: `set_collection_parent(collection, parent)` sets or clears it, from what a source states (an IMAP or JMAP parent, the DAV collection holding it), never from a name. The hierarchy MUST stay a forest within an account: a parent is a collection of the same account, never the collection itself nor one under it. `set_collection_parent` holds this by changing no row for a parent that breaks it, or that the store does not hold, which the owner reads as a refusal. A rename carries a child's `parent` (`rename_collection`), and a deleted parent leaves its children at the top.
+
+A collection's presentation, `color`, `description` and `sort_order`, is what its source states, each `NULL` when it states none: `set_collection_presentation(collection, color, description, sort_order)` writes the three together on a declared collection. `list_collections` orders by `sort_order`. Nothing keys on them, and a reader takes the color and the description as untrusted text (§18). With several sources on one collection, the first that states one wins, as for the name.
+
 A source's **capabilities** are declared as a set, `delete_capabilities(source)` then `set_capability(account, source, collection, capability, support, detail)` per row, in one transaction (§15.6); a source the owner stops running has its set deleted the same way. A **performer** is recorded by `set_performer(account, capability, source)` and withdrawn by `delete_performer(account, capability)`, both applying a `set-performer` action (§15.3).
 
 **`rename_collection(collection, new_id)`** is the only safe way to change an id. Every foreign key onto `collections(id)`, and `bindings`' key onto `items(id, collection)`, cascades, so items, bindings, sources, queue rows and children follow in one statement, an item's other children keyed by its id alone, and the items are restamped under the new id (§4.5).
