@@ -61,7 +61,9 @@ change: the-freeze-plan
 ## 6. io-pimdir's public API
 
 - [ ] The list of public items, each kept, made private or removed
-- [ ] `non_exhaustive` on every enum and struct expected to grow
+- [ ] `non_exhaustive` on every enum and struct expected to grow (`PimdirConflictPolicy` among them)
+- [ ] `PimdirReader::pending_actions` lists a row whose payload it cannot decode instead of failing the listing (STORAGE §15.4; finding G1 of io-pimdir tests/generated)
+- [ ] An owner write registering a source with no checkpoint (neverest opens its own connection for it, src/sync/storage.rs:143-182)
 - [ ] Private fields behind a constructor where a value must be guarded
 - [ ] Every public item documented and named by the family's rules
 - [ ] The MSRV stated; the features checked against the guidelines
