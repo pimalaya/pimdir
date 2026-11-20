@@ -3440,7 +3440,7 @@ for case in refresh["cases"]:
         require(f"{label}: {item['link_id']} in a known collection", item["collection"] in collections)
         if "fixture" in item:
             require(f"{label}: {item['fixture']} exists", (root / item["fixture"]).is_file())
-        model[(item["collection"], item["seq"])] = {"link_id": item["link_id"], "live": True}
+        model[(item["collection"], item["seq"])] = {"link_id": item["link_id"], "live": True, "fixture": item.get("fixture")}
     for number, step in enumerate(case["steps"], 1):
         where = f"{label} step {number}"
         write = step["write"]
@@ -3453,7 +3453,7 @@ for case in refresh["cases"]:
             held = model.get((item["collection"], item["seq"]))
             require(f"{where}: a put keeps the link id of the seq it names",
                     held is None or (held["link_id"] == item["link_id"] and held["live"]))
-            model[(item["collection"], item["seq"])] = {"link_id": item["link_id"], "live": True}
+            model[(item["collection"], item["seq"])] = {"link_id": item["link_id"], "live": True, "fixture": item.get("fixture")}
             items.add((item["collection"], item["link_id"]))
         elif write["kind"] in ("remove", "purge", "erase"):
             key = (write["collection"], write["seq"])
@@ -3486,12 +3486,18 @@ for case in refresh["cases"]:
         check(f"{where}: the collections the feed lists", sorted(step["changed"]["collections"]), sorted(touched))
         check(f"{where}: whether the purge count moves", step["changed"]["purged"], purged)
         live = {(collections[collection], seq) for (collection, seq), held in model.items() if held["live"]}
+        # A canonical index holds the bodies its live placements name, each
+        # once (SEARCH.md section 4).
+        if "objects" in step:
+            bodies = {held["fixture"] for held in model.values() if held["live"] and held["fixture"]}
+            check(f"{where}: the object rows a canonical index holds", step["objects"], len(bodies))
         for query in step["queries"]:
             try:
                 parse(query["query"])
             except Refused as refused:
                 failures.append(f"{where}: {query['query']!r} is refused ({refused.code})")
-            for hit in query["hits"]:
+            hits = query.get("hits", []) + [hit for thread in query.get("threads", []) for hit in thread["hits"]]
+            for hit in hits:
                 require(f"{where}: {query['query']!r} hit {hit} names a searchable item", tuple(hit) in live)
 
 # Every fixture is a body some case names (summaries.json, a sync case, the

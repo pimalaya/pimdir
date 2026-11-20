@@ -1,5 +1,5 @@
 {
-  "v": 1,
+  "v": 2,
   "note": "a refresh driven by the change feed (STORAGE.md section 4.5, SEARCH.md section 4): each case builds its store as store.json's are built and indexes it, then applies its steps in order, each as an owner would write it. After each step the feed lists, above the cursor read before it, the items and the collections stated in changed, and the purge count moves when purged says so; a refresh then answers each query as stated, as an index rebuilt from the store as it then stands does. A missing stamp leaves the index answering the earlier store.",
   "cases": [
     {
@@ -103,6 +103,78 @@
             { "query": "smith", "hits": [] },
             { "query": "kind:contact", "hits": [] },
             { "query": "kind:mail", "hits": [["work", 2], ["work", 4]] }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "a body goes with its last placement",
+      "note": "the card's first body is replaced, then the card retained: each body leaves the index with the last placement naming it, though the store still holds it, uncollected or pinned by the retained row, as an index rebuilt then would hold it (SEARCH.md section 4). objects counts the object rows a canonical index holds",
+      "store": {
+        "collections": [{ "id": "home/Contacts", "account": "home", "kind": "text/vcard" }],
+        "items": [
+          { "collection": "home/Contacts", "seq": 1, "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "flags": [], "fixture": "fixtures/card-basic.vcf" }
+        ],
+        "references": []
+      },
+      "steps": [
+        {
+          "write": { "kind": "put", "item": { "collection": "home/Contacts", "seq": 1, "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "flags": [], "fixture": "fixtures/card-basic-renamed.vcf" } },
+          "changed": { "items": [["home/Contacts", "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40"]], "collections": [], "purged": false },
+          "objects": 1,
+          "queries": [
+            { "query": "smith", "hits": [["home", 1]] }
+          ]
+        },
+        {
+          "write": { "kind": "remove", "collection": "home/Contacts", "seq": 1 },
+          "changed": { "items": [["home/Contacts", "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40"]], "collections": [], "purged": false },
+          "objects": 0,
+          "queries": [
+            { "query": "smith", "hits": [] }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "a member whose sort key moves names and bounds its thread again",
+      "note": "basic-1 and follow-1, which replies to it, are one thread named after basic-1, the earlier. follow-1's date, and so its sort key, moves before basic-1's: the thread is named after follow-1 and bounded by the two dates as they stand, as an index rebuilt then would name and bound it (SEARCH.md section 9)",
+      "store": {
+        "collections": [{ "id": "work/INBOX", "account": "work", "kind": "message/rfc822" }],
+        "items": [
+          { "collection": "work/INBOX", "seq": 1, "link_id": "basic-1@example.org", "flags": [], "fixture": "fixtures/mail-basic.eml" },
+          { "collection": "work/INBOX", "seq": 2, "link_id": "follow-1@example.org", "flags": [], "summary": { "table": "mail_summary", "row": { "message_id": "follow-1@example.org", "in_reply_to": ["basic-1@example.org"], "subject": "Re: Stand-up notes", "sender": "bob@example.org", "sender_name": "Bob", "date": "2026-08-05T08:00:00Z", "size": 512, "attachment": null, "invitation": null }, "addresses": [{ "role": "from", "position": 0, "address": "bob@example.org", "name": "Bob" }], "sort_key": "2026-08-05T08:00:00Z" } }
+        ],
+        "references": []
+      },
+      "steps": [
+        {
+          "write": { "kind": "put", "item": { "collection": "work/INBOX", "seq": 2, "link_id": "follow-1@example.org", "flags": [], "summary": { "table": "mail_summary", "row": { "message_id": "follow-1@example.org", "in_reply_to": ["basic-1@example.org"], "subject": "Re: Stand-up notes", "sender": "bob@example.org", "sender_name": "Bob", "date": "2026-07-20T08:00:00Z", "size": 512, "attachment": null, "invitation": null }, "addresses": [{ "role": "from", "position": 0, "address": "bob@example.org", "name": "Bob" }], "sort_key": "2026-07-20T08:00:00Z" } } },
+          "changed": { "items": [["work/INBOX", "follow-1@example.org"]], "collections": [], "purged": false },
+          "queries": [
+            { "query": "thread:basic-1@example.org", "threads": [{ "thread": "follow-1@example.org", "count": 2, "first": "2026-07-20T08:00:00Z", "last": "2026-08-01T10:00:00Z", "hits": [["work", 1], ["work", 2]] }] }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "an event in a zone whose rule steps by the second is indexed within bounds",
+      "note": "event-zoned-hostile.ics: its zone's DAYLIGHT rule steps every second from 1970, which an expander following every onset walks for 1.7 billion steps; STORAGE.md Annex A.3 and SEARCH.md section 7 bound the periods a rule is followed for, so indexing the event ends and it answers by the fields it states, its title and its kind; the instant a zone this hostile resolves to is the implementation's own and no query here reads it (SEARCH.md section 7)",
+      "store": {
+        "collections": [{ "id": "home/Calendar", "account": "home", "kind": "text/calendar" }],
+        "items": [
+          { "collection": "home/Calendar", "seq": 1, "link_id": "event-hostile-zone@example.org", "flags": [], "fixture": "fixtures/event-zoned-hostile.ics" }
+        ],
+        "references": []
+      },
+      "steps": [
+        {
+          "write": { "kind": "cover", "collection": "home/Calendar", "source": "mirror", "covered_since": null, "covered_until": null },
+          "changed": { "items": [], "collections": ["home/Calendar"], "purged": false },
+          "objects": 1,
+          "queries": [
+            { "query": "stepping", "hits": [["home", 1]] },
+            { "query": "kind:event", "hits": [["home", 1]] }
           ]
         }
       ]

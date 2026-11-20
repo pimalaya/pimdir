@@ -109,6 +109,7 @@ The index holds:
 | `thread_rows` | indexer | §9 |
 | `delete_thread` | indexer | §9 |
 | `placements_gone` | indexer | §4 |
+| `object_placed` | indexer | §4 |
 | `objects_gone` | indexer | §4 |
 | `delete_object` | indexer | §4 |
 | `delete_object_row` | indexer | §4 |
@@ -150,7 +151,7 @@ Per row:
 - occurrences are re-expanded when the body changed (§7);
 - the thread is updated (§9).
 
-A deleted row loses its placement, which takes its flags and occurrences by cascade. The indexer deletes its summary text by the rowid the delete returns. Its body's text stays until the object goes. A mail placement that was its link id's last prunes its thread (§9) in the same transaction.
+A deleted row loses its placement, which takes its flags and occurrences by cascade. The indexer deletes its summary text by the rowid the delete returns. A body goes with its last placement: once a placement dropped or repointed leaves a hash no placement names (`object_placed`), the indexer deletes that body's text and its `object` row (`delete_object`, `delete_object_row`) in the same transaction, so a refreshed index holds the bodies its placements name, as one rebuilt does, whatever the store still pins. A mail placement that was its link id's last prunes its thread (§9) in the same transaction.
 
 **A body that cannot be read is tried again.** A body the blob directory no longer holds when the indexer opens it, or whose bytes fail its name (STORAGE §7), is not `unparseable`, and its placement is recorded in `missing` (`insert_missing`). One the index never read writes no `object` row: the placement is indexed as a bodiless one, its `hash` `NULL` and its summary text written. One the index holds already, which a re-expansion opens again (§7), keeps its rows, its occurrences and its cut as they stand.
 
@@ -449,7 +450,7 @@ Mail only. A message's `parent` is its first `In-Reply-To` id, else the last `Re
 
 A **member** is a message a live mail placement holds. Every id a member bears or names as its parent has a `message` row, present in the store or not, and no other id has one. Two replies to a parent nobody holds are thus one thread, and a parent arriving later joins what already waited for it. A cycle is broken by ignoring the edge that would close it.
 
-A thread is the connected set over those rows. Its id is the link id of the present member with the lowest `(sort_key, link_id)`, recomputed when threads join: the new row is written and the members repointed before the old row goes, since the old row's delete cascades. No joining by subject.
+A thread is the connected set over those rows. Its id is the link id of the present member with the lowest `(sort_key, link_id)`, and its `first` and `last` its members' lowest and highest sort keys, recomputed when threads join and when a member is restated, its sort key having moved or not (`thread_rows` reads the keys as they stand): the new row is written and the members repointed before the old row goes, since the old row's delete cascades. No joining by subject.
 
 **A message that leaves prunes its thread.** When a mail placement goes (a deleted row, or the key reconciliation, §4) and no other holds its link id, the rows become those a rebuild from the store as it stands writes, in the same transaction: within its thread, a row no member holds names no parent (`unparent_messages`), then a row no member holds and no row names goes (`prune_messages`). The rows left are re-keyed: each connected set among them is a thread named by its member with the lowest `(sort_key, link_id)` (`thread_rows`), written and its rows repointed before a thread row no row points to goes (`delete_thread`). A purged message thus leaves no id, parent nor thread of its own in the index, and stays only as the phantom parent a member names.
 
@@ -463,12 +464,12 @@ Tagging from a query stages one `set-flags` action per placement of each hit thr
 
 ## 11. Test vectors
 
-vectors/search/ holds the fixture store and the queries every conforming implementation MUST answer alike, each file stating the version of its format, `v` 4 for queries.json, `v` 2 for store.json, `v` 1 for chunks.json and `v` 1 for refresh.json, and conforming to its JSON Schema under vectors/schema/:
+vectors/search/ holds the fixture store and the queries every conforming implementation MUST answer alike, each file stating the version of its format, `v` 4 for queries.json, `v` 2 for store.json, `v` 1 for chunks.json and `v` 2 for refresh.json, and conforming to its JSON Schema under vectors/schema/:
 
 - `store.json`: collections (`id`, `account`, `kind`), items (`collection`, `seq`, `link_id`, `flags`, and a `fixture` or a `summary` for a bodiless item, an item stating `unreadable` being one whose row and summary the store holds and whose body the indexer cannot read, §4) and the references the store records (`from_kind`, `from_link_id`, `to_kind`, `to_link_id`, `role`, `origin`), given rather than derived.
 - `queries.json`: the `now` relative dates resolve against, in UTC, the horizon, the coverage over every collection of the store, per kind its four counts (§8.2), and the cases, then the `occurrences` windows, each a `start`, an `end` and the `rows` `occurrences_between` answers for it, `(collection, seq, start, end)` in its order.
 - `chunks.json`: field texts and the chunk boundaries §6 cuts them into.
-- `refresh.json`: refreshes driven by the change feed (§4, STORAGE §4.5). A case is a `store` in store.json's shape and its `steps`, each a `write` an owner makes, the feed it leaves and the `queries` answered after it. A write is `put`, an item in store.json's shape (an insert, flags changed, a body replaced, or a bodiless item's summary changed under unchanged columns); `remove`, its sources dropping an item, which retains it; `purge` or `erase` of a retained item (STORAGE §11.2, §11.5); `rename` of a collection; or `cover`, a source's round closed over a scope. `changed` states the items, as `(collection, link_id)`, and the collections the feed lists above the cursor read before the write, and whether the purge count moved.
+- `refresh.json`: refreshes driven by the change feed (§4, STORAGE §4.5). A case is a `store` in store.json's shape and its `steps`, each a `write` an owner makes, the feed it leaves and the `queries` answered after it. A write is `put`, an item in store.json's shape (an insert, flags changed, a body replaced, or a bodiless item's summary changed under unchanged columns); `remove`, its sources dropping an item, which retains it; `purge` or `erase` of a retained item (STORAGE §11.2, §11.5); `rename` of a collection; or `cover`, a source's round closed over a scope. `changed` states the items, as `(collection, link_id)`, and the collections the feed lists above the cursor read before the write, and whether the purge count moved. A query answers `hits` or the `threads` of a threaded listing, as queries.json's do; a step stating `objects` gives the number of `object` rows a canonical index holds after the refresh, the bodies its placements name, which an index of another shape does not compare.
 
 A case has a `query`, an optional `sort` (`date`, `name`, `relevance`), an optional `zone`, `index_zone` and `now`, and one answer:
 

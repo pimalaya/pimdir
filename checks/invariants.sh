@@ -3070,6 +3070,9 @@ isearch upsert_placement ":collection='Cal'" ":seq=2" ":link_id='plain'" ":hash=
 isearch upsert_placement ":collection='Cal'" ":seq=3" ":link_id='bare'" ":hash=NULL" > /dev/null
 expect "attached: a body whose attachment field holds text answers, an empty field and no body do not" \
     "$(isearch attached | tr '\n' ' ')|$(sqlite3 "$dir/index.db" "INSERT INTO object(hash, status) VALUES('$hx', 'ok');" 2>&1 | grep -c 'NOT NULL')" "Cal|1 |1"
+isearch upsert_placement ":collection='Cal'" ":seq=2" ":link_id='plain'" ":hash='$ha'" > /dev/null
+expect "placed: a body a placement names is placed, one its last placement moved off is not, for the refresh to delete" \
+    "$(isearch object_placed ":hash='$ha'")$(isearch object_placed ":hash='$hn'")" "10"
 
 # --- What a card holds is read by a seek (SEARCH.md §6, §8) ----------------
 
@@ -3131,7 +3134,7 @@ expect "behind: a rename draws the stamps the index has yet to fold" "$(isearch 
 isearch set_index_cursor ":store_change=$moved" ":store_purges=$purges"
 expect "reconciled: past a batch, the store's purge count still stands above the one the index recorded, so the next pass reconciles the old id" \
     "$(isearch load_index_meta | cut -d'|' -f4)|$(run read/load_change_cursor | cut -d'|' -f2)|$(isearch behind)|$(isearch placements_gone)" \
-    "$purges|$((purges + 1))|0|INBOX|1|a"
+    "$purges|$((purges + 1))|0|INBOX|1|a|"
 
 # --- An index names its version and shape, and its store (SEARCH.md §2) -----
 
@@ -3262,7 +3265,7 @@ for thread in r@x z@x; do
 done
 expect "thread: a message no placement holds names no parent, and goes once no row names it, its phantom parent with it" \
     "$gone|$(isearch prune_messages ":thread='r@x'")|$(isearch prune_messages ":thread='z@x'" | sort | tr '\n' ' ')" \
-    "INBOX|1|r@x INBOX|4|z@x ||w@x z@x "
+    "INBOX|1|r@x| INBOX|4|z@x| ||w@x z@x "
 expect "thread: thread_rows reads each row's parent and a held one's sort key, so the re-keying finds the lowest present member" \
     "$(isearch thread_rows ":thread='r@x'" | tr '\n' ' ')" \
     "r@x|| x@x|r@x|2026-09-02T00:00:00Z y@x|x@x|2026-09-03T00:00:00Z "

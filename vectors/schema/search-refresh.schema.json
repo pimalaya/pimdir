@@ -10,7 +10,7 @@
   ],
   "additionalProperties": false,
   "properties": {
-    "v": { "const": 1 },
+    "v": { "const": 2 },
     "note": {
       "type": "string"
     },
@@ -131,8 +131,7 @@
           "items": {
             "type": "object",
             "required": [
-              "query",
-              "hits"
+              "query"
             ],
             "additionalProperties": false,
             "properties": {
@@ -159,9 +158,72 @@
                   "items": false,
                   "minItems": 2
                 }
+              },
+              "threads": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "thread",
+                    "count",
+                    "first",
+                    "last",
+                    "hits"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "thread": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "first": {
+                      "type": "string"
+                    },
+                    "last": {
+                      "type": "string"
+                    },
+                    "hits": {
+                      "type": "array",
+                      "uniqueItems": true,
+                      "items": {
+                        "type": "array",
+                        "prefixItems": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "integer",
+                            "minimum": 1
+                          }
+                        ],
+                        "items": false,
+                        "minItems": 2
+                      }
+                    }
+                  }
+                }
               }
-            }
+            },
+            "oneOf": [
+              {
+                "required": [
+                  "hits"
+                ]
+              },
+              {
+                "required": [
+                  "threads"
+                ]
+              }
+            ]
           }
+        },
+        "objects": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },
