@@ -20,6 +20,7 @@
 
 pub mod body;
 pub mod error;
+pub mod fixture;
 pub mod model;
 pub mod name;
 pub mod oracle;

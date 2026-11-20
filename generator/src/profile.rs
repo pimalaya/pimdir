@@ -8,8 +8,11 @@ use std::collections::BTreeSet;
 
 use crate::{
     body::{Card, Document, Event, Journal, Mail, Person, Task, Time},
+    error::{Error, Result},
+    fixture,
     model::{Collection, Kind, Model, Placement},
     rng::Rng,
+    spec::Spec,
     time::Instant,
 };
 
@@ -22,9 +25,9 @@ pub enum Profile {
 
 impl Profile {
     /// The store a seed gives under this profile.
-    pub fn generate(&self, seed: u64) -> Model {
+    pub fn generate(&self, spec: &Spec, seed: u64) -> Result<Model> {
         match self {
-            Self::Structure => Draw::new(seed).structure(),
+            Self::Structure => Draw::new(seed).structure(spec),
         }
     }
 }
@@ -58,7 +61,7 @@ impl Draw {
         }
     }
 
-    fn structure(mut self) -> Model {
+    fn structure(mut self, spec: &Spec) -> Result<Model> {
         let mut model = Model::new();
 
         let mailboxes = [
@@ -116,7 +119,39 @@ impl Draw {
         self.contacts(&mut model);
         self.calendar(&mut model);
         self.files(&mut model);
-        model
+        self.fixtures(&mut model, spec)?;
+        Ok(model)
+    }
+
+    fn fixtures(&mut self, model: &mut Model, spec: &Spec) -> Result<()> {
+        for (id, kind, source) in [
+            ("lab/INBOX", Kind::Mail, "imap"),
+            ("lab/contacts", Kind::Contact, "carddav"),
+            ("lab/calendar", Kind::Calendar, "caldav"),
+        ] {
+            model.declare(collection(id, Some("lab"), kind, id, None, Some(source)));
+        }
+
+        for fixture in fixture::load(spec)? {
+            let (collection, placement) = match fixture.filed.summary.table.kind() {
+                Kind::Mail => ("lab/INBOX", self.placement(true)),
+                Kind::Contact => ("lab/contacts", self.mutable_placement(true)),
+                _ => ("lab/calendar", self.mutable_placement(true)),
+            };
+            let index = model.file(collection, fixture.filed, placement);
+            let link_id = &model.items[index].link_id;
+            if *link_id != fixture.link_id {
+                return Err(Error::Disagreement {
+                    what: format!("the key of {}", fixture.path),
+                    detail: format!(
+                        "the model files it {link_id}, summaries.json {}",
+                        fixture.link_id
+                    ),
+                });
+            }
+        }
+
+        Ok(())
     }
 
     fn mail(&mut self, model: &mut Model) {
@@ -174,6 +209,16 @@ impl Draw {
         placement.flags = None;
         model.file("work/INBOX", listed.file(), placement);
 
+        let deleted = self.message(false);
+        let placement = self.placement(true);
+        let index = model.file("work/INBOX", deleted.file(), placement);
+        model.tombstone(index);
+
+        let gone = self.message(false);
+        let placement = self.placement(true);
+        let index = model.file("work/Archive", gone.file(), placement);
+        model.retain(index);
+
         let keyworded = self.message(true);
         let mut placement = self.placement(true);
         placement.flags = Some(BTreeSet::from([
@@ -183,6 +228,22 @@ impl Draw {
             String::from("$label1"),
         ]));
         model.file("home/INBOX", keyworded.file(), placement);
+
+        let mut reply = self.message(false);
+        reply.in_reply_to = vec![filed_twice.message_id.clone().unwrap_or_default()];
+        let placement = self.placement(true);
+        model.file("work/INBOX", reply.file(), placement);
+
+        let mut sent_reply = self.message(false);
+        sent_reply.in_reply_to = vec![String::from("only-from-sent@pimdir.test")];
+        let placement = self.placement(true);
+        model.file("work/Sent Items", sent_reply.file(), placement);
+
+        let mut twice = self.message(false);
+        let person = self.person();
+        twice.to = vec![person.clone(), person];
+        let placement = self.placement(true);
+        model.file("home/INBOX", twice.file(), placement);
     }
 
     fn contacts(&mut self, model: &mut Model) {
@@ -205,7 +266,13 @@ impl Draw {
 
         let listed = self.card();
         let placement = self.mutable_placement(false);
-        model.file("work/contacts", listed.file(), placement);
+        let index = model.file("work/contacts", listed.file(), placement);
+        model.retain(index);
+
+        let kept = self.card();
+        let placement = self.mutable_placement(true);
+        let index = model.file("work/contacts", kept.file(), placement);
+        model.retain(index);
     }
 
     fn calendar(&mut self, model: &mut Model) {

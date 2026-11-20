@@ -193,14 +193,28 @@ pub struct Item {
     pub level: i64,
     /// Its sort key.
     pub sort_key: String,
-    /// Whether it is a tombstone.
-    pub deleted: bool,
+    /// Whether it is live, a tombstone or retained.
+    pub state: State,
     /// Its summary row.
     pub summary: Summary,
     /// Its address rows.
     pub addresses: Vec<Address>,
     /// The binding of its collection's source, if one syncs it.
     pub binding: Option<Binding>,
+}
+
+/// The state of an item's row (STORAGE §11).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum State {
+    /// Live: `deleted` 0.
+    Live,
+    /// A tombstone a source still binds: `deleted` 1, no `retained_at`.
+    Tombstone,
+    /// Retained: `deleted` 1, `retained_at` stamped, no binding.
+    Retained {
+        /// The source whose removal retired it.
+        by: Option<String>,
+    },
 }
 
 /// How an item is placed in a collection.
@@ -258,7 +272,7 @@ impl Model {
     /// Files a body in `collection` as a writer naming it does: the key
     /// from the hint, escaped, or the fallback, minted over the handle
     /// while held (STORAGE §9), the `seq` shared or drawn (§9.1).
-    pub fn file(&mut self, collection: &str, filed: Filed, placement: Placement) -> &Item {
+    pub fn file(&mut self, collection: &str, filed: Filed, placement: Placement) -> usize {
         let base = match &filed.hint {
             Some(hint) if RESERVED.iter().any(|prefix| hint.starts_with(prefix)) => {
                 format!("esc:{hint}")
@@ -300,12 +314,26 @@ impl Model {
             level: if object.is_some() { 2 } else { 1 },
             object,
             sort_key: filed.sort_key,
-            deleted: false,
+            state: State::Live,
             summary: filed.summary,
             addresses: filed.addresses,
             binding,
         });
-        &self.items[self.items.len() - 1]
+        self.items.len() - 1
+    }
+
+    /// Marks the item at `index` deleted while its source still binds it, a
+    /// tombstone whose delete is still to push (STORAGE §10).
+    pub fn tombstone(&mut self, index: usize) {
+        self.items[index].state = State::Tombstone;
+    }
+
+    /// Retains the item at `index` as its last binding goes, its body kept
+    /// (STORAGE §11).
+    pub fn retain(&mut self, index: usize) {
+        let item = &mut self.items[index];
+        let by = item.binding.take().map(|binding| binding.source);
+        item.state = State::Retained { by };
     }
 
     /// Whether a row of `collection` holds `link_id`, whatever its state.
@@ -319,7 +347,7 @@ impl Model {
     pub fn live(&self, collection: &str) -> impl Iterator<Item = &Item> {
         self.items
             .iter()
-            .filter(move |item| item.collection == collection && !item.deleted)
+            .filter(move |item| item.collection == collection && item.state == State::Live)
     }
 
     fn seq_for(&mut self, collection: &str, link_id: &str, summary: &Summary) -> i64 {

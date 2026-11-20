@@ -21,7 +21,7 @@ use rusqlite::{ToSql, types::Value};
 
 use crate::{
     error::{Error, Result},
-    model::{Item, Model, Table, split_flags},
+    model::{Item, Model, State, Table, split_flags},
     name::ObjectName,
     store::{Store, create_private_dir},
 };
@@ -128,7 +128,10 @@ fn write_item(store: &Store, item: &Item) -> Result<()> {
             ("object_hash", &object),
             ("sort_key", &Value::Text(item.sort_key.clone())),
             ("level", &Value::Integer(item.level)),
-            ("deleted", &Value::Integer(i64::from(item.deleted))),
+            (
+                "deleted",
+                &Value::Integer(i64::from(item.state != State::Live)),
+            ),
             ("conflicted", &Value::Integer(0)),
             ("conflict_object", &Value::Null),
         ],
@@ -178,6 +181,18 @@ fn write_item(store: &Store, item: &Item) -> Result<()> {
             store.run("storage/owner/retain_base_flags", &key)?;
             store.run("storage/owner/add_base_flags", &key)?;
         }
+    }
+
+    if let State::Retained { by } = &item.state {
+        run(
+            store,
+            "storage/owner/retain_item",
+            &[
+                ("collection", &collection),
+                ("link_id", &link_id),
+                ("source", &text(by.as_deref())),
+            ],
+        )?;
     }
 
     Ok(())
