@@ -4,13 +4,18 @@
 //! cases it must hold; the seed chooses its surface (names, subjects,
 //! dates, counts within bounds).
 
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, fs};
+
+use rusqlite::types::Value;
+use serde_json::{Value as Json, json};
 
 use crate::{
     body::{Card, Document, Event, Journal, Mail, Person, Task, Time},
     error::{Error, Result},
     fixture,
-    model::{Collection, Kind, Model, Placement},
+    model::{Collection, Item, Kind, Model, Placement, Refusal, State},
+    name::ObjectName,
+    queue::{Action, Outcome, RowState},
     rng::Rng,
     spec::Spec,
     time::Instant,
@@ -120,6 +125,8 @@ impl Draw {
         self.calendar(&mut model);
         self.files(&mut model);
         self.fixtures(&mut model, spec)?;
+        self.conflicts(&mut model);
+        self.queue(&mut model, spec)?;
         Ok(model)
     }
 
@@ -338,6 +345,357 @@ impl Draw {
         }
     }
 
+    fn conflicts(&mut self, model: &mut Model) {
+        let cards: Vec<usize> = (0..model.items.len())
+            .filter(|index| {
+                let item = &model.items[*index];
+                item.collection == "work/contacts"
+                    && item.state == State::Live
+                    && item.object.is_some()
+                    && item.binding.is_some()
+            })
+            .collect();
+
+        let diverging = self.card().file().bytes;
+        let name = ObjectName::of(&diverging);
+        model.objects.insert(name.clone(), diverging);
+        let item = &mut model.items[cards[0]];
+        item.conflicted = true;
+        item.conflict_object = Some(name.clone());
+
+        let binding = model.items[cards[1]]
+            .binding
+            .as_mut()
+            .expect("a bound card");
+        binding.conflicted = true;
+        binding.conflict_revision = Some(String::from("\"etag-diverged\""));
+        binding.conflict_object = Some(name);
+
+        let binding = model.items[cards[2]]
+            .binding
+            .as_mut()
+            .expect("a bound card");
+        binding.conflicted = true;
+        binding.conflict_revision = Some(String::from("\"etag-unread\""));
+    }
+
+    fn queue(&mut self, model: &mut Model, spec: &Spec) -> Result<()> {
+        let pick = |model: &Model, collection: &str, skip: usize, test: &dyn Fn(&Item) -> bool| {
+            model
+                .items
+                .iter()
+                .filter(|item| {
+                    item.collection == collection && item.state == State::Live && test(item)
+                })
+                .nth(skip)
+                .map(|item| (item.seq, item.flags.clone(), item.object.clone()))
+        };
+        let known = |item: &Item| item.flags.is_some() && item.binding.is_some();
+        let unknown = |item: &Item| item.flags.is_none();
+        let free = |item: &Item| {
+            !item.conflicted
+                && item
+                    .binding
+                    .as_ref()
+                    .is_some_and(|binding| !binding.conflicted)
+        };
+        let any = |_: &Item| true;
+
+        let (seq, flags, _) = pick(model, "work/INBOX", 0, &known).expect("a message");
+        let base = flags.unwrap_or_default();
+        let mut read = base.clone();
+        read.insert(String::from("\\Seen"));
+        model.enqueue(
+            "himalaya",
+            "work/INBOX",
+            Action::SetFlags {
+                seq,
+                flags: read,
+                base: Some(base),
+            },
+        );
+
+        let (seq, ..) = pick(model, "work/INBOX", 1, &known).expect("a message");
+        let flagged = BTreeSet::from([String::from("\\Flagged")]);
+        model.enqueue(
+            "himalaya",
+            "work/INBOX",
+            Action::SetFlags {
+                seq,
+                flags: flagged.clone(),
+                base: None,
+            },
+        );
+
+        let (seq, ..) = pick(model, "work/INBOX", 0, &unknown).expect("a listed message");
+        model.enqueue(
+            "x-tagger",
+            "work/INBOX",
+            Action::SetFlags {
+                seq,
+                flags: flagged.clone(),
+                base: Some(BTreeSet::new()),
+            },
+        );
+
+        let (seq, ..) = pick(model, "work/INBOX", 2, &known).expect("a message");
+        let to = String::from("work/Archive");
+        model.enqueue("himalaya", "work/INBOX", Action::Move { seq, to });
+        let (seq, ..) = pick(model, "work/INBOX", 3, &known).expect("a message");
+        let to = String::from("home/INBOX");
+        model.enqueue("himalaya", "work/INBOX", Action::Copy { seq, to });
+        let (seq, ..) = pick(model, "work/INBOX", 4, &known).expect("a message");
+        let to = String::from("work/INBOX");
+        let id = model.enqueue("himalaya", "work/INBOX", Action::Move { seq, to });
+        model.drain(id);
+
+        let (seq, ..) = pick(model, "work/Archive", 0, &known).expect("a message");
+        let id = model.enqueue(
+            "himalaya",
+            "work/Archive",
+            Action::SetFlags {
+                seq,
+                flags: flagged,
+                base: None,
+            },
+        );
+        model.drain(id);
+        let (seq, ..) = pick(model, "work/Archive", 1, &known).expect("a message");
+        let id = model.enqueue(
+            "himalaya",
+            "work/Archive",
+            Action::Remove {
+                seq,
+                if_match: None,
+            },
+        );
+        model.drain(id);
+
+        let seen = BTreeSet::from([String::from("\\Seen")]);
+        let sent = self.message(false);
+        let filed = sent.file();
+        let link_id = sent.message_id.clone().unwrap_or_default();
+        let id = model.enqueue(
+            "himalaya",
+            "work/Sent Items",
+            Action::Add {
+                link_id,
+                flags: seen.clone(),
+                filed,
+            },
+        );
+        if let Outcome::Applied(Some(seq)) = model.drain(id) {
+            let created = model
+                .items
+                .iter_mut()
+                .find(|item| item.collection == "work/Sent Items" && item.seq == seq)
+                .and_then(|item| item.binding.as_mut());
+            if let Some(binding) = created {
+                binding.refusal = Some(Refusal {
+                    reason: String::from("the server takes appends into its drafts folder alone"),
+                    key: format!("{:016x}", self.u64()),
+                });
+            }
+        }
+
+        for state in [
+            RowState::Pending,
+            RowState::Unconfirmed(String::from(
+                "the connection dropped after the message was handed over",
+            )),
+            RowState::Applied(None),
+        ] {
+            let mail = self.message(false);
+            let rcpts: Vec<&String> = mail.to.iter().map(|person| &person.address).collect();
+            let payload = json!({
+                "v": 1,
+                "source": "imap",
+                "from": mail.from.address,
+                "rcpts": rcpts,
+                "subject": mail.subject,
+                "copy": "work/Sent Items",
+            });
+            let body = mail.file().bytes;
+            let applied = state == RowState::Applied(None);
+            let id = model.enqueue(
+                "himalaya",
+                "work/Sent Items",
+                Action::Intent {
+                    action: String::from("submit"),
+                    payload,
+                    body: Some(body.clone()),
+                },
+            );
+            model.settle(id, state);
+            if applied {
+                let mut filed = mail.file();
+                filed.bytes = body;
+                let link_id = mail.message_id.clone().unwrap_or_default();
+                model.enqueue(
+                    "neverest",
+                    "work/Sent Items",
+                    Action::Add {
+                        link_id,
+                        flags: seen.clone(),
+                        filed,
+                    },
+                );
+            }
+        }
+        let payload = json!({ "v": 1, "source": "imap", "name": "Projects" });
+        model.enqueue(
+            "himalaya",
+            "work/INBOX",
+            Action::Intent {
+                action: String::from("collection-create"),
+                payload,
+                body: None,
+            },
+        );
+
+        let card = self.card();
+        let link_id = card.uid.clone().unwrap_or_default();
+        model.enqueue(
+            "cardamum",
+            "work/contacts",
+            Action::Add {
+                link_id,
+                flags: BTreeSet::new(),
+                filed: card.file(),
+            },
+        );
+
+        let (seq, _, object) = pick(model, "work/contacts", 0, &free).expect("a card");
+        let mut edited = self.card();
+        edited.uid = model
+            .items
+            .iter()
+            .find(|item| item.collection == "work/contacts" && item.seq == seq)
+            .and_then(|item| match item.summary.get("uid") {
+                Value::Text(uid) => Some(uid),
+                _ => None,
+            });
+        let first = edited.file();
+        let first_name = ObjectName::of(&first.bytes);
+        model.enqueue(
+            "cardamum",
+            "work/contacts",
+            Action::Update {
+                seq,
+                filed: first,
+                if_match: object.clone(),
+            },
+        );
+        edited.name = format!("{} Junior", edited.name);
+        model.enqueue(
+            "cardamum",
+            "work/contacts",
+            Action::Update {
+                seq,
+                filed: edited.file(),
+                if_match: Some(first_name),
+            },
+        );
+        edited.name = String::from("Stale Edit");
+        model.enqueue(
+            "cardamum",
+            "work/contacts",
+            Action::Update {
+                seq,
+                filed: edited.file(),
+                if_match: object,
+            },
+        );
+
+        let (seq, _, object) = pick(model, "work/contacts", 1, &free).expect("a card");
+        model.enqueue(
+            "cardamum",
+            "work/contacts",
+            Action::Remove {
+                seq,
+                if_match: object,
+            },
+        );
+
+        let (seq, _, object) = pick(model, "work/contacts", 0, &|item: &Item| item.conflicted)
+            .expect("a conflicted card");
+        let mut over = self.card();
+        over.name = String::from("Over A Conflict");
+        model.enqueue(
+            "cardamum",
+            "work/contacts",
+            Action::Update {
+                seq,
+                filed: over.file(),
+                if_match: object,
+            },
+        );
+
+        let start = Time::Utc(self.instant());
+        let event = self.event(start);
+        let link_id = event.uid.clone().unwrap_or_default();
+        model.enqueue(
+            "calendula",
+            "work/calendar",
+            Action::Add {
+                link_id,
+                flags: BTreeSet::new(),
+                filed: event.file(),
+            },
+        );
+        let (seq, ..) = pick(model, "work/calendar", 0, &any).expect("an event");
+        let payload = json!({ "v": 1, "source": "caldav", "seq": seq, "partstat": "ACCEPTED" });
+        model.enqueue(
+            "calendula",
+            "work/calendar",
+            Action::Intent {
+                action: String::from("calendar-reply"),
+                payload,
+                body: None,
+            },
+        );
+
+        let (seq, ..) = pick(model, "home/folder:0f", 0, &any).expect("a file");
+        let keep = BTreeSet::from([String::from("$keep")]);
+        model.enqueue(
+            "x-files",
+            "home/folder:0f",
+            Action::SetFlags {
+                seq,
+                flags: keep,
+                base: None,
+            },
+        );
+
+        let raw = payload_cases(spec)?;
+        for (index, (action, payload, malformed)) in raw.into_iter().enumerate() {
+            let id = model.enqueue(
+                "x-app",
+                "home/INBOX",
+                Action::Raw {
+                    action,
+                    payload,
+                    malformed,
+                },
+            );
+            if index % 2 == 1 {
+                model.drain(id);
+            }
+        }
+        let payload = json!({ "v": 1, "note": "an application's own action" });
+        model.enqueue(
+            "x-app",
+            "home/INBOX",
+            Action::Raw {
+                action: String::from("x-app-archive"),
+                payload,
+                malformed: false,
+            },
+        );
+
+        Ok(())
+    }
+
     fn message(&mut self, cc: bool) -> Mail {
         let domain = self.pick(&DOMAINS);
         Mail {
@@ -483,4 +841,37 @@ fn collection(
         source: source.map(String::from),
         checkpoint: source.map(|_| b"c1".to_vec()),
     }
+}
+
+/// Malformed and unknown payloads of store actions from
+/// vectors/payloads.json, with whether each is malformed.
+fn payload_cases(spec: &Spec) -> Result<Vec<(String, Json, bool)>> {
+    let path = spec.root.join("vectors/payloads.json");
+    let text = fs::read_to_string(&path).map_err(|source| Error::Io {
+        path: path.clone(),
+        source,
+    })?;
+    let payloads: Json =
+        serde_json::from_str(&text).map_err(|source| Error::Json { path, source })?;
+
+    let store = ["add", "set-flags", "remove", "move", "copy", "update"];
+    let cases = payloads["cases"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|case| store.contains(&case["action"].as_str().unwrap_or_default()))
+        .filter_map(|case| {
+            let malformed = match case["outcome"].as_str() {
+                Some("malformed") => true,
+                Some("unknown") => false,
+                _ => return None,
+            };
+            Some((
+                String::from(case["action"].as_str().unwrap_or_default()),
+                case["payload"].clone(),
+                malformed,
+            ))
+        })
+        .collect();
+    Ok(cases)
 }

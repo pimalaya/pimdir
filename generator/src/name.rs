@@ -49,6 +49,8 @@ pub fn base32(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use serde_json::Value;
 
     use crate::{
@@ -58,7 +60,7 @@ mod tests {
 
     fn objects() -> Value {
         let path = Spec::default_root().join("vectors/objects.json");
-        let text = std::fs::read_to_string(&path).unwrap();
+        let text = fs::read_to_string(&path).unwrap();
         serde_json::from_str(&text).unwrap()
     }
 

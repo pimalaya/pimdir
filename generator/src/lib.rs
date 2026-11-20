@@ -25,6 +25,7 @@ pub mod model;
 pub mod name;
 pub mod oracle;
 pub mod profile;
+pub mod queue;
 pub mod rng;
 pub mod spec;
 pub mod store;

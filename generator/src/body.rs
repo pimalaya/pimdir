@@ -605,6 +605,8 @@ fn base64(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use rusqlite::types::Value;
     use serde_json::Value as Json;
 
@@ -616,7 +618,7 @@ mod tests {
 
     fn pinned(label: &str) -> Json {
         let path = Spec::default_root().join("vectors/summaries.json");
-        let text = std::fs::read_to_string(path).unwrap();
+        let text = fs::read_to_string(path).unwrap();
         let summaries: Json = serde_json::from_str(&text).unwrap();
         summaries["cases"]
             .as_array()
@@ -775,8 +777,8 @@ mod tests {
     #[test]
     fn fnv1a64_keys_the_fixture_with_no_uid_as_the_vectors_do() {
         let root = crate::spec::Spec::default_root();
-        let bytes = std::fs::read(root.join("vectors/fixtures/event-no-uid.ics")).unwrap();
-        let text = std::fs::read_to_string(root.join("vectors/summaries.json")).unwrap();
+        let bytes = fs::read(root.join("vectors/fixtures/event-no-uid.ics")).unwrap();
+        let text = fs::read_to_string(root.join("vectors/summaries.json")).unwrap();
         let key = format!("hash:{}", fnv1a64(&bytes));
         assert!(text.contains(&format!("\"{key}\"")), "{key}");
     }

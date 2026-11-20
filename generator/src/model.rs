@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use rusqlite::types::Value;
 
-use crate::{body::Filed, body::Person, name::ObjectName};
+use crate::{body::Filed, body::Person, name::ObjectName, queue::Row};
 
 /// The kind a collection declares (STORAGE §13).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -172,8 +172,27 @@ pub struct Binding {
     pub base_object: Option<ObjectName>,
     /// The base revision.
     pub base_revision: Option<String>,
+    /// Whether a base exists: a pending create holds none.
+    pub base_present: bool,
     /// The body last agreed with the shared item.
     pub shared_object: Option<ObjectName>,
+    /// Whether the binding is in conflict with its remote.
+    pub conflicted: bool,
+    /// The remote revision observed in conflict.
+    pub conflict_revision: Option<String>,
+    /// The remote body observed in conflict, `None` while unread.
+    pub conflict_object: Option<ObjectName>,
+    /// The refusal standing on the binding (SYNC §5).
+    pub refusal: Option<Refusal>,
+}
+
+/// A change a remote refused for good (STORAGE §13).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Refusal {
+    /// The reason it gave.
+    pub reason: String,
+    /// The idempotency key of the change, sixteen hexadecimal digits.
+    pub key: String,
 }
 
 /// One item, its row of `items` and what hangs off it.
@@ -195,6 +214,10 @@ pub struct Item {
     pub sort_key: String,
     /// Whether it is live, a tombstone or retained.
     pub state: State,
+    /// Whether two sources disagree on it (SYNC §9).
+    pub conflicted: bool,
+    /// The diverging body, `None` while unread.
+    pub conflict_object: Option<ObjectName>,
     /// Its summary row.
     pub summary: Summary,
     /// Its address rows.
@@ -241,6 +264,8 @@ pub struct Model {
     pub objects: BTreeMap<ObjectName, Vec<u8>>,
     /// The next `seq` to draw, `store_meta.next_seq`.
     pub next_seq: i64,
+    /// The queue's rows, applied ones included, by id.
+    pub queue: Vec<Row>,
 }
 
 /// The prefixes a writer derives keys under (STORAGE §9).
@@ -303,7 +328,12 @@ impl Model {
             base_flags: placement.flags.clone(),
             base_object: object.clone(),
             base_revision: placement.revision.clone(),
+            base_present: true,
             shared_object: object.clone(),
+            conflicted: false,
+            conflict_revision: None,
+            conflict_object: None,
+            refusal: None,
         });
 
         self.items.push(Item {
@@ -315,6 +345,8 @@ impl Model {
             object,
             sort_key: filed.sort_key,
             state: State::Live,
+            conflicted: false,
+            conflict_object: None,
             summary: filed.summary,
             addresses: filed.addresses,
             binding,
@@ -350,7 +382,7 @@ impl Model {
             .filter(move |item| item.collection == collection && item.state == State::Live)
     }
 
-    fn seq_for(&mut self, collection: &str, link_id: &str, summary: &Summary) -> i64 {
+    pub(crate) fn seq_for(&mut self, collection: &str, link_id: &str, summary: &Summary) -> i64 {
         let derived = ["alt:", "hash:", "dup:"]
             .iter()
             .any(|prefix| link_id.starts_with(prefix));
@@ -395,7 +427,7 @@ pub fn split_flags(flags: &BTreeSet<String>) -> (i64, Vec<String>) {
     (marks, others)
 }
 
-fn fallback(filed: &Filed) -> String {
+pub(crate) fn fallback(filed: &Filed) -> String {
     match filed.summary.table {
         Table::Mail => {
             let text = |column: &str| match filed.summary.get(column) {

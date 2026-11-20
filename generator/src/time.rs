@@ -6,6 +6,8 @@
 //! §3.3.5). The calendar is the proleptic Gregorian one, computed here so
 //! no time library enters the crate.
 
+use std::ops::Range;
+
 /// Seconds since 1970-01-01T00:00:00Z.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Instant(pub i64);
@@ -24,7 +26,7 @@ impl Instant {
 
     /// Reads an iCalendar UTC date-time, `20260801T100000Z`.
     pub fn from_ical_utc(text: &str) -> Self {
-        let number = |range: std::ops::Range<usize>| text[range].parse::<u32>().unwrap_or(0);
+        let number = |range: Range<usize>| text[range].parse::<u32>().unwrap_or(0);
         Self::at(
             i64::from(number(0..4)),
             number(4..6),

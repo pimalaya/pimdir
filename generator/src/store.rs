@@ -184,6 +184,12 @@ impl<'a> Store<'a> {
         self.spec
     }
 
+    /// The id of the row the connection last inserted, the id a producer
+    /// follows its enqueue by (STORAGE §15.1).
+    pub fn last_insert_rowid(&self) -> i64 {
+        self.conn.last_insert_rowid()
+    }
+
     /// Reads a pragma's one value, for the checks of the store's shape.
     pub fn pragma(&self, name: &str) -> Result<Value> {
         self.conn
@@ -252,8 +258,10 @@ fn private_file(path: &Path) -> Result<File> {
 #[cfg(test)]
 mod tests {
     use std::{
+        env,
         fs::{self, File},
         path::PathBuf,
+        process,
         sync::atomic::{AtomicU32, Ordering},
     };
 
@@ -268,9 +276,9 @@ mod tests {
     static NEXT: AtomicU32 = AtomicU32::new(0);
 
     fn scratch() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
+        let dir = env::temp_dir().join(format!(
             "pimdir-generator-{}-{}",
-            std::process::id(),
+            process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         let _ = fs::remove_dir_all(&dir);
