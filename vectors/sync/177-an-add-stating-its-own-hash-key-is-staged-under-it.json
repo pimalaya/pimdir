@@ -1,0 +1,30 @@
+{
+  "v": 10,
+  "label": "an add stating the hash: key its own bytes give is staged under it",
+  "note": "the case of 176 stating hash:6978bdefb73bfcc5, the key c1's bytes give: the add is staged under it, a pending create under its provisional handle (SYNC.md section 7; STORAGE.md section 15.3)",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
+    "objects": { "c1": { "body": "fixtures/card-empty-uid.vcf" } },
+    "items": [],
+    "bindings": [],
+    "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d0" }]
+  },
+  "run": { "verb": "mutate", "collection": "Contacts", "source": "dav", "mutation": { "kind": "Add", "flags": [], "object": "c1", "link_id": "hash:6978bdefb73bfcc5" } },
+  "remote": {
+    "snapshot": null,
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [
+        { "collection": "Contacts", "link_id": "hash:6978bdefb73bfcc5", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0 }
+      ],
+      "bindings": [
+        { "collection": "Contacts", "link_id": "hash:6978bdefb73bfcc5", "source": "dav", "handle": "\u0001hash:6978bdefb73bfcc5", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }
+      ]
+    }
+  }
+}

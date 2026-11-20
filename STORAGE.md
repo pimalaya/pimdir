@@ -912,6 +912,8 @@ Existing items are addressed by `seq`. A payload is a JSON object, typed by the 
 
 - **`add`**: `{ "v": 1, "link_id": key?, "flags": […], "object": hash, "supersedes": { "collection": collection, "seq": n }? }`. Creates an item staged as a local creation to push under its provisional handle (§2); the owner derives its summary and addresses from `object` (Annex A).
 
+  A stated `link_id` is a key §9 assigns, the owner staging the create under it. One beginning with `hash:` names bytes (§9): it MUST be the one the object's own bytes give (Annex A.2, A.3). A producer MUST refuse an `add` stating a `hash:` key another body gives, read from the body it stores before anything is appended, and an owner MUST park one (§15.2), the key naming no bytes the store holds under it. A producer that states no `link_id` checks the duplicate under the key the owner derives (Annex A), which it may answer the caller.
+
   A live duplicate `link_id` (`live_item_for_link`) parks the action: a source's duplicate is minted, a producer's is a mistake worth reporting. A retained row under the key revives (§11), and a tombstone still propagating is revived the same way, the new content beating the delete on every source; a message that does not agree with either is another one, and is minted instead (§9's table, its `Add` column).
 
   With `"supersedes": { "collection": id, "seq": n }` the add replaces the item it names (a task filed into another collection, renamed or not) rather than moving it there. In one transaction the owner applies the add, tombstones the superseded item as a `remove` of it would, and records the pair (`supersede_item`).

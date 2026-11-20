@@ -1,5 +1,5 @@
 {
-  "v": 9,
+  "v": 10,
   "label": "an upgrade reading the body its base named at that revision keeps the item conflict and the local body",
   "note": "a named the card at r1 without reading it, and its edit c3 is the shared body; b diverged with c2, which the item conflict holds. a's upgrade reads c1, the body a's server holds at r1, the one a's edit was made over: it fills a's base, a's local body staying an edit over a body read (SYNC.md section 5), and settles nothing, the item keeping c3 and its conflict on c2 (section 6 revisits an item conflict only while it holds no diverging body). Before, an engine read c1 as a fast-forward of a's own: the item took c1, the conflict cleared, and c3 and c2 were kept nowhere",
   "store": {

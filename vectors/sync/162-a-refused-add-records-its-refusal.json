@@ -1,5 +1,5 @@
 {
-  "v": 9,
+  "v": 10,
   "label": "an add the remote refuses for good records the refusal on its binding and stays pending",
   "note": "Refused, unlike Rejected, is the remote refusing the change itself: the write recording the outcome records its reason and its key on the binding the add was pushed for, the create staying pending under its provisional handle, and the run reports it Refused with the reason (SYNC.md §4, §5)",
   "store": {

@@ -1,0 +1,27 @@
+{
+  "v": 10,
+  "label": "an add stating a hash: key another body gives is refused and stages nothing",
+  "note": "c1 states an empty UID, so its key is the hash: fallback over its own bytes, hash:6978bdefb73bfcc5. The add states hash:0b546173f363e9ee, another body's: a hash: key names bytes, and one naming bytes the item does not hold would be retired by the first read of its member (STORAGE.md sections 9 and 15.3). It is refused, staging nothing, as a producer refuses it and an owner parks it; a producer that derived its key before stripping the X-PIMDIR- properties it stores without states such a key",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
+    "objects": { "c1": { "body": "fixtures/card-empty-uid.vcf" } },
+    "items": [],
+    "bindings": [],
+    "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d0" }]
+  },
+  "run": { "verb": "mutate", "collection": "Contacts", "source": "dav", "mutation": { "kind": "Add", "flags": [], "object": "c1", "link_id": "hash:0b546173f363e9ee" } },
+  "remote": {
+    "snapshot": null,
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "failed": true,
+    "store": {
+      "items": [],
+      "bindings": []
+    }
+  }
+}

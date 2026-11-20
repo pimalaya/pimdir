@@ -1,5 +1,5 @@
 {
-  "v": 9,
+  "v": 10,
   "label": "a remove stating the body it deletes is refused when the item holds no body",
   "note": "the store of vector 153: a frontend showed the card at c1 and queued its delete stating if_match c1, and a pull at r2 carrying no body emptied the item before the drain. The remove was decided over a body the item no longer holds, the one the server holds now being unread: it is refused and stages nothing, which the drain parks naming both, rather than delete an edit its user never saw (SYNC.md §7; STORAGE §15.3)",
   "store": {

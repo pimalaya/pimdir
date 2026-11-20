@@ -1,5 +1,5 @@
 {
-  "v": 9,
+  "v": 10,
   "label": "a delivered create whose member never arrived is given up on request, retained and reported",
   "note": "a relocation into Trash was accepted, the create recorded delivered, and \\Seen staged on it since; no listing of Trash ever named the member. No round gives a delivered create up (vector 139), so it waits until a person asks: the Abandon drops its binding as a removal the source stated is dropped, and the item, no source binding it any more, is retained with its body and the flag staged on it, to be revived should the member arrive after all. Nothing is pushed, there being no member to push to, and the run reports the provisional handle it gave up (SYNC.md §5, §7; STORAGE §11)",
   "store": {

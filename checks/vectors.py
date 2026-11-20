@@ -1753,6 +1753,14 @@ for path in sync_cases:
         named = {item.get(column) for item in rows.get("items", []) for column in ("object", "conflict_object")}
         named |= {binding.get(column) for binding in rows.get("bindings", []) for column in ("base_object", "conflict_object", "shared_object")}
         require(f"{label}: {side} names no object with no row", not rowless & named)
+    # An Add stating a hash: key names bytes (STORAGE sections 9 and 15.3):
+    # one its body's bytes do not give is refused, staging nothing, and one
+    # they give is staged under it.
+    mutation = case["run"].get("mutation", {})
+    if mutation.get("kind") == "Add" and mutation.get("link_id", "").startswith("hash:"):
+        body = (root / store["objects"][mutation["object"]]["body"]).read_bytes()
+        refused = mutation["link_id"] != "hash:" + fnv1a(body)
+        check(f"{label}: an Add stating {mutation['link_id']} is refused", case["expect"].get("failed", False), refused)
     # A run may declare a collection, as an owner recording attachments
     # declares the account's (STORAGE section 14.3).
     expected = case["expect"].get("store", {})
