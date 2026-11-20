@@ -26,7 +26,7 @@ use rusqlite::{ToSql, types::Value};
 
 use crate::{
     error::Result,
-    model::{Binding, Collection, Item, Kind, MARKS, Model, Refusal, State, Table},
+    model::{Binding, Collection, Item, Kind, MARKS, Model, Refusal, Scope, State, Table},
     name::ObjectName,
     queue::{Action, RowState},
     spec::Spec,
@@ -179,7 +179,7 @@ impl Oracle<'_> {
         let model = self.model;
         let row = |id: &str| {
             let collection = &model.collections[id];
-            vec![
+            let mut row = vec![
                 Value::Text(collection.id.clone()),
                 text(collection.account.as_deref()),
                 Value::Text(String::from(
@@ -192,10 +192,9 @@ impl Oracle<'_> {
                 Value::Null,
                 Value::Integer(1),
                 text(collection.role.as_deref()),
-                Value::Null,
-                Value::Null,
-                covered(collection),
-            ]
+            ];
+            row.extend(covered(collection));
+            row
         };
 
         let all = model.collections.keys().map(|id| row(id)).collect();
@@ -253,26 +252,58 @@ impl Oracle<'_> {
         let conflict = Value::Text(collection.conflict.clone());
         self.expect("storage/owner/load_conflict", &key, vec![vec![conflict]]);
         self.expect("load_generation", &key, vec![vec![Value::Integer(1)]]);
+        let instant = |held: bool| match held {
+            false => Value::Null,
+            true => Value::Text(String::from(INSTANT)),
+        };
         let coverage = collection
             .sources
             .iter()
             .map(|(source, sync)| {
-                let mut row = vec![Value::Text(source.clone())];
-                row.extend([
-                    Value::Null,
-                    Value::Null,
-                    match sync.rounds {
-                        0 => Value::Null,
-                        _ => Value::Text(String::from(INSTANT)),
-                    },
-                    Value::Null,
-                    Value::Null,
-                    Value::Null,
-                ]);
-                row
+                let (since, until) = sync.coverage.clone().unwrap_or_default().values();
+                let (round_since, round_until) = sync
+                    .open
+                    .as_ref()
+                    .map(|open| open.scope.clone())
+                    .unwrap_or_default()
+                    .values();
+                vec![
+                    Value::Text(source.clone()),
+                    since,
+                    until,
+                    instant(sync.coverage.is_some()),
+                    instant(sync.open.is_some()),
+                    round_since,
+                    round_until,
+                ]
             })
             .collect();
         self.expect("list_coverage", &key, coverage);
+        for (source, sync) in &collection.sources {
+            let mut params = key.to_vec();
+            params.push(("source", Value::Text(source.clone())));
+            let (since, until) = sync
+                .open
+                .as_ref()
+                .map(|open| open.scope.clone())
+                .unwrap_or_default()
+                .values();
+            let checkpoint = sync
+                .open
+                .as_ref()
+                .and_then(|open| open.checkpoint.clone())
+                .map_or(Value::Null, Value::Blob);
+            let row = vec![
+                Value::Integer(sync.rounds),
+                instant(sync.open.is_some()),
+                since,
+                until,
+                Value::Null,
+                checkpoint,
+                Value::Integer(0),
+            ];
+            self.expect("storage/owner/load_round", &params, vec![row]);
+        }
 
         let rows: Vec<&Item> = model
             .items
@@ -1205,15 +1236,22 @@ fn cell(item: &Item, column: &str, table: Option<Table>) -> Value {
     }
 }
 
-/// The instant a collection's source last closed a round, as a marker, or
-/// `NULL` before it closed one.
-fn covered(collection: &Collection) -> Value {
-    let all =
-        !collection.sources.is_empty() && collection.sources.values().all(|sync| sync.rounds > 0);
-    match all {
-        false => Value::Null,
-        true => Value::Text(String::from(INSTANT)),
-    }
+/// A collection's coverage, the narrowest of its sources': the latest floor,
+/// the earliest ceiling and the oldest closing as a marker, none while one
+/// source has closed no round (STORAGE §14.1).
+fn covered(collection: &Collection) -> [Value; 3] {
+    let scopes: Option<Vec<&Scope>> = collection
+        .sources
+        .values()
+        .map(|sync| sync.coverage.as_ref())
+        .collect();
+    let Some(scopes) = scopes.filter(|scopes| !scopes.is_empty()) else {
+        return [Value::Null, Value::Null, Value::Null];
+    };
+    let since = scopes.iter().filter_map(|scope| scope.since).max();
+    let until = scopes.iter().filter_map(|scope| scope.until).min();
+    let (since, until) = Scope { since, until }.values();
+    [since, until, Value::Text(String::from(INSTANT))]
 }
 
 fn as_text(value: &Value) -> &str {

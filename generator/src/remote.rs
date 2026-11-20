@@ -18,7 +18,9 @@ use std::{
     collections::{BTreeMap, BTreeSet},
 };
 
-use crate::{body::Filed, engine::Answer};
+use rusqlite::types::Value;
+
+use crate::{body::Filed, engine::Answer, model::Scope, time::Instant};
 
 /// One member a remote holds.
 #[derive(Clone, Debug)]
@@ -33,6 +35,9 @@ pub struct Member {
     pub changed: u64,
     /// The order it arrived in, the recency a round lists by.
     pub arrival: u64,
+    /// The instant the source received it, which a received-date filter
+    /// reads.
+    pub received: Instant,
 }
 
 /// A source's conflict policy against its own remote (SYNC §5).
@@ -79,6 +84,15 @@ pub struct Remote {
     pub refuse: BTreeMap<String, String>,
     /// The changes it rejects once, by key, a precondition failing.
     pub reject: BTreeSet<String>,
+    /// Whether its connector narrows a scoped round by the received date,
+    /// two days below the scope's floor (SYNC §5).
+    pub narrows: bool,
+    /// Whether a narrowed round's last page hands every handle it holds.
+    pub enumerates: bool,
+    /// The newest members it lists of the collection at most, if it caps.
+    pub cap: Option<usize>,
+    /// The instant it receives a member stating no date at.
+    pub clock: Instant,
 }
 
 /// A member as a page lists it.
@@ -111,6 +125,23 @@ pub struct Page {
     pub cursor: Option<String>,
     /// The checkpoint it carries.
     pub checkpoint: Option<String>,
+    /// Whether a date filter narrowed the round's listing.
+    pub narrowed: bool,
+    /// On a narrowed round's last page, every handle the source holds.
+    pub enumerated: Option<Vec<String>>,
+    /// Whether the source caps what it lists of the collection.
+    pub capped: bool,
+}
+
+impl Member {
+    /// Its summary `date`, a message's, which a connector checks a scope
+    /// against.
+    pub fn date(&self) -> Option<String> {
+        match self.filed.summary.get("date") {
+            Value::Text(date) => Some(date),
+            _ => None,
+        }
+    }
 }
 
 impl Remote {
@@ -129,6 +160,10 @@ impl Remote {
             carries: false,
             refuse: BTreeMap::new(),
             reject: BTreeSet::new(),
+            narrows: false,
+            enumerates: false,
+            cap: None,
+            clock: Instant::at(2026, 10, 1, 9, 0, 0),
         }
     }
 
@@ -141,8 +176,24 @@ impl Remote {
         }
     }
 
-    /// Takes a member in, answering its handle and its revision.
+    /// Takes a member in, received at its date or else at the remote's
+    /// clock, answering its handle and its revision.
     pub fn deliver(&mut self, filed: Filed, flags: BTreeSet<String>) -> (String, Option<String>) {
+        let received = match filed.summary.get("date") {
+            Value::Text(date) => Instant::from_rfc3339(&date),
+            _ => self.clock,
+        };
+        self.deliver_at(filed, flags, received)
+    }
+
+    /// Delivers a member the source received at `received`, whatever its
+    /// date says.
+    pub fn deliver_at(
+        &mut self,
+        filed: Filed,
+        flags: BTreeSet<String>,
+        received: Instant,
+    ) -> (String, Option<String>) {
         let number = self.next;
         self.next += 1;
         self.modseq += 1;
@@ -159,6 +210,7 @@ impl Remote {
                 revision: revision.clone(),
                 changed: self.modseq,
                 arrival: number,
+                received,
             },
         );
         (handle, revision)
@@ -196,6 +248,12 @@ impl Remote {
         Some(revision)
     }
 
+    /// Loses a member unannounced, as a server whose deletion no delta
+    /// states: only a round's absence finds it.
+    pub fn forget(&mut self, handle: &str) {
+        self.members.remove(handle);
+    }
+
     /// Removes a member.
     pub fn expunge(&mut self, handle: &str) {
         self.modseq += 1;
@@ -209,13 +267,28 @@ impl Remote {
         self.modseq.to_string()
     }
 
-    /// A round over every member, newest first, `size` a page, each page's
-    /// members in handle byte order, the checkpoint on the first.
-    pub fn round(&self, size: usize) -> Vec<Page> {
+    /// A round over `scope`, newest first, `size` a page, each page's
+    /// members in handle byte order, the checkpoint on the first (SYNC §4,
+    /// §5): the newest members alone where the source caps, those received
+    /// from two days below the floor where the connector narrows, a dated
+    /// member out of scope dropped by the connector's own check, the last
+    /// page of a narrowed round handing every handle where it enumerates.
+    pub fn round(&self, size: usize, scope: &Scope) -> Vec<Page> {
         let mut newest: Vec<(&String, &Member)> = self.members.iter().collect();
         newest.sort_by_key(|(_, member)| Reverse(member.arrival));
+        if let Some(cap) = self.cap {
+            newest.truncate(cap);
+        }
+        let narrowed = self.narrows && scope != &Scope::default();
+        let floor = scope.since.map(|since| Instant(since.0 - 2 * 86_400));
+        newest.retain(|(_, member)| {
+            let received = !narrowed || floor.is_none_or(|floor| member.received >= floor);
+            received && scope.holds(member.date().as_deref())
+        });
         let chunks: Vec<&[(&String, &Member)]> = newest.chunks(size.max(1)).collect();
         let count = chunks.len().max(1);
+        let enumerated =
+            (narrowed && self.enumerates).then(|| self.members.keys().cloned().collect());
 
         (0..count)
             .map(|index| {
@@ -228,19 +301,22 @@ impl Remote {
                     last,
                     cursor: (!last).then(|| format!("page-{}", index + 1)),
                     checkpoint: (index == 0).then(|| self.checkpoint()),
+                    narrowed,
+                    enumerated: enumerated.clone().filter(|_| last),
+                    capped: self.cap.is_some(),
                 }
             })
             .collect()
     }
 
-    /// A delta from `checkpoint`: the members changed above it and the
-    /// handles removed above it.
-    pub fn delta(&self, checkpoint: &str) -> Page {
+    /// A delta from `checkpoint`: the members changed above it, a dated one
+    /// out of `scope` dropped, and the handles removed above it.
+    pub fn delta(&self, checkpoint: &str, scope: &Scope) -> Page {
         let since: u64 = checkpoint.parse().unwrap_or(0);
         let changed = self
             .members
             .iter()
-            .filter(|(_, member)| member.changed > since);
+            .filter(|(_, member)| member.changed > since && scope.holds(member.date().as_deref()));
         let vanished = self
             .vanished
             .iter()
@@ -254,6 +330,9 @@ impl Remote {
             last: true,
             cursor: None,
             checkpoint: Some(self.checkpoint()),
+            narrowed: false,
+            enumerated: None,
+            capped: false,
         }
     }
 

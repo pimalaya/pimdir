@@ -327,15 +327,18 @@ fn write_rounds(store: &Store, model: &Model, collection: &Collection) -> Result
 
     for (name, sync) in &collection.sources {
         let source = Value::Text(name.clone());
+        let covered = sync.coverage.clone().unwrap_or_default();
         for round in 1..=sync.rounds {
+            let open = sync.open.as_ref().filter(|_| round == sync.rounds);
+            let (since, until) = open.map_or(&covered, |open| &open.scope).values();
             run(
                 store,
                 "storage/owner/open_round",
                 &[
                     ("collection", &id),
                     ("source", &source),
-                    ("since", &Value::Null),
-                    ("until", &Value::Null),
+                    ("since", &since),
+                    ("until", &until),
                     ("band", &Value::Integer(0)),
                 ],
             )?;
@@ -353,13 +356,28 @@ fn write_rounds(store: &Store, model: &Model, collection: &Collection) -> Result
                 "storage/owner/stamp_bindings",
                 &[("collection", &id), ("source", &source)],
             )?;
+            if let Some(open) = open {
+                let checkpoint = open.checkpoint.clone().map_or(Value::Null, Value::Blob);
+                run(
+                    store,
+                    "storage/owner/set_round_cursor",
+                    &[
+                        ("cursor", &Value::Null),
+                        ("checkpoint", &checkpoint),
+                        ("collection", &id),
+                        ("source", &source),
+                    ],
+                )?;
+                continue;
+            }
+            let (since, until) = covered.values();
             run(
                 store,
                 "storage/owner/close_round",
                 &[
                     ("checkpoint", &Value::Null),
-                    ("since", &Value::Null),
-                    ("until", &Value::Null),
+                    ("since", &since),
+                    ("until", &until),
                     ("collection", &id),
                     ("source", &source),
                 ],

@@ -11,12 +11,13 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     body::{Card, Mail, fnv1a64},
-    engine::{Push, Run},
-    model::{Collection, Kind, Model, synced_by},
+    engine::{Options, Push, Run},
+    model::{Collection, Kind, Model, Scope, synced_by},
     name::ObjectName,
     profile::Draw,
     queue::{Action, RowState},
     remote::{Policy, Remote},
+    time::Instant,
 };
 
 /// One step of a history.
@@ -363,9 +364,9 @@ impl History {
             });
         };
 
-        let run = model.sync_in(&mut remotes, "work/INBOX", PAGE);
+        let run = model.sync_in(&mut remotes, "work/INBOX", PAGE, &Options::default());
         record("the inbox's first round", Some(run), &model);
-        let run = model.sync_in(&mut remotes, "work/Archive", PAGE);
+        let run = model.sync_in(&mut remotes, "work/Archive", PAGE, &Options::default());
         record("the archive's first round", Some(run), &model);
         let handles: Vec<String> = ["1", "2", "3", "4", "5"].map(String::from).to_vec();
         let run = model.upgrade(&remotes["work/INBOX"], &handles);
@@ -393,9 +394,9 @@ impl History {
         model.drain(id);
         record("a move and a copy into the archive, drained", None, &model);
 
-        let run = model.sync_in(&mut remotes, "work/INBOX", PAGE);
+        let run = model.sync_in(&mut remotes, "work/INBOX", PAGE, &Options::default());
         record("the source syncs first and relocates", Some(run), &model);
-        let run = model.sync_in(&mut remotes, "work/Archive", PAGE);
+        let run = model.sync_in(&mut remotes, "work/Archive", PAGE, &Options::default());
         record(
             "the target lands the relocation and copies",
             Some(run),
@@ -414,14 +415,14 @@ impl History {
         model.drain(id);
         record("another move, drained", None, &model);
 
-        let run = model.sync_in(&mut remotes, "work/Archive", PAGE);
+        let run = model.sync_in(&mut remotes, "work/Archive", PAGE, &Options::default());
         record("the target syncs first and copies", Some(run), &model);
-        let run = model.sync_in(&mut remotes, "work/INBOX", PAGE);
+        let run = model.sync_in(&mut remotes, "work/INBOX", PAGE, &Options::default());
         record("the source deletes what moved", Some(run), &model);
 
-        let run = model.sync_in(&mut remotes, "work/Archive", PAGE);
+        let run = model.sync_in(&mut remotes, "work/Archive", PAGE, &Options::default());
         record("the archive with nothing left to do", Some(run), &model);
-        let run = model.sync_in(&mut remotes, "work/INBOX", PAGE);
+        let run = model.sync_in(&mut remotes, "work/INBOX", PAGE, &Options::default());
         record("the inbox with nothing left to do", Some(run), &model);
 
         Self { steps }
@@ -874,6 +875,206 @@ impl History {
 
         Self { steps }
     }
+
+    /// One source's rounds under scopes (SYNC §5), a mailbox each: on
+    /// work/INBOX a round over October, one widened to September, one over
+    /// everything, a delta narrowing the coverage, then a round over
+    /// September finding the absence in its scope alone while a create dated
+    /// August waits, and one over everything pushing it; on work/Archive a
+    /// connector narrowing by received date, its round proving no absence
+    /// until it enumerates; on work/Sent Items a capped round proving none;
+    /// on work/Junk a mass absence and on work/Drafts an empty listing
+    /// parking their rounds until the run accepts the absences.
+    pub fn scopes(seed: u64) -> Self {
+        let mut draw = Draw::new(seed);
+        let mut model = Model::new();
+        let mut steps = vec![Step {
+            label: String::from("an empty store"),
+            run: None,
+            model: model.clone(),
+        }];
+        let mut record = |label: String, run: Option<Run>, model: &Model| {
+            steps.push(Step {
+                label,
+                run,
+                model: model.clone(),
+            });
+        };
+        let mut dated = |date: Option<Instant>| Mail {
+            date,
+            ..draw.message(false)
+        };
+        let day = |month: u32, day: u32| Some(Instant::at(2026, month, day, 9, 0, 0));
+        let from = |month: u32| Options {
+            scope: Scope {
+                since: Some(Instant::at(2026, month, 1, 0, 0, 0)),
+                until: None,
+            },
+            accept_absences: false,
+        };
+        let everything = Options::default();
+        let mailbox = |model: &mut Model, id: &str, source: &str| {
+            model.declare(Collection {
+                id: String::from(id),
+                account: Some(String::from("work")),
+                kind: Some(Kind::Mail),
+                name: String::from(id),
+                role: None,
+                sources: synced_by(&[source]),
+                conflict: String::from("manual"),
+            });
+            Remote::new(source, id)
+        };
+
+        let id = "work/INBOX";
+        let mut remote = mailbox(&mut model, id, "inbox-imap");
+        for message in [
+            dated(day(8, 10)),
+            dated(day(9, 10)),
+            dated(day(10, 10)),
+            dated(None),
+            dated(day(8, 20)),
+            dated(day(9, 20)),
+        ] {
+            remote.deliver(message.file(), BTreeSet::new());
+        }
+        let run = model.sync_with(&mut remote, PAGE, &from(10));
+        record(format!("{id}: a round over October on"), Some(run), &model);
+        let run = model.sync_with(&mut remote, PAGE, &from(9));
+        record(
+            format!("{id}: a round widened to September"),
+            Some(run),
+            &model,
+        );
+        let run = model.sync_with(&mut remote, PAGE, &everything);
+        record(format!("{id}: a round over everything"), Some(run), &model);
+        remote.forget("1");
+        remote.forget("2");
+        let run = model.sync_with(&mut remote, PAGE, &from(10));
+        record(
+            format!("{id}: a delta narrowing the coverage"),
+            Some(run),
+            &model,
+        );
+        for message in [dated(day(8, 25)), dated(day(10, 25))] {
+            let row = model.enqueue(
+                "himalaya",
+                id,
+                Action::Add {
+                    link_id: message.message_id.clone().unwrap_or_default(),
+                    flags: BTreeSet::new(),
+                    filed: message.file(),
+                },
+            );
+            model.drain(row);
+        }
+        let run = model.sync_with(&mut remote, PAGE, &from(9));
+        record(format!("{id}: a round over September"), Some(run), &model);
+        let run = model.sync_with(&mut remote, PAGE, &everything);
+        record(
+            format!("{id}: a round over everything again"),
+            Some(run),
+            &model,
+        );
+
+        let id = "work/Archive";
+        let mut remote = mailbox(&mut model, id, "archive-graph");
+        remote.narrows = true;
+        remote.deliver(dated(day(9, 10)).file(), BTreeSet::new());
+        let early = dated(day(9, 5)).file();
+        remote.deliver_at(early, BTreeSet::new(), Instant::at(2026, 5, 1, 9, 0, 0));
+        remote.deliver(dated(day(10, 10)).file(), BTreeSet::new());
+        let margin = dated(day(9, 12)).file();
+        remote.deliver_at(margin, BTreeSet::new(), Instant::at(2026, 8, 31, 9, 0, 0));
+        let run = model.sync_with(&mut remote, PAGE, &everything);
+        record(format!("{id}: a first round"), Some(run), &model);
+        remote.forget("1");
+        let run = model.sync_with(&mut remote, PAGE, &from(10));
+        record(
+            format!("{id}: a delta narrowing the coverage"),
+            Some(run),
+            &model,
+        );
+        let run = model.sync_with(&mut remote, PAGE, &from(9));
+        record(format!("{id}: a narrowed round"), Some(run), &model);
+        let run = model.sync_with(&mut remote, PAGE, &from(10));
+        record(
+            format!("{id}: a delta narrowing it again"),
+            Some(run),
+            &model,
+        );
+        remote.enumerates = true;
+        let run = model.sync_with(&mut remote, PAGE, &from(9));
+        record(
+            format!("{id}: a narrowed round enumerating"),
+            Some(run),
+            &model,
+        );
+
+        let id = "work/Sent Items";
+        let mut remote = mailbox(&mut model, id, "sent-imap");
+        for date in [day(9, 1), day(9, 15), day(10, 1), day(10, 15)] {
+            remote.deliver(dated(date).file(), BTreeSet::new());
+        }
+        let run = model.sync_with(&mut remote, PAGE, &everything);
+        record(format!("{id}: a first round"), Some(run), &model);
+        remote.forget("1");
+        let run = model.sync_with(&mut remote, PAGE, &from(10));
+        record(
+            format!("{id}: a delta narrowing the coverage"),
+            Some(run),
+            &model,
+        );
+        remote.cap = Some(2);
+        let run = model.sync_with(&mut remote, PAGE, &everything);
+        record(format!("{id}: a capped round"), Some(run), &model);
+
+        for (id, count, kept) in [("work/Junk", 21, 1), ("work/Drafts", 2, 0)] {
+            let source = format!("{}-imap", &id[5..].to_lowercase());
+            let mut remote = mailbox(&mut model, id, &source);
+            for _ in 0..count {
+                remote.deliver(dated(day(10, 1)).file(), BTreeSet::new());
+            }
+            let run = model.sync_with(&mut remote, PAGE, &everything);
+            record(format!("{id}: a first round"), Some(run), &model);
+            for number in 1 + kept..=count {
+                remote.forget(&number.to_string());
+            }
+            let run = model.sync_with(&mut remote, PAGE, &from(10));
+            record(
+                format!("{id}: a delta narrowing the coverage"),
+                Some(run),
+                &model,
+            );
+            let staged = dated(day(10, 2));
+            let row = model.enqueue(
+                "himalaya",
+                id,
+                Action::Add {
+                    link_id: staged.message_id.clone().unwrap_or_default(),
+                    flags: BTreeSet::new(),
+                    filed: staged.file(),
+                },
+            );
+            model.drain(row);
+            let run = model.sync_with(&mut remote, PAGE, &everything);
+            record(format!("{id}: a round parks"), Some(run), &model);
+            let run = model.sync_with(&mut remote, PAGE, &everything);
+            record(
+                format!("{id}: the round resumed parks again"),
+                Some(run),
+                &model,
+            );
+            let accepting = Options {
+                accept_absences: true,
+                ..Options::default()
+            };
+            let run = model.sync_with(&mut remote, PAGE, &accepting);
+            record(format!("{id}: the absences accepted"), Some(run), &model);
+        }
+
+        Self { steps }
+    }
 }
 
 impl Model {
@@ -932,7 +1133,7 @@ mod tests {
         body::Card,
         engine::{Answer, Event, Push, Run},
         history::{History, PAGE, SHARED, drained, set},
-        model::{Item, Model, State},
+        model::{Item, Model, Scope, State},
         name::ObjectName,
         oracle,
         profile::Draw,
@@ -940,6 +1141,7 @@ mod tests {
         remote::Remote,
         spec::Spec,
         store::Store,
+        time::Instant,
         writer,
     };
 
@@ -958,6 +1160,7 @@ mod tests {
             History::appends(23),
             History::policies(29),
             History::sources(31),
+            History::scopes(37),
         ];
         for (index, step) in histories
             .iter()
@@ -2074,5 +2277,168 @@ mod tests {
         assert!(!settled.conflicted);
         assert_eq!(settled.base_object, Some(binding_conflict));
         assert_eq!(settled.base_revision, binding.conflict_revision);
+    }
+
+    fn scoped(history: &History, step: usize) -> (&Model, &Run) {
+        let step = &history.steps[step];
+        (&step.model, step.run.as_ref().unwrap())
+    }
+
+    fn handled<'a>(model: &'a Model, collection: &str, handle: &str) -> Option<&'a Item> {
+        model.items.iter().find(|item| {
+            item.collection == collection
+                && item.bindings.iter().any(|binding| binding.handle == handle)
+        })
+    }
+
+    fn coverage(model: &Model, collection: &str) -> Option<Scope> {
+        let sources = &model.collections[collection].sources;
+        sources.values().next().unwrap().coverage.clone()
+    }
+
+    fn since(month: u32) -> Scope {
+        Scope {
+            since: Some(Instant::at(2026, month, 1, 0, 0, 0)),
+            until: None,
+        }
+    }
+
+    #[test]
+    fn a_round_lists_its_scope_and_finds_absences_in_it_alone() {
+        let history = History::scopes(37);
+        let inbox = "work/INBOX";
+
+        let (model, run) = scoped(&history, 1);
+        assert_eq!(model.live(inbox).count(), 2);
+        assert!(
+            model
+                .live(inbox)
+                .all(|item| since(10).holds(item.date().as_deref()))
+        );
+        assert_eq!(coverage(model, inbox), Some(since(10)));
+        assert!(run.pages.iter().all(|page| page.complete));
+
+        let (model, _) = scoped(&history, 2);
+        assert_eq!(model.live(inbox).count(), 4);
+        assert_eq!(coverage(model, inbox), Some(since(9)));
+
+        let (model, run) = scoped(&history, 4);
+        assert!(!run.pages[0].complete);
+        assert!(run.events.is_empty());
+        assert_eq!(coverage(model, inbox), Some(since(10)));
+
+        let (model, run) = scoped(&history, 5);
+        assert!(run.pages[0].complete);
+        assert!(run.events.contains(&Event::Vanished(String::from("2"))));
+        assert!(!run.events.contains(&Event::Vanished(String::from("1"))));
+        assert_eq!(handled(model, inbox, "1").unwrap().state, State::Live);
+        assert_eq!(coverage(model, inbox), Some(since(9)));
+
+        let (model, run) = scoped(&history, 6);
+        assert!(run.events.contains(&Event::Vanished(String::from("1"))));
+        assert!(handled(model, inbox, "1").is_none());
+        assert_eq!(coverage(model, inbox), Some(Scope::default()));
+    }
+
+    #[test]
+    fn a_create_dated_out_of_the_scope_waits_for_a_round_holding_it() {
+        let history = History::scopes(37);
+        let added = |run: &Run| -> Vec<String> {
+            run.pushes
+                .iter()
+                .filter_map(|(push, _)| match push {
+                    Push::Add { link_id, .. } => Some(link_id.clone()),
+                    _ => None,
+                })
+                .collect()
+        };
+        let (model, run) = scoped(&history, 5);
+        let dates: Vec<Option<String>> = added(run)
+            .iter()
+            .map(|link_id| {
+                let item = model.items.iter().find(|item| &item.link_id == link_id);
+                item.unwrap().date()
+            })
+            .collect();
+        assert_eq!(dates, [Some(String::from("2026-10-25T09:00:00Z"))]);
+
+        let (model, run) = scoped(&history, 6);
+        let dates: Vec<Option<String>> = added(run)
+            .iter()
+            .map(|link_id| {
+                let item = model.items.iter().find(|item| &item.link_id == link_id);
+                item.unwrap().date()
+            })
+            .collect();
+        assert_eq!(dates, [Some(String::from("2026-08-25T09:00:00Z"))]);
+    }
+
+    #[test]
+    fn a_narrowed_round_proves_only_what_its_enumeration_lacks() {
+        let history = History::scopes(37);
+        let archive = "work/Archive";
+
+        let (model, run) = scoped(&history, 9);
+        let last = run.pages.last().unwrap();
+        assert!(last.narrowed && last.enumerated.is_none());
+        assert!(
+            last.items.iter().any(|member| member.handle == "4"),
+            "a narrowing takes two days below the floor"
+        );
+        assert!(run.events.is_empty());
+        assert_eq!(handled(model, archive, "1").unwrap().state, State::Live);
+        assert_eq!(handled(model, archive, "2").unwrap().state, State::Live);
+        assert_eq!(coverage(model, archive), Some(since(9)));
+
+        let (model, run) = scoped(&history, 11);
+        let last = run.pages.last().unwrap();
+        assert!(last.narrowed && last.enumerated.is_some());
+        assert!(last.items.iter().all(|member| member.handle != "2"));
+        assert_eq!(run.events, [Event::Vanished(String::from("1"))]);
+        assert_eq!(handled(model, archive, "2").unwrap().state, State::Live);
+    }
+
+    #[test]
+    fn a_capped_round_proves_no_absence() {
+        let history = History::scopes(37);
+        let (model, run) = scoped(&history, 14);
+        assert!(run.pages.iter().all(|page| page.capped));
+        assert_eq!(
+            run.pages.iter().map(|page| page.items.len()).sum::<usize>(),
+            2
+        );
+        assert!(run.events.is_empty());
+        assert_eq!(model.live("work/Sent Items").count(), 4);
+        assert_eq!(coverage(model, "work/Sent Items"), Some(Scope::default()));
+    }
+
+    #[test]
+    fn a_mass_or_an_empty_absence_parks_its_round_until_accepted() {
+        let history = History::scopes(37);
+        for (id, base, absent, bound) in [("work/Junk", 15, 20, 21), ("work/Drafts", 20, 2, 2)] {
+            let (before, _) = scoped(&history, base + 1);
+            let (model, run) = scoped(&history, base + 2);
+            assert_eq!(run.parked, Some((absent, bound)), "{id}");
+            assert!(run.events.is_empty());
+            assert!(run.pushes.is_empty(), "no add while the round stays open");
+            assert_eq!(model.live(id).count(), bound + 1);
+            let state = model.collections[id].sources.values().next().unwrap();
+            assert_eq!(state.open.as_ref().unwrap().scope, Scope::default());
+            assert_eq!(state.coverage, coverage(before, id));
+
+            let (resumed, run) = scoped(&history, base + 3);
+            assert_eq!(run.parked, Some((absent, bound)));
+            let again = resumed.collections[id].sources.values().next().unwrap();
+            assert_eq!(again.rounds, state.rounds);
+
+            let (model, run) = scoped(&history, base + 4);
+            assert_eq!(run.parked, None);
+            assert_eq!(run.events.len(), absent + 1);
+            assert!(matches!(run.pushes[..], [(Push::Add { .. }, _)]));
+            assert_eq!(model.live(id).count(), bound - absent + 1);
+            let state = model.collections[id].sources.values().next().unwrap();
+            assert!(state.open.is_none());
+            assert_eq!(state.coverage, Some(Scope::default()));
+        }
     }
 }

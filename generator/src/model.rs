@@ -14,6 +14,7 @@ use crate::{
     body::{Filed, Person},
     name::ObjectName,
     queue::Row,
+    time::Instant,
 };
 
 /// The kind a collection declares (STORAGE §13).
@@ -74,8 +75,69 @@ impl Collection {
 pub struct SourceState {
     /// The checkpoint it last recorded.
     pub checkpoint: Option<Vec<u8>>,
-    /// The rounds it closed, the last one's id.
+    /// The last round id it drew, the open round's when one is.
     pub rounds: i64,
+    /// The scope its last closed round covers, none before one closed.
+    pub coverage: Option<Scope>,
+    /// The round it opened and did not close, a parked one.
+    pub open: Option<OpenRound>,
+}
+
+/// A round left open, its last page landed as one before the last (SYNC
+/// §5).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OpenRound {
+    /// What it lists.
+    pub scope: Scope,
+    /// The checkpoint its pages landed, the source's once it closes.
+    pub checkpoint: Option<Vec<u8>>,
+}
+
+/// `[since, until)` on a message's summary `date`, either bound open (SYNC
+/// §2).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Scope {
+    /// Its floor.
+    pub since: Option<Instant>,
+    /// Its ceiling, excluded.
+    pub until: Option<Instant>,
+}
+
+impl Scope {
+    /// Whether a member dated `date` is in scope: an undated one always is.
+    pub fn holds(&self, date: Option<&str>) -> bool {
+        let Some(date) = date else {
+            return true;
+        };
+        self.since
+            .is_none_or(|since| date >= since.rfc3339().as_str())
+            && self
+                .until
+                .is_none_or(|until| date < until.rfc3339().as_str())
+    }
+
+    /// Whether it lies inside `other`, which its checkpoint then serves.
+    pub fn within(&self, other: &Scope) -> bool {
+        let floor = match (self.since, other.since) {
+            (_, None) => true,
+            (None, Some(_)) => false,
+            (Some(own), Some(other)) => own >= other,
+        };
+        let ceiling = match (self.until, other.until) {
+            (_, None) => true,
+            (None, Some(_)) => false,
+            (Some(own), Some(other)) => own <= other,
+        };
+        floor && ceiling
+    }
+
+    /// Its bounds as the store holds them, `NULL` for an open one.
+    pub fn values(&self) -> (Value, Value) {
+        let bound = |instant: Option<Instant>| {
+            instant.map_or(Value::Null, |instant| Value::Text(instant.rfc3339()))
+        };
+        (bound(self.since), bound(self.until))
+    }
 }
 
 /// The sync state of a collection its `sources` sync, none of them synced
@@ -274,6 +336,14 @@ pub enum State {
 }
 
 impl Item {
+    /// Its summary `date`, a message's alone, which a scope reads (SYNC §2).
+    pub fn date(&self) -> Option<String> {
+        match (self.summary.table, self.summary.get("date")) {
+            (Table::Mail, Value::Text(date)) => Some(date),
+            _ => None,
+        }
+    }
+
     /// The binding `source` holds of it.
     pub fn bound(&self, source: &str) -> Option<&Binding> {
         self.bindings

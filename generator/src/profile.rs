@@ -1221,7 +1221,7 @@ fn collection(
             .map(|source| {
                 let sync = SourceState {
                     checkpoint: Some(b"c1".to_vec()),
-                    rounds: 0,
+                    ..SourceState::default()
                 };
                 BTreeMap::from([(String::from(source), sync)])
             })

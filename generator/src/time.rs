@@ -37,6 +37,11 @@ impl Instant {
         )
     }
 
+    /// Reads an RFC 3339 UTC date-time, `2026-08-01T10:00:00Z`.
+    pub fn from_rfc3339(text: &str) -> Self {
+        Self::from_ical_utc(&text.replace(['-', ':'], ""))
+    }
+
     /// The start of its UTC day.
     pub fn midnight(&self) -> Self {
         Self(self.0.div_euclid(86_400) * 86_400)

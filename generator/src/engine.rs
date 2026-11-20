@@ -20,7 +20,10 @@ use rusqlite::types::Value;
 
 use crate::{
     body::Filed,
-    model::{Address, Binding, Item, Model, Placement, Refusal, State, Summary, Table, key},
+    model::{
+        Address, Binding, Item, Model, OpenRound, Placement, Refusal, Scope, State, Summary, Table,
+        key,
+    },
     name::ObjectName,
     remote::{Listed, Page, Policy, Remote},
 };
@@ -213,6 +216,15 @@ pub enum Event {
     },
 }
 
+/// What a sync is asked (SYNC §5).
+#[derive(Clone, Debug, Default)]
+pub struct Options {
+    /// The scope it lists, a mail collection's.
+    pub scope: Scope,
+    /// Whether a mass or an empty listing's absences close the round.
+    pub accept_absences: bool,
+}
+
 /// One verb run over one collection and the script it ran against.
 #[derive(Clone, Debug)]
 pub struct Run {
@@ -232,28 +244,41 @@ pub struct Run {
     pub outcomes: Vec<Outcome>,
     /// The events reported.
     pub events: Vec<Event>,
+    /// A round left open by a mass or an empty listing's absence: the
+    /// based bindings it found absent and those in its scope (SYNC §5).
+    pub parked: Option<(usize, usize)>,
 }
 
 impl Model {
+    /// Syncs `remote`'s collection alone under no scope: [`Model::sync_with`]
+    /// and the default options.
+    pub fn sync(&mut self, remote: &mut Remote, size: usize) -> Run {
+        self.sync_with(remote, size, &Options::default())
+    }
+
     /// Syncs `remote`'s collection alone: [`Model::sync_in`] over the one
     /// remote.
-    pub fn sync(&mut self, remote: &mut Remote, size: usize) -> Run {
+    pub fn sync_with(&mut self, remote: &mut Remote, size: usize, options: &Options) -> Run {
         let collection = remote.collection.clone();
         let mut remotes = BTreeMap::from([(collection.clone(), remote.clone())]);
-        let run = self.sync_in(&mut remotes, &collection, size);
+        let run = self.sync_in(&mut remotes, &collection, size, options);
         *remote = remotes.remove(&collection).expect("the remote synced");
         run
     }
 
     /// Syncs `collection` against its remote among `remotes`, the other
-    /// collections of the source's account being where a relocation goes:
-    /// a round of pages of `size` when its source never closed one, else a
-    /// delta from its checkpoint.
+    /// collections of the source's account being where a relocation goes,
+    /// choosing its listing as SYNC §5 does: the open round resumed when it
+    /// lists the scope asked for, a round of pages of `size` opened when no
+    /// round closed, one is open over another scope or the scope reaches
+    /// outside the coverage, else a delta from the checkpoint, recording a
+    /// narrower scope as the coverage.
     pub fn sync_in(
         &mut self,
         remotes: &mut BTreeMap<String, Remote>,
         collection: &str,
         size: usize,
+        options: &Options,
     ) -> Run {
         let collection = String::from(collection);
         let remote = &remotes[&collection];
@@ -263,14 +288,20 @@ impl Model {
             .get(&source)
             .cloned()
             .unwrap_or_default();
-        let first = state.rounds == 0;
-        let pages = match (&state.checkpoint, first) {
-            (Some(checkpoint), false) => {
-                vec![remote.delta(&String::from_utf8_lossy(checkpoint))]
-            }
-            _ => remote.round(size),
+        let scope = &options.scope;
+        let (listing, round) = match (&state.open, &state.coverage) {
+            (Some(open), _) if &open.scope == scope => (true, state.rounds),
+            (Some(_), _) | (None, None) => (true, state.rounds + 1),
+            (None, Some(coverage)) if !scope.within(coverage) => (true, state.rounds + 1),
+            _ => (false, state.rounds),
         };
-        let round = state.rounds + 1;
+        let pages = match listing {
+            true => remote.round(size, scope),
+            false => {
+                let checkpoint = state.checkpoint.clone().unwrap_or_default();
+                vec![remote.delta(&String::from_utf8_lossy(&checkpoint), scope)]
+            }
+        };
         let policy = remotes[&collection].policy;
         let mut events = Vec::new();
         let mut listed: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
@@ -313,7 +344,7 @@ impl Model {
                         },
                     },
                 };
-                if first {
+                if listing {
                     let binding = self.items[index].bound_mut(&source).expect("a bound item");
                     binding.round = Some(round);
                 }
@@ -326,31 +357,21 @@ impl Model {
             }
         }
 
-        if first {
-            let absent: Vec<String> = self
-                .items
-                .iter()
-                .filter(|item| item.collection == collection)
-                .filter_map(|item| item.bound(&source))
-                .filter(|binding| {
-                    binding.source == source
-                        && binding.base_present
-                        && !binding.handle.starts_with('\u{1}')
-                        && binding.round != Some(round)
-                })
-                .map(|binding| binding.handle.clone())
-                .collect();
-            for handle in absent {
-                if let Some(index) = self.bound_handle(&collection, &source, &handle) {
-                    self.drop_deleted(index, &source);
-                    events.push(Event::Vanished(handle));
-                }
-            }
-        }
+        let parked = match listing {
+            true => self.absences(&collection, &source, round, &pages, options, &mut events),
+            false => None,
+        };
 
         let mutable = remotes[&collection].mutable;
         let pushes: Vec<Push> = self
-            .derive(&collection, &source, &listed, mutable)
+            .derive(
+                &collection,
+                &source,
+                &listed,
+                mutable,
+                scope,
+                parked.is_none(),
+            )
             .into_iter()
             .filter(|push| {
                 let held = self
@@ -378,11 +399,29 @@ impl Model {
             .sources
             .entry(source.clone())
             .or_default();
-        if let Some(checkpoint) = checkpoint {
-            entry.checkpoint = Some(checkpoint.into_bytes());
-        }
-        if first {
-            entry.rounds = round;
+        entry.rounds = round;
+        let checkpoint = checkpoint.map(String::into_bytes);
+        match (listing, parked) {
+            (true, Some(_)) => {
+                let checkpoint = checkpoint.or(entry.open.take().and_then(|open| open.checkpoint));
+                entry.open = Some(OpenRound {
+                    scope: scope.clone(),
+                    checkpoint,
+                });
+            }
+            (true, None) => {
+                if let Some(checkpoint) = checkpoint {
+                    entry.checkpoint = Some(checkpoint);
+                }
+                entry.open = None;
+                entry.coverage = Some(scope.clone());
+            }
+            (false, _) => {
+                if let Some(checkpoint) = checkpoint {
+                    entry.checkpoint = Some(checkpoint);
+                }
+                entry.coverage = Some(scope.clone());
+            }
         }
 
         Run {
@@ -400,7 +439,61 @@ impl Model {
             fetch: BTreeMap::new(),
             outcomes,
             events,
+            parked,
         }
+    }
+
+    /// What a round finds absent once its last page lands (SYNC §5): the
+    /// based bindings of the source in the round's scope, an undated item
+    /// in it, that no page stamped, none under a provisional handle; for a
+    /// narrowed last page only those its enumeration lacks, none when it
+    /// hands none; none for a capped one. They are dropped `Deleted`, unless
+    /// more than half of at least 20 in scope or any after a listing naming
+    /// nothing are, which parks the round, answered as the absent and the
+    /// bound counts, unless the run accepts absences.
+    fn absences(
+        &mut self,
+        collection: &str,
+        source: &str,
+        round: i64,
+        pages: &[Page],
+        options: &Options,
+        events: &mut Vec<Event>,
+    ) -> Option<(usize, usize)> {
+        let last = pages.last()?;
+        let scoped: Vec<(String, bool)> = self
+            .items
+            .iter()
+            .filter(|item| item.collection == collection)
+            .filter(|item| options.scope.holds(item.date().as_deref()))
+            .filter_map(|item| item.bound(source))
+            .filter(|binding| binding.base_present && !binding.handle.starts_with('\u{1}'))
+            .map(|binding| (binding.handle.clone(), binding.round == Some(round)))
+            .collect();
+        let absent: Vec<String> = scoped
+            .iter()
+            .filter(|(_, stamped)| !stamped)
+            .map(|(handle, _)| handle.clone())
+            .filter(|handle| match (last.narrowed, &last.enumerated) {
+                (false, _) => !last.capped,
+                (true, Some(enumerated)) => !last.capped && !enumerated.contains(handle),
+                (true, None) => false,
+            })
+            .collect();
+
+        let named = pages.iter().any(|page| !page.items.is_empty());
+        let mass = absent.len() * 2 > scoped.len() && scoped.len() >= 20;
+        let empty = !named && !absent.is_empty();
+        if (mass || empty) && !options.accept_absences {
+            return Some((absent.len(), scoped.len()));
+        }
+        for handle in absent {
+            if let Some(index) = self.bound_handle(collection, source, &handle) {
+                self.drop_deleted(index, source);
+                events.push(Event::Vanished(handle));
+            }
+        }
+        None
     }
 
     /// Raises the placements of `handles` to `Full`, fetching each body
@@ -439,6 +532,7 @@ impl Model {
             pushes: Vec::new(),
             outcomes: Vec::new(),
             events: Vec::new(),
+            parked: None,
         }
     }
 
@@ -854,13 +948,17 @@ impl Model {
     /// a pending create's `Add`, by copy from its origin, a local body off
     /// its base an `Update`, a flag set off what the source holds a
     /// `SetFlags`, one change a handle; a conflict and a delivered create
-    /// owe none.
+    /// owe none. No `Add` while the round stays open, nor for a create with
+    /// no origin dated out of the run's scope, which may be an arrival no
+    /// page of that scope lists.
     fn derive(
         &self,
         collection: &str,
         source: &str,
         listed: &BTreeMap<String, BTreeSet<String>>,
         mutable: bool,
+        scope: &Scope,
+        creating: bool,
     ) -> Vec<Push> {
         let mut pushes = Vec::new();
         for item in self
@@ -922,6 +1020,24 @@ impl Model {
                 _ => {}
             }
         }
+        pushes.retain(|push| {
+            let Push::Add {
+                link_id, origin, ..
+            } = push
+            else {
+                return true;
+            };
+            let dated = self
+                .items
+                .iter()
+                .find(|item| {
+                    item.collection == collection
+                        && &item.link_id == link_id
+                        && item.state == State::Live
+                })
+                .and_then(Item::date);
+            creating && (origin.is_some() || scope.holds(dated.as_deref()))
+        });
         pushes.sort_by(|a, b| a.handle().cmp(b.handle()));
         pushes
     }
