@@ -1,5 +1,5 @@
 {
-  "v": 8,
+  "v": 9,
   "label": "a remove a refusal standing on its binding names is held, the tombstone kept and reported",
   "note": "the delete was refused for good: the tombstone derives the same Remove under the same key, so nothing is pushed and nothing dropped, and the run reports the refusal. Restoring or editing the item is the way out (SYNC.md §5)",
   "store": {

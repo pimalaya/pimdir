@@ -1,5 +1,5 @@
 {
-  "v": 8,
+  "v": 9,
   "label": "a move of an item two sources left in conflict is refused, through a binding that is not conflicted itself",
   "note": "the store of vector 124 beside a second address book both sources sync: a pulled c3 into the item, then b's own edit c2 diverged under manual, so the item is conflicted and neither binding is. A move through b meets the item's conflict and is refused, staging nothing, which the drain parks naming it: the item keeps c3 and its conflict over c2, and both bindings are as they were. A Move settles no conflict, the item's no more than a binding's (SYNC.md §7, §9; STORAGE §15.2, §15.3)",
   "store": {

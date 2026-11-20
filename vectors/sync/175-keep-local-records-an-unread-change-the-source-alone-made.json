@@ -1,0 +1,34 @@
+{
+  "v": 9,
+  "label": "under keep-local a change the source alone made whose member carries no body is recorded, never pulled nor pushed over",
+  "note": "the case of 174 with a listing carrying no body: no policy pushes over a body nobody has read, and keep-local pulls nothing, so the binding is recorded as manual records it, conflicted at r2 with no conflict_object, the store's c1 kept and nothing pushed. The upgrade fetching the body settles it as prefer-local does (SYNC.md sections 5 and 6)",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
+    "objects": { "c1": { "body": "fixtures/card-basic.vcf" } },
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0 }],
+    "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1 }],
+    "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d0" }]
+  },
+  "run": { "verb": "sync", "collection": "Contacts", "source": "dav", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "keep-local" } },
+  "remote": {
+    "snapshot": {
+      "items": [{ "handle": "a.vcf", "flags": [], "revision": "r2", "meta": { "body": "fixtures/card-basic-renamed.vcf" } }],
+      "vanished": [],
+      "complete": true,
+      "checkpoint": "d1"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [{ "kind": "Conflicted", "handle": "a.vcf" }],
+    "store": {
+      "items": [
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0 }
+      ],
+      "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1, "conflicted": 1, "conflict_revision": "r2", "conflict_object": null }],
+      "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d1" }]
+    }
+  }
+}

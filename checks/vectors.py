@@ -1995,12 +1995,12 @@ for path in sync_cases:
             if item.get("deleted") == 0:
                 require(f"{label}: Overruled {event['handle']} under {policies[run['collection']]} settles for a body, never for one nobody read", item.get("object") is not None)
     # A source's policy settles a divergence once its body is read (SYNC.md
-    # sections 5 and 6): an upgrade under prefer-local, content pushes allowed,
-    # or prefer-remote leaves no binding of its source holding a fetched
-    # diverging body.
+    # sections 5 and 6): an upgrade under prefer-local or keep-local, content
+    # pushes allowed, or prefer-remote leaves no binding of its source holding
+    # a fetched diverging body.
     policy = run.get("options", {}).get("conflict")
     pushable = run.get("options", {}).get("push", True) and run.get("options", {}).get("rights", {}).get("content", True)
-    if run.get("verb") == "upgrade" and (policy == "prefer-remote" or (policy == "prefer-local" and pushable)):
+    if run.get("verb") == "upgrade" and (policy == "prefer-remote" or (policy in ("prefer-local", "keep-local") and pushable)):
         for binding in after.get("bindings", []):
             if binding["source"] == run["source"] and binding.get("conflicted") == 1:
                 require(f"{label}: binding {binding['handle']} under {policy} is settled once its diverging body is read", binding.get("conflict_object") is None)

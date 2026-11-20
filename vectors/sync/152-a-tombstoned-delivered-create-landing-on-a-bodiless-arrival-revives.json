@@ -1,5 +1,5 @@
 {
-  "v": 8,
+  "v": 9,
   "label": "a tombstoned delivered create of a mutable kind landing on an arrival that carries no body revives as a divergence, its delete not pushed",
   "note": "the card's create was delivered, an add accepted with no handle, and deleted here since, its Remove held for the page naming the member. The delta names it under a.vcf at r1 and carries no body. The page lands the create on a.vcf, but r1 is a revision the tombstone's base does not name, and nothing has read what the server holds there, which another client may have edited: by the rule for a tombstone that is a remote edit, which revives it. So it lands live, recorded as Manual records a divergence whatever the policy: conflicted at r1 with no conflict_object, the base at r1 naming no body, reported Conflicted beside the landing's Created. The staged delete is not pushed over a body nobody read; the upgrade fetches that body, and the person deletes again (SYNC.md §5, §6)",
   "store": {

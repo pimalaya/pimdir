@@ -328,7 +328,7 @@ It MUST run for every placement present on both sides, one whose content axis de
 
 The flag axis leaves the status alone while the content axis still owes a push, and leaves an unresolved conflict alone.
 
-**The content axis** applies to a mutable kind, which reports a revision. A local body the base does not hold is an `Update` gated on the base revision. A remote revision the base does not hold is a pull: the member's meta becomes the summary, address rows and sort key, and the member's body, when it carries one, becomes the body and the base at its revision, as a fetch's does (§6). A member carrying none drops the local body and lowers the level to `Meta`.
+**The content axis** applies to a mutable kind, which reports a revision. A local body the base does not hold is an `Update` gated on the base revision. A remote revision the base does not hold is a pull, but under `KeepLocal` (below): the member's meta becomes the summary, address rows and sort key, and the member's body, when it carries one, becomes the body and the base at its revision, as a fetch's does (§6). A member carrying none drops the local body and lowers the level to `Meta`.
 
 A placement holding no body (a pull having emptied it) owes nothing until the upgrade refetches it. One holding a local body over a base that names a revision and no body (an edit staged after such a pull) MUST derive no `Update`, nor the `Remove` a move's staged edit rides ahead of (below): the body the server holds at that revision is one nobody has read, and pushing over it would lose it unkept. It waits for the upgrade, which fetches that body into the base (§6), after which the local body is an edit over a body read. A placement whose local body the run keeps, pushed or conflicted, keeps that body's summary.
 
@@ -345,8 +345,9 @@ A conflict whose fetched body equals the placement's own is no divergence (the p
 - `Manual` (default) marks the binding conflicted with the observed revision, and records the diverging body in `conflict_object` when the member carries it, else asks the upgrade for it (§6).
 - `PreferRemote` pulls, the local edit it drops kept as a retained item and reported (§9). A member carrying no body is pulled as any pull is, the item emptied for the upgrade to fetch: nothing is written to the remote, and the local edit is kept.
 - `PreferLocal` keeps the member's body and pushes the local one over it. In a write that commits before the push, the binding's base adopts the observed revision and the member's body, as a person's `Edit` adopts a conflict (§7), and that body is kept as a retained item, reported `Overruled` (§9); the local body, an edit over that base, is then pushed gated on the observed revision. A push rejected, interrupted or replayed finds the body kept and the base moved, so nothing is kept twice, and one that landed unrecorded is read back as the push whose record was lost (above). It falls back to `Manual` when content pushes are forbidden.
+- `KeepLocal` is `PreferLocal` for a source the store is authoritative over, a copy the store writes from its other sources: a remote revision the base does not hold is a divergence whether or not a local body is staged, so a change made on that remote alone is never pulled. It is settled as `PreferLocal` settles a both-changed case, the store's body, the staged edit or the base's, pushed over the member's, which is kept and reported `Overruled`. A placement holding no body has nothing to keep and pulls as any. It falls back to `Manual` when content pushes are forbidden, the divergence recorded rather than pulled.
 
-No policy pushes over a body nobody has read. A both-changed case whose member carries no body MUST be recorded as `Manual` records it under `PreferLocal`, conflicted at the observed revision with no `conflict_object`, and the upgrade fetching that body settles it by the policy then (§6).
+No policy pushes over a body nobody has read. A both-changed case whose member carries no body MUST be recorded as `Manual` records it under `PreferLocal` and `KeepLocal`, and so MUST a remote-only change under `KeepLocal`, conflicted at the observed revision with no `conflict_object`, and the upgrade fetching that body settles it by the policy then (§6).
 
 The collection's `conflict` (STORAGE §4.3) is the other axis, settling the shared item between sources (§9); the two are named apart on purpose.
 
@@ -458,7 +459,7 @@ A fetch carrying no body writes the level the payload supports, never lower than
 
 **A conflict's body.** A conflicted placement holding no `conflict_object` is revisited. The body fetched MUST land in `conflict_object`, never in its own object, unless it equals the placement's own body: that is no divergence, and the binding adopts the revision and the body as its base and the conflict clears (§5).
 
-Otherwise the source's policy then settles it as a carried body (§5): under `Manual` it stays recorded; under `PreferLocal`, content pushes allowed, the fetched body is kept as a retained item, reported `Overruled`, and the base adopts it with its revision, the conflict cleared, so the next sync pushes the local body gated on that revision; under `PreferRemote` the item adopts it as its body and the base, the local edit kept as §9 keeps it.
+Otherwise the source's policy then settles it as a carried body (§5): under `Manual` it stays recorded; under `PreferLocal` or `KeepLocal`, content pushes allowed, the fetched body is kept as a retained item, reported `Overruled`, and the base adopts it with its revision, the conflict cleared, so the next sync pushes the local body gated on that revision; under `PreferRemote` the item adopts it as its body and the base, the local edit kept as §9 keeps it.
 
 An item conflict holding no `conflict_object`, recorded before its incoming body was read (§9), is revisited by the upgrade of every binding of the item whose base names a revision and no body. The body fetched is then settled by the collection's `conflict` policy as a carried one would have been:
 
@@ -581,7 +582,7 @@ An upsert leaving a conflicted binding counts as the source having changed its b
 - the shared body `prefer-incoming` replaced;
 - the incoming body `prefer-existing` refused;
 - the local edit a source's `PreferRemote` dropped (§5), which reaches the write as an upsert whose source changed, over an item that had not changed for it, replacing a body the binding's base did not hold.
-- the server's body a source's `PreferLocal` pushes over (§5), which reaches the write as an upsert moving the binding's base to it, before the push.
+- the server's body a source's `PreferLocal` or `KeepLocal` pushes over (§5), which reaches the write as an upsert moving the binding's base to it, before the push.
 
 So MUST the diverging body an overruling `Edit` does not adopt (§7): an automatic settle never discards a body silently, and only a person's resolution may.
 
@@ -623,7 +624,7 @@ While this part is a draft, an engine MUST refuse a store whose `sync_version` n
 
 ## 11. Test vectors
 
-vectors/sync/ holds cases every conforming engine MUST reproduce, one JSON file each, stating `v` 8 (the version of the format this section describes) and conforming to vectors/schema/sync.schema.json. A case states:
+vectors/sync/ holds cases every conforming engine MUST reproduce, one JSON file each, stating `v` 9 (the version of the format this section describes) and conforming to vectors/schema/sync.schema.json. A case states:
 
 - `store`: the rows before the run, bodies named by label, summaries by their row. An object stated with `blob` false has its row and no blob file: a body that cannot be read. One stated `corrupt` has its row and a blob file whose bytes do not hash to its name (any other bytes, the fixture's altered): a body that fails verification (STORAGE §7). One stated with `row` false has a blob file under its name and no row, as a crash leaves a file written before the transaction storing its row commits, and no row names it; `row` false beside `corrupt` is that file holding other bytes.
 - `run`: the verb, collection, source and options (`push`, `rights`, `conflict`, `scope` as `since` and `until`, and `accept_absences`); an `upgrade` run its `tier` and the `handles` it upgrades; a `mutate` run carries its `mutation` (§7) by `kind`: an `Add` its `object` and `flags`, an `Edit` its `seq` and `object` with its `if_match`, `overrule` and `resolves` (a list of object labels) where it states them, a `Remove` its `seq` with its `if_match` and `resolves` where it states them, a `SetFlags` its `seq` and `flags` with its `base` where it states one, a `Copy` or a `Move` its `seq` and the collection it goes `to`, an `Abandon` its `seq`, objects named by label.

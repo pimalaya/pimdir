@@ -1,5 +1,5 @@
 {
-  "v": 8,
+  "v": 9,
   "label": "a move into the collection the item is in is refused, staging nothing",
   "note": "a frontend queued a move of the card into Contacts, where it already is. Applied, the move would tombstone the card and stage a create beside it under a key minted over its own, which for a message held without its body never delivers while the tombstone pushes a plain delete: a server-side delete nobody asked for. The Move is refused and stages nothing, which the drain parks naming the collection (SYNC.md §7; STORAGE §15.2, §15.3)",
   "store": {

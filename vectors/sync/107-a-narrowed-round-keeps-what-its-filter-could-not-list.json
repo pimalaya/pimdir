@@ -1,5 +1,5 @@
 {
-  "v": 8,
+  "v": 9,
   "label": "a round narrowed by received date and handing no enumeration finds no member absent",
   "note": "Graph lists the scope [2026-09-01, open) by receivedDateTime from two days below since, and says so (narrowed), handing no unfiltered enumeration of ids here. The draft 11 states no usable Date and was saved in May, before the filter's window; 13 is dated 2035 by a sender's clock but arrived in May too; 14, dated 5 October, is not listed either. A filter on another instant than the Date proves no absence whatever the dates (14 may be a message whose Date runs ahead of its arrival, as 13's does), so all three are left as they stand, neither dropped nor pushed: a stated removal, an unnarrowed round or an enumeration decides them. The round closes as any round does (SYNC.md §4, §5)",
   "store": {

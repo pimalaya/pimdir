@@ -7,7 +7,7 @@
   "required": ["v", "label", "note", "store", "run", "remote", "expect"],
   "additionalProperties": false,
   "properties": {
-    "v": { "const": 8 },
+    "v": { "const": 9 },
     "label": { "type": "string" },
     "note": { "type": "string" },
     "store": { "$ref": "#/$defs/store" },
@@ -316,7 +316,7 @@
               "additionalProperties": false,
               "properties": { "flags": { "type": "boolean" }, "content": { "type": "boolean" }, "add": { "type": "boolean" }, "remove": { "type": "boolean" } }
             },
-            "conflict": { "enum": ["manual", "prefer-remote", "prefer-local"] },
+            "conflict": { "enum": ["manual", "prefer-remote", "prefer-local", "keep-local"] },
             "scope": {
               "type": "object",
               "required": ["since", "until"],
