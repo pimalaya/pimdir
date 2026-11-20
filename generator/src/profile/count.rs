@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     body::{Filed, Time},
-    model::{Collection, Kind, Model, Placement, Scope, SourceState, key},
+    model::{Collection, Kind, Model, Placement, Presentation, Scope, SourceState, key},
     profile::Draw,
 };
 
@@ -22,6 +22,9 @@ const MAILBOXES: usize = 100;
 
 /// The deepest a mailbox nests.
 const DEPTH: usize = 6;
+
+/// The mailboxes a client lists first, in this order.
+const SPECIAL: [&str; 4] = ["INBOX", "Sent", "Drafts", "Archive"];
 
 impl Draw {
     /// The count profile at `items` items.
@@ -55,6 +58,22 @@ impl Draw {
                 declare(&mut model, &id, account, Kind::Calendar, None, source);
                 kinds.entry(Kind::Calendar).or_default().push(id);
             }
+        }
+        for collection in model.collections.values_mut() {
+            let (account, path) = collection.id.split_once('/').expect("an account's");
+            collection.parent = path
+                .rsplit_once('/')
+                .map(|(up, _)| format!("{account}/{up}"));
+            let sort_order = SPECIAL.iter().position(|special| *special == path);
+            let color = (collection.kind == Some(Kind::Calendar))
+                .then(|| format!("#{:06x}", self.rng.next_u32() & 0xff_ffff));
+            let description = (collection.kind == Some(Kind::Contact))
+                .then(|| format!("{} {path}", self.pick(&WORDS)));
+            collection.presentation = Presentation {
+                color,
+                description,
+                sort_order: sort_order.map(|at| at as i64),
+            };
         }
         for collections in kinds.values_mut() {
             for index in (1..collections.len()).rev() {
@@ -203,6 +222,8 @@ pub(crate) fn declare(
             .collect(),
         conflict: String::from("manual"),
         generation: 1,
+        parent: None,
+        presentation: Presentation::default(),
     });
 }
 
@@ -255,6 +276,36 @@ pub(crate) mod tests {
             .max()
             .unwrap();
         assert!(deepest >= 6, "a mailbox six levels under its account");
+        let depth = |id: &String| {
+            let mut depth = 0;
+            let mut at = model.collections[id].parent.clone();
+            while let Some(parent) = at {
+                let up = &model.collections[&parent];
+                assert_eq!(
+                    up.account, model.collections[id].account,
+                    "a forest per account"
+                );
+                depth += 1;
+                at = up.parent.clone();
+            }
+            depth
+        };
+        assert!(
+            model.collections.keys().map(depth).max().unwrap() >= 5,
+            "a hierarchy by parent"
+        );
+        assert!(
+            model
+                .collections
+                .values()
+                .any(|collection| collection.presentation.color.is_some())
+        );
+        assert!(
+            model
+                .collections
+                .values()
+                .any(|collection| collection.presentation.sort_order.is_some())
+        );
         for kind in [Kind::Mail, Kind::Contact, Kind::Calendar] {
             let holding = model
                 .items

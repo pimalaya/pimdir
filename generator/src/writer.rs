@@ -107,6 +107,28 @@ pub fn materialise(model: &Model, store: &Store) -> Result<()> {
         }
     }
 
+    for collection in model.collections.values() {
+        let id = Value::Text(collection.id.clone());
+        let parent = text(collection.parent.as_deref());
+        run(
+            store,
+            "storage/owner/set_collection_parent",
+            &[("parent", &parent), ("collection", &id)],
+        )?;
+        let shown = &collection.presentation;
+        let sort_order = shown.sort_order.map_or(Value::Null, Value::Integer);
+        run(
+            store,
+            "storage/owner/set_collection_presentation",
+            &[
+                ("color", &text(shown.color.as_deref())),
+                ("description", &text(shown.description.as_deref())),
+                ("sort_order", &sort_order),
+                ("collection", &id),
+            ],
+        )?;
+    }
+
     let sources: BTreeSet<&String> = model.capabilities.iter().map(|row| &row.source).collect();
     for source in sources {
         let source_value = Value::Text(source.clone());

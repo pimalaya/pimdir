@@ -62,6 +62,23 @@ pub struct Collection {
     pub conflict: String,
     /// Its handle-space epoch, from 1, bumped by a rekey (STORAGE §12).
     pub generation: i64,
+    /// The collection it sits under in its account's hierarchy, none at
+    /// the top (STORAGE §14).
+    pub parent: Option<String>,
+    /// How it is shown, as its source states it.
+    pub presentation: Presentation,
+}
+
+/// How a collection is shown, each part as its source states it or none
+/// (STORAGE §14).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Presentation {
+    /// A color as written.
+    pub color: Option<String>,
+    /// A description.
+    pub description: Option<String>,
+    /// Its position among its siblings.
+    pub sort_order: Option<i64>,
 }
 
 impl Collection {

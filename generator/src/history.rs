@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::{
     body::{Card, Mail, fnv1a64},
     engine::{Options, Push, Run},
-    model::{Collection, Kind, Model, Scope, synced_by},
+    model::{Collection, Kind, Model, Presentation, Scope, synced_by},
     name::ObjectName,
     profile::Draw,
     queue::{Action, RowState},
@@ -83,6 +83,8 @@ impl History {
             sources: synced_by(&[&String::from("work-imap")]),
             conflict: String::from("manual"),
             generation: 1,
+            parent: None,
+            presentation: Presentation::default(),
         });
         let mut remote = Remote::new("work-imap", "work/INBOX");
         for index in 0..7 {
@@ -212,6 +214,8 @@ impl History {
             sources: synced_by(&[&String::from("work-carddav")]),
             conflict: String::from("manual"),
             generation: 1,
+            parent: None,
+            presentation: Presentation::default(),
         });
         let mut remote = Remote::dav("work-carddav", "work/contacts");
         let mut cards = Vec::new();
@@ -354,6 +358,8 @@ impl History {
                 sources: synced_by(&[&String::from("work-imap")]),
                 conflict: String::from("manual"),
                 generation: 1,
+                parent: None,
+                presentation: Presentation::default(),
             });
             remotes.insert(String::from(id), Remote::new("work-imap", id));
         }
@@ -464,6 +470,8 @@ impl History {
             sources: synced_by(&[&String::from("work-carddav")]),
             conflict: String::from("manual"),
             generation: 1,
+            parent: None,
+            presentation: Presentation::default(),
         });
         let mut remote = Remote::dav("work-carddav", "work/contacts");
         let mut cards = Vec::new();
@@ -624,6 +632,8 @@ impl History {
             sources: synced_by(&[&String::from("work-imap")]),
             conflict: String::from("manual"),
             generation: 1,
+            parent: None,
+            presentation: Presentation::default(),
         });
         let mut remote = Remote::new("work-imap", "work/Sent");
         remote.uidplus = false;
@@ -707,6 +717,8 @@ impl History {
                 sources: synced_by(&[&format!("dav-{id}")]),
                 conflict: String::from("manual"),
                 generation: 1,
+                parent: None,
+                presentation: Presentation::default(),
             });
             let mut remote = Remote::dav(&format!("dav-{id}"), id);
             remote.policy = policy;
@@ -795,6 +807,8 @@ impl History {
                 sources: synced_by(&[&a, &b]),
                 conflict: String::from(conflict),
                 generation: 1,
+                parent: None,
+                presentation: Presentation::default(),
             });
             let mut ra = Remote::dav(&a, id);
             let mut rb = Remote::dav(&b, id);
@@ -875,6 +889,8 @@ impl History {
             sources: synced_by(&["imap-a", "imap-b"]),
             conflict: String::from("manual"),
             generation: 1,
+            parent: None,
+            presentation: Presentation::default(),
         });
         let mut ra = Remote::new("imap-a", id);
         ra.carries = true;
@@ -912,6 +928,8 @@ impl History {
                 sources: synced_by(&[&a, &b]),
                 conflict: String::from(conflict),
                 generation: 1,
+                parent: None,
+                presentation: Presentation::default(),
             });
             let mut ra = Remote::dav(&a, id);
             let mut rb = Remote::dav(&b, id);
@@ -986,6 +1004,8 @@ impl History {
                 sources: synced_by(&[source]),
                 conflict: String::from("manual"),
                 generation: 1,
+                parent: None,
+                presentation: Presentation::default(),
             });
             Remote::new(source, id)
         };
@@ -1178,6 +1198,8 @@ impl History {
             sources: synced_by(&["work-imap"]),
             conflict: String::from("manual"),
             generation: 1,
+            parent: None,
+            presentation: Presentation::default(),
         });
         let mut remote = Remote::new("work-imap", id);
         let messages: Vec<Mail> = (0..24).map(|_| draw.message(false)).collect();
@@ -1233,6 +1255,8 @@ impl History {
             sources: synced_by(&["work-carddav"]),
             conflict: String::from("manual"),
             generation: 1,
+            parent: None,
+            presentation: Presentation::default(),
         });
         let mut remote = Remote::dav("work-carddav", id);
         let cards: Vec<Card> = (0..3).map(|_| draw.card()).collect();
@@ -1331,6 +1355,8 @@ impl History {
             sources: synced_by(&["work-imap"]),
             conflict: String::from("manual"),
             generation: 1,
+            parent: None,
+            presentation: Presentation::default(),
         });
         let mut remote = Remote::new("work-imap", id);
         for _ in 0..8 {
@@ -1391,6 +1417,8 @@ impl History {
                 sources: synced_by(&[&source]),
                 conflict: String::from("manual"),
                 generation: 1,
+                parent: None,
+                presentation: Presentation::default(),
             });
             let mut remote = Remote::dav(&source, id);
             let card = draw.card();
@@ -1479,6 +1507,8 @@ impl History {
                 sources: synced_by(&[source]),
                 conflict: String::from("manual"),
                 generation: 1,
+                parent: None,
+                presentation: Presentation::default(),
             });
             Remote::new(source, id)
         };
@@ -1610,6 +1640,8 @@ impl History {
                     sources: synced_by(sources),
                     conflict: String::from(conflict),
                     generation: 1,
+                    parent: None,
+                    presentation: Presentation::default(),
                 });
             };
         let renamed = |card: &Card, name: &str| Card {

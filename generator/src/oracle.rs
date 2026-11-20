@@ -252,10 +252,13 @@ impl Oracle<'_> {
                     collection.kind.map_or("", |kind| kind.media_type()),
                 )),
                 Value::Text(collection.name.clone()),
-                Value::Null,
-                Value::Null,
-                Value::Null,
-                Value::Null,
+                text(collection.parent.as_deref()),
+                text(collection.presentation.color.as_deref()),
+                text(collection.presentation.description.as_deref()),
+                collection
+                    .presentation
+                    .sort_order
+                    .map_or(Value::Null, Value::Integer),
                 Value::Integer(collection.generation),
                 text(collection.role.as_deref()),
             ];
@@ -263,7 +266,15 @@ impl Oracle<'_> {
             row
         };
 
-        let all = model.collections.keys().map(|id| row(id)).collect();
+        let mut listed: Vec<&Collection> = model.collections.values().collect();
+        listed.sort_by_key(|collection| {
+            let order = collection.presentation.sort_order;
+            (order.is_none(), order, collection.id.as_str())
+        });
+        let all = listed
+            .iter()
+            .map(|collection| row(&collection.id))
+            .collect();
         self.expect("list_collections", &[], all);
 
         let accounts: BTreeSet<Option<&String>> = model
@@ -272,9 +283,8 @@ impl Oracle<'_> {
             .map(|collection| collection.account.as_ref())
             .collect();
         for account in &accounts {
-            let rows = model
-                .collections
-                .values()
+            let rows = listed
+                .iter()
                 .filter(|collection| collection.account.as_ref() == *account)
                 .map(|collection| row(&collection.id))
                 .collect();
