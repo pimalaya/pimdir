@@ -24,8 +24,8 @@ use rusqlite::types::Value;
 use crate::{
     body::Filed,
     model::{
-        Address, Binding, Item, Model, OpenRound, Placement, Refusal, Scope, SourceState, State,
-        Summary, Table, key,
+        Address, Binding, Derived, Item, Model, OpenRound, Placement, Refusal, Scope, SourceState,
+        State, Summary, Table, key,
     },
     name::ObjectName,
     remote::{Listed, Page, Policy, Remote},
@@ -231,7 +231,7 @@ pub struct Options {
 /// One verb run over one collection and the script it ran against.
 #[derive(Clone, Debug)]
 pub struct Run {
-    /// `sync`, `upgrade` or `rekey`.
+    /// `sync`, `upgrade`, `rekey` or `mutate`.
     pub verb: &'static str,
     /// What it was asked, a vector's `run.options`: the scope and whether
     /// absences are accepted.
@@ -413,21 +413,29 @@ impl Model {
                                 }
                                 index
                             }
-                            None => {
-                                if member.carries {
-                                    self.objects
-                                        .insert(ObjectName::of(&member.meta), member.meta.clone());
+                            None => match self.reviving(&collection, &filed) {
+                                Some(index) => {
+                                    self.revive(index, member, &filed, &source, &mut events);
+                                    index
                                 }
-                                let placement = Placement {
-                                    flags: Some(member.flags.clone()),
-                                    held: member.carries,
-                                    handle: Some(member.handle.clone()),
-                                    revision: member.revision.clone(),
-                                    source: Some(source.clone()),
-                                };
-                                events.push(Event::Added(member.handle.clone()));
-                                self.file(&collection, filed, placement)
-                            }
+                                None => {
+                                    if member.carries {
+                                        self.objects.insert(
+                                            ObjectName::of(&member.meta),
+                                            member.meta.clone(),
+                                        );
+                                    }
+                                    let placement = Placement {
+                                        flags: Some(member.flags.clone()),
+                                        held: member.carries,
+                                        handle: Some(member.handle.clone()),
+                                        revision: member.revision.clone(),
+                                        source: Some(source.clone()),
+                                    };
+                                    events.push(Event::Added(member.handle.clone()));
+                                    self.file(&collection, filed, placement)
+                                }
+                            },
                         },
                     },
                 };
@@ -863,12 +871,27 @@ impl Model {
                 continue;
             }
 
-            let item = &mut self.items[index];
-            item.object = Some(name.clone());
-            item.level = 2;
-            let binding = item.bound_mut(&source).expect("a bound item");
-            binding.base_object = Some(name.clone());
-            binding.shared_object = Some(name);
+            let member = &remote.members[handle];
+            let binding = self.items[index].bound(&source).expect("a bound item");
+            let held = binding.base_object.is_some();
+            let moved = member.revision.is_some() && member.revision != binding.base_revision;
+            match (held, moved) {
+                (true, true) => {
+                    let listed = Listed {
+                        handle: handle.clone(),
+                        flags: member.flags.clone(),
+                        revision: member.revision.clone(),
+                        meta: filed.bytes.clone(),
+                        carries: true,
+                    };
+                    self.diverge(index, &listed, &filed, Some(name), &source, &mut events);
+                }
+                (true, false) => {}
+                (false, _) => {
+                    let revision = member.revision.clone();
+                    self.fill(index, &source, handle, name, &filed, revision, &mut events);
+                }
+            }
         }
 
         Run {
@@ -942,6 +965,7 @@ impl Model {
                 sort_key: filed.sort_key.clone(),
             }),
             (false, _) => {
+                self.remember(Some(&fetched), filed);
                 let item = &mut self.items[index];
                 item.conflict_object = Some(fetched.clone());
                 let binding = item.bound_mut(source).expect("a bound item");
@@ -974,6 +998,285 @@ impl Model {
             .sources
             .entry(String::from(source))
             .or_default()
+    }
+
+    /// Keeps the row a body derives, for an item that may adopt it later.
+    fn remember(&mut self, name: Option<&ObjectName>, filed: &Filed) {
+        if let Some(name) = name {
+            let derived = Derived {
+                summary: filed.summary.clone(),
+                addresses: filed.addresses.clone(),
+                sort_key: filed.sort_key.clone(),
+            };
+            self.rows.insert(name.clone(), derived);
+        }
+    }
+
+    /// Fills an item holding no body with the one a binding whose base
+    /// names none read (SYNC §9): adopted without a divergence measured.
+    /// An item conflict waiting on the item's own body is then settled by
+    /// the collection's policy: `manual` keeps it, `prefer-incoming` adopts
+    /// the diverging body and `prefer-existing` the one filled, the body not
+    /// adopted kept over the filling binding's handle.
+    #[allow(clippy::too_many_arguments)]
+    fn fill(
+        &mut self,
+        index: usize,
+        source: &str,
+        handle: &str,
+        name: ObjectName,
+        filed: &Filed,
+        revision: Option<String>,
+        events: &mut Vec<Event>,
+    ) {
+        let policy = self.collections[&self.items[index].collection]
+            .conflict
+            .clone();
+        let item = &mut self.items[index];
+        item.object = Some(name.clone());
+        item.level = 2;
+        item.summary = filed.summary.clone();
+        item.addresses = filed.addresses.clone();
+        item.sort_key = filed.sort_key.clone();
+        let conflicted = item.conflicted;
+        let waiting = item.conflict_object.clone().filter(|_| conflicted);
+        let binding = item.bound_mut(source).expect("a bound item");
+        binding.base_object = Some(name.clone());
+        if revision.is_some() {
+            binding.base_revision = revision;
+        }
+        let Some(incoming) = waiting else {
+            if !conflicted {
+                binding.shared_object = Some(name);
+            }
+            return;
+        };
+
+        let derived = self.rows.get(&incoming).cloned();
+        let item = &self.items[index];
+        let (kept, settled) = match policy.as_str() {
+            "prefer-incoming" => {
+                let kept = Kept {
+                    object: Some(name),
+                    flags: item.flags.clone(),
+                    summary: item.summary.clone(),
+                    addresses: item.addresses.clone(),
+                    sort_key: item.sort_key.clone(),
+                };
+                let item = &mut self.items[index];
+                item.object = Some(incoming.clone());
+                if let Some(derived) = derived {
+                    item.summary = derived.summary;
+                    item.addresses = derived.addresses;
+                    item.sort_key = derived.sort_key;
+                }
+                (kept, incoming)
+            }
+            "prefer-existing" => {
+                let derived = derived.unwrap_or_else(|| Derived {
+                    summary: item.summary.clone(),
+                    addresses: item.addresses.clone(),
+                    sort_key: item.sort_key.clone(),
+                });
+                let kept = Kept {
+                    object: Some(incoming),
+                    flags: item.flags.clone(),
+                    summary: derived.summary,
+                    addresses: derived.addresses,
+                    sort_key: derived.sort_key,
+                };
+                (kept, name)
+            }
+            _ => return,
+        };
+        let item = &mut self.items[index];
+        item.conflicted = false;
+        item.conflict_object = None;
+        item.bound_mut(source).expect("a bound item").shared_object = Some(settled);
+        let link_id = self.keep(index, handle, kept, source);
+        events.push(Event::Overruled {
+            handle: String::from(handle),
+            link_id,
+        });
+    }
+
+    /// The retained row of the collection a member revives: the one holding
+    /// its key, its summary agreeing, and a message's size too where both
+    /// state one (SYNC §6, STORAGE §11.1).
+    fn reviving(&self, collection: &str, filed: &Filed) -> Option<usize> {
+        let key = key(filed);
+        self.items.iter().position(|item| {
+            item.collection == collection
+                && item.link_id == key
+                && matches!(item.state, State::Retained { .. })
+                && agrees(&item.summary, &filed.summary)
+                && (item.summary.table != Table::Mail
+                    || item.summary.get("size") == filed.summary.get("size")
+                    || [&item.summary, &filed.summary]
+                        .iter()
+                        .any(|summary| summary.get("size") == Value::Null))
+        })
+    }
+
+    /// Revives a retained row under the member naming it, reported `Added`
+    /// (STORAGE §11.1): bound by the source at the member's flags and
+    /// revision. A message keeps its body, the member's own. A mutable kind
+    /// takes the body the member carries, none when it carries none, at
+    /// `Meta`, the body the row held kept as a retained item over the
+    /// member's handle, reported `Overruled`, its server having perhaps
+    /// replaced it.
+    fn revive(
+        &mut self,
+        index: usize,
+        member: &Listed,
+        filed: &Filed,
+        source: &str,
+        events: &mut Vec<Event>,
+    ) {
+        let carried = member.carries.then(|| ObjectName::of(&member.meta));
+        if let Some(name) = &carried {
+            self.objects.insert(name.clone(), member.meta.clone());
+        }
+        let item = &self.items[index];
+        let mutable = item.summary.table != Table::Mail;
+        let kept = (mutable && item.object.is_some() && item.object != carried).then(|| Kept {
+            object: item.object.clone(),
+            flags: item.flags.clone(),
+            summary: item.summary.clone(),
+            addresses: item.addresses.clone(),
+            sort_key: item.sort_key.clone(),
+        });
+
+        let item = &mut self.items[index];
+        item.state = State::Live;
+        item.flags = Some(member.flags.clone());
+        if mutable {
+            item.object = carried;
+            item.level = if item.object.is_some() { 2 } else { 1 };
+            item.summary = filed.summary.clone();
+            item.addresses = filed.addresses.clone();
+            item.sort_key = filed.sort_key.clone();
+        }
+        let object = item.object.clone();
+        item.bind(Binding {
+            source: String::from(source),
+            handle: member.handle.clone(),
+            base_flags: Some(member.flags.clone()),
+            base_object: object.clone(),
+            base_revision: member.revision.clone(),
+            base_present: true,
+            shared_object: object,
+            conflicted: false,
+            conflict_revision: None,
+            conflict_object: None,
+            refusal: None,
+            round: None,
+        });
+        events.push(Event::Added(member.handle.clone()));
+        if let Some(kept) = kept {
+            let link_id = self.keep(index, &member.handle, kept, source);
+            events.push(Event::Overruled {
+                handle: member.handle.clone(),
+                link_id,
+            });
+        }
+    }
+
+    /// An `Edit` stating `overrule` through `source`'s binding of the item
+    /// at `seq` (SYNC §7): an engine settling a conflict by its own rule.
+    /// It is refused, staging nothing, when a conflict it settles holds a
+    /// diverging body nobody has read. Else the binding's conflict is
+    /// adopted as its base, as any settling `Edit` adopts it, the item takes
+    /// the edit's body, and each diverging body not adopted is kept over the
+    /// binding's handle, the binding's then the item's, reported `Overruled`.
+    pub fn overrule(&mut self, collection: &str, source: &str, seq: i64, filed: Filed) -> Run {
+        let index = self
+            .items
+            .iter()
+            .position(|item| {
+                item.collection == collection && item.seq == seq && item.bound(source).is_some()
+            })
+            .expect("a bound item");
+        let item = &self.items[index];
+        let binding = item.bound(source).expect("a bound item");
+        let handle = binding.handle.clone();
+        let unread = (binding.conflicted && binding.conflict_object.is_none())
+            || (item.conflicted && item.conflict_object.is_none());
+        let mut events = Vec::new();
+
+        if !unread {
+            let name = ObjectName::of(&filed.bytes);
+            self.objects.insert(name.clone(), filed.bytes.clone());
+            let item = &self.items[index];
+            let binding = item.bound(source).expect("a bound item");
+            let diverging = [
+                binding
+                    .conflict_object
+                    .clone()
+                    .filter(|_| binding.conflicted),
+                item.conflict_object.clone().filter(|_| item.conflicted),
+            ];
+            let kept: Vec<Kept> = diverging
+                .into_iter()
+                .flatten()
+                .filter(|object| object != &name)
+                .map(|object| {
+                    let derived = self.rows.get(&object).cloned().unwrap_or_else(|| Derived {
+                        summary: item.summary.clone(),
+                        addresses: item.addresses.clone(),
+                        sort_key: item.sort_key.clone(),
+                    });
+                    Kept {
+                        object: Some(object),
+                        flags: item.flags.clone(),
+                        summary: derived.summary,
+                        addresses: derived.addresses,
+                        sort_key: derived.sort_key,
+                    }
+                })
+                .collect();
+
+            let item = &mut self.items[index];
+            item.object = Some(name.clone());
+            item.level = 2;
+            item.summary = filed.summary.clone();
+            item.addresses = filed.addresses.clone();
+            item.sort_key = filed.sort_key.clone();
+            item.conflicted = false;
+            item.conflict_object = None;
+            let binding = item.bound_mut(source).expect("a bound item");
+            if binding.conflicted {
+                binding.base_object = binding.conflict_object.take();
+                binding.base_revision = binding.conflict_revision.take();
+                binding.conflicted = false;
+            }
+            binding.shared_object = Some(name);
+            for kept in kept {
+                let link_id = self.keep(index, &handle, kept, source);
+                events.push(Event::Overruled {
+                    handle: handle.clone(),
+                    link_id,
+                });
+            }
+        }
+
+        Run {
+            verb: "mutate",
+            options: Options::default(),
+            policy: Policy::Manual,
+            handles: vec![handle],
+            collection: String::from(collection),
+            source: String::from(source),
+            head: None,
+            pages: Vec::new(),
+            fetch: BTreeMap::new(),
+            pushes: Vec::new(),
+            outcomes: Vec::new(),
+            events,
+            parked: None,
+            unlisted: None,
+            failed: unread,
+        }
     }
 
     fn bound_handle(&self, collection: &str, source: &str, handle: &str) -> Option<usize> {
@@ -1119,6 +1422,7 @@ impl Model {
                 sort_key: filed.sort_key.clone(),
             }),
             _ => {
+                self.remember(carried.as_ref(), filed);
                 let item = &mut self.items[index];
                 item.conflicted = true;
                 item.conflict_object = carried.clone();
@@ -1223,6 +1527,7 @@ impl Model {
 
         match settle {
             Settle::Record => {
+                self.remember(carried.as_ref(), filed);
                 let binding = self.items[index].bound_mut(source).expect("a bound item");
                 binding.conflicted = true;
                 binding.conflict_revision = member.revision.clone();

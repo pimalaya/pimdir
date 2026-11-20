@@ -58,6 +58,14 @@ const UNREAD: [(&str, &str); 2] = [
     ("work/unread-incoming", "prefer-incoming"),
 ];
 
+/// The address books [`History::bodies`] fills, and the conflict policy of
+/// each.
+const FILLS: [(&str, &str); 3] = [
+    ("work/fill", "manual"),
+    ("work/fill-incoming", "prefer-incoming"),
+    ("work/fill-existing", "prefer-existing"),
+];
+
 impl History {
     /// One source and one mailbox (README.md, "Events and histories"): a
     /// first round in pages, an upgrade, remote changes, local changes
@@ -1565,6 +1573,187 @@ impl History {
 
         Self { steps }
     }
+
+    /// Bodies read late, revived and overruled (SYNC §6, §7, §9). On each
+    /// address book of `FILLS`: `a` and `b` agree on a card, `a`'s pull of
+    /// its server's edit carries no body, `b`'s upgrade reads its server's
+    /// edit over the emptied item, recorded in conflict, and `a`'s upgrade
+    /// fills the item, settled by the policy. On work/revived: a card its
+    /// server deleted, restored unread. On work/revived-mail: two messages
+    /// deleted, one restored as it was and one under its `Message-ID` at
+    /// another size. On work/overruled and work/overruled-unread: `b`
+    /// records its server's edit in conflict over `a`'s, carried or not,
+    /// and an engine overrules it with the item's body.
+    pub fn bodies(seed: u64) -> Self {
+        let mut draw = Draw::new(seed);
+        let mut model = Model::new();
+        let mut steps = vec![Step {
+            label: String::from("an empty store"),
+            run: None,
+            model: model.clone(),
+        }];
+        let mut record = |label: String, run: Option<Run>, model: &Model| {
+            steps.push(Step {
+                label,
+                run,
+                model: model.clone(),
+            });
+        };
+        let declare =
+            |model: &mut Model, id: &str, kind: Kind, sources: &[String], conflict: &str| {
+                model.declare(Collection {
+                    id: String::from(id),
+                    account: Some(String::from("work")),
+                    kind: Some(kind),
+                    name: String::from(id),
+                    role: None,
+                    sources: synced_by(sources),
+                    conflict: String::from(conflict),
+                    generation: 1,
+                });
+            };
+        let renamed = |card: &Card, name: &str| Card {
+            name: String::from(name),
+            ..card.clone()
+        };
+
+        for (id, conflict) in FILLS {
+            let (a, b) = (format!("{id}-a"), format!("{id}-b"));
+            declare(
+                &mut model,
+                id,
+                Kind::Contact,
+                &[a.clone(), b.clone()],
+                conflict,
+            );
+            let mut ra = Remote::dav(&a, id);
+            let mut rb = Remote::dav(&b, id);
+            let card = draw.card();
+            ra.deliver(card.file(), BTreeSet::new());
+            rb.deliver(card.file(), BTreeSet::new());
+            let run = model.sync(&mut ra, PAGE);
+            record(format!("{id}: a's first round"), Some(run), &model);
+            let run = model.sync(&mut rb, PAGE);
+            record(format!("{id}: b joins"), Some(run), &model);
+            ra.carries = false;
+            ra.edit("r1.vcf", renamed(&card, "Edited At A").file());
+            let run = model.sync(&mut ra, PAGE);
+            record(format!("{id}: a pulls its edit unread"), Some(run), &model);
+            rb.edit("r1.vcf", renamed(&card, "Edited At B").file());
+            let run = model.upgrade(&rb, &[String::from("r1.vcf")]);
+            record(
+                format!("{id}: b's upgrade reads its edit"),
+                Some(run),
+                &model,
+            );
+            let run = model.upgrade(&ra, &[String::from("r1.vcf")]);
+            record(
+                format!("{id}: a's upgrade fills the item"),
+                Some(run),
+                &model,
+            );
+        }
+
+        let id = "work/revived";
+        declare(
+            &mut model,
+            id,
+            Kind::Contact,
+            &[String::from("revived-dav")],
+            "manual",
+        );
+        let mut remote = Remote::dav("revived-dav", id);
+        let cards: Vec<Card> = (0..2).map(|_| draw.card()).collect();
+        for card in &cards {
+            remote.deliver(card.file(), BTreeSet::new());
+        }
+        let run = model.sync(&mut remote, PAGE);
+        record(format!("{id}: a first round"), Some(run), &model);
+        remote.expunge("r1.vcf");
+        let run = model.sync(&mut remote, PAGE);
+        record(
+            format!("{id}: its server deletes a card"),
+            Some(run),
+            &model,
+        );
+        remote.carries = false;
+        remote.deliver(renamed(&cards[0], "Restored").file(), BTreeSet::new());
+        let run = model.sync(&mut remote, PAGE);
+        record(format!("{id}: the card restored unread"), Some(run), &model);
+
+        let id = "work/revived-mail";
+        declare(
+            &mut model,
+            id,
+            Kind::Mail,
+            &[String::from("revived-imap")],
+            "manual",
+        );
+        let mut remote = Remote::new("revived-imap", id);
+        remote.carries = true;
+        let messages: Vec<Mail> = (0..2).map(|_| draw.message(false)).collect();
+        for message in &messages {
+            remote.deliver(message.file(), BTreeSet::new());
+        }
+        let run = model.sync(&mut remote, PAGE);
+        record(format!("{id}: a first round"), Some(run), &model);
+        remote.expunge("1");
+        remote.expunge("2");
+        let run = model.sync(&mut remote, PAGE);
+        record(format!("{id}: its server deletes both"), Some(run), &model);
+        remote.carries = false;
+        remote.deliver(messages[0].file(), BTreeSet::new());
+        let longer = Mail {
+            text: format!("{} and more", messages[1].text),
+            ..messages[1].clone()
+        };
+        remote.deliver(longer.file(), BTreeSet::new());
+        let run = model.sync(&mut remote, PAGE);
+        record(
+            format!("{id}: one restored, one resent longer"),
+            Some(run),
+            &model,
+        );
+
+        for (id, carries) in [("work/overruled", true), ("work/overruled-unread", false)] {
+            let (a, b) = (format!("{id}-a"), format!("{id}-b"));
+            declare(
+                &mut model,
+                id,
+                Kind::Contact,
+                &[a.clone(), b.clone()],
+                "manual",
+            );
+            let mut ra = Remote::dav(&a, id);
+            let mut rb = Remote::dav(&b, id);
+            let card = draw.card();
+            ra.deliver(card.file(), BTreeSet::new());
+            rb.deliver(card.file(), BTreeSet::new());
+            let run = model.sync(&mut ra, PAGE);
+            record(format!("{id}: a's first round"), Some(run), &model);
+            let run = model.sync(&mut rb, PAGE);
+            record(format!("{id}: b joins"), Some(run), &model);
+            let ours = renamed(&card, "Edited At A");
+            ra.edit("r1.vcf", ours.file());
+            let run = model.sync(&mut ra, PAGE);
+            record(format!("{id}: a pulls its edit"), Some(run), &model);
+            rb.carries = carries;
+            rb.edit("r1.vcf", renamed(&card, "Edited At B").file());
+            let run = model.sync(&mut rb, PAGE);
+            record(
+                format!("{id}: b records its edit in conflict"),
+                Some(run),
+                &model,
+            );
+            let (seq, _) = model.bound_card(id, "r1.vcf");
+            let run = model.overrule(id, &b, seq, ours.file());
+            record(format!("{id}: an engine overrules it"), Some(run), &model);
+            let run = model.sync(&mut rb, PAGE);
+            record(format!("{id}: b's next run"), Some(run), &model);
+        }
+
+        Self { steps }
+    }
 }
 
 impl Model {
@@ -1625,7 +1814,7 @@ mod tests {
     use crate::{
         body::Card,
         engine::{Answer, Event, Push, Run},
-        history::{History, PAGE, SHARED, UNREAD, drained, set},
+        history::{FILLS, History, PAGE, SHARED, UNREAD, drained, set},
         model::{Item, Model, Scope, State},
         name::ObjectName,
         oracle,
@@ -1657,6 +1846,7 @@ mod tests {
             History::rekeys(41),
             History::crashes(43),
             History::heads(47),
+            History::bodies(53),
         ];
         for (index, step) in histories
             .iter()
@@ -3498,5 +3688,194 @@ mod tests {
                 .any(|item| item.link_id == undated.link_id),
             "a band round finds no undated member absent"
         );
+    }
+
+    fn bodied<'a>(model: &'a Model, collection: &str) -> &'a Item {
+        model
+            .items
+            .iter()
+            .find(|item| item.collection == collection && !item.link_id.starts_with("dup:"))
+            .unwrap()
+    }
+
+    fn kept_in<'a>(model: &'a Model, collection: &str) -> Option<&'a Item> {
+        model
+            .items
+            .iter()
+            .find(|item| item.collection == collection && item.link_id.starts_with("dup:"))
+    }
+
+    #[test]
+    fn an_upgrade_reading_a_change_over_an_emptied_item_records_it() {
+        let history = History::bodies(53);
+        for (book, (id, _)) in FILLS.iter().enumerate() {
+            let (model, run) = rekeyed(&history, 5 * book + 4);
+            let item = bodied(model, id);
+            let b = item.bound(&format!("{id}-b")).unwrap();
+            assert_eq!(item.object, None, "{id}: the item's own body is unread");
+            assert!(item.conflicted && item.conflict_object.is_some());
+            assert_eq!(item.conflict_object, b.base_object);
+            assert_eq!(run.events, [Event::Conflicted(String::from("r1.vcf"))]);
+            assert!(
+                kept_in(model, id).is_none(),
+                "nothing kept against a body unread"
+            );
+        }
+    }
+
+    #[test]
+    fn a_fill_adopts_its_body_and_the_policy_settles_the_conflict_waiting() {
+        let history = History::bodies(53);
+        for (book, (id, conflict)) in FILLS.iter().enumerate() {
+            let (before, _) = rekeyed(&history, 5 * book + 4);
+            let (model, run) = rekeyed(&history, 5 * book + 5);
+            let diverging = bodied(before, id).conflict_object.clone();
+            let item = bodied(model, id);
+            let a = item.bound(&format!("{id}-a")).unwrap();
+            let filled = a.base_object.clone();
+            assert!(filled.is_some() && filled != diverging, "{id}");
+            match *conflict {
+                "manual" => {
+                    assert_eq!(item.object, filled);
+                    assert!(item.conflicted && item.conflict_object == diverging);
+                    assert_eq!(
+                        a.shared_object,
+                        bodied(before, id)
+                            .bound(&format!("{id}-a"))
+                            .unwrap()
+                            .shared_object
+                    );
+                    assert!(run.events.is_empty());
+                }
+                _ => {
+                    let (adopted, lost) = match *conflict {
+                        "prefer-incoming" => (diverging.clone(), filled.clone()),
+                        _ => (filled.clone(), diverging.clone()),
+                    };
+                    assert!(!item.conflicted && item.conflict_object.is_none());
+                    assert_eq!(item.object, adopted, "{id}");
+                    assert_eq!(a.shared_object, adopted);
+                    let loser = kept_in(model, id).unwrap();
+                    assert_eq!(loser.object, lost);
+                    assert_eq!(
+                        run.events,
+                        [Event::Overruled {
+                            handle: String::from("r1.vcf"),
+                            link_id: loser.link_id.clone(),
+                        }]
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_retained_row_revives_under_the_member_naming_it() {
+        let history = History::bodies(53);
+        let (before, _) = rekeyed(&history, 17);
+        let (model, run) = rekeyed(&history, 18);
+        let id = "work/revived";
+        let was = before
+            .items
+            .iter()
+            .find(|item| item.collection == id && matches!(item.state, State::Retained { .. }))
+            .unwrap();
+        let revived = model
+            .items
+            .iter()
+            .find(|item| item.link_id == was.link_id)
+            .unwrap();
+        assert_eq!((revived.state.clone(), revived.seq), (State::Live, was.seq));
+        assert_eq!(
+            (revived.object.clone(), revived.level),
+            (None, 1),
+            "unread, at Meta"
+        );
+        let loser = kept_in(model, id).unwrap();
+        assert_eq!(loser.object, was.object, "the body it held is kept apart");
+        assert_eq!(
+            run.events,
+            [
+                Event::Added(String::from("r3.vcf")),
+                Event::Overruled {
+                    handle: String::from("r3.vcf"),
+                    link_id: loser.link_id.clone(),
+                }
+            ]
+        );
+
+        let (before, _) = rekeyed(&history, 20);
+        let (model, run) = rekeyed(&history, 21);
+        let id = "work/revived-mail";
+        assert_eq!(run.events.len(), 2);
+        let retained: Vec<&Item> = before
+            .items
+            .iter()
+            .filter(|item| item.collection == id)
+            .collect();
+        let same = model
+            .items
+            .iter()
+            .find(|item| item.link_id == retained[0].link_id)
+            .unwrap();
+        assert_eq!(same.state, State::Live);
+        assert_eq!(same.object, retained[0].object, "a message keeps its body");
+        assert_eq!(same.bindings[0].base_object, same.object);
+        let other = model
+            .items
+            .iter()
+            .find(|item| item.link_id == retained[1].link_id)
+            .unwrap();
+        assert!(
+            matches!(other.state, State::Retained { .. }),
+            "another size mints"
+        );
+        assert!(model.live(id).any(|item| item.link_id.starts_with("dup:")));
+    }
+
+    #[test]
+    fn an_overruling_edit_keeps_the_diverging_body_or_is_refused_unread() {
+        let history = History::bodies(53);
+        let id = "work/overruled";
+        let (before, _) = rekeyed(&history, 25);
+        let (model, run) = rekeyed(&history, 26);
+        let was = bodied(before, id)
+            .bound("work/overruled-b")
+            .unwrap()
+            .clone();
+        let item = bodied(model, id);
+        let b = item.bound("work/overruled-b").unwrap();
+        assert!(!b.conflicted);
+        assert_eq!(
+            (b.base_object.clone(), b.base_revision.clone()),
+            (was.conflict_object.clone(), was.conflict_revision.clone())
+        );
+        assert_eq!(b.shared_object, item.object);
+        let loser = kept_in(model, id).unwrap();
+        assert_eq!(loser.object, was.conflict_object);
+        assert_eq!(
+            run.events,
+            [Event::Overruled {
+                handle: String::from("r1.vcf"),
+                link_id: loser.link_id.clone(),
+            }]
+        );
+        let (_, run) = rekeyed(&history, 27);
+        let Some(Push::Update { if_match, .. }) = pushed(run, "update", "r1.vcf") else {
+            panic!("b owes the item's body");
+        };
+        assert_eq!(if_match, &was.conflict_revision);
+
+        let id = "work/overruled-unread";
+        let (before, _) = rekeyed(&history, 31);
+        let (model, run) = rekeyed(&history, 32);
+        assert!(run.failed && run.events.is_empty());
+        let item = bodied(model, id);
+        assert_eq!(
+            format!("{:?}", item.bindings),
+            format!("{:?}", bodied(before, id).bindings),
+            "refused, staging nothing"
+        );
+        assert!(kept_in(model, id).is_none());
     }
 }

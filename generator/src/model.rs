@@ -428,6 +428,9 @@ pub struct Model {
     pub objects: BTreeMap<ObjectName, Vec<u8>>,
     /// The bodies too large to hold, by name, rendered when written.
     pub streams: BTreeMap<ObjectName, Stream>,
+    /// The rows the bodies an item does not hold derive, a diverging one
+    /// kept for an item that may adopt it later.
+    pub rows: BTreeMap<ObjectName, Derived>,
     /// The next `seq` to draw, `store_meta.next_seq`.
     pub next_seq: i64,
     /// The rows purged, objects collected and collections deleted or
@@ -441,6 +444,17 @@ pub struct Model {
     pub performers: BTreeMap<(Option<String>, String), String>,
     /// The references between items (STORAGE §14.2).
     pub references: Vec<Reference>,
+}
+
+/// What Annex A derives from a body, kept apart from any item.
+#[derive(Clone, Debug)]
+pub struct Derived {
+    /// Its summary row.
+    pub summary: Summary,
+    /// Its address rows.
+    pub addresses: Vec<Address>,
+    /// Its sort key.
+    pub sort_key: String,
 }
 
 /// One row a source declares (STORAGE §15.6, Annex B).
