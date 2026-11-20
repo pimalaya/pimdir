@@ -58,6 +58,9 @@ pub enum Action {
         filed: Filed,
         /// The body the producer read.
         if_match: Option<ObjectName>,
+        /// The diverging bodies a person resolved, naming each conflict it
+        /// settles (STORAGE §15.3).
+        resolves: Option<Vec<ObjectName>>,
     },
     /// `move`.
     Move {
@@ -153,6 +156,7 @@ impl Action {
                 seq,
                 filed,
                 if_match,
+                resolves,
             } => {
                 let mut value = json!({
                     "v": 1,
@@ -161,6 +165,9 @@ impl Action {
                 });
                 if let Some(name) = if_match {
                     value["if_match"] = json!(name.0);
+                }
+                if let Some(names) = resolves {
+                    value["resolves"] = json!(names.iter().map(|name| &name.0).collect::<Vec<_>>());
                 }
                 value
             }
@@ -353,7 +360,7 @@ impl Model {
                 let Some(index) = self.found(collection, *seq) else {
                     return Outcome::Applied(None);
                 };
-                if let Some(reason) = self.gate(index, if_match.as_ref()) {
+                if let Some(reason) = self.gate(index, if_match.as_ref(), None) {
                     return Outcome::Parked(reason);
                 }
                 let item = &mut self.items[index];
@@ -372,21 +379,32 @@ impl Model {
                 seq,
                 filed,
                 if_match,
+                resolves,
             } => {
                 let Some(index) = self.bound(collection, *seq) else {
                     return Outcome::Parked(String::from("the item is not bound yet"));
                 };
-                if let Some(reason) = self.gate(index, if_match.as_ref()) {
+                if let Some(reason) = self.gate(index, if_match.as_ref(), resolves.as_deref()) {
                     return Outcome::Parked(reason);
                 }
                 let name = ObjectName::of(&filed.bytes);
                 self.objects.insert(name.clone(), filed.bytes.clone());
                 let item = &mut self.items[index];
-                item.object = Some(name);
+                item.object = Some(name.clone());
                 item.level = 2;
                 item.summary = filed.summary.clone();
                 item.addresses = filed.addresses.clone();
                 item.sort_key = filed.sort_key.clone();
+                item.conflicted = false;
+                item.conflict_object = None;
+                if let Some(binding) = item.binding.as_mut() {
+                    if binding.conflicted {
+                        binding.base_object = binding.conflict_object.take();
+                        binding.base_revision = binding.conflict_revision.take();
+                        binding.conflicted = false;
+                    }
+                    binding.shared_object = Some(name);
+                }
                 Outcome::Applied(Some(item.seq))
             }
             Action::Move { seq, to } => self.apply_copy(collection, *seq, to, true),
@@ -518,15 +536,35 @@ impl Model {
 
     /// Why an `update` or a `remove` stating no resolution parks: a body
     /// other than the one it read, or a conflict (STORAGE §15.3).
-    fn gate(&self, index: usize, if_match: Option<&ObjectName>) -> Option<String> {
+    fn gate(
+        &self,
+        index: usize,
+        if_match: Option<&ObjectName>,
+        resolves: Option<&[ObjectName]>,
+    ) -> Option<String> {
         let item = &self.items[index];
         if let Some(name) = if_match
             && item.object.as_ref() != Some(name)
         {
             return Some(format!("if_match {} is not the item's body", name.0));
         }
-        self.conflict(index)
-            .then(|| String::from("the item is in conflict"))
+
+        let mut met = Vec::new();
+        if item.conflicted {
+            met.push(item.conflict_object.as_ref());
+        }
+        if let Some(binding) = item.binding.as_ref().filter(|binding| binding.conflicted) {
+            met.push(binding.conflict_object.as_ref());
+        }
+        match (met.is_empty(), resolves) {
+            (true, None) => None,
+            (true, Some(_)) => Some(String::from("a resolution meeting no conflict")),
+            (false, None) => Some(String::from("the item is in conflict")),
+            (false, Some(names)) => met
+                .iter()
+                .any(|object| object.is_none_or(|object| !names.contains(object)))
+                .then(|| String::from("a resolution not naming each conflict it meets")),
+        }
     }
 }
 

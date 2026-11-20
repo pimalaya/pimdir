@@ -10,8 +10,10 @@
 use std::collections::BTreeSet;
 
 use crate::{
+    body::Card,
     engine::Run,
     model::{Collection, Kind, Model},
+    name::ObjectName,
     profile::Draw,
     queue::{Action, RowState},
     remote::Remote,
@@ -165,6 +167,143 @@ impl History {
 
         Self { steps }
     }
+
+    /// One source and one address book over DAV (README.md, "Events and
+    /// histories"): a first round carrying bodies, a body edited on the
+    /// server and pulled, one edited locally and pushed gated on its
+    /// revision, one edited on both sides and recorded in conflict, a
+    /// person's resolution pushed, a delete each way, and a run with
+    /// nothing left to do.
+    pub fn cards(seed: u64) -> Self {
+        let mut draw = Draw::new(seed);
+        let mut model = Model::new();
+        model.declare(Collection {
+            id: String::from("work/contacts"),
+            account: Some(String::from("work")),
+            kind: Some(Kind::Contact),
+            name: String::from("Contacts"),
+            role: Some(String::from("default")),
+            source: Some(String::from("work-carddav")),
+            checkpoint: None,
+            rounds: 0,
+        });
+        let mut remote = Remote::dav("work-carddav", "work/contacts");
+        let mut cards = Vec::new();
+        for _ in 0..5 {
+            let card = draw.card();
+            remote.deliver(card.file(), BTreeSet::new());
+            cards.push(card);
+        }
+        let renamed = |card: &Card, name: &str| Card {
+            name: String::from(name),
+            ..card.clone()
+        };
+
+        let mut steps = vec![Step {
+            label: String::from("an address book declared, never synced"),
+            run: None,
+            model: model.clone(),
+        }];
+        let mut record = |label: &str, run: Option<Run>, model: &Model| {
+            steps.push(Step {
+                label: String::from(label),
+                run,
+                model: model.clone(),
+            });
+        };
+
+        let run = model.sync(&mut remote, PAGE);
+        record("a first round carrying every body", Some(run), &model);
+
+        remote.edit("r1.vcf", renamed(&cards[0], "Edited On The Server").file());
+        let (seq, object) = model.bound_card("work/contacts", "r2.vcf");
+        let id = model.enqueue(
+            "cardamum",
+            "work/contacts",
+            Action::Update {
+                seq,
+                filed: renamed(&cards[1], "Edited Here").file(),
+                if_match: Some(object),
+                resolves: None,
+            },
+        );
+        model.drain(id);
+        record(
+            "a body edited on the server, another edited here",
+            None,
+            &model,
+        );
+
+        let run = model.sync(&mut remote, PAGE);
+        record(
+            "a delta pulling one body and pushing the other",
+            Some(run),
+            &model,
+        );
+
+        remote.edit("r3.vcf", renamed(&cards[2], "Their Version").file());
+        let (seq, object) = model.bound_card("work/contacts", "r3.vcf");
+        let id = model.enqueue(
+            "cardamum",
+            "work/contacts",
+            Action::Update {
+                seq,
+                filed: renamed(&cards[2], "Our Version").file(),
+                if_match: Some(object),
+                resolves: None,
+            },
+        );
+        model.drain(id);
+        record("one body edited on both sides", None, &model);
+
+        let run = model.sync(&mut remote, PAGE);
+        record("a delta recording the conflict", Some(run), &model);
+
+        let (seq, _) = model.bound_card("work/contacts", "r3.vcf");
+        let diverging = model.items[model.bound_index("work/contacts", "r3.vcf")]
+            .binding
+            .as_ref()
+            .and_then(|binding| binding.conflict_object.clone());
+        let id = model.enqueue(
+            "cardamum",
+            "work/contacts",
+            Action::Update {
+                seq,
+                filed: renamed(&cards[2], "Our Merged Version").file(),
+                if_match: None,
+                resolves: diverging.map(|name| vec![name]),
+            },
+        );
+        model.drain(id);
+        let (seq, object) = model.bound_card("work/contacts", "r4.vcf");
+        let id = model.enqueue(
+            "cardamum",
+            "work/contacts",
+            Action::Remove {
+                seq,
+                if_match: Some(object),
+            },
+        );
+        model.drain(id);
+        remote.expunge("r5.vcf");
+        record(
+            "a person's resolution, a delete here and one there",
+            None,
+            &model,
+        );
+
+        let run = model.sync(&mut remote, PAGE);
+        record(
+            "a delta pushing the resolution and the delete",
+            Some(run),
+            &model,
+        );
+
+        let run = model.sync(&mut remote, PAGE);
+        record("a delta with nothing left to do", Some(run), &model);
+
+        Self { steps }
+    }
 }
 
 impl Model {
@@ -183,6 +322,25 @@ impl Model {
             .expect("a bound handle");
         (item.seq, item.flags.clone().unwrap_or_default())
     }
+
+    fn bound_index(&self, collection: &str, handle: &str) -> usize {
+        self.items
+            .iter()
+            .position(|item| {
+                item.collection == collection
+                    && item
+                        .binding
+                        .as_ref()
+                        .is_some_and(|binding| binding.handle == handle)
+            })
+            .expect("a bound handle")
+    }
+
+    /// The `seq` and body of the card a handle binds in `collection`.
+    fn bound_card(&self, collection: &str, handle: &str) -> (i64, ObjectName) {
+        let item = &self.items[self.bound_index(collection, handle)];
+        (item.seq, item.object.clone().expect("a held body"))
+    }
 }
 
 fn set(flags: &[&str]) -> BTreeSet<String> {
@@ -198,11 +356,14 @@ pub fn drained(model: &Model) -> bool {
 mod tests {
     use std::{env, fs, process};
 
+    use rusqlite::types::Value;
+
     use crate::{
         engine::{Event, Push},
         history::{History, PAGE, drained},
-        model::State,
+        model::{Item, Model, State},
         oracle,
+        queue::RowState,
         spec::Spec,
         store::Store,
         writer,
@@ -215,7 +376,12 @@ mod tests {
     #[test]
     fn every_step_leaves_a_store_the_statements_write_and_read_back() {
         let spec = Spec::load_default().unwrap();
-        for (index, step) in history().steps.iter().enumerate() {
+        let histories = [history(), History::cards(13)];
+        for (index, step) in histories
+            .iter()
+            .flat_map(|history| history.steps.iter())
+            .enumerate()
+        {
             let dir = env::temp_dir().join(format!(
                 "pimdir-generator-history-{}-{index}",
                 process::id()
@@ -293,15 +459,7 @@ mod tests {
         let step = &history.steps[5];
         let run = step.run.as_ref().unwrap();
 
-        let kinds: Vec<&str> = run
-            .pushes
-            .iter()
-            .map(|(push, _)| match push {
-                Push::Add { .. } => "add",
-                Push::Remove { .. } => "remove",
-                Push::SetFlags { .. } => "set-flags",
-            })
-            .collect();
+        let kinds: Vec<&str> = run.pushes.iter().map(|(push, _)| push.name()).collect();
         assert_eq!(kinds, ["add", "set-flags", "remove"]);
         let Push::SetFlags { add, remove, .. } = &run.pushes[1].0 else {
             panic!("a flag push");
@@ -393,5 +551,145 @@ mod tests {
         let run = last.run.as_ref().unwrap();
         assert!(run.pushes.is_empty(), "{:?}", run.pushes);
         assert!(run.events.is_empty(), "{:?}", run.events);
+    }
+
+    fn card(model: &Model, handle: &str) -> Item {
+        model
+            .items
+            .iter()
+            .find(|item| {
+                item.binding
+                    .as_ref()
+                    .is_some_and(|binding| binding.handle == handle)
+            })
+            .cloned()
+            .unwrap()
+    }
+
+    #[test]
+    fn a_dav_round_names_every_member_with_the_body_it_carries() {
+        let history = History::cards(13);
+        let step = &history.steps[1];
+        let run = step.run.as_ref().unwrap();
+        assert!(
+            run.pages
+                .iter()
+                .flat_map(|page| &page.items)
+                .all(|member| member.carries)
+        );
+        assert_eq!(run.events.len(), 5);
+        for item in &step.model.items {
+            let binding = item.binding.as_ref().unwrap();
+            assert_eq!(item.level, 2);
+            assert_eq!(binding.base_object, item.object);
+            assert!(binding.base_revision.is_some());
+        }
+    }
+
+    #[test]
+    fn a_server_edit_is_pulled_and_a_local_one_pushed_on_its_revision() {
+        let history = History::cards(13);
+        let before = &history.steps[2].model;
+        let step = &history.steps[3];
+        let run = step.run.as_ref().unwrap();
+
+        assert!(
+            run.events
+                .contains(&Event::ContentChanged(String::from("r1.vcf")))
+        );
+        let pulled = card(&step.model, "r1.vcf");
+        assert_eq!(
+            pulled.summary.get("fn"),
+            Value::Text(String::from("Edited On The Server"))
+        );
+        assert_eq!(pulled.binding.as_ref().unwrap().base_object, pulled.object);
+        assert_eq!(
+            pulled.sort_key, "edited on the server",
+            "a pull restates the sort key"
+        );
+
+        assert_eq!(run.pushes.len(), 1);
+        let Push::Update {
+            handle,
+            if_match,
+            object,
+        } = &run.pushes[0].0
+        else {
+            panic!("an update");
+        };
+        assert_eq!(handle, "r2.vcf");
+        assert_eq!(
+            if_match,
+            &card(before, "r2.vcf").binding.unwrap().base_revision
+        );
+        let pushed = card(&step.model, "r2.vcf");
+        let binding = pushed.binding.as_ref().unwrap();
+        assert_eq!(binding.base_object.as_ref(), Some(object));
+        assert_eq!(binding.base_revision, run.outcomes[0].revision);
+        assert!(run.outcomes[0].revision.is_some());
+    }
+
+    #[test]
+    fn an_edit_on_both_sides_is_recorded_in_conflict_and_pushes_nothing() {
+        let history = History::cards(13);
+        let step = &history.steps[5];
+        let run = step.run.as_ref().unwrap();
+        assert_eq!(run.events, [Event::Conflicted(String::from("r3.vcf"))]);
+        assert!(run.pushes.is_empty());
+
+        let item = card(&step.model, "r3.vcf");
+        let binding = item.binding.as_ref().unwrap();
+        assert!(binding.conflicted);
+        assert!(binding.conflict_object.is_some() && binding.conflict_revision.is_some());
+        assert_eq!(
+            item.summary.get("fn"),
+            Value::Text(String::from("Our Version"))
+        );
+        assert_ne!(binding.base_object, item.object);
+    }
+
+    #[test]
+    fn a_resolution_pushes_on_the_revision_it_resolved_and_deletes_travel_both_ways() {
+        let history = History::cards(13);
+        let resolved = &history.steps[6].model;
+        assert!(drained(resolved));
+        assert!(
+            resolved
+                .queue
+                .iter()
+                .all(|row| matches!(row.state, RowState::Applied(_)))
+        );
+        let conflicted = card(&history.steps[5].model, "r3.vcf").binding.unwrap();
+        let settled = card(resolved, "r3.vcf").binding.unwrap();
+        assert!(!settled.conflicted);
+        assert_eq!(settled.base_revision, conflicted.conflict_revision);
+        assert_eq!(settled.base_object, conflicted.conflict_object);
+
+        let step = &history.steps[7];
+        let run = step.run.as_ref().unwrap();
+        let names: Vec<&str> = run.pushes.iter().map(|(push, _)| push.name()).collect();
+        assert_eq!(names, ["update", "remove"]);
+        let Push::Update { if_match, .. } = &run.pushes[0].0 else {
+            panic!("an update");
+        };
+        assert_eq!(if_match, &conflicted.conflict_revision);
+        let Push::Remove { if_match, .. } = &run.pushes[1].0 else {
+            panic!("a remove");
+        };
+        assert!(if_match.is_some());
+        assert!(
+            run.events
+                .contains(&Event::Vanished(String::from("r5.vcf")))
+        );
+
+        let retained = step
+            .model
+            .items
+            .iter()
+            .filter(|item| matches!(item.state, State::Retained { .. }))
+            .count();
+        assert_eq!(retained, 2);
+        assert!(history.steps[8].run.as_ref().unwrap().pushes.is_empty());
+        assert!(history.steps[8].run.as_ref().unwrap().events.is_empty());
     }
 }

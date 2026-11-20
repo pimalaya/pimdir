@@ -1,16 +1,19 @@
 //! # The engine
 //!
-//! The model of SYNC's verbs over one source and one mail collection: a
-//! first round in pages, deltas, the flag axis merged over `(local, base,
-//! remote)`, stated removals and a closed round's absences dropped, the
-//! consumer's tombstones, creates and flag changes pushed, and an upgrade
-//! fetching bodies (SYNC §3 to §6). A run answers what it listed, fetched
-//! and pushed, the outcomes and the events, and leaves the model as the
-//! store stands after it.
+//! The model of SYNC's verbs over one source and one collection: a first
+//! round in pages, deltas, the flag axis merged over `(local, base,
+//! remote)`, the content axis of a mutable kind (a remote revision pulled,
+//! a local body pushed gated on its base revision, both a conflict
+//! recorded under `Manual`), stated removals and a closed round's absences
+//! dropped, the consumer's tombstones, creates and changes pushed, and an
+//! upgrade fetching bodies (SYNC §3 to §6). A run answers what it listed,
+//! fetched and pushed, the outcomes and the events, and leaves the model
+//! as the store stands after it.
 //!
 //! The model runs only what it states exactly: one source per collection,
-//! no scope, every right, every push accepted, no move, copy, landing,
-//! conflict nor refusal, which later parts add (README.md, "Limits").
+//! no scope, every right, every push accepted, the `Manual` policy, no
+//! move, copy, landing nor refusal, which later parts add (README.md,
+//! "Limits").
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -18,7 +21,7 @@ use crate::{
     body::Filed,
     model::{Model, Placement, State},
     name::ObjectName,
-    remote::{Page, Remote},
+    remote::{Listed, Page, Remote},
 };
 
 /// One change a run pushes (SYNC §4).
@@ -41,6 +44,8 @@ pub enum Push {
         handle: String,
         /// The tombstone's key.
         link_id: String,
+        /// The revision it is gated on, a mutable kind's base revision.
+        if_match: Option<String>,
     },
     /// A flag change.
     SetFlags {
@@ -51,6 +56,15 @@ pub enum Push {
         /// The flags to remove.
         remove: BTreeSet<String>,
     },
+    /// A new body for a mutable member.
+    Update {
+        /// Its handle.
+        handle: String,
+        /// The body.
+        object: ObjectName,
+        /// The revision it is gated on, the base's.
+        if_match: Option<String>,
+    },
 }
 
 impl Push {
@@ -59,11 +73,23 @@ impl Push {
         match self {
             Self::Add { handle, .. }
             | Self::Remove { handle, .. }
-            | Self::SetFlags { handle, .. } => handle,
+            | Self::SetFlags { handle, .. }
+            | Self::Update { handle, .. } => handle,
         }
     }
 
-    /// The idempotency key SYNC §4 derives for it in `collection`.
+    /// The change's name, as its key spells it.
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Add { .. } => "add",
+            Self::Remove { .. } => "remove",
+            Self::SetFlags { .. } => "set-flags",
+            Self::Update { .. } => "update",
+        }
+    }
+
+    /// The idempotency key SYNC §4 derives for it in `collection`, its
+    /// precondition left out.
     pub fn key(&self, collection: &str) -> String {
         let flags = |set: &BTreeSet<String>| {
             let mut fields = vec![String::from("known"), set.len().to_string()];
@@ -90,6 +116,9 @@ impl Push {
                 fields.extend(flags(add));
                 fields.extend(flags(remove));
             }
+            Self::Update { object, .. } => {
+                fields.extend([String::from("update"), object.0.clone()]);
+            }
         }
         change_key(&fields)
     }
@@ -115,6 +144,8 @@ pub struct Outcome {
     pub handle: String,
     /// The handle an accepted add was assigned.
     pub assigned: Option<String>,
+    /// The revision a mutable member holds once accepted.
+    pub revision: Option<String>,
 }
 
 /// What a run reports (SYNC §5).
@@ -124,6 +155,10 @@ pub enum Event {
     Added(String),
     /// A member's flags pulled.
     FlagsChanged(String),
+    /// A member's body pulled.
+    ContentChanged(String),
+    /// A divergence recorded.
+    Conflicted(String),
     /// A member removed or found absent, dropped.
     Vanished(String),
     /// An add accepted under its assigned handle.
@@ -171,32 +206,25 @@ impl Model {
         for page in &pages {
             for member in &page.items {
                 listed.insert(member.handle.clone(), member.flags.clone());
+                let filed = &remote.members[&member.handle].filed;
                 let index = match self.bound_handle(&collection, &source, &member.handle) {
                     Some(index) => {
-                        let item = &mut self.items[index];
-                        let binding = item.binding.as_mut().expect("a bound item");
-                        let merged = merge(
-                            item.flags.as_ref(),
-                            binding.base_flags.as_ref(),
-                            &member.flags,
-                        );
-                        binding.base_flags = Some(member.flags.clone());
-                        if item.flags.as_ref() != Some(&merged) {
-                            item.flags = Some(merged);
-                            events.push(Event::FlagsChanged(member.handle.clone()));
-                        }
+                        self.refresh(index, member, filed, &mut events);
                         index
                     }
                     None => {
-                        let filed = remote.members[&member.handle].filed.clone();
+                        if member.carries {
+                            self.objects
+                                .insert(ObjectName::of(&member.meta), member.meta.clone());
+                        }
                         let placement = Placement {
                             flags: Some(member.flags.clone()),
-                            held: false,
+                            held: member.carries,
                             handle: Some(member.handle.clone()),
-                            revision: None,
+                            revision: member.revision.clone(),
                         };
                         events.push(Event::Added(member.handle.clone()));
-                        self.file(&collection, filed, placement)
+                        self.file(&collection, filed.clone(), placement)
                     }
                 };
                 if first {
@@ -235,7 +263,7 @@ impl Model {
             }
         }
 
-        let pushes = self.derive(&collection, &source, &listed);
+        let pushes = self.derive(&collection, &source, &listed, remote.mutable);
         let mut outcomes = Vec::new();
         for push in &pushes {
             outcomes.push(self.push(remote, push, &mut events));
@@ -320,6 +348,51 @@ impl Model {
         })
     }
 
+    /// A listed member over its binding: the flag axis, then for a mutable
+    /// kind the content axis under `Manual` (SYNC §5).
+    fn refresh(&mut self, index: usize, member: &Listed, filed: &Filed, events: &mut Vec<Event>) {
+        let item = &mut self.items[index];
+        let binding = item.binding.as_mut().expect("a bound item");
+        let merged = merge(
+            item.flags.as_ref(),
+            binding.base_flags.as_ref(),
+            &member.flags,
+        );
+        binding.base_flags = Some(member.flags.clone());
+        if item.flags.as_ref() != Some(&merged) {
+            item.flags = Some(merged);
+            events.push(Event::FlagsChanged(member.handle.clone()));
+        }
+
+        if member.revision.is_none() || member.revision == binding.base_revision {
+            return;
+        }
+        let carried = member.carries.then(|| ObjectName::of(&member.meta));
+        let edited = item.object.is_some() && item.object != binding.base_object;
+
+        if edited || binding.conflicted {
+            binding.conflicted = true;
+            binding.conflict_revision = member.revision.clone();
+            binding.conflict_object = carried.clone();
+            events.push(Event::Conflicted(member.handle.clone()));
+        } else {
+            item.object = carried.clone();
+            item.level = if carried.is_some() { 2 } else { 1 };
+            item.summary = filed.summary.clone();
+            item.addresses = filed.addresses.clone();
+            item.sort_key = filed.sort_key.clone();
+            binding.base_object = carried.clone();
+            binding.base_revision = member.revision.clone();
+            if carried.is_some() {
+                binding.shared_object = carried.clone();
+            }
+            events.push(Event::ContentChanged(member.handle.clone()));
+        }
+        if let Some(name) = carried {
+            self.objects.insert(name, member.meta.clone());
+        }
+    }
+
     /// A `Deleted` drop: the binding goes, and with it the item's last, so
     /// the item is retained (STORAGE §10, §11).
     fn drop_deleted(&mut self, index: usize) {
@@ -329,13 +402,15 @@ impl Model {
     }
 
     /// The changes the run's placements owe, in handle byte order (SYNC
-    /// §3, §5): a tombstone's `Remove`, a pending create's `Add`, a flag
-    /// set off its remote's a `SetFlags`.
+    /// §3, §5): a tombstone's `Remove`, a pending create's `Add`, a local
+    /// body off its base an `Update`, a flag set off what the source holds
+    /// a `SetFlags`, one change a handle, a conflict owing none.
     fn derive(
         &self,
         collection: &str,
         source: &str,
         listed: &BTreeMap<String, BTreeSet<String>>,
+        mutable: bool,
     ) -> Vec<Push> {
         let mut pushes = Vec::new();
         for item in self
@@ -354,6 +429,7 @@ impl Model {
                 (State::Tombstone, true) => pushes.push(Push::Remove {
                     handle: binding.handle.clone(),
                     link_id: item.link_id.clone(),
+                    if_match: binding.base_revision.clone(),
                 }),
                 (State::Live, false) => {
                     if let Some(object) = &item.object {
@@ -364,6 +440,16 @@ impl Model {
                             object: object.clone(),
                         });
                     }
+                }
+                (State::Live, true) if binding.conflicted => {}
+                (State::Live, true)
+                    if mutable && item.object.is_some() && item.object != binding.base_object =>
+                {
+                    pushes.push(Push::Update {
+                        handle: binding.handle.clone(),
+                        object: item.object.clone().expect("a held body"),
+                        if_match: binding.base_revision.clone(),
+                    });
                 }
                 (State::Live, true) => {
                     let (Some(flags), Some(base)) = (&item.flags, &binding.base_flags) else {
@@ -395,6 +481,11 @@ impl Model {
         let index = self
             .bound_handle(&collection, &source, push.handle())
             .expect("a pushed placement");
+        let mut outcome = Outcome {
+            handle: String::from(push.handle()),
+            assigned: None,
+            revision: None,
+        };
 
         match push {
             Push::SetFlags {
@@ -408,48 +499,46 @@ impl Model {
                 let item = &mut self.items[index];
                 let flags = item.flags.clone();
                 item.binding.as_mut().expect("a bound item").base_flags = flags;
-                Outcome {
-                    handle: handle.clone(),
-                    assigned: None,
-                }
             }
             Push::Remove { handle, .. } => {
                 remote.expunge(handle);
                 self.drop_deleted(index);
-                Outcome {
-                    handle: handle.clone(),
-                    assigned: None,
-                }
             }
-            Push::Add {
-                handle,
-                flags,
-                object,
-                ..
-            } => {
-                let item = &self.items[index];
-                let filed = Filed {
-                    bytes: self.objects[object].clone(),
-                    hint: None,
-                    summary: item.summary.clone(),
-                    addresses: item.addresses.clone(),
-                    sort_key: item.sort_key.clone(),
-                    fallback: None,
-                };
-                let assigned = remote.deliver(filed, flags.clone());
-                let item = &mut self.items[index];
-                let binding = item.binding.as_mut().expect("a bound item");
+            Push::Update { handle, object, .. } => {
+                let filed = self.filed(index, object);
+                outcome.revision = remote.edit(handle, filed);
+                let binding = self.items[index].binding.as_mut().expect("a bound item");
+                binding.base_object = Some(object.clone());
+                binding.base_revision = outcome.revision.clone();
+                binding.shared_object = Some(object.clone());
+            }
+            Push::Add { flags, object, .. } => {
+                let filed = self.filed(index, object);
+                let (assigned, revision) = remote.deliver(filed, flags.clone());
+                let binding = self.items[index].binding.as_mut().expect("a bound item");
                 binding.handle = assigned.clone();
                 binding.base_present = true;
                 binding.base_flags = Some(flags.clone());
                 binding.base_object = Some(object.clone());
+                binding.base_revision = revision.clone();
                 binding.shared_object = Some(object.clone());
                 events.push(Event::Created(assigned.clone()));
-                Outcome {
-                    handle: handle.clone(),
-                    assigned: Some(assigned),
-                }
+                outcome.assigned = Some(assigned);
+                outcome.revision = revision;
             }
+        }
+        outcome
+    }
+
+    fn filed(&self, index: usize, object: &ObjectName) -> Filed {
+        let item = &self.items[index];
+        Filed {
+            bytes: self.objects[object].clone(),
+            hint: None,
+            summary: item.summary.clone(),
+            addresses: item.addresses.clone(),
+            sort_key: item.sort_key.clone(),
+            fallback: None,
         }
     }
 }
@@ -582,6 +671,12 @@ mod tests {
                     "Remove" if push["to"].is_null() => Some(Push::Remove {
                         handle,
                         link_id: text("link_id").unwrap_or_default(),
+                        if_match: text("if_match"),
+                    }),
+                    "Update" => Some(Push::Update {
+                        handle,
+                        object: ObjectName(object(push["object"].as_str().unwrap())),
+                        if_match: text("if_match"),
                     }),
                     "SetFlags" => Some(Push::SetFlags {
                         handle,

@@ -6,9 +6,12 @@
 //! scripted connector hands an engine, in the shape of vectors/sync's
 //! `remote`, so a generated run and a vector read alike.
 //!
-//! The remote behaves as an IMAP mailbox with CONDSTORE and QRESYNC: UIDs
-//! as handles, a modification sequence as the checkpoint, a delta listing
-//! every member changed above it and every UID it expunged.
+//! A mail remote behaves as an IMAP mailbox with CONDSTORE and QRESYNC:
+//! UIDs as handles, a modification sequence as the checkpoint, a listing
+//! carrying no body. A DAV remote behaves as a collection answering
+//! `sync-collection`: resource names as handles, an ETag per resource as
+//! its revision, its sync token as the checkpoint, every page carrying the
+//! bodies a multiget read before handing it over.
 
 use std::{
     cmp::Reverse,
@@ -24,8 +27,12 @@ pub struct Member {
     pub flags: BTreeSet<String>,
     /// Its body and what Annex A derives from it, its meta.
     pub filed: Filed,
-    /// The modification sequence it last changed at.
+    /// Its revision, a DAV resource's ETag.
+    pub revision: Option<String>,
+    /// The sequence it last changed at.
     pub changed: u64,
+    /// The order it arrived in, the recency a round lists by.
+    pub arrival: u64,
 }
 
 /// One source's side of one collection.
@@ -35,14 +42,16 @@ pub struct Remote {
     pub source: String,
     /// The collection it fills.
     pub collection: String,
+    /// Whether it holds a mutable kind, revisions and carried bodies.
+    pub mutable: bool,
     /// The members by handle.
     pub members: BTreeMap<String, Member>,
-    /// The handles it expunged, at the sequence each went at.
+    /// The handles it removed, at the sequence each went at.
     pub vanished: BTreeMap<String, u64>,
-    /// The highest modification sequence, its checkpoint.
+    /// The highest sequence, its checkpoint.
     pub modseq: u64,
-    /// The next UID it hands out.
-    pub next_uid: u64,
+    /// The next number it names a member by.
+    pub next: u64,
 }
 
 /// A member as a page lists it.
@@ -54,8 +63,10 @@ pub struct Listed {
     pub flags: BTreeSet<String>,
     /// Its revision, none for mail.
     pub revision: Option<String>,
-    /// The body its meta is read from; a listing carries no body.
+    /// The body its meta is read from.
     pub meta: Vec<u8>,
+    /// Whether the page carries that body too (SYNC §4).
+    pub carries: bool,
 }
 
 /// One page an enumeration answers (SYNC §4).
@@ -81,27 +92,43 @@ impl Remote {
         Self {
             source: String::from(source),
             collection: String::from(collection),
+            mutable: false,
             members: BTreeMap::new(),
             vanished: BTreeMap::new(),
             modseq: 1,
-            next_uid: 1,
+            next: 1,
         }
     }
 
-    /// Delivers a message, answering its handle.
-    pub fn deliver(&mut self, filed: Filed, flags: BTreeSet<String>) -> String {
-        let handle = self.next_uid.to_string();
-        self.next_uid += 1;
+    /// An empty DAV collection.
+    pub fn dav(source: &str, collection: &str) -> Self {
+        Self {
+            mutable: true,
+            ..Self::new(source, collection)
+        }
+    }
+
+    /// Takes a member in, answering its handle and its revision.
+    pub fn deliver(&mut self, filed: Filed, flags: BTreeSet<String>) -> (String, Option<String>) {
+        let number = self.next;
+        self.next += 1;
         self.modseq += 1;
+        let handle = match self.mutable {
+            true => format!("r{number}.vcf"),
+            false => number.to_string(),
+        };
+        let revision = self.mutable.then(|| format!("\"e{}\"", self.modseq));
         self.members.insert(
             handle.clone(),
             Member {
                 flags,
                 filed,
+                revision: revision.clone(),
                 changed: self.modseq,
+                arrival: number,
             },
         );
-        handle
+        (handle, revision)
     }
 
     /// Changes a member's flags, as another client does.
@@ -113,7 +140,19 @@ impl Remote {
         }
     }
 
-    /// Expunges a member.
+    /// Replaces a member's body, as another client or an accepted
+    /// `Update` does, answering its new revision.
+    pub fn edit(&mut self, handle: &str, filed: Filed) -> Option<String> {
+        self.modseq += 1;
+        let revision = format!("\"e{}\"", self.modseq);
+        let member = self.members.get_mut(handle)?;
+        member.filed = filed;
+        member.revision = Some(revision.clone());
+        member.changed = self.modseq;
+        Some(revision)
+    }
+
+    /// Removes a member.
     pub fn expunge(&mut self, handle: &str) {
         self.modseq += 1;
         if self.members.remove(handle).is_some() {
@@ -130,7 +169,7 @@ impl Remote {
     /// members in handle byte order, the checkpoint on the first.
     pub fn round(&self, size: usize) -> Vec<Page> {
         let mut newest: Vec<(&String, &Member)> = self.members.iter().collect();
-        newest.sort_by_key(|(handle, _)| Reverse(handle.parse::<u64>().unwrap_or(0)));
+        newest.sort_by_key(|(_, member)| Reverse(member.arrival));
         let chunks: Vec<&[(&String, &Member)]> = newest.chunks(size.max(1)).collect();
         let count = chunks.len().max(1);
 
@@ -139,7 +178,7 @@ impl Remote {
                 let chunk = chunks.get(index).copied().unwrap_or(&[]);
                 let last = index + 1 == count;
                 Page {
-                    items: listed(chunk.iter().copied()),
+                    items: self.listed(chunk.iter().copied()),
                     vanished: Vec::new(),
                     complete: true,
                     last,
@@ -151,7 +190,7 @@ impl Remote {
     }
 
     /// A delta from `checkpoint`: the members changed above it and the
-    /// handles expunged above it.
+    /// handles removed above it.
     pub fn delta(&self, checkpoint: &str) -> Page {
         let since: u64 = checkpoint.parse().unwrap_or(0);
         let changed = self
@@ -165,7 +204,7 @@ impl Remote {
             .map(|(handle, _)| handle.clone())
             .collect();
         Page {
-            items: listed(changed),
+            items: self.listed(changed),
             vanished,
             complete: false,
             last: true,
@@ -173,17 +212,18 @@ impl Remote {
             checkpoint: Some(self.checkpoint()),
         }
     }
-}
 
-fn listed<'a>(members: impl Iterator<Item = (&'a String, &'a Member)>) -> Vec<Listed> {
-    let mut items: Vec<Listed> = members
-        .map(|(handle, member)| Listed {
-            handle: handle.clone(),
-            flags: member.flags.clone(),
-            revision: None,
-            meta: member.filed.bytes.clone(),
-        })
-        .collect();
-    items.sort_by(|a, b| a.handle.cmp(&b.handle));
-    items
+    fn listed<'a>(&self, members: impl Iterator<Item = (&'a String, &'a Member)>) -> Vec<Listed> {
+        let mut items: Vec<Listed> = members
+            .map(|(handle, member)| Listed {
+                handle: handle.clone(),
+                flags: member.flags.clone(),
+                revision: member.revision.clone(),
+                meta: member.filed.bytes.clone(),
+                carries: self.mutable,
+            })
+            .collect();
+        items.sort_by(|a, b| a.handle.cmp(&b.handle));
+        items
+    }
 }

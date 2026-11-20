@@ -889,6 +889,7 @@ impl Draw {
                 seq,
                 filed: first,
                 if_match: object.clone(),
+                resolves: None,
             },
         );
         edited.name = format!("{} Junior", edited.name);
@@ -899,6 +900,7 @@ impl Draw {
                 seq,
                 filed: edited.file(),
                 if_match: Some(first_name),
+                resolves: None,
             },
         );
         edited.name = String::from("Stale Edit");
@@ -909,6 +911,7 @@ impl Draw {
                 seq,
                 filed: edited.file(),
                 if_match: object,
+                resolves: None,
             },
         );
 
@@ -933,6 +936,7 @@ impl Draw {
                 seq,
                 filed: over.file(),
                 if_match: object,
+                resolves: None,
             },
         );
 
@@ -1076,7 +1080,7 @@ impl Draw {
         }
     }
 
-    fn card(&mut self) -> Card {
+    pub(crate) fn card(&mut self) -> Card {
         let person = self.person();
         Card {
             uid: Some(self.uid()),
