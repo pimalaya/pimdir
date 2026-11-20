@@ -1289,6 +1289,139 @@ impl History {
 
         Self { steps }
     }
+
+    /// Runs cut by a crash (SYNC §5). On work/INBOX, eight messages: a first
+    /// round interrupted after its first page, resumed from its cursor;
+    /// then a staged add and two flag changes whose run is cut after the
+    /// add was taken and before its outcome was written, the next run
+    /// landing the add on its arrival and pushing the flags. On two address
+    /// books, one listing bodies and one not: a staged edit whose run is cut
+    /// after the server took it, the next run meeting the pushed body.
+    pub fn crashes(seed: u64) -> Self {
+        let mut draw = Draw::new(seed);
+        let mut model = Model::new();
+        let mut steps = vec![Step {
+            label: String::from("an empty store"),
+            run: None,
+            model: model.clone(),
+        }];
+        let mut record = |label: String, run: Option<Run>, model: &Model| {
+            steps.push(Step {
+                label,
+                run,
+                model: model.clone(),
+            });
+        };
+
+        let id = "work/INBOX";
+        model.declare(Collection {
+            id: String::from(id),
+            account: Some(String::from("work")),
+            kind: Some(Kind::Mail),
+            name: String::from("INBOX"),
+            role: Some(String::from("inbox")),
+            sources: synced_by(&["work-imap"]),
+            conflict: String::from("manual"),
+            generation: 1,
+        });
+        let mut remote = Remote::new("work-imap", id);
+        for _ in 0..8 {
+            remote.deliver(draw.message(false).file(), BTreeSet::new());
+        }
+        remote.interrupt = Some(1);
+        let run = model.sync(&mut remote, PAGE);
+        record(
+            format!("{id}: a round cut after its first page"),
+            Some(run),
+            &model,
+        );
+        let run = model.sync(&mut remote, PAGE);
+        record(format!("{id}: the round resumed"), Some(run), &model);
+
+        let message = draw.message(false);
+        let row = model.enqueue(
+            "himalaya",
+            id,
+            Action::Add {
+                link_id: message.message_id.clone().unwrap_or_default(),
+                flags: set(&["\\Seen"]),
+                filed: message.file(),
+            },
+        );
+        model.drain(row);
+        for handle in ["1", "2"] {
+            let (seq, _) = model.bound_seq(id, handle);
+            let row = model.enqueue(
+                "himalaya",
+                id,
+                Action::SetFlags {
+                    seq,
+                    flags: set(&["\\Flagged"]),
+                    base: None,
+                },
+            );
+            model.drain(row);
+        }
+        remote.crash = Some(1);
+        let run = model.sync(&mut remote, PAGE);
+        record(
+            format!("{id}: a run cut after its add was taken"),
+            Some(run),
+            &model,
+        );
+        let run = model.sync(&mut remote, PAGE);
+        record(format!("{id}: the next run"), Some(run), &model);
+
+        for (id, carries) in [("work/contacts", true), ("work/directory", false)] {
+            let source = format!("{}-carddav", &id[5..]);
+            model.declare(Collection {
+                id: String::from(id),
+                account: Some(String::from("work")),
+                kind: Some(Kind::Contact),
+                name: String::from(&id[5..]),
+                role: None,
+                sources: synced_by(&[&source]),
+                conflict: String::from("manual"),
+                generation: 1,
+            });
+            let mut remote = Remote::dav(&source, id);
+            let card = draw.card();
+            remote.deliver(card.file(), BTreeSet::new());
+            let run = model.sync(&mut remote, PAGE);
+            record(format!("{id}: a first round"), Some(run), &model);
+            remote.carries = carries;
+
+            let (seq, object) = model.bound_card(id, "r1.vcf");
+            let ours = Card {
+                name: String::from("Our Version"),
+                ..card
+            };
+            let row = model.enqueue(
+                "cardamum",
+                id,
+                Action::Update {
+                    seq,
+                    filed: ours.file(),
+                    if_match: Some(object),
+                    resolves: None,
+                },
+            );
+            model.drain(row);
+            remote.crash = Some(1);
+            let run = model.sync(&mut remote, PAGE);
+            record(
+                format!("{id}: a run cut after its edit was taken"),
+                Some(run),
+                &model,
+            );
+            let run = model.sync(&mut remote, PAGE);
+            record(format!("{id}: the next run"), Some(run), &model);
+            let run = model.upgrade(&remote, &[String::from("r1.vcf")]);
+            record(format!("{id}: an upgrade"), Some(run), &model);
+        }
+
+        Self { steps }
+    }
 }
 
 impl Model {
@@ -1379,6 +1512,7 @@ mod tests {
             History::sources(31),
             History::scopes(37),
             History::rekeys(41),
+            History::crashes(43),
         ];
         for (index, step) in histories
             .iter()
@@ -2981,5 +3115,113 @@ mod tests {
         };
         assert_eq!(Some(object), after.object.as_ref());
         assert_eq!(if_match, &binding.base_revision);
+    }
+
+    #[test]
+    fn an_interrupted_round_keeps_what_landed_and_resumes_from_its_cursor() {
+        let history = History::crashes(43);
+        let inbox = "work/INBOX";
+        let (model, run) = rekeyed(&history, 1);
+        assert!(run.failed && run.pushes.is_empty());
+        let state = &model.collections[inbox].sources["work-imap"];
+        let open = state.open.as_ref().unwrap();
+        assert_eq!(open.cursor.as_deref(), run.pages[0].cursor.as_deref());
+        assert_eq!(
+            open.checkpoint,
+            run.pages[0].checkpoint.clone().map(String::into_bytes)
+        );
+        assert_eq!(
+            (state.checkpoint.clone(), state.coverage.clone()),
+            (None, None)
+        );
+        let landed: Vec<_> = model.live(inbox).collect();
+        assert_eq!(landed.len(), run.pages[0].items.len());
+        assert!(
+            landed
+                .iter()
+                .all(|item| item.bindings[0].round == Some(state.rounds))
+        );
+
+        let (after, run) = rekeyed(&history, 2);
+        assert!(!run.failed);
+        assert!(
+            run.pages[0].checkpoint.is_none(),
+            "resumed past the first page"
+        );
+        assert!(
+            !run.events
+                .iter()
+                .any(|event| matches!(event, Event::Vanished(_)))
+        );
+        let state_after = &after.collections[inbox].sources["work-imap"];
+        assert_eq!(state_after.rounds, state.rounds, "the same round");
+        assert!(state_after.open.is_none());
+        assert_eq!(state_after.checkpoint, open.checkpoint);
+        assert_eq!(state_after.coverage, Some(Scope::default()));
+        assert_eq!(after.live(inbox).count(), 8);
+        assert!(
+            after
+                .live(inbox)
+                .all(|item| item.bindings[0].round == Some(state.rounds))
+        );
+    }
+
+    #[test]
+    fn a_push_whose_record_was_lost_is_landed_or_met_not_pushed_again() {
+        let history = History::crashes(43);
+        let inbox = "work/INBOX";
+        let (model, run) = rekeyed(&history, 3);
+        assert!(run.failed);
+        assert!(matches!(run.pushes[..], [(Push::Add { .. }, _)]));
+        assert_eq!(run.outcomes[0].answer, Answer::Accepted);
+        let create = model
+            .live(inbox)
+            .find(|item| item.bindings[0].handle.starts_with('\u{1}'))
+            .unwrap();
+        assert!(
+            !create.bindings[0].base_present,
+            "the outcome was never written"
+        );
+
+        let (after, run) = rekeyed(&history, 4);
+        assert!(
+            run.events
+                .iter()
+                .any(|event| matches!(event, Event::Created(_)))
+        );
+        assert!(
+            run.pushes
+                .iter()
+                .all(|(push, _)| push.name() == "set-flags")
+        );
+        assert_eq!(run.pushes.len(), 2);
+        let landed = after
+            .live(inbox)
+            .find(|item| item.link_id == create.link_id)
+            .unwrap();
+        assert!(landed.bindings[0].base_present);
+
+        for (base, id) in [(5, "work/contacts"), (9, "work/directory")] {
+            let (model, run) = rekeyed(&history, base + 1);
+            assert!(run.failed && run.outcomes[0].answer == Answer::Accepted);
+            let staged = card_in(model, id, "r1.vcf");
+            let (after, run) = rekeyed(&history, base + 2);
+            assert!(run.pushes.is_empty(), "{id}: the edit is not pushed again");
+            let (settled, _) = rekeyed(&history, base + 3);
+            let card = card_in(settled, id, "r1.vcf");
+            let binding = &card.bindings[0];
+            assert!(!binding.conflicted, "{id}");
+            assert_eq!(card.object, staged.object, "{id}: the edit stands");
+            assert_eq!(binding.base_object, card.object);
+            assert_ne!(binding.base_revision, staged.bindings[0].base_revision);
+            let met = card_in(after, id, "r1.vcf");
+            match id {
+                "work/contacts" => assert!(!met.bindings[0].conflicted, "a body listed"),
+                _ => assert!(
+                    met.bindings[0].conflicted,
+                    "a body unread until the upgrade"
+                ),
+            }
+        }
     }
 }

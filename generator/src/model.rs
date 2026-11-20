@@ -93,6 +93,9 @@ pub struct OpenRound {
     pub scope: Scope,
     /// The checkpoint its pages landed, the source's once it closes.
     pub checkpoint: Option<Vec<u8>>,
+    /// The resume cursor its last page landed, none for a parked round,
+    /// which resumes from its first page.
+    pub cursor: Option<String>,
 }
 
 /// `[since, until)` on a message's summary `date`, either bound open (SYNC

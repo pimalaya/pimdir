@@ -21,8 +21,8 @@ use rusqlite::types::Value;
 use crate::{
     body::Filed,
     model::{
-        Address, Binding, Item, Model, OpenRound, Placement, Refusal, Scope, State, Summary, Table,
-        key,
+        Address, Binding, Item, Model, OpenRound, Placement, Refusal, Scope, SourceState, State,
+        Summary, Table, key,
     },
     name::ObjectName,
     remote::{Listed, Page, Policy, Remote},
@@ -250,6 +250,9 @@ pub struct Run {
     /// How many based bindings a closing round, capped or narrowed handing
     /// no enumeration, left unlisted, none when it left none (SYNC §5).
     pub unlisted: Option<usize>,
+    /// Whether the run failed: interrupted between two pages, or cut after a
+    /// push the remote took and before the write recording its outcome.
+    pub failed: bool,
 }
 
 impl Model {
@@ -298,13 +301,25 @@ impl Model {
             (None, Some(coverage)) if !scope.within(coverage) => (true, state.rounds + 1),
             _ => (false, state.rounds),
         };
-        let pages = match listing {
-            true => remote.round(size, scope),
+        let resumed = state.open.as_ref().filter(|open| &open.scope == scope);
+        let cursor = resumed.and_then(|open| open.cursor.clone());
+        let landed = resumed.and_then(|open| open.checkpoint.clone());
+        let mut pages = match listing {
+            true => remote.round_from(size, scope, cursor.as_deref()),
             false => {
                 let checkpoint = state.checkpoint.clone().unwrap_or_default();
                 vec![remote.delta(&String::from_utf8_lossy(&checkpoint), scope)]
             }
         };
+        let interrupt = remotes
+            .get_mut(&collection)
+            .expect("a remote")
+            .interrupt
+            .take();
+        let interrupted = listing && interrupt.is_some_and(|after| after < pages.len());
+        if let (true, Some(after)) = (interrupted, interrupt) {
+            pages.truncate(after);
+        }
         let policy = remotes[&collection].policy;
         let mut events = Vec::new();
         let mut listed: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
@@ -365,10 +380,63 @@ impl Model {
             }
         }
 
+        let checkpoint = pages
+            .iter()
+            .rev()
+            .find_map(|page| page.checkpoint.clone())
+            .map(String::into_bytes)
+            .or(landed);
+        if interrupted {
+            let entry = self.sync_state(&collection, &source);
+            entry.rounds = round;
+            entry.open = Some(OpenRound {
+                scope: scope.clone(),
+                checkpoint,
+                cursor: pages.last().and_then(|page| page.cursor.clone()),
+            });
+            return Run {
+                verb: "sync",
+                collection,
+                source,
+                pages,
+                fetch: BTreeMap::new(),
+                pushes: Vec::new(),
+                outcomes: Vec::new(),
+                events,
+                parked: None,
+                unlisted: None,
+                failed: true,
+            };
+        }
+
         let (parked, unlisted) = match listing {
             true => self.absences(&collection, &source, round, &pages, options, &mut events),
             false => (None, None),
         };
+        let entry = self.sync_state(&collection, &source);
+        entry.rounds = round;
+        match (listing, parked) {
+            (true, Some(_)) => {
+                entry.open = Some(OpenRound {
+                    scope: scope.clone(),
+                    checkpoint,
+                    cursor: None,
+                });
+            }
+            (true, None) => {
+                if let Some(checkpoint) = checkpoint {
+                    entry.checkpoint = Some(checkpoint);
+                }
+                entry.open = None;
+                entry.coverage = Some(scope.clone());
+            }
+            (false, _) => {
+                if let Some(checkpoint) = checkpoint {
+                    entry.checkpoint = Some(checkpoint);
+                }
+                entry.coverage = Some(scope.clone());
+            }
+        }
 
         let mutable = remotes[&collection].mutable;
         let pushes: Vec<Push> = self
@@ -395,43 +463,21 @@ impl Model {
                 held.is_none()
             })
             .collect();
+        let crash = remotes.get_mut(&collection).expect("a remote").crash.take();
         let mut outcomes = Vec::new();
-        for push in &pushes {
+        let mut failed = false;
+        let mut pushes = pushes;
+        for (at, push) in pushes.iter().enumerate() {
+            if crash == Some(at + 1) {
+                let written = self.clone();
+                outcomes.push(self.push(remotes, &collection, push, &mut Vec::new()));
+                *self = written;
+                failed = true;
+                break;
+            }
             outcomes.push(self.push(remotes, &collection, push, &mut events));
         }
-
-        let checkpoint = pages.iter().find_map(|page| page.checkpoint.clone());
-        let entry = self
-            .collections
-            .get_mut(&collection)
-            .expect("a declared collection")
-            .sources
-            .entry(source.clone())
-            .or_default();
-        entry.rounds = round;
-        let checkpoint = checkpoint.map(String::into_bytes);
-        match (listing, parked) {
-            (true, Some(_)) => {
-                let checkpoint = checkpoint.or(entry.open.take().and_then(|open| open.checkpoint));
-                entry.open = Some(OpenRound {
-                    scope: scope.clone(),
-                    checkpoint,
-                });
-            }
-            (true, None) => {
-                if let Some(checkpoint) = checkpoint {
-                    entry.checkpoint = Some(checkpoint);
-                }
-                entry.open = None;
-                entry.coverage = Some(scope.clone());
-            }
-            (false, _) => {
-                if let Some(checkpoint) = checkpoint {
-                    entry.checkpoint = Some(checkpoint);
-                }
-                entry.coverage = Some(scope.clone());
-            }
-        }
+        pushes.truncate(outcomes.len());
 
         Run {
             verb: "sync",
@@ -450,6 +496,7 @@ impl Model {
             events,
             parked,
             unlisted,
+            failed,
         }
     }
 
@@ -673,13 +720,16 @@ impl Model {
             events,
             parked,
             unlisted: None,
+            failed: false,
         }
     }
 
     /// Raises the placements of `handles` to `Full`, fetching each body
     /// the store does not hold, the base moving onto it, and each a binding
     /// names a revision of and no body while the item holds one, which an
-    /// item conflict recorded unread waits for (SYNC §6, §9).
+    /// item conflict recorded unread waits for (SYNC §6, §9), and the
+    /// diverging body a binding's conflict asks for, which clears it when
+    /// it is the placement's own (SYNC §5).
     pub fn upgrade(&mut self, remote: &Remote, handles: &[String]) -> Run {
         let collection = remote.collection.clone();
         let source = remote.source.clone();
@@ -693,13 +743,29 @@ impl Model {
             let item = &self.items[index];
             let binding = item.bound(&source).expect("a bound item");
             let unread = binding.base_object.is_none() && binding.base_revision.is_some();
-            if item.object.is_some() && !unread {
+            let diverging = binding.conflicted && binding.conflict_object.is_none();
+            if item.object.is_some() && !unread && !diverging {
                 continue;
             }
             let filed = remote.members[handle].filed.clone();
             let name = ObjectName::of(&filed.bytes);
             self.objects.insert(name.clone(), filed.bytes.clone());
             fetch.insert(handle.clone(), filed.bytes.clone());
+            if diverging {
+                let item = &mut self.items[index];
+                let equal = item.object.as_ref() == Some(&name);
+                let binding = item.bound_mut(&source).expect("a bound item");
+                match equal {
+                    true => {
+                        binding.base_object = Some(name.clone());
+                        binding.base_revision = binding.conflict_revision.take();
+                        binding.shared_object = Some(name);
+                        binding.conflicted = false;
+                    }
+                    false => binding.conflict_object = Some(name),
+                }
+                continue;
+            }
             if self.items[index].object.is_some() {
                 self.revisit(index, &source, handle, name, &filed, &mut events);
                 continue;
@@ -724,6 +790,7 @@ impl Model {
             events,
             parked: None,
             unlisted: None,
+            failed: false,
         }
     }
 
@@ -801,6 +868,16 @@ impl Model {
                 link_id,
             });
         }
+    }
+
+    /// The sync state `source` keeps in `collection`, to write.
+    fn sync_state(&mut self, collection: &str, source: &str) -> &mut SourceState {
+        self.collections
+            .get_mut(collection)
+            .expect("a declared collection")
+            .sources
+            .entry(String::from(source))
+            .or_default()
     }
 
     fn bound_handle(&self, collection: &str, source: &str, handle: &str) -> Option<usize> {
@@ -1018,6 +1095,17 @@ impl Model {
         let carried = member.carries.then(|| ObjectName::of(&member.meta));
         if let Some(name) = &carried {
             self.objects.insert(name.clone(), member.meta.clone());
+        }
+        if carried.is_some() && carried == self.items[index].object {
+            let item = &mut self.items[index];
+            let binding = item.bound_mut(source).expect("a bound item");
+            binding.base_object = carried.clone();
+            binding.base_revision = member.revision.clone();
+            binding.shared_object = carried;
+            binding.conflicted = false;
+            binding.conflict_revision = None;
+            binding.conflict_object = None;
+            return false;
         }
         let item = &self.items[index];
         let binding = item.bound(source).expect("a bound item");

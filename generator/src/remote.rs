@@ -94,6 +94,12 @@ pub struct Remote {
     pub cap: Option<usize>,
     /// The instant it receives a member stating no date at.
     pub clock: Instant,
+    /// The pages after which its next round fails, as a connection lost
+    /// between two pages, once.
+    pub interrupt: Option<usize>,
+    /// The pushes after which its next run fails, the last one taken and its
+    /// outcome never written, as a crash between the two, once.
+    pub crash: Option<usize>,
 }
 
 /// A member as a page lists it.
@@ -165,6 +171,8 @@ impl Remote {
             enumerates: false,
             cap: None,
             clock: Instant::at(2026, 10, 1, 9, 0, 0),
+            interrupt: None,
+            crash: None,
         }
     }
 
@@ -296,6 +304,12 @@ impl Remote {
     /// member out of scope dropped by the connector's own check, the last
     /// page of a narrowed round handing every handle where it enumerates.
     pub fn round(&self, size: usize, scope: &Scope) -> Vec<Page> {
+        self.round_from(size, scope, None)
+    }
+
+    /// The pages of [`Remote::round`] from the one `cursor` names on, or
+    /// from the first without one.
+    pub fn round_from(&self, size: usize, scope: &Scope, cursor: Option<&str>) -> Vec<Page> {
         let mut newest: Vec<(&String, &Member)> = self.members.iter().collect();
         newest.sort_by_key(|(_, member)| Reverse(member.arrival));
         if let Some(cap) = self.cap {
@@ -312,7 +326,11 @@ impl Remote {
         let enumerated =
             (narrowed && self.enumerates).then(|| self.members.keys().cloned().collect());
 
-        (0..count)
+        let skip = cursor
+            .and_then(|cursor| cursor.strip_prefix("page-"))
+            .and_then(|index| index.parse::<usize>().ok())
+            .unwrap_or(0);
+        (skip.min(count - 1)..count)
             .map(|index| {
                 let chunk = chunks.get(index).copied().unwrap_or(&[]);
                 let last = index + 1 == count;

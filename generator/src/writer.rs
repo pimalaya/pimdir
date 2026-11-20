@@ -377,11 +377,15 @@ fn write_rounds(store: &Store, stamped: &Stamps, collection: &Collection) -> Res
             )?;
             if let Some(open) = open {
                 let checkpoint = open.checkpoint.clone().map_or(Value::Null, Value::Blob);
+                let cursor = open
+                    .cursor
+                    .clone()
+                    .map_or(Value::Null, |cursor| Value::Blob(cursor.into_bytes()));
                 run(
                     store,
                     "storage/owner/set_round_cursor",
                     &[
-                        ("cursor", &Value::Null),
+                        ("cursor", &cursor),
                         ("checkpoint", &checkpoint),
                         ("collection", &id),
                         ("source", &source),

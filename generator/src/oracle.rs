@@ -355,6 +355,11 @@ impl Oracle<'_> {
                 .map(|open| open.scope.clone())
                 .unwrap_or_default()
                 .values();
+            let cursor = sync
+                .open
+                .as_ref()
+                .and_then(|open| open.cursor.clone())
+                .map_or(Value::Null, |cursor| Value::Blob(cursor.into_bytes()));
             let checkpoint = sync
                 .open
                 .as_ref()
@@ -365,7 +370,7 @@ impl Oracle<'_> {
                 instant(sync.open.is_some()),
                 since,
                 until,
-                Value::Null,
+                cursor,
                 checkpoint,
                 Value::Integer(0),
             ];
