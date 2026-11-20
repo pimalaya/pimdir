@@ -7,10 +7,10 @@ change: the-freeze-plan
 
 ## 1. Y2
 
-- [ ] neverest: an integration test starting maddy (nixpkgs) on loopback when its binary is given, checking first that its CAPABILITY lacks UIDPLUS
-- [ ] Case a: a remove into a mailbox already holding the same `Message-ID` is held, nothing copied nor marked `\Deleted`, gated on `if_match`; again with a stale `if_match`
-- [ ] Case b: an append answered with no `APPENDUID` is bound by `UID SEARCH HEADER Message-ID`, one copy, a second run changing nothing
-- [ ] maddy in neverest's flake, the test in its CI; tick audit-2026-11-12/tasks.md:46
+- [x] neverest: an integration test starting maddy (nixpkgs) on loopback when its binary is given, checking first that its CAPABILITY lacks UIDPLUS
+- [x] Case a: a remove into a mailbox already holding the same `Message-ID` is held, nothing copied nor marked `\Deleted`, gated on `if_match`; again with a stale `if_match`
+- [x] Case b: an append answered with no `APPENDUID` is bound by `UID SEARCH HEADER Message-ID`, one copy, a second run changing nothing
+- [x] maddy in neverest's flake, the test in its CI; tick audit-2026-11-12/tasks.md:46
 
 ## 2. The generator
 
