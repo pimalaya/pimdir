@@ -1,6 +1,6 @@
 {
-  "v": 3,
-  "note": "a refresh driven by the change feed (STORAGE.md section 4.5, SEARCH.md section 4): each case builds its store as store.json's are built and indexes it, then applies its steps in order, each as an owner would write it. After each step the feed lists, above the cursor read before it, the items and the collections stated in changed, and the purge count moves when purged says so; a refresh then answers each query as stated, as an index rebuilt from the store as it then stands does. A missing stamp leaves the index answering the earlier store.",
+  "v": 4,
+  "note": "a refresh driven by the change feed (STORAGE.md section 4.5, SEARCH.md section 4): each case builds its store as store.json's are built and indexes it, then applies its steps in order, each as an owner would write it. After each step the feed lists, above the cursor read before it, the items and the collections stated in changed, and the purge count moves when purged says so; a refresh then answers each query as stated, as an index rebuilt from the store as it then stands does, but in a step stating lagging, which answers its queries before the refresh. A missing stamp leaves the index answering the earlier store.",
   "cases": [
     {
       "label": "every kind of write an owner makes",
@@ -256,6 +256,57 @@
           "queries": [
             { "query": "property:himalaya/snooze-until=2026-12-01T09:00:00Z", "hits": [] },
             { "query": "id:reply-1@example.org", "hits": [["home", 2]] }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "a system flag is read from the store as it stands",
+      "note": "is: and a tag: naming a system flag read the store's items.marks when the query runs (SEARCH.md section 8.2), never the index, so a step stating lagging, answered before the refresh with the index one write behind, answers the flags the write left; a keyword is read from the index's flag table, once refreshed",
+      "store": {
+        "collections": [
+          { "id": "home/INBOX", "account": "home", "kind": "message/rfc822" },
+          { "id": "home/Archive", "account": "home", "kind": "message/rfc822" }
+        ],
+        "items": [
+          { "collection": "home/INBOX", "seq": 1, "link_id": "basic-1@example.org", "flags": [], "fixture": "fixtures/mail-basic.eml" },
+          { "collection": "home/Archive", "seq": 1, "link_id": "basic-1@example.org", "flags": [], "fixture": "fixtures/mail-basic.eml" },
+          { "collection": "home/INBOX", "seq": 2, "link_id": "reply-1@example.org", "flags": ["\\Seen"], "fixture": "fixtures/mail-reply.eml" }
+        ],
+        "references": []
+      },
+      "steps": [
+        {
+          "note": "a message marked read and flagged in one of its two collections, answered before the refresh: no longer unread, since a placement holds the bit, and flagged",
+          "lagging": true,
+          "write": { "kind": "put", "item": { "collection": "home/INBOX", "seq": 1, "link_id": "basic-1@example.org", "flags": ["\\Seen", "\\Flagged"], "fixture": "fixtures/mail-basic.eml" } },
+          "changed": { "items": [["home/INBOX", "basic-1@example.org"]], "collections": [], "purged": false },
+          "queries": [
+            { "query": "is:read", "hits": [["home", 1], ["home", 2]] },
+            { "query": "is:unread", "hits": [] },
+            { "query": "is:flagged", "hits": [["home", 1]] },
+            { "query": "tag:\\Flagged", "hits": [["home", 1]] }
+          ]
+        },
+        {
+          "note": "the reply marked unread, answered before the refresh",
+          "lagging": true,
+          "write": { "kind": "put", "item": { "collection": "home/INBOX", "seq": 2, "link_id": "reply-1@example.org", "flags": [], "fixture": "fixtures/mail-reply.eml" } },
+          "changed": { "items": [["home/INBOX", "reply-1@example.org"]], "collections": [], "purged": false },
+          "queries": [
+            { "query": "is:unread", "hits": [["home", 2]] },
+            { "query": "is:read kind:mail", "hits": [["home", 1]] }
+          ]
+        },
+        {
+          "note": "a keyword added, answered after the refresh: the keyword from the index, the system flags from the store, a text term beside them",
+          "write": { "kind": "put", "item": { "collection": "home/INBOX", "seq": 1, "link_id": "basic-1@example.org", "flags": ["\\Seen", "\\Flagged", "$todo"], "fixture": "fixtures/mail-basic.eml" } },
+          "changed": { "items": [["home/INBOX", "basic-1@example.org"]], "collections": [], "purged": false },
+          "queries": [
+            { "query": "tag:$todo", "hits": [["home", 1]] },
+            { "query": "tag:$todo is:flagged", "hits": [["home", 1]] },
+            { "query": "stand-up is:read", "hits": [["home", 1]] },
+            { "query": "stand-up is:unread", "hits": [] }
           ]
         }
       ]

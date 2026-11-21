@@ -3626,6 +3626,61 @@ for case in chunk_cases:
             derived.append({"ord": len(derived), "field": field, "start": start, "end": end})
     check(f"chunks {case['label']!r}", derived, case["chunks"])
 
+# The system flags a query reads from the store as it stands (SEARCH.md
+# section 8, 8.2), each by its exact bytes, and the is: values naming one.
+SYSTEM_FLAGS = {"\\Seen", "\\Answered", "\\Flagged", "\\Draft", "\\Deleted"}
+IS_FLAGS = {"read": "\\Seen", "flagged": "\\Flagged", "answered": "\\Answered", "draft": "\\Draft"}
+
+
+def flag_hits(query, placements):
+    """The hits of a query whose terms, all conjuncts, are system flag terms
+    beside kind:mail, kind:contact, kind:file or collection:, over the live
+    placements given as (account, collection, kind, seq, flags); None for any
+    other query. Each term holds per hit (SEARCH.md section 8.2): a flag when
+    any placement holds it, is:unread when none holds `\\Seen`, a collection
+    or a kind when any placement is in it."""
+    tokens = lex(query)
+    if not tokens or any(token["kind"] != "field" for token in tokens):
+        return None
+    tests, flagged = [], False
+    for token in tokens:
+        name, value = field_of(query, token)
+        if name == "is" and value in IS_FLAGS:
+            flag = IS_FLAGS[value]
+            tests.append(lambda rows, flag=flag: any(flag in row[4] for row in rows))
+            flagged = True
+        elif name == "is" and value == "unread":
+            tests.append(lambda rows: all("\\Seen" not in row[4] for row in rows))
+            flagged = True
+        elif name in ("tag", "flag") and value in SYSTEM_FLAGS:
+            tests.append(lambda rows, flag=value: any(flag in row[4] for row in rows))
+            flagged = True
+        elif name == "kind" and value in ("mail", "contact", "file"):
+            tests.append(lambda rows, kind=MEDIA[value]: any(row[2] == kind for row in rows))
+        elif name == "collection":
+            tests.append(lambda rows, collection=value: any(row[1] == collection for row in rows))
+        else:
+            return None
+    if not flagged:
+        return None
+    hits = {}
+    for row in placements:
+        hits.setdefault((row[0], row[3]), []).append(row)
+    return {hit for hit, rows in hits.items() if all(test(rows) for test in tests)}
+
+
+derived_flags = 0
+for case in queries["cases"]:
+    placements = [(accounts[item["collection"]], item["collection"], kinds[item["collection"]], item["seq"],
+                   set(item.get("flags") or [])) for item in store["items"]]
+    derived = flag_hits(case["query"], placements) if "hits" in case else None
+    if derived is None:
+        continue
+    check(f"search {case['query']!r}: the hits of the store's system flags",
+          sorted(map(tuple, case["hits"])), sorted(derived))
+    derived_flags += 1
+require("search: system flag cases re-derived from the store", derived_flags >= 5)
+
 # The refresh cases (SEARCH.md section 11, STORAGE.md section 4.5): the feed
 # each step leaves is re-derived from the stamping rules, over a model of
 # the store holding each item's collection, link id and state, and every hit
@@ -3633,22 +3688,34 @@ for case in chunk_cases:
 # stamps the item it retains; a purge and an erase stamp nothing and count
 # as purges; a rename restamps every item under the new id, stamps the
 # collection and counts as a purge; a coverage moving stamps its collection.
+# A query of system flag terms is re-derived from the flags the model holds
+# after the write, a lagging step's too, whose index is one write behind: at
+# least one such step answers otherwise than the flags it folded would.
+def model_placements(collections, collection_kinds, model):
+    return [(collections[collection], collection, collection_kinds[collection], seq, held["flags"])
+            for (collection, seq), held in model.items() if held["live"]]
+
+
 refresh = json.loads((search / "refresh.json").read_text())
+lagging_apart = 0
 for case in refresh["cases"]:
     label = f"refresh {case['label']!r}"
     collections = {c["id"]: c["account"] for c in case["store"]["collections"]}
+    collection_kinds = {c["id"]: c["kind"] for c in case["store"]["collections"]}
     model = {}
     for item in case["store"]["items"]:
         require(f"{label}: {item['link_id']} in a known collection", item["collection"] in collections)
         if "fixture" in item:
             require(f"{label}: {item['fixture']} exists", (root / item["fixture"]).is_file())
-        model[(item["collection"], item["seq"])] = {"link_id": item["link_id"], "live": True, "fixture": item.get("fixture")}
+        model[(item["collection"], item["seq"])] = {"link_id": item["link_id"], "live": True, "fixture": item.get("fixture"),
+                                                    "flags": set(item.get("flags") or [])}
     properties = [dict(row) for row in case["store"].get("properties", [])]
     check_properties(label, properties, {seq for (_, seq) in model})
     for number, step in enumerate(case["steps"], 1):
         where = f"{label} step {number}"
         write = step["write"]
         items, touched, purged = set(), set(), False
+        indexed = model_placements(collections, collection_kinds, model)
         if write["kind"] == "put":
             item = write["item"]
             require(f"{where}: {item['collection']} is held", item["collection"] in collections)
@@ -3657,7 +3724,8 @@ for case in refresh["cases"]:
             held = model.get((item["collection"], item["seq"]))
             require(f"{where}: a put keeps the link id of the seq it names",
                     held is None or (held["link_id"] == item["link_id"] and held["live"]))
-            model[(item["collection"], item["seq"])] = {"link_id": item["link_id"], "live": True, "fixture": item.get("fixture")}
+            model[(item["collection"], item["seq"])] = {"link_id": item["link_id"], "live": True, "fixture": item.get("fixture"),
+                                                        "flags": set(item.get("flags") or [])}
             items.add((item["collection"], item["link_id"]))
         elif write["kind"] in ("remove", "purge", "erase"):
             key = (write["collection"], write["seq"])
@@ -3706,6 +3774,7 @@ for case in refresh["cases"]:
             require(f"{where}: {write['collection']} is held and {write['to']} is not",
                     write["collection"] in collections and write["to"] not in collections)
             collections[write["to"]] = collections.pop(write["collection"], None)
+            collection_kinds[write["to"]] = collection_kinds.pop(write["collection"], None)
             for (collection, seq) in list(model):
                 if collection == write["collection"]:
                     model[(write["to"], seq)] = model.pop((collection, seq))
@@ -3736,10 +3805,22 @@ for case in refresh["cases"]:
                       sorted({(collections[collection], seq) for (collection, seq), row in model.items()
                               if row["live"] and seq in holders}))
                 derived_properties += 1
+            marked = flag_hits(query["query"], model_placements(collections, collection_kinds, model)) \
+                if "hits" in query else None
+            if marked is not None:
+                check(f"{where}: {query['query']!r}, the hits of the store's system flags after the write",
+                      sorted(map(tuple, query["hits"])), sorted(marked))
+                if step.get("lagging") and flag_hits(query["query"], indexed) != marked:
+                    lagging_apart += 1
+            if step.get("lagging"):
+                require(f"{where}: {query['query']!r} in a lagging step holds only terms the store answers",
+                        holders is not None or marked is not None)
 
             hits = query.get("hits", []) + [hit for thread in query.get("threads", []) for hit in thread["hits"]]
             for hit in hits:
                 require(f"{where}: {query['query']!r} hit {hit} names a searchable item", tuple(hit) in live)
+require("refresh: a lagging step answers a system flag term otherwise than the index's flags, one write behind, would",
+        lagging_apart >= 2)
 
 # Every fixture is a body some case names (summaries.json, a sync case, the
 # search store, a refresh case), so none lies under vectors/fixtures/ that no

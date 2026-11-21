@@ -227,7 +227,7 @@ A summary holds what a list row shows and sorts by; the index answers what the s
 - records whether a card holds a phone, a postal address, a birthday or a photo, and its categories;
 - links messages into threads by their reply headers.
 
-Labels and an application's properties are not indexed: a query reads them from the store, a label matched without regard to case, any other value exactly.
+Labels and an application's properties are not indexed: a query reads them from the store, a label matched without regard to case, any other value exactly. Nor are the system flags, whether an item is read, flagged, answered, a draft or deleted: a query reads them from the store as it stands, so while the index lags behind a write a query's flags are fresher than its text, and marking a message read is seen at once. Other keywords are indexed.
 
 
 Text is folded (case and accents) before any full-text engine sees it, so engines that tokenise alike find the same words.

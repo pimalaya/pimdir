@@ -29,7 +29,7 @@ The ledger of proposal.md: one line per action, each closed by the log entry, ve
 - [ ] pimdir: SEARCH §8.2, a hit placed by its first placement walked, the store-order form by membership in each term's matches; vectors walking pages to the end (F1)
 - [ ] android: the bridge on the planner and its compile.rs fork removed; a page from one statement on the index handle; no unpaged hits across JNI (F1, F11)
 - [ ] android: lists bound inline per arity, reads on a reader connection (F9)
-- [ ] pimdir: the index without `flag`, `flag:`, `tag:` and `is:` read from the store; summary text rewritten only when it changed (SEARCH §3, §4, migrations/search) (F6)
+- [ ] pimdir: the index without `flag`, `flag:`, `tag:` and `is:` read from the store; summary text rewritten only when it changed (SEARCH §3, §4, migrations/search) (F6) Partly answered 2026-11-21: `is:` and a `tag:` or `flag:` naming a system flag read from `items.marks` (`unread`, `marked`), the index's `flag` table kept for keywords alone by the owner's decision (cairn/log/2026-11-21-system-flags-from-the-store.md); open: the summary text rewritten only when it changed, and no keyword rewrite on a mark change.
 - [ ] pimdir: occurrences bounded by the longest span (SEARCH §7, occurrences_between, occurring_between, a multi-day vector) (F7)
 - [ ] io-pimdir, android: coverage once per query, kept per collection until its stamp moves (F8)
 - [ ] android, ranked by the phone's profile: an item inserted with its flags known (no `SET_FLAGS_KNOWN` after `INSERT_ITEM`), the sender rule once per page, one lookup by link for unheld members, multi-row inserts of a page's fresh members (F4)

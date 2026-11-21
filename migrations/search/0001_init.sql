@@ -170,11 +170,13 @@ CREATE VIRTUAL TABLE summary_text USING fts5(
     tokenize = 'unicode61 remove_diacritics 0', prefix = '2 3'
 );
 
--- The flag predicates (§8), one row per flag per placement, so `is:unread`
--- alone is a seek rather than a JSON scan of every item. Cascades with the
--- placement, so a dropped placement takes its flags with it (§4).
+-- The keyword predicates (§8, §10), one row per keyword per placement, so
+-- tag:x is a seek. A system flag is no row: `is:` and a tag: naming one read
+-- the store's items.marks as it stands, so the CHECK refuses the five, each by
+-- its exact bytes (STORAGE §13). Cascades with the placement, so a dropped
+-- placement takes its keywords with it (§4).
 CREATE TABLE flag (
-    flag       TEXT    NOT NULL,
+    flag       TEXT    NOT NULL CHECK (flag NOT IN ('\Seen', '\Answered', '\Flagged', '\Draft', '\Deleted')),
     collection TEXT    NOT NULL,
     seq        INTEGER NOT NULL,
     PRIMARY KEY (flag, collection, seq),

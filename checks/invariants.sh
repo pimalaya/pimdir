@@ -3542,14 +3542,20 @@ done
 expect "thread: thread_of names a message's thread, thread_members its present members in one account, a phantom none" \
     "$(isearch thread_of ":link_id='x@x'")|$(isearch thread_of ":link_id='nobody@x'")|$(isearch thread_members ":thread='r@x'" ":account='work'" | sort | tr '\n' ' ')|$(isearch thread_members ":thread='r@x'" ":account='home'" | tr '\n' ' ')" \
     "r@x||Work|1 Work|2 |Home|1 "
-isearch insert_flag ":flag='\\Seen'" ":collection='Work'" ":seq=1"
-isearch insert_flag ":flag='\\Flagged'" ":collection='Work'" ":seq=1"
-isearch insert_flag ":flag='\\Seen'" ":collection='Work'" ":seq=2"
-expect "flag: flagged answers the placements holding a flag" \
-    "$(isearch flagged ":flag='\\Seen'" | sort | tr '\n' ' ')|$(isearch flagged ":flag='\\Flagged'")" "Work|1 Work|2 |Work|1"
+isearch insert_flag ":flag='todo'" ":collection='Work'" ":seq=1"
+isearch insert_flag ":flag='\\seen'" ":collection='Work'" ":seq=1"
+isearch insert_flag ":flag='todo'" ":collection='Work'" ":seq=2"
+expect "flag: flagged answers the placements holding a keyword" \
+    "$(isearch flagged ":flag='todo'" | sort | tr '\n' ' ')|$(isearch flagged ":flag='\\seen'")" "Work|1 Work|2 |Work|1"
 isearch replace_flags ":collection='Work'" ":seq=1"
-expect "flag: replace_flags clears one placement's flags, another's kept" \
-    "$(isearch flagged ":flag='\\Seen'" | tr '\n' ' ')|$(isearch flagged ":flag='\\Flagged'")" "Work|2 |"
+expect "flag: replace_flags clears one placement's keywords, another's kept" \
+    "$(isearch flagged ":flag='todo'" | tr '\n' ' ')|$(isearch flagged ":flag='\\seen'")" "Work|2 |"
+# A system flag is no row of the index (SEARCH §3, §4): items.marks holds it
+# and a query reads it there, so the table refuses each of the five by its
+# exact bytes, a keyword spelling one in another case taken.
+expect "flag: the index refuses a system flag, each of the five, by its exact bytes" \
+    "$(for flag in '\Seen' '\Answered' '\Flagged' '\Draft' '\Deleted'; do isearch insert_flag ":flag='$flag'" ":collection='Work'" ":seq=2" 2>&1 | grep -c 'CHECK constraint failed' || true; done | tr -d '\n')|$(isearch flagged ":flag='\\Seen'")" \
+    "11111|"
 for spec in Work:1:2026-09-01 Work:1:2026-09-08 Work:2:2026-09-02; do
     IFS=: read -r collection seq day <<<"$spec"
     isearch insert_occurrence ":collection='$collection'" ":seq=$seq" ":start='${day}T09:00:00Z'" ":end='${day}T10:00:00Z'"
@@ -3576,6 +3582,48 @@ sql "UPDATE items SET deleted = 1 WHERE link_id = 'gone@x';"
 expect "linked: the live placements at the other end of an item's references, either way, under a role or any" \
     "$(isearch linked ":kind='message/rfc822'" ":link_id='m@x'" ":role=NULL" | tr '\n' ' ')|$(isearch linked ":kind='text/calendar'" ":link_id='ev@x'" ":role='invitation'")|$(isearch linked ":kind='text/calendar'" ":link_id='ev@x'" ":role='parent'")|$(isearch linked ":kind='message/rfc822'" ":link_id='ev@x'" ":role=NULL")" \
     "Cal|2 |INBOX|1||"
+
+# --- A system flag is read from the store as it stands (SEARCH.md §8, §8.2) --
+
+# is: and a tag: naming a system flag read items.marks, never the index's flag
+# table, so a flag the store changed and no refresh folded answers as the
+# store holds it: the index here holds a placement for every row and no flag
+# at all. unread answers the live rows lacking the bit, an unknown set (no
+# bit) among them; marked the live rows holding a bit, each of the five.
+fresh
+index
+collection Work "'work'"
+collection Archive "'work'"
+marked_item() {
+    local flags="'$4'"
+    [ "$4" != NULL ] || flags=NULL
+    run owner/insert_item ":collection='$1'" ":link_id='$2'" ":seq=$3" ":flags=$flags" ":object_hash=NULL" \
+        ":sort_key='2026-09-0${3}T00:00:00Z'" ":level=1" ":deleted=0" ":conflicted=0" ":conflict_object=NULL"
+    isearch upsert_placement ":collection='$1'" ":seq=$3" ":link_id='$2'" ":hash=NULL" > /dev/null
+}
+marked_item Work a 1 '["\\Seen", "\\Flagged"]'
+marked_item Archive a 1 '[]'
+marked_item Work b 2 '[]'
+marked_item Work u 3 NULL
+marked_item Work d 4 '["\\Seen", "\\Answered", "\\Draft", "\\Deleted"]'
+marked_item Work k 5 '["$todo", "\\seen"]'
+expect "flags: unread answers the live rows lacking \\Seen, an unknown set among them, from the store with no flag row in the index" \
+    "$(sqlite3 "$dir/index.db" "SELECT count(*) FROM flag;")|$(isearch unread | sort | tr '\n' ' ')" \
+    "0|Archive|1 Work|2 Work|3 Work|5 "
+expect "flags: marked answers the live rows holding a bit, for each of the five" \
+    "$(for mark in 1 2 4 8 16; do isearch marked ":mark=$mark" | sort | tr '\n' ' '; echo -n '/'; done)" \
+    "Work|1 Work|4 /Work|4 /Work|1 /Work|4 /Work|4 /"
+# A flag changed in the store and not yet folded: no refresh runs between the
+# write and the read, and both statements answer the store's state.
+run owner/update_item ":collection='Work'" ":link_id='a'" ":flags='[]'" ":object_hash=NULL" ":sort_key='2026-09-01T00:00:00Z'" \
+    ":level=1" ":deleted=0" ":conflicted=0" ":conflict_object=NULL" > /dev/null
+sql "UPDATE items SET deleted = 1 WHERE link_id = 'b';"
+expect "flags: a flag changed and a row deleted since the last refresh answer as the store holds them" \
+    "$(isearch unread | sort | tr '\n' ' ')|$(isearch marked ":mark=1" | tr '\n' ' ')|$(isearch marked ":mark=4")" \
+    "Archive|1 Work|1 Work|3 Work|5 |Work|4 |"
+expect "flags: unread walks items_unread, marked items_by_sort alone, neither the whole table" \
+    "$(isplan unread | grep -c 'SCAN i USING INDEX items_unread' || true)$(isplan unread | grep -cE 'SCAN i$|items_by_sort' || true)$(isplan marked ":mark=4" | grep -c 'SCAN i USING COVERING INDEX items_by_sort' || true)$(isplan marked ":mark=4" | grep -cE 'SCAN i$|items_unread' || true)" \
+    "1010"
 
 # --- Erasing: a purge leaves nothing in the files (STORAGE.md §11.5) ----------
 
