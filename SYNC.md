@@ -615,7 +615,7 @@ Every verb begins with a load naming a collection and a selection, `All`, `Handl
 
 - A mutation asks for the one placement it edits, or for every holder of the link id an `Add` must not collide with. A `Copy` or a `Move` also loads its target for the identity it carries into it, and the sources syncing the target (`collection_sources`) for a placement holding no body (§7).
 - An upgrade asks for the handles it raises.
-- A delta, reasoning about what it does not list only through what owes a push, asks for `Handles` of the members it lists or drops and of those `list_owing_bindings` names, and for `Links` of the hints it carries and of those `list_lacking_items` names: every placement a push or a propagation can concern, so its load grows with what moved, not with the collection.
+- A delta, reasoning about what it does not list only through what owes a push, asks for `Handles` of the members it lists or drops and of those `list_owing_bindings` names, and for `Links` of the hints it carries and of those `list_lacking_items` names: every placement a push or a propagation can concern, both statements seeking the store's owing marks (STORAGE §4.6), so its load grows with what moved, not with the collection.
 - The last page of a round and a rekey ask for the whole collection: what each finds absent, and whether a mass absence parks it (§5, §8), is counted over every based binding of the source in its scope.
 - A page before the last and a head ask for `Handles` of their members and `Links` of the hints they carry, which naming them needs (§6).
 

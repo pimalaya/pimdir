@@ -298,6 +298,9 @@ CREATE TABLE items (
     conflicted      INTEGER NOT NULL DEFAULT 0 CHECK (typeof(conflicted) = 'integer') CHECK (conflicted IN (0, 1)),  -- 1 while a cross-source content conflict is unresolved
     conflict_object INTEGER CHECK (typeof(conflict_object) IN ('integer', 'null')) REFERENCES objects(id),  -- the diverging body a manual conflict recorded
     changed         INTEGER NOT NULL DEFAULT 0 CHECK (typeof(changed) = 'integer'),  -- the change stamp (§4.5), trigger-maintained
+    -- 1 while the row is live, holds a body and a source of its collection
+    -- binds it not (§4.6): the lacking mark, trigger-maintained.
+    lacks           INTEGER NOT NULL DEFAULT 0 CHECK (typeof(lacks) = 'integer') CHECK (lacks IN (0, 1)),
     UNIQUE (collection, link_id),
     -- What a binding's foreign key names, so its collection is its item's.
     UNIQUE (id, collection),
@@ -503,6 +506,9 @@ CREATE TABLE bindings (
                       CHECK (refused_key GLOB '[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]'),
     refused_at        TEXT CHECK (typeof(refused_at) IN ('text', 'null'))  -- the shape of §13
                       CHECK (refused_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'),
+    -- 1 while the placement may owe a push or a decision (§4.6): the owing
+    -- mark, trigger-maintained.
+    owes              INTEGER NOT NULL DEFAULT 0 CHECK (typeof(owes) = 'integer') CHECK (owes IN (0, 1)),
     PRIMARY KEY (item, source),
     -- A refusal states its reason, its key and its instant, or none of them.
     CHECK ((refusal IS NULL) = (refused_key IS NULL) AND (refusal IS NULL) = (refused_at IS NULL)),
@@ -910,3 +916,212 @@ CREATE UNIQUE INDEX bindings_by_handle ON bindings(collection, source, handle);
 -- queue view and an engine's load read. Partial, so it holds only what a
 -- remote refused and is empty at rest.
 CREATE INDEX bindings_refused ON bindings(collection, source) WHERE refusal IS NOT NULL;
+
+-- The owing marks (§4.6): bindings.owes and items.lacks, which a delta's load
+-- reads through a partial index each (list_owing_bindings,
+-- list_lacking_items), so it costs what is owed rather than what the
+-- collection holds. Each mark is a rule written once, as a view, and the
+-- triggers below compute it again from the view after every write that can
+-- move it, so a writer never writes one and the mark equals its rule at the
+-- end of every statement. A recompute flips a mark only where it differs,
+-- so a write restating a row moves no index entry.
+
+-- A binding may owe a push or a decision: it or its item is conflicted, the
+-- item is deleted, the binding has no base, a known flag set differs from a
+-- known base (the system flags' bits, then the other flags' rows, compared by
+-- an anti-join each way on the other's key), or the item holds a body other
+-- than the base's (SYNC.md §3). A superset of the placements not Clean.
+CREATE VIEW binding_owes(item, source, owes) AS
+SELECT b.item, b.source,
+       b.conflicted = 1 OR i.conflicted = 1 OR i.deleted = 1
+       OR b.base_present = 0
+       OR (i.flags_known = 1 AND b.base_flags_known = 1
+           AND (i.marks != b.base_marks
+                OR EXISTS (SELECT 1 FROM placement_flag f
+                           WHERE f.item = i.id
+                             AND NOT EXISTS (SELECT 1 FROM binding_base_flag g
+                                             WHERE g.item = b.item AND g.source = b.source
+                                               AND g.flag = f.flag))
+                OR EXISTS (SELECT 1 FROM binding_base_flag g
+                           WHERE g.item = b.item AND g.source = b.source
+                             AND NOT EXISTS (SELECT 1 FROM placement_flag f
+                                             WHERE f.item = i.id AND f.flag = g.flag))))
+       OR (i.object IS NOT NULL AND i.object IS NOT b.base_object)
+FROM bindings b JOIN items i ON i.id = b.item;
+
+-- An item is lacking while it is live, holds a body and a source syncing its
+-- collection (a row of sources) binds it not: a Created projection some
+-- source is offered (SYNC.md §3).
+CREATE VIEW item_lacks(item, lacks) AS
+SELECT i.id,
+       i.deleted = 0 AND i.object IS NOT NULL
+       AND EXISTS (SELECT 1 FROM sources s
+                   WHERE s.collection = i.collection
+                     AND NOT EXISTS (SELECT 1 FROM bindings b
+                                     WHERE b.item = i.id AND b.source = s.source))
+FROM items i;
+
+-- The owing mark follows the binding's own columns, its item's, and both
+-- flag sets' rows. A binding without its item is marked, a superset. A flag
+-- of an item no source binds yet, as an import writes it, moves no mark.
+CREATE TRIGGER bindings_owes_insert AFTER INSERT ON bindings
+BEGIN
+    UPDATE bindings SET owes = 1 - owes
+    WHERE item = NEW.item AND source = NEW.source
+      AND owes != coalesce((SELECT o.owes FROM binding_owes o
+                            WHERE o.item = bindings.item AND o.source = bindings.source), 1);
+END;
+
+CREATE TRIGGER bindings_owes_update AFTER UPDATE OF
+    item, source, conflicted, base_present, base_flags_known, base_marks, base_object
+ON bindings
+WHEN OLD.item IS NOT NEW.item
+  OR OLD.source IS NOT NEW.source
+  OR OLD.conflicted IS NOT NEW.conflicted
+  OR OLD.base_present IS NOT NEW.base_present
+  OR OLD.base_flags_known IS NOT NEW.base_flags_known
+  OR OLD.base_marks IS NOT NEW.base_marks
+  OR OLD.base_object IS NOT NEW.base_object
+BEGIN
+    UPDATE bindings SET owes = 1 - owes
+    WHERE item = NEW.item AND source = NEW.source
+      AND owes != coalesce((SELECT o.owes FROM binding_owes o
+                            WHERE o.item = bindings.item AND o.source = bindings.source), 1);
+END;
+
+CREATE TRIGGER items_owes_update AFTER UPDATE OF
+    conflicted, deleted, flags_known, marks, object
+ON items
+WHEN OLD.conflicted IS NOT NEW.conflicted
+  OR OLD.deleted IS NOT NEW.deleted
+  OR OLD.flags_known IS NOT NEW.flags_known
+  OR OLD.marks IS NOT NEW.marks
+  OR OLD.object IS NOT NEW.object
+BEGIN
+    UPDATE bindings SET owes = 1 - owes
+    WHERE item = NEW.id
+      AND owes != coalesce((SELECT o.owes FROM binding_owes o
+                            WHERE o.item = bindings.item AND o.source = bindings.source), 1);
+END;
+
+CREATE TRIGGER placement_flag_owes_insert AFTER INSERT ON placement_flag
+WHEN EXISTS (SELECT 1 FROM bindings WHERE item = NEW.item)
+BEGIN
+    UPDATE bindings SET owes = 1 - owes
+    WHERE item = NEW.item
+      AND owes != coalesce((SELECT o.owes FROM binding_owes o
+                            WHERE o.item = bindings.item AND o.source = bindings.source), 1);
+END;
+
+CREATE TRIGGER placement_flag_owes_delete AFTER DELETE ON placement_flag
+WHEN EXISTS (SELECT 1 FROM bindings WHERE item = OLD.item)
+BEGIN
+    UPDATE bindings SET owes = 1 - owes
+    WHERE item = OLD.item
+      AND owes != coalesce((SELECT o.owes FROM binding_owes o
+                            WHERE o.item = bindings.item AND o.source = bindings.source), 1);
+END;
+
+CREATE TRIGGER binding_base_flag_owes_insert AFTER INSERT ON binding_base_flag
+BEGIN
+    UPDATE bindings SET owes = 1 - owes
+    WHERE item = NEW.item AND source = NEW.source
+      AND owes != coalesce((SELECT o.owes FROM binding_owes o
+                            WHERE o.item = bindings.item AND o.source = bindings.source), 1);
+END;
+
+CREATE TRIGGER binding_base_flag_owes_delete AFTER DELETE ON binding_base_flag
+BEGIN
+    UPDATE bindings SET owes = 1 - owes
+    WHERE item = OLD.item AND source = OLD.source
+      AND owes != coalesce((SELECT o.owes FROM binding_owes o
+                            WHERE o.item = bindings.item AND o.source = bindings.source), 1);
+END;
+
+-- A flag row is added or removed, never rewritten in place: the owing mark
+-- and the stamp (§4.5) follow its insert and its delete alone.
+CREATE TRIGGER placement_flag_keep_row BEFORE UPDATE ON placement_flag
+BEGIN
+    SELECT RAISE(ABORT, 'a flag is added or removed');
+END;
+
+CREATE TRIGGER binding_base_flag_keep_row BEFORE UPDATE ON binding_base_flag
+BEGIN
+    SELECT RAISE(ABORT, 'a flag is added or removed');
+END;
+
+-- The lacking mark follows the item's own columns, the bindings it gains and
+-- loses, and the sources of its collection. A binding gained can only clear
+-- it and one lost only set it, so each seeks the one item; a source added
+-- marks what it binds not of its collection, which it is then owed.
+CREATE TRIGGER items_lacks_insert AFTER INSERT ON items
+WHEN NEW.deleted = 0 AND NEW.object IS NOT NULL
+BEGIN
+    UPDATE items SET lacks = 1 - lacks
+    WHERE id = NEW.id
+      AND lacks != (SELECT l.lacks FROM item_lacks l WHERE l.item = items.id);
+END;
+
+CREATE TRIGGER items_lacks_update AFTER UPDATE OF collection, deleted, object ON items
+WHEN OLD.collection IS NOT NEW.collection
+  OR OLD.deleted IS NOT NEW.deleted
+  OR OLD.object IS NOT NEW.object
+BEGIN
+    UPDATE items SET lacks = 1 - lacks
+    WHERE id = NEW.id
+      AND lacks != (SELECT l.lacks FROM item_lacks l WHERE l.item = items.id);
+END;
+
+CREATE TRIGGER bindings_lacks_insert AFTER INSERT ON bindings
+WHEN (SELECT lacks FROM items WHERE id = NEW.item) = 1
+BEGIN
+    UPDATE items SET lacks = 0
+    WHERE id = NEW.item AND lacks = 1
+      AND (SELECT l.lacks FROM item_lacks l WHERE l.item = items.id) = 0;
+END;
+
+CREATE TRIGGER bindings_lacks_delete AFTER DELETE ON bindings
+BEGIN
+    UPDATE items SET lacks = 1
+    WHERE id = OLD.item AND lacks = 0
+      AND (SELECT l.lacks FROM item_lacks l WHERE l.item = items.id) = 1;
+END;
+
+-- No statement rewrites a binding's item or source; a write that does is
+-- one binding lost and another gained.
+CREATE TRIGGER bindings_lacks_update AFTER UPDATE OF item, source ON bindings
+WHEN OLD.item IS NOT NEW.item OR OLD.source IS NOT NEW.source
+BEGIN
+    UPDATE items SET lacks = 1 - lacks
+    WHERE id IN (OLD.item, NEW.item)
+      AND lacks != (SELECT l.lacks FROM item_lacks l WHERE l.item = items.id);
+END;
+
+CREATE TRIGGER sources_lacks_insert AFTER INSERT ON sources
+BEGIN
+    UPDATE items SET lacks = 1
+    WHERE collection = NEW.collection AND deleted = 0 AND object IS NOT NULL AND lacks = 0
+      AND NOT EXISTS (SELECT 1 FROM bindings b WHERE b.item = items.id AND b.source = NEW.source);
+END;
+
+CREATE TRIGGER sources_lacks_delete AFTER DELETE ON sources
+BEGIN
+    UPDATE items SET lacks = 0
+    WHERE collection = OLD.collection AND lacks = 1
+      AND (SELECT l.lacks FROM item_lacks l WHERE l.item = items.id) = 0;
+END;
+
+-- A rename's cascade moves a source and its items together, in either order,
+-- and each side recomputes what the move can change.
+CREATE TRIGGER sources_lacks_update AFTER UPDATE OF collection, source ON sources
+WHEN OLD.collection IS NOT NEW.collection OR OLD.source IS NOT NEW.source
+BEGIN
+    UPDATE items SET lacks = 1 - lacks
+    WHERE collection IN (OLD.collection, NEW.collection)
+      AND lacks != (SELECT l.lacks FROM item_lacks l WHERE l.item = items.id);
+END;
+
+-- What a delta's load seeks (list_owing_bindings, list_lacking_items), each
+-- holding what is owed alone and empty at rest.
+CREATE INDEX bindings_owing ON bindings(collection, source, handle) WHERE owes = 1;
+CREATE INDEX items_lacking ON items(collection, link_id) WHERE lacks = 1;

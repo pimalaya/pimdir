@@ -49,11 +49,61 @@ fresh() {
     run owner/init_store_meta ":version=1" ":derivation=3"
 }
 
-# sql <statement...>: runs literal SQL with foreign keys on.
+# The owing marks (STORAGE.md §4.6) hold after every statement any scenario
+# runs, canonical or literal: each mark equals its rule, the view the
+# triggers read, and covers what the statements of storage-draft-15 before
+# the marks answered, spelled here as they read: a binding whose placement
+# may owe a push or a decision, and a live item holding a body that a source
+# syncing its collection binds not. The probe writes one line per row
+# breaking either to drift.now, which drifted appends to drift, and the gate
+# at the end fails on any, so every write path a scenario drives is checked.
+probe="SELECT 'owes ' || b.collection || ' ' || b.source || ' ' || b.handle || ': ' || b.owes || ', its rule ' || coalesce(o.owes, 1)
+       FROM bindings b LEFT JOIN binding_owes o ON o.item = b.item AND o.source = b.source
+       WHERE b.owes != coalesce(o.owes, 1)
+       UNION ALL
+       SELECT 'owes ' || b.collection || ' ' || b.source || ' ' || b.handle || ': unmarked, and it may owe'
+       FROM bindings b JOIN items i ON i.id = b.item
+       WHERE b.owes = 0
+         AND (b.conflicted = 1 OR i.conflicted = 1 OR i.deleted = 1
+              OR b.base_present = 0
+              OR (i.flags_known = 1 AND b.base_flags_known = 1
+                  AND (i.marks != b.base_marks
+                       OR EXISTS (SELECT 1 FROM placement_flag f
+                                  WHERE f.item = i.id
+                                    AND NOT EXISTS (SELECT 1 FROM binding_base_flag g
+                                                    WHERE g.item = b.item AND g.source = b.source
+                                                      AND g.flag = f.flag))
+                       OR EXISTS (SELECT 1 FROM binding_base_flag g
+                                  WHERE g.item = b.item AND g.source = b.source
+                                    AND NOT EXISTS (SELECT 1 FROM placement_flag f
+                                                    WHERE f.item = i.id AND f.flag = g.flag))))
+              OR (i.object IS NOT NULL AND i.object IS NOT b.base_object))
+       UNION ALL
+       SELECT 'lacks ' || i.collection || ' ' || i.link_id || ': ' || i.lacks || ', its rule ' || l.lacks
+       FROM items i JOIN item_lacks l ON l.item = i.id
+       WHERE i.lacks != l.lacks
+       UNION ALL
+       SELECT 'lacks ' || i.collection || ' ' || i.link_id || ': unmarked, and ' || s.source || ' binds it not'
+       FROM sources s JOIN items i ON i.collection = s.collection
+       WHERE i.lacks = 0 AND i.deleted = 0 AND i.object IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM bindings b WHERE b.item = i.id AND b.source = s.source);"
+
+# drifted <label>: appends what the last probe found, under the label.
+drifted() {
+    if [ -s "$dir/drift.now" ]; then
+        { echo "after $1:"; cat "$dir/drift.now"; } >> "$dir/drift"
+    fi
+    : > "$dir/drift.now"
+}
+
+# sql <statement...>: runs literal SQL with foreign keys on, then the probe.
 sql() {
-    local lines
+    local lines status=0
     mapfile -t lines < <(prelude)
-    sqlite3 "$dir/pimdir.db" "${lines[@]}" "PRAGMA foreign_keys = ON; $*"
+    sqlite3 "$dir/pimdir.db" "${lines[@]}" "PRAGMA foreign_keys = ON; $*" \
+        ".output $dir/drift.now" "$probe" ".output" || status=$?
+    drifted "sql: $*"
+    return "$status"
 }
 
 # The system flags and their bits (STORAGE.md §13), as rows.
@@ -153,7 +203,7 @@ takes() {
 
 run() {
     local file="$1"; shift
-    local after=""
+    local after="" status=0
     takes "storage/$file" "$@"
     case " $* " in
         *" :flags='["*) after=flags ;;
@@ -168,7 +218,12 @@ run() {
             flags) statement storage/owner/retain_flags; statement storage/owner/add_flags ;;
             base_flags) statement storage/owner/retain_base_flags; statement storage/owner/add_base_flags ;;
         esac
-    } | sqlite3 "$dir/pimdir.db"
+        echo ".output $dir/drift.now"
+        echo "$probe"
+        echo ".output"
+    } | sqlite3 "$dir/pimdir.db" || status=$?
+    drifted "$file $*"
+    return "$status"
 }
 
 # fails <profile/name> [:param=literal...]: the statement must be refused.
@@ -201,7 +256,7 @@ plan() {
 trigger_plan() {
     local name="$1"; shift
     local body
-    body="$(sql "SELECT sql FROM sqlite_schema WHERE name = '$name';" | sed -n '/^BEGIN$/,/^END$/p' | sed '1d;$d;s/OLD\./:old_/g')"
+    body="$(sql "SELECT sql FROM sqlite_schema WHERE name = '$name';" | sed -n '/^BEGIN$/,/^END$/p' | sed '1d;$d;s/OLD\./:old_/g;s/NEW\./:new_/g')"
     {
         for binding in "$@"; do
             echo ".parameter set ${binding%%=*} ${binding#*=}"
@@ -3796,16 +3851,163 @@ expect "owing: the handles in byte order, a provisional one before every member'
 expect "lacking: the live items holding a body a source binds not" \
     "$(run owner/list_lacking_items ":collection='INBOX'" ":source='graph'" | tr '\n' ' ')|$(run owner/list_lacking_items ":collection='INBOX'" ":source='imap'" | tr '\n' ' ')" \
     "dbody edited |"
-expect "owing: the source's bindings seek bindings_by_handle, never the whole store" \
-    "$(plan owner/list_owing_bindings ":collection='INBOX'" ":source='imap'" | grep -c 'bindings_by_handle (collection=? AND source=?)' || true)" "1"
+expect "owing: the source's owed bindings seek bindings_owing in handle order, never the collection" \
+    "$(plan owner/list_owing_bindings ":collection='INBOX'" ":source='imap'" | grep -c 'bindings_owing (collection=? AND source=?)\|TEMP B-TREE' || true)" "1"
+steps="$(plan owner/list_lacking_items ":collection='INBOX'" ":source='imap'")"
+expect "lacking: a source syncing the collection seeks items_lacking, the walk for one no row names nested under its guard" \
+    "$(grep -c 'items_lacking (collection=?)' <<<"$steps" || true)$(grep -A1 'SCAN unsynced' <<<"$steps" | grep -c 'SEARCH i USING INDEX' || true)" "11"
 # The two flag sets are compared by a seek each way on the other's key, in
-# the delta's read and in the eviction holding the same comparison (§11.3):
-# no temporary b-tree is built per binding to compare them.
-for statement in list_owing_bindings evict_before; do
-    steps="$(plan "owner/$statement" ":collection='INBOX'" ":source='imap'" ":before='2026-09-01T00:00:00Z'")"
-    expect "owing: $statement compares the flag sets by two anti-joins on their keys, building no temporary b-tree" \
+# the owing mark's rule (§4.6), which every trigger recomputing it reads, and
+# in the eviction holding the same comparison (§11.3): no temporary b-tree is
+# built per binding to compare them.
+for steps in "$(trigger_plan bindings_owes_insert ":new_item=1" ":new_source='imap'")" \
+    "$(plan owner/evict_before ":collection='INBOX'" ":before='2026-09-01T00:00:00Z'")"; do
+    expect "owing: the owing rule and evict_before compare the flag sets by two anti-joins on their keys, building no temporary b-tree" \
         "$(grep -c 'SEARCH g USING PRIMARY KEY (item=? AND source=? AND flag=?)' <<<"$steps" || true)$(grep -c 'SEARCH f USING PRIMARY KEY (item=? AND flag=?)' <<<"$steps" || true)$(grep -c 'TEMP B-TREE' <<<"$steps" || true)" "110"
 done
+
+# --- The owing marks follow every write (STORAGE.md §4.6, SYNC.md §10) -------
+
+# A delta's two reads seek the marks the triggers keep, never the collection:
+# each write below moves one input of a mark, and after it the two statements
+# answer, for a source syncing the collection (imap, graph) and for one no row
+# names (phone), what the statements before the marks answer, spelled here
+# as they read: they walk every binding and item of the collection. The probe
+# checks each mark against its rule after every statement besides.
+before_owing="SELECT b.handle FROM bindings b JOIN items i ON i.id = b.item
+WHERE b.collection = :collection AND b.source = :source
+  AND (b.conflicted = 1 OR i.conflicted = 1 OR i.deleted = 1
+       OR b.base_present = 0
+       OR (i.flags_known = 1 AND b.base_flags_known = 1
+           AND (i.marks != b.base_marks
+                OR EXISTS (SELECT 1 FROM placement_flag f
+                           WHERE f.item = i.id
+                             AND NOT EXISTS (SELECT 1 FROM binding_base_flag g
+                                             WHERE g.item = b.item AND g.source = b.source
+                                               AND g.flag = f.flag))
+                OR EXISTS (SELECT 1 FROM binding_base_flag g
+                           WHERE g.item = b.item AND g.source = b.source
+                             AND NOT EXISTS (SELECT 1 FROM placement_flag f
+                                             WHERE f.item = i.id AND f.flag = g.flag))))
+       OR (i.object IS NOT NULL AND i.object IS NOT b.base_object))
+ORDER BY b.handle;"
+before_lacking="SELECT i.link_id FROM items i
+WHERE i.collection = :collection AND i.deleted = 0 AND i.object IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM bindings b WHERE b.item = i.id AND b.source = :source)
+ORDER BY i.link_id;"
+# answers <collection> [before]: per source, the handles owing a push and the
+# link ids lacking, by the canonical statements or, with `before`, by the
+# statements before the marks.
+answers() {
+    local source owing lacking
+    for source in imap graph phone; do
+        if [ "${2:-}" = before ]; then
+            owing="$(printf '%s\n' ".parameter set :collection '$1'" ".parameter set :source '$source'" "$before_owing" | sqlite3 "$dir/pimdir.db" | paste -sd,)"
+            lacking="$(printf '%s\n' ".parameter set :collection '$1'" ".parameter set :source '$source'" "$before_lacking" | sqlite3 "$dir/pimdir.db" | paste -sd,)"
+        else
+            owing="$(run owner/list_owing_bindings ":collection='$1'" ":source='$source'" | paste -sd,)"
+            lacking="$(run owner/list_lacking_items ":collection='$1'" ":source='$source'" | paste -sd,)"
+        fi
+        printf '%s:%s/%s ' "$source" "$owing" "$lacking"
+    done
+}
+# owed <label> <want> [collection]: the answers after a write, and the same
+# as the statements before the marks give.
+owed() {
+    local now
+    now="$(answers "${3:-INBOX}")"
+    expect "marks: $1" "$now" "$2"
+    expect "marks: $1, as the statements before the marks answer" "$now" "$(answers "${3:-INBOX}" before)"
+}
+upd_item() {
+    run owner/update_item ":collection='INBOX'" ":link_id='$1'" ":flags=$2" ":object_hash=$3" ":sort_key=''" \
+        ":level=2" ":deleted=${4:-0}" ":conflicted=${5:-0}" ":conflict_object=NULL"
+}
+upd_binding() {
+    run owner/update_binding ":collection='INBOX'" ":link_id='$1'" ":source='$2'" ":base_flags=$3" ":base_object=$4" \
+        ":base_revision=NULL" ":base_present=${5:-1}" ":conflicted=${6:-0}" ":conflict_revision=${7:-NULL}" \
+        ":conflict_object=NULL" ":shared_object=NULL"
+}
+bind() {
+    run owner/insert_binding ":collection='INBOX'" ":link_id='$1'" ":source='$2'" ":handle='$3'" \
+        ":base_flags=$4" ":base_object=$5" ":base_revision=NULL" ":base_present=1" \
+        ":conflicted=0" ":conflict_revision=NULL" ":conflict_object=NULL" ":shared_object=NULL"
+}
+
+fresh
+collection INBOX
+object "$h1"
+object "$h2"
+run owner/upsert_checkpoint ":collection='INBOX'" ":source='imap'" ":checkpoint=NULL"
+run owner/insert_item ":collection='INBOX'" ":link_id='b'" ":seq=2" ":flags='[\"\\\\Seen\"]'" ":object_hash='$h1'" \
+    ":sort_key=''" ":level=2" ":deleted=0" ":conflicted=0" ":conflict_object=NULL"
+bind b imap 20 "'[\"\\\\Seen\"]'" "'$h1'"
+run owner/insert_item ":collection='INBOX'" ":link_id='a'" ":seq=1" ":flags='[\"\\\\Seen\"]'" ":object_hash='$h1'" \
+    ":sort_key=''" ":level=2" ":deleted=0" ":conflicted=0" ":conflict_object=NULL"
+owed "a new item holding a body lacks every syncing source's binding" "imap:/a graph:/a,b phone:/a,b "
+bind a imap 10 "'[\"\\\\Seen\"]'" "'$h1'"
+owed "a binding gained clears the lack, a clean binding owes nothing" "imap:/ graph:/a,b phone:/a,b "
+run owner/upsert_checkpoint ":collection='INBOX'" ":source='graph'" ":checkpoint=NULL"
+expect "marks: a source joining the collection marks what it binds not" \
+    "$(sql "SELECT group_concat(link_id, ',') FROM (SELECT link_id FROM items WHERE lacks = 1 ORDER BY link_id);")" "a,b"
+owed "a source joining the collection is owed every live body by the mark" "imap:/ graph:/a,b phone:/a,b "
+upd_item a "'[\"\\\\Seen\",\"\\\\Flagged\"]'" "'$h1'"
+owed "a system flag the item gained owes" "imap:10/ graph:/a,b phone:/a,b "
+upd_binding a imap "'[\"\\\\Seen\",\"\\\\Flagged\"]'" "'$h1'"
+owed "a base taking the item's flags settles" "imap:/ graph:/a,b phone:/a,b "
+upd_item a "'[\"\\\\Seen\",\"\\\\Flagged\",\"\$x\"]'" "'$h1'"
+owed "a keyword row the item gained owes" "imap:10/ graph:/a,b phone:/a,b "
+upd_binding a imap "'[\"\\\\Seen\",\"\\\\Flagged\",\"\$x\"]'" "'$h1'"
+owed "a keyword row the base gained settles" "imap:/ graph:/a,b phone:/a,b "
+upd_item a "'[\"\\\\Seen\",\"\\\\Flagged\"]'" "'$h1'"
+owed "a keyword row the item lost owes" "imap:10/ graph:/a,b phone:/a,b "
+upd_binding a imap "'[\"\\\\Seen\",\"\\\\Flagged\"]'" "'$h1'"
+owed "a keyword row the base lost settles" "imap:/ graph:/a,b phone:/a,b "
+upd_item a "'[\"\\\\Seen\"]'" "'$h1'"
+upd_binding a imap "'[\"\\\\Seen\",\"\$y\"]'" "'$h1'"
+owed "a keyword row the base holds and the item lacks owes" "imap:10/ graph:/a,b phone:/a,b "
+upd_binding a imap "'[\"\\\\Seen\"]'" "'$h1'"
+upd_item a "'[\"\\\\Seen\"]'" "'$h2'"
+owed "a body other than the base's owes" "imap:10/ graph:/a,b phone:/a,b "
+upd_binding a imap "'[\"\\\\Seen\"]'" "'$h2'"
+owed "a base taking the body settles" "imap:/ graph:/a,b phone:/a,b "
+upd_item a NULL "'$h2'"
+upd_binding a imap NULL "'$h1'"
+owed "an unknown flag set holds no opinion, a body still owes" "imap:10/ graph:/a,b phone:/a,b "
+upd_binding a imap NULL "'$h2'"
+upd_item a "'[\"\\\\Seen\"]'" "'$h2'" 0 1
+owed "an item conflict owes" "imap:10/ graph:/a,b phone:/a,b "
+upd_item a "'[\"\\\\Seen\"]'" "'$h2'"
+upd_binding a imap NULL "'$h2'" 1 1 "'r9'"
+owed "a binding conflict owes, the item settled" "imap:10/ graph:/a,b phone:/a,b "
+upd_binding a imap NULL NULL 0
+owed "a binding with no base owes" "imap:10/ graph:/a,b phone:/a,b "
+upd_binding a imap NULL "'$h2'"
+bind a graph 30 NULL NULL
+owed "a binding the other source gained clears its lack, a base naming no body owes it the body" "imap:/ graph:30/b phone:/a,b "
+run owner/delete_binding ":collection='INBOX'" ":link_id='a'" ":source='graph'"
+owed "a binding lost marks the lack again" "imap:/ graph:/a,b phone:/a,b "
+upd_item a "'[\"\\\\Seen\"]'" "'$h2'" 1
+owed "a deleted item owes its tombstone and lacks nobody" "imap:10/ graph:/b phone:/b "
+run owner/revive_item ":collection='INBOX'" ":link_id='a'"
+owed "a revived item lacks again" "imap:/ graph:/a,b phone:/a,b "
+sql "INSERT INTO items(collection, link_id, seq, flags_known, level) VALUES('INBOX', 'c', 3, 1, 1);"
+owed "a bodiless item lacks nobody" "imap:/ graph:/a,b phone:/a,b "
+upd_item c "'[]'" "'$h1'"
+owed "a body arriving makes it lacking" "imap:/c graph:/a,b,c phone:/a,b,c "
+bind a graph 31 NULL "'$h2'"
+owed "an item every syncing source binds lacks nobody" "imap:/c graph:/b,c phone:/a,b,c "
+sql "UPDATE bindings SET source = 'phone' WHERE source = 'graph';"
+owed "a binding moved to another source is one lost and one gained" "imap:/c graph:/a,b,c phone:/b,c "
+sql "DELETE FROM bindings WHERE source = 'phone';"
+expect "marks: a flag row is added or removed, never rewritten" \
+    "$(sql "INSERT INTO placement_flag(item, flag) SELECT id, '\$k' FROM items WHERE link_id = 'c'; UPDATE placement_flag SET flag = 'x';" 2>&1 | grep -c 'a flag is added or removed')$(sql "INSERT INTO binding_base_flag(item, source, flag) SELECT item, source, 'y' FROM bindings WHERE handle = '20'; UPDATE binding_base_flag SET flag = 'x';" 2>&1 | grep -c 'a flag is added or removed')" "11"
+run owner/rename_collection ":collection='INBOX'" ":new_id='Archive'"
+owed "a rename carries both marks" "imap:20/c graph:/a,b,c phone:/a,b,c " Archive
+sql "DELETE FROM sources WHERE collection = 'Archive' AND source = 'graph';"
+owed "a source leaving clears what it alone lacked, the walk answering it while no row names it" "imap:20/c graph:/a,b,c phone:/a,b,c " Archive
+expect "marks: what is owed is all the partial indexes hold" \
+    "$(sql "SELECT count(*) FROM bindings WHERE owes = 1;")|$(sql "SELECT count(*) FROM items WHERE lacks = 1;")" "1|1"
 
 # --- The sender rule runs once per page (STORAGE.md §14.2) ------------------
 
@@ -4008,6 +4210,12 @@ while read -r line; do
         failures=$((failures + 1))
     fi
 done <<<"$index_waived"
+
+if [ -s "$dir/drift" ]; then
+    echo "an owing mark (STORAGE.md §4.6) left its rule or missed a row it covers:" >&2
+    cat "$dir/drift" >&2
+    failures=$((failures + 1))
+fi
 
 if [ -s "$dir/stray" ]; then
     echo "a scenario binds a parameter its statement does not take:" >&2
