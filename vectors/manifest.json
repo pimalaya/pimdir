@@ -116,14 +116,14 @@
     "vectors/schema/objects.schema.json": "27d5271230b92359ea242565def4f1fab4bfde465bca7ce263c961c8cf94398b",
     "vectors/schema/payloads.schema.json": "cfeeaef33d63945aa2cd4ee9bce53b9b298595dccbea94b0a1f256e4c1959e8d",
     "vectors/schema/search-chunks.schema.json": "0d98341ffd6455327e176688d4affe359b04dc0317d2a3bb920d4fcc6a0d653c",
-    "vectors/schema/search-queries.schema.json": "9f6463dc8f74be2353bf1c8163ac26bd42a72a32e5a7c11358a7aa8582428ec2",
+    "vectors/schema/search-queries.schema.json": "cb82c08148d7660d74dd1ac4bb0b02090398d701341a56bc8047e44a2ff0cb76",
     "vectors/schema/search-refresh.schema.json": "abc840cab27ed8e9bc1ed621dd1a601ed38ec8a37aad4790485a724bc2eae72d",
     "vectors/schema/search-store.schema.json": "ffd9e3bb85ed36c8bf8962d6bd5c8feb26755a2dfe357224650dbc380bc6145a",
     "vectors/schema/summaries.schema.json": "5dcd70af3d37d44420d5b5289ba5643a6e8905f0c9dc63d285e91a57287f4a54",
     "vectors/schema/sync.schema.json": "0f30c8f274692b973bd984f5f32a767129c411048100b8e55dead23c0f280c5b",
     "vectors/schema/versions.schema.json": "189ca52345b56a64626844d8805ebaea10356ae5ecae651a8c9675610a500705",
     "vectors/search/chunks.json": "6fc4e98bdf1306f7d5a2635fa2db4c3d96dc8856fbd61df49bc2f67d4d44de3a",
-    "vectors/search/queries.json": "1dc7c37c7b8ecf5d70e7c835388ce9288a31ace43a7e84189d501f993e05fc24",
+    "vectors/search/queries.json": "51e5372782fe10253b22867f5e4e1b022f7e9ba661a4578ff7c589ecd56e478f",
     "vectors/search/refresh.json": "edb6c955879b7c0ae61c4b3c62a31f34a48d459a3ef8077d0948b287e74bc848",
     "vectors/search/store.json": "e9456aad4a57e745c978d401e4b1300c3b383ac020b209d5bec7a15b6d6b855a",
     "vectors/summaries.json": "6a4eaead0970b91f76d2db33b53215ba35975e171f8c373b45e313d09298aad8",
@@ -336,7 +336,7 @@
       "/cases": 10
     },
     "vectors/search/queries.json": {
-      "/cases": 246,
+      "/cases": 268,
       "/occurrences": 8
     },
     "vectors/search/refresh.json": {

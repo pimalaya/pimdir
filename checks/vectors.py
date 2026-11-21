@@ -136,7 +136,7 @@ OPEN_FIELDS = {"tag", "flag", "account", "collection", "folder", "thread", "id",
 FIELDS = TEXT_FIELDS | set(CLOSED_FIELDS) | DATE_FIELDS | {"changed"} | OPEN_FIELDS
 CODES = {
     "empty-query", "unknown-field", "invalid-value", "invalid-date", "unterminated-phrase",
-    "unbalanced-parenthesis", "dangling-operator", "invalid-wildcard", "limit-exceeded",
+    "unbalanced-parenthesis", "dangling-operator", "reserved-form", "invalid-wildcard", "limit-exceeded",
 }
 WHITESPACE = " \t\r\n"
 
@@ -237,9 +237,19 @@ def range_of(value, point):
     return (low or high) != "" and all(side == "" or point(side) for side in (low, high))
 
 
+def check_reserved(word, start, end, value):
+    """The forms SEARCH.md section 8.3 keeps for later operators: a word
+    beginning with ~, one of two characters or more beginning with /, and
+    a value beginning with {."""
+    if word.startswith("~") or (len(word) >= 2 and word.startswith("/")) or (value and word.startswith("{")):
+        raise Refused("reserved-form", start, end)
+
+
 def check_term(query, token):
     if token["kind"] == "text":
-        check_wildcard(query[token["start"]:token["end"]], token["start"], True)
+        word = query[token["start"]:token["end"]]
+        check_reserved(word, token["start"], token["end"], False)
+        check_wildcard(word, token["start"], True)
         return
     if token["kind"] != "field":
         return
@@ -251,6 +261,7 @@ def check_term(query, token):
         raise Refused("invalid-value", start, end)
     value = query[colon + 2:end - 1] if token["phrase"] else query[colon + 1:end]
     if not token["phrase"]:
+        check_reserved(value, colon + 1, end, True)
         check_wildcard(value, colon + 1, name in TEXT_FIELDS and not (name in ADDRESS_FIELDS and "@" in value))
     if name in CLOSED_FIELDS and value not in CLOSED_FIELDS[name]:
         raise Refused("invalid-value", colon + 1, end)

@@ -79,7 +79,7 @@
           "required": ["code", "start", "end"],
           "additionalProperties": false,
           "properties": {
-            "code": { "enum": ["empty-query", "unknown-field", "invalid-value", "invalid-date", "unterminated-phrase", "unbalanced-parenthesis", "dangling-operator", "invalid-wildcard", "limit-exceeded"] },
+            "code": { "enum": ["empty-query", "unknown-field", "invalid-value", "invalid-date", "unterminated-phrase", "unbalanced-parenthesis", "dangling-operator", "reserved-form", "invalid-wildcard", "limit-exceeded"] },
             "start": { "type": "integer", "minimum": 0 },
             "end": { "type": "integer", "minimum": 0 }
           }

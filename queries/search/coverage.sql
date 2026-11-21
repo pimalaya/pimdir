@@ -2,7 +2,8 @@
 -- collections (the `collections` slot), of the kinds whose body search reads:
 -- the live items with no body, read from the store, then, read from the
 -- index, the placements whose body could not be read (missing) and those
--- whose body the extraction recorded unparseable or encrypted. A kind
+-- whose body the extraction recorded unparseable or encrypted, a status the
+-- reader does not know counted unparseable (§6, an open vocabulary). A kind
 -- counting none answers no row. A file is indexed from its summary alone
 -- (§6), so a bodiless one hides nothing and is never counted. Each
 -- collection seeks the store's items_bodiless, never the store's other rows,
@@ -24,7 +25,7 @@ FROM (
     WHERE m.collection IN (SELECT value FROM temp.param WHERE slot = 'collections')
     GROUP BY c.kind
     UNION ALL
-    SELECT c.kind, 0, 0, sum(o.status = 'unparseable'), sum(o.status = 'encrypted')
+    SELECT c.kind, 0, 0, sum(o.status <> 'encrypted'), sum(o.status = 'encrypted')
     FROM object o
     CROSS JOIN placement p ON p.hash = o.hash
     JOIN store.collections c ON c.id = p.collection

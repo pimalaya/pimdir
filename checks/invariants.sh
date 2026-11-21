@@ -3076,6 +3076,12 @@ expect "coverage: a bodiless file hides nothing from search and is never counted
     "$(isearch coverage ":collections='[\"Cal\",\"Docs\"]'")" "text/calendar|1|0|0|0"
 expect "coverage: only the query's collections are counted" \
     "$(isearch coverage ":collections='[\"Docs\"]'")|$(isearch coverage ":collections='[\"Cal\",\"Cal2\"]'")" "|text/calendar|2|0|0|0"
+hd="$(name hd)"
+isearch insert_object ":hash='$hd'" ":status='decrypted'" ":attachment=0" ":tel=0" ":adr=0" ":bday=0" ":photo=0" > /dev/null
+isearch upsert_placement ":collection='Cal2'" ":seq=99" ":link_id='later'" ":hash='$hd'" > /dev/null
+expect "coverage: a status this version does not know is read as unparseable, the extraction status an open vocabulary" \
+    "$(isearch coverage ":collections='[\"Cal2\"]'")" "text/calendar|1|0|1|0"
+sqlite3 "$dir/index.db" "DELETE FROM placement WHERE collection = 'Cal2' AND seq = 99; DELETE FROM object WHERE hash = '$hd';"
 steps="$(isplan coverage ":collections='[\"Cal\"]'")"
 expect "coverage: each collection seeks items_bodiless, never the store's other rows" \
     "$(grep -c 'USING COVERING INDEX items_bodiless (collection=? AND deleted=? AND object_hash=?)' <<<"$steps" || true)$(grep -c 'items_by_object\|SCAN i' <<<"$steps" || true)" "10"
