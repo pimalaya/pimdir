@@ -1,0 +1,57 @@
+{
+  "v": 11,
+  "label": "a listing records on each member's binding the server object id it states, and clears one it no longer states",
+  "note": "INBOX binds basic-1@example.org under 5, its binding stating the server object id M-old from an earlier listing. The round lists 5 stating none, and 9, recent-1@example.org, a member it names for the first time, stating M-9. The write records each beside the meta it came with: 9's binding states M-9, and 5's states none, a listing naming the member stating none clearing it, so an upgrade never compares an id its source no longer states (SYNC.md §4, §6; STORAGE §4.3)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": {},
+    "items": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" }
+    ],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "5", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "server_object_id": "M-old" }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "INBOX",
+    "source": "imap",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual"
+    }
+  },
+  "remote": {
+    "snapshot": {
+      "items": [
+        { "handle": "5", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-basic.eml" } },
+        { "handle": "9", "flags": [], "revision": null, "meta": { "body": "fixtures/mail-recent.eml", "server_object_id": "M-9" } }
+      ],
+      "vanished": [],
+      "complete": true,
+      "checkpoint": "c2"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [{ "kind": "Added", "handle": "9" }],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0 },
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-10-06T08:30:00Z" }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "5", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "server_object_id": null },
+        { "collection": "INBOX", "link_id": "recent-1@example.org", "source": "imap", "handle": "9", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "server_object_id": "M-9" }
+      ],
+      "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c2" }]
+    }
+  }
+}

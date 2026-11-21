@@ -492,6 +492,13 @@ CREATE TABLE bindings (
     -- is conflicted. Pinned like the base (§5): it is the common ancestor a
     -- merge reads, one body per binding, released when the binding next agrees.
     shared_object     INTEGER CHECK (typeof(shared_object) IN ('integer', 'null')) REFERENCES objects(id),
+    -- The id the source's server gives the member's content (RFC 8474
+    -- EMAILID, Gmail's X-GM-MSGID, JMAP's Email/id), as the source last
+    -- stated it with the member's meta (SYNC.md §4), NULL where it stated
+    -- none. Opaque, comparable only with another binding of the same
+    -- source: two stating different ones never share a body by link id
+    -- (lookup_objects, SYNC.md §6).
+    server_object_id  TEXT CHECK (typeof(server_object_id) IN ('text', 'null')) CHECK (server_object_id != ''),
     -- The id of the last round whose listing carried this handle (SYNC.md
     -- §5), NULL until one did: a round's last page drops the in-scope
     -- bindings it did not stamp.

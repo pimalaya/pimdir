@@ -81,6 +81,7 @@
         "conflict_revision": { "$ref": "#/$defs/maybe" },
         "conflict_object": { "$ref": "#/$defs/object" },
         "shared_object": { "$ref": "#/$defs/object" },
+        "server_object_id": { "oneOf": [{ "type": "null" }, { "type": "string", "minLength": 1 }] },
         "round": { "type": ["integer", "null"] },
         "refusal": { "$ref": "#/$defs/maybe" },
         "refused_key": { "oneOf": [{ "type": "null" }, { "type": "string", "pattern": "^[0-9a-f]{16}$" }] }
@@ -338,7 +339,7 @@
           "type": "object",
           "required": ["body"],
           "additionalProperties": false,
-          "properties": { "body": { "type": "string" }, "size": { "type": "integer", "minimum": 0 }, "attachment": { "type": "boolean" } }
+          "properties": { "body": { "type": "string" }, "size": { "type": "integer", "minimum": 0 }, "attachment": { "type": "boolean" }, "server_object_id": { "type": "string", "minLength": 1 } }
         },
         {
           "type": "object",

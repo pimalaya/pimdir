@@ -57,6 +57,7 @@
     "vectors/fixtures/mail-attachments.eml": "d0842b73267213b4c0b9f36ba5351e895ddb55267c17ed6fed41aba231b8cdd2",
     "vectors/fixtures/mail-bare-file.eml": "62b91709d66c9a64497a17af9fc3dbe6962decca9d660c109802edacb22bbd52",
     "vectors/fixtures/mail-bare-parts.eml": "92e9c0ca6376f3050e56e201147e15ae1a6a91e5cf80eaef30dfc5780d7d32f1",
+    "vectors/fixtures/mail-basic-twin.eml": "9803915cef88eda28dd9c86a4949b772505835ac38d466a3accfdde758484f77",
     "vectors/fixtures/mail-basic.eml": "19f9499d0a7cbd18b833c168a0d1de9639b2b7edc1f62e5b718548c2e79ceefc",
     "vectors/fixtures/mail-bracketless-id.eml": "50a19945dc3549c0581ab7f00f26d60b01d85d08d0dcdc7b8364914349b404ad",
     "vectors/fixtures/mail-charset-gbk.eml": "cb71bff99fdfac81974480fe9e234b931fa25970ddbfd2763cf1793b6a789993",
@@ -123,7 +124,7 @@
     "vectors/schema/search-refresh.schema.json": "b0449e74e03caac49070463bd4b5b70455961cadd606246c2adf10ff30b94ec5",
     "vectors/schema/search-store.schema.json": "056ccdee9ee7ac8dacd7ef8508e92f71d0ca8e7e905ed7c05776b747c9596e49",
     "vectors/schema/summaries.schema.json": "5dcd70af3d37d44420d5b5289ba5643a6e8905f0c9dc63d285e91a57287f4a54",
-    "vectors/schema/sync.schema.json": "0f30c8f274692b973bd984f5f32a767129c411048100b8e55dead23c0f280c5b",
+    "vectors/schema/sync.schema.json": "5847aac0b86a2361311fac14b67ad0db74afe7bb838c0098643738d4c76ab367",
     "vectors/schema/versions.schema.json": "189ca52345b56a64626844d8805ebaea10356ae5ecae651a8c9675610a500705",
     "vectors/search/chunks.json": "6fc4e98bdf1306f7d5a2635fa2db4c3d96dc8856fbd61df49bc2f67d4d44de3a",
     "vectors/search/queries.json": "7fcae2db132e7d21f68632225e6dbdad5249447fa8171d424bfe06a77e2500cd",
@@ -245,7 +246,12 @@
     "vectors/sync/193-a-server-edit-meeting-another-sources-change-under-manual-conflicts-the-item.json": "fcf4b92435a68bb318bf382162cb105555052572759248c5508f4198f6bf08cb",
     "vectors/sync/194-a-write-draws-named-members-seqs-before-kept-bodies.json": "dedad9a27938ba1d41a20e2c44958dc0a49536de4953fe3f00a58203676b0d0d",
     "vectors/sync/195-a-rekey-runs-the-flag-axis-on-its-listed-flags.json": "d4b0987619a1d18e3e7148200050cd50fa36fb47a3bccda6449054417818569e",
+    "vectors/sync/196-a-relocation-stating-its-handle-lands-the-create-on-it.json": "270d1bdd45d485b8722a73a0b8eca870aab905f4e65ab2052a2e4633b25aebe0",
+    "vectors/sync/197-a-listing-after-a-landed-relocation-mints-the-other-message.json": "1c8194ab2d8743e5dbef1fa6740021855a37fb6e1c2ebbaa949d602d998579e3",
+    "vectors/sync/198-an-upgrade-fetches-rather-than-links-a-body-under-another-server-object-id.json": "36f89a3ff13b02fec682e5243394fe25bf78fe681f9fef7088a9fceed4f1d2bd",
+    "vectors/sync/199-an-upgrade-links-a-body-under-an-equal-server-object-id.json": "273145d0b1a1953cdc24342c1f4d3539ca562612f4b157078a61a4fff0e7fee8",
     "vectors/sync/20-move-source-first-relocates.json": "21729b1c61a5085e531c817866cf1471944a0d22bf4df5ce4a89289cb7edf40d",
+    "vectors/sync/200-a-listing-records-the-server-object-id-it-states.json": "9fd189ac8fe84e03417f0f8fbbbd0f776ca0366a3fbc9e0f8d0274db2886364d",
     "vectors/sync/21-a-page-lands-a-pending-create.json": "6e6d36fb5836347ca11426072acfd4cad17924e268516fd3ffeee1ca0009cc80",
     "vectors/sync/22-rekey-carries-a-minted-key.json": "86bdf0df6fea79ff71e196cb3ad427d5d84df35ff5a3c1b4472fe489f7c0b15b",
     "vectors/sync/23-rekey-remote-edit-conflicts-a-local-edit.json": "5bec1da6775beb586e1ccf04d00b517c9e3338da49fe567b673ef6d95c9a3b1a",
@@ -358,5 +364,5 @@
       "/cases": 24
     }
   },
-  "sync": 195
+  "sync": 200
 }

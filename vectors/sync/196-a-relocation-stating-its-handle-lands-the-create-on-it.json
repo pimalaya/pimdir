@@ -1,0 +1,58 @@
+{
+  "v": 11,
+  "label": "a relocation stating the handle it gave its member lands the destination's create on that handle at once",
+  "note": "the source half of a move relocates basic-1@example.org from INBOX into Archive, where another message stating the same Message-ID already sits under 1, unlisted yet. The connector answers the move's COPYUID: the member is 2 in Archive. The write recording the outcome lands the create on 2 rather than leaving it delivered: the provisional handle is superseded, the binding moves to 2 and its base takes the flags and body staged on the create. Left delivered, the next Archive listing would land it on 1, the first member stating its hint, binding the moved body to the other message (SYNC.md §4, §5, §6; STORAGE §14)",
+  "store": {
+    "collections": [
+      { "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" },
+      { "id": "Archive", "account": null, "kind": "message/rfc822", "conflict": "manual" }
+    ],
+    "objects": {
+      "m1": { "body": "fixtures/mail-basic.eml" }
+    },
+    "items": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 1 },
+      { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }
+    ],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 },
+      { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }
+    ],
+    "sources": [
+      { "collection": "INBOX", "source": "imap", "checkpoint": "c0" },
+      { "collection": "Archive", "source": "imap", "checkpoint": "a0" }
+    ]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "INBOX",
+    "source": "imap",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual"
+    }
+  },
+  "remote": {
+    "snapshot": {
+      "items": [{ "handle": "10", "flags": ["\\Seen"], "revision": null, "meta": { "body": "fixtures/mail-basic.eml" } }],
+      "vanished": [],
+      "complete": true,
+      "checkpoint": "c1"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [{ "kind": "Remove", "handle": "10", "to": "Archive", "link_id": "basic-1@example.org", "if_match": null, "key": "6dc3500bff3aa6fb" }],
+    "outcomes": [{ "handle": "10", "outcome": "Accepted", "relocated": true, "assigned": "2" }],
+    "events": [],
+    "store": {
+      "items": [{ "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+      "bindings": [{ "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "2", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }],
+      "sources": [
+        { "collection": "Archive", "source": "imap", "checkpoint": "a0" },
+        { "collection": "INBOX", "source": "imap", "checkpoint": "c1" }
+      ]
+    }
+  }
+}

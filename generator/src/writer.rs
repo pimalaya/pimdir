@@ -320,6 +320,7 @@ fn write_item(store: &Store, item: &Item) -> Result<()> {
                 ),
                 ("conflict_object", &name(&binding.conflict_object)),
                 ("shared_object", &name(&binding.shared_object)),
+                ("server_object_id", &Value::Null),
             ],
         )?;
         if !base_others.is_empty() {

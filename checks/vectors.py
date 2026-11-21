@@ -1962,8 +1962,9 @@ for path in sync_cases:
                 continue
             require(f"{label}: member {member['handle']} carries its meta", isinstance(meta, dict) and (root / meta.get("body", "")).is_file())
             # A meta is read off the fixture save what a source states
-            # itself: its attachment flag and its size (Annex A.1).
-            require(f"{label}: member {member['handle']} meta is body, attachment and size", set(meta) <= {"body", "attachment", "size"})
+            # itself: its attachment flag and its size (Annex A.1), and the
+            # server object id it gives the content (SYNC.md §4).
+            require(f"{label}: member {member['handle']} meta is body, attachment, size and server_object_id", set(meta) <= {"body", "attachment", "size", "server_object_id"})
             require(f"{label}: member {member['handle']} states a size in octets", isinstance(meta.get("size", 0), int))
     for source in store.get("sources", []) + case["expect"].get("store", {}).get("sources", []):
         if source.get("round_open") is False:

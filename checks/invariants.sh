@@ -2589,7 +2589,7 @@ item Work 'ALT:y' 7 "'$h5'"
 links=":links='[\"k@x\",\"alt:s|d|f\",\"hash:0123456789abcdef\",\"dup:k@x#7\",\"meta@x\",\"Hash:x\",\"ALT:y\"]'"
 expect "lookup: an account's body for a stated key, with its size, one spelling a reserved prefix in another case included, never another account's, a derived or a minted key's, nor a bodiless row's" \
     "$(run owner/lookup_objects ":account='work'" "$links" | LC_ALL=C sort -u | tr '\n' ' ')|$(run owner/lookup_objects ":account='home'" "$links" | tr '\n' ' ')|$(run owner/lookup_objects ":account=NULL" "$links" | tr '\n' ' ')" \
-    "ALT:y|$h5|1||| Hash:x|$h4|1||| k@x|$h1|1||| |k@x|$h2|1||| |k@x|$h3|1||| "
+    "ALT:y|$h5|1|||| Hash:x|$h4|1|||| k@x|$h1|1|||| |k@x|$h2|1|||| |k@x|$h3|1|||| "
 # The agreement of §9 guards a link across collections (SYNC.md §6): each
 # holder answers the subject, date and sender its summary states beside its
 # body, one row per holder, so a caller adopts a body only from a row agreeing
@@ -2603,7 +2603,28 @@ run owner/upsert_mail_summary ":collection='Work2'" ":link_id='k@x'" ":message_i
     ":sender=NULL" ":sender_name=NULL" ":date=NULL" ":size=1" ":attachment=NULL" ":invitation=NULL"
 expect "lookup: each holder of a key answers its body with the subject, date and sender its row states, two messages under one Message-ID as two rows" \
     "$(run owner/lookup_objects ":account='work'" ":links='[\"k@x\"]'" | LC_ALL=C sort | tr '\n' ' ')" \
-    "k@x|$h2|1|Notice|| k@x|$h1|1|Notice|2026-08-01T10:00:00Z|cron@x "
+    "k@x|$h2|1|Notice||| k@x|$h1|1|Notice|2026-08-01T10:00:00Z|cron@x| "
+# A source's server object id rides along too (SYNC.md §4, §6): each holder
+# answers the id its binding of the asking source states, which
+# insert_binding and update_binding write and load_bindings answers, so an
+# upgrade links no body from a row stating another id than its member's. An id
+# is comparable within one source alone: a holder another source binds, or
+# whose binding states none, answers NULL.
+for at in Work Work2; do
+    run owner/insert_binding ":collection='$at'" ":link_id='k@x'" ":source='imap'" ":handle='1'" ":base_flags_known=0" \
+        ":base_marks=0" ":base_object=NULL" ":base_revision=NULL" ":base_present=1" ":conflicted=0" ":conflict_revision=NULL" \
+        ":conflict_object=NULL" ":shared_object=NULL" ":server_object_id='M-$at'"
+done
+run owner/insert_binding ":collection='Work2'" ":link_id='k@x'" ":source='jmap'" ":handle='e2'" ":base_flags_known=0" \
+    ":base_marks=0" ":base_object=NULL" ":base_revision=NULL" ":base_present=1" ":conflicted=0" ":conflict_revision=NULL" \
+    ":conflict_object=NULL" ":shared_object=NULL" ":server_object_id='J2'"
+run owner/update_binding ":collection='Work2'" ":link_id='k@x'" ":source='imap'" ":base_flags_known=0" ":base_marks=0" \
+    ":base_object=NULL" ":base_revision=NULL" ":base_present=1" ":conflicted=0" ":conflict_revision=NULL" \
+    ":conflict_object=NULL" ":shared_object=NULL" ":server_object_id=NULL"
+expect "lookup: each holder answers the server object id its binding of the asking source states, NULL for one stating none or bound by another source alone" \
+    "$(run owner/lookup_objects ":account='work'" ":source='imap'" ":links='[\"k@x\"]'" | LC_ALL=C sort | tr '\n' ' ')|$(run owner/lookup_objects ":account='work'" ":source='jmap'" ":links='[\"k@x\"]'" | LC_ALL=C sort | tr '\n' ' ')|$(run owner/load_bindings ":collection='Work'" | cut -d'|' -f2,12)" \
+    "k@x|$h2|1|Notice||| k@x|$h1|1|Notice|2026-08-01T10:00:00Z|cron@x|M-Work |k@x|$h2|1|Notice|||J2 k@x|$h1|1|Notice|2026-08-01T10:00:00Z|cron@x| |imap|M-Work"
+sql "DELETE FROM bindings WHERE item IN (SELECT id FROM items WHERE link_id = 'k@x');"
 sql "UPDATE items SET object = (SELECT id FROM objects WHERE hash = '$h1') WHERE collection = 'Work2' AND link_id = 'k@x';
      DELETE FROM mail_summary WHERE item IN (SELECT id FROM items WHERE link_id = 'k@x');"
 # summary <collection> <link_id> <attachment> <invitation>: a mail summary

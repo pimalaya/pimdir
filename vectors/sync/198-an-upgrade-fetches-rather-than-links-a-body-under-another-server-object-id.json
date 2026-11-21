@@ -1,0 +1,46 @@
+{
+  "v": 11,
+  "label": "an upgrade fetches, never links, a body whose holder's binding states another server object id, though every listed field agrees",
+  "note": "Archive holds basic-1@example.org with its body, its binding stating the server object id M-archive. INBOX lists another message stating the same Message-ID, a re-sent copy whose body differs by one octet: subject, date, sender and size all agree, and nothing a listing states tells the two apart but the id its server gives each content, M-inbox. Its Full upgrade asks lookup_objects, which answers Archive's body with the id its binding of the same source states: the ids differ, so the body is not adopted and the upgrade fetches. Linked on the agreement alone, INBOX would hold the archived body for ever, an immutable kind never fetching again (SYNC.md §4, §6; STORAGE §9, §14)",
+  "store": {
+    "collections": [
+      { "id": "Archive", "account": null, "kind": "message/rfc822", "conflict": "manual" },
+      { "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }
+    ],
+    "objects": {
+      "b1": { "body": "fixtures/mail-basic.eml" },
+      "t1": { "body": "fixtures/mail-basic-twin.eml" }
+    },
+    "items": [
+      { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": "b1", "level": 2, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" },
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" }
+    ],
+    "bindings": [
+      { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "5", "base_flags": [], "base_object": "b1", "base_revision": null, "base_present": 1, "server_object_id": "M-archive" },
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "77", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "server_object_id": "M-inbox" }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "Archive", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [{ "collection": "Archive", "source": "imap", "checkpoint": "a1" }, { "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+  },
+  "run": { "verb": "upgrade", "collection": "INBOX", "source": "imap", "tier": "Full", "handles": ["77"] },
+  "remote": { "snapshot": null, "fetch": { "77": { "Full": { "body": "fixtures/mail-basic-twin.eml", "revision": null } } } },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [
+        { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": "b1", "level": 2, "deleted": 0 },
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": "t1", "level": 2, "deleted": 0 }
+      ],
+      "bindings": [
+        { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "5", "base_flags": [], "base_object": "b1", "base_revision": null, "base_present": 1, "server_object_id": "M-archive" },
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "77", "base_flags": [], "base_object": "t1", "base_revision": null, "base_present": 1, "server_object_id": "M-inbox" }
+      ],
+      "sources": [{ "collection": "Archive", "source": "imap", "checkpoint": "a1" }, { "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "v": 11,
+  "label": "an upgrade links a body whose holder's binding states the same server object id as its member's",
+  "note": "Archive holds basic-1@example.org with its body, its binding stating the server object id M-1. INBOX lists the same message, one content filed in two mailboxes, its binding stating M-1 too, as a server keeping one id per content states it in every mailbox holding it. Its Full upgrade asks lookup_objects, which answers Archive's body with the id its binding of the same source states: the ids are equal and the summaries agree, so the body is adopted from the store, as the base too, and nothing is fetched (SYNC.md §4, §6; STORAGE §9, §14)",
+  "store": {
+    "collections": [
+      { "id": "Archive", "account": null, "kind": "message/rfc822", "conflict": "manual" },
+      { "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }
+    ],
+    "objects": {
+      "b1": { "body": "fixtures/mail-basic.eml" }
+    },
+    "items": [
+      { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": "b1", "level": 2, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" },
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" }
+    ],
+    "bindings": [
+      { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "5", "base_flags": [], "base_object": "b1", "base_revision": null, "base_present": 1, "server_object_id": "M-1" },
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "77", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1, "server_object_id": "M-1" }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "Archive", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [{ "collection": "Archive", "source": "imap", "checkpoint": "a1" }, { "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+  },
+  "run": { "verb": "upgrade", "collection": "INBOX", "source": "imap", "tier": "Full", "handles": ["77"] },
+  "remote": { "snapshot": null, "fetch": {} },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [
+        { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": "b1", "level": 2, "deleted": 0 },
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": "b1", "level": 2, "deleted": 0 }
+      ],
+      "bindings": [
+        { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "5", "base_flags": [], "base_object": "b1", "base_revision": null, "base_present": 1, "server_object_id": "M-1" },
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "77", "base_flags": [], "base_object": "b1", "base_revision": null, "base_present": 1, "server_object_id": "M-1" }
+      ],
+      "sources": [{ "collection": "Archive", "source": "imap", "checkpoint": "a1" }, { "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+    }
+  }
+}

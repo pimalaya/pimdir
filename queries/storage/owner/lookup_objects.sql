@@ -13,12 +13,16 @@
 -- with the member on the three, and on the size where the member states one,
 -- since a message reusing a Message-ID in another collection is another
 -- body. The three are NULL together for a row with no mail summary, which a
--- message agrees with never. One row per holder, so the caller picks one
--- that agrees.
-SELECT i.link_id, o.hash AS object_hash, o.size, m.subject, m.date, m.sender FROM items i
+-- message agrees with never. The server object id the binding of :source on
+-- the row states rides along too, NULL where :source binds it not or states
+-- none: a body is never adopted from a row stating another id than the
+-- member's (SYNC.md §6), ids being comparable within one source alone. One
+-- row per holder, so the caller picks one that agrees.
+SELECT i.link_id, o.hash AS object_hash, o.size, m.subject, m.date, m.sender, b.server_object_id FROM items i
 JOIN collections c ON c.id = i.collection
 JOIN objects o ON o.id = i.object
 LEFT JOIN mail_summary m ON m.item = i.id
+LEFT JOIN bindings b ON b.item = i.id AND b.source = :source
 WHERE i.object IS NOT NULL
   AND i.link_id IN (SELECT value FROM temp.param WHERE slot = 'links')
   AND NOT (i.link_id GLOB 'alt:*' OR i.link_id GLOB 'hash:*' OR i.link_id GLOB 'dup:*')
