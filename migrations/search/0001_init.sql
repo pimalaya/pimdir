@@ -149,6 +149,21 @@ CREATE INDEX placement_by_link ON placement(link_id);
 -- The items a query's coverage reports cut (cut_before, §8.2), by
 -- collection. Partial, so it holds the few cut items alone.
 CREATE INDEX placement_cut ON placement(collection, cut) WHERE cut IS NOT NULL;
+-- The placements of a public id, which split_mark counts the documents of.
+CREATE INDEX placement_by_seq ON placement(seq);
+
+-- The public ids whose placements name two or more documents (§3): a
+-- document is a placement's body, or its own summary while it has none,
+-- the two told apart by coalesce(object, -id), so two placements naming one
+-- body name one document and two bodiless ones name two. A text term holds
+-- for a hit when any of its placements matches it (§8.2): a hit naming one
+-- document matches a whole expression exactly when that document does, and
+-- a count may match one, but a hit listed here is evaluated per placement.
+-- Kept by split_forget and split_mark after each batch's placement writes
+-- (§4).
+CREATE TABLE split (
+    seq INTEGER PRIMARY KEY
+) STRICT;
 
 -- The placements whose body the indexer could not read (§4): gone from the
 -- blob directory or failing its name, when a pass went to index it or to

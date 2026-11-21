@@ -95,6 +95,8 @@
     "vectors/fixtures/mail-reused-id-same-size.eml": "3220c7ba4b9a8f1f1a5acf3dc7fae516516a4e15a402c546546fb8cd626ecb31",
     "vectors/fixtures/mail-reused-message-id.eml": "b475c6ded5b0825b690d52b1e39882952b6b4dc26a92b4d037e92007655c6d6e",
     "vectors/fixtures/mail-spaced-field-name.eml": "b1d6bed4db063970965cd7f27cddfada0c5aba757a57ba0383b89f4cf4fb9008",
+    "vectors/fixtures/mail-split-quince.eml": "7fe5b58a362afa0d4ceb392428ca04f09cf0d5e6df9cb1a0e2418b1afdf52eef",
+    "vectors/fixtures/mail-split-rhubarb.eml": "e5ea7d0dda269e537aa2d2559c9648a3df6ab145d22680de4fd692a07640b810",
     "vectors/fixtures/mail-stray-cr.eml": "3e7ecd0336ebc80195ccb1fe616fdfeac4c310e9f071dd893526632953c94fac",
     "vectors/fixtures/mail-unclosed-multipart.eml": "8caf7836216001e5f981404b1bd41820a0b4dd9750be48e1f00d03d14e0a3227",
     "vectors/fixtures/mail-unparseable-date.eml": "8d50e9ab0d3c088e2bc8fe10e2bdc7933778c40741cdd99a83500561f4efb38a",
@@ -118,14 +120,14 @@
     "vectors/schema/payloads.schema.json": "cfeeaef33d63945aa2cd4ee9bce53b9b298595dccbea94b0a1f256e4c1959e8d",
     "vectors/schema/search-chunks.schema.json": "0d98341ffd6455327e176688d4affe359b04dc0317d2a3bb920d4fcc6a0d653c",
     "vectors/schema/search-queries.schema.json": "cb82c08148d7660d74dd1ac4bb0b02090398d701341a56bc8047e44a2ff0cb76",
-    "vectors/schema/search-refresh.schema.json": "1e7ed06bb664ee782a99981403a1d80737e0b6725042e733767b9c1432ec8687",
+    "vectors/schema/search-refresh.schema.json": "b0449e74e03caac49070463bd4b5b70455961cadd606246c2adf10ff30b94ec5",
     "vectors/schema/search-store.schema.json": "056ccdee9ee7ac8dacd7ef8508e92f71d0ca8e7e905ed7c05776b747c9596e49",
     "vectors/schema/summaries.schema.json": "5dcd70af3d37d44420d5b5289ba5643a6e8905f0c9dc63d285e91a57287f4a54",
     "vectors/schema/sync.schema.json": "0f30c8f274692b973bd984f5f32a767129c411048100b8e55dead23c0f280c5b",
     "vectors/schema/versions.schema.json": "189ca52345b56a64626844d8805ebaea10356ae5ecae651a8c9675610a500705",
     "vectors/search/chunks.json": "6fc4e98bdf1306f7d5a2635fa2db4c3d96dc8856fbd61df49bc2f67d4d44de3a",
     "vectors/search/queries.json": "7fcae2db132e7d21f68632225e6dbdad5249447fa8171d424bfe06a77e2500cd",
-    "vectors/search/refresh.json": "48a2ec367fc25b9014302cacca2cbc536472db0c738f502d2f0204d552d77544",
+    "vectors/search/refresh.json": "b5872d86ede89eae5bd6be1ac90108206389ea3b9afba7987e3a0265ef068c55",
     "vectors/search/store.json": "e782d0e8a53bab0891b4db528a95c8b67ab0b9916451d07f73bcae3bc3b2a9d1",
     "vectors/summaries.json": "6a4eaead0970b91f76d2db33b53215ba35975e171f8c373b45e313d09298aad8",
     "vectors/sync/01-remote-flag-pulled.json": "4c21981d4f790448e14bd822cd8cff8ade79cfea9a7e9fd86d6966e34d2b01ff",
@@ -341,7 +343,7 @@
       "/occurrences": 8
     },
     "vectors/search/refresh.json": {
-      "/cases": 6
+      "/cases": 7
     },
     "vectors/search/store.json": {
       "/collections": 11,

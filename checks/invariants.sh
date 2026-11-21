@@ -3080,6 +3080,38 @@ expect "index: a body's placements are sought by its id, a text term's matches j
     "$(for statement in match_objects categorised object_placed coverage_all; do isplan "$statement" ":match='\"budget\"'" ":value='work'" ":hash='$h1'" | grep -c 'placement_by_object (object=?)' || true; done | tr -d '\n')|$(isplan match_objects ":match='\"budget\"'" | grep -cE 'SEARCH o |SCAN o |sqlite_autoindex_object_1' || true)|$(for statement in attached holding; do isplan "$statement" ":property='phone'" | grep -c 'SEARCH o USING INTEGER PRIMARY KEY (rowid=?)' || true; done | tr -d '\n')" \
     "1111|0|11"
 
+# A public id is split when its placements name two or more documents (§3,
+# §4), a body or a bodiless placement's own summary: two placements naming
+# one body are not, a body beside another or beside a bodiless placement is,
+# and two bodiless placements are. split_forget then split_mark after the
+# placement writes keep the rows a rebuild would write, taking one away once
+# a placement moves to the others' body or goes, and split_seqs lists each
+# placement of a split public id with its body, by the seq's index.
+fresh
+index
+body "$h1" > /dev/null
+body "$h2" > /dev/null
+place() {
+    isearch upsert_placement ":collection='$1'" ":seq=$2" ":link_id='x$2'" ":hash=$3" > /dev/null
+}
+recount() {
+    isearch split_forget ":seq=$1"
+    isearch split_mark ":seq=$1"
+}
+held() {
+    sqlite3 "$dir/index.db" "SELECT group_concat(seq, ',') FROM (SELECT seq FROM split ORDER BY seq);"
+}
+place C 1 "'$h1'"; place A 1 "'$h1'"; recount 1; one="$(held)"
+place A 1 "'$h2'"; recount 1; two="$(held)"
+listed="$(isearch split_seqs | sed "s/$h1/h1/; s/$h2/h2/" | tr '\n' ' ')"
+place A 1 NULL; recount 1; three="$(held)"
+place C 2 NULL; recount 2; place A 2 NULL; recount 2; four="$(held)"
+place A 1 "'$h1'"; recount 1; five="$(held)"
+isearch delete_placement ":collection='A'" ":seq=2" > /dev/null; recount 2; six="$(held)"
+expect "index: a public id is split while its placements name two documents, bodies or bodiless summaries, and recounted after each write" \
+    "$one|$two|$listed|$three|$four|$five|$six|$(for statement in split_mark split_seqs; do isplan "$statement" ":seq=1" | grep -c 'placement_by_seq (seq=?)' || true; done | tr -d '\n')" \
+    "|1|1|A|h2 1|C|h1 |1|1,2|2||11"
+
 fresh
 index
 expect "index: an object names a body as the store does, 52 characters of a-z2-7, never a path, and a placement names none other" \

@@ -1,5 +1,5 @@
 {
-  "v": 4,
+  "v": 5,
   "note": "a refresh driven by the change feed (STORAGE.md section 4.5, SEARCH.md section 4): each case builds its store as store.json's are built and indexes it, then applies its steps in order, each as an owner would write it. After each step the feed lists, above the cursor read before it, the items and the collections stated in changed, and the purge count moves when purged says so; a refresh then answers each query as stated, as an index rebuilt from the store as it then stands does, but in a step stating lagging, which answers its queries before the refresh. A missing stamp leaves the index answering the earlier store.",
   "cases": [
     {
@@ -307,6 +307,63 @@
             { "query": "tag:$todo is:flagged", "hits": [["home", 1]] },
             { "query": "stand-up is:read", "hits": [["home", 1]] },
             { "query": "stand-up is:unread", "hits": [] }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "a hit holding two bodies holds a text term through either",
+      "note": "split-1 is filed in two collections of one account, one seq, the INBOX copy under a body saying quince and the Archive copy under one saying rhubarb, as two clients may file one Message-ID under bodies differing in a header. A text term holds for the hit when any of its placements matches it (SEARCH.md section 8.2), so quince rhubarb holds and quince not rhubarb does not, though no body holds both words: a count matching whole documents answers otherwise unless it evaluates the seq per placement. split lists the seqs a canonical index records as naming two documents (SEARCH.md section 3): the Archive copy filed under the other body, repointed to the INBOX body, back to its own, then removed",
+      "store": {
+        "collections": [
+          { "id": "home/INBOX", "account": "home", "kind": "message/rfc822" },
+          { "id": "home/Archive", "account": "home", "kind": "message/rfc822" }
+        ],
+        "items": [
+          { "collection": "home/INBOX", "seq": 1, "link_id": "split-1@example.org", "flags": [], "fixture": "fixtures/mail-split-quince.eml" }
+        ],
+        "references": []
+      },
+      "steps": [
+        {
+          "write": { "kind": "put", "item": { "collection": "home/Archive", "seq": 1, "link_id": "split-1@example.org", "flags": [], "fixture": "fixtures/mail-split-rhubarb.eml" } },
+          "changed": { "items": [["home/Archive", "split-1@example.org"]], "collections": [], "purged": false },
+          "objects": 2,
+          "split": [1],
+          "queries": [
+            { "query": "quince rhubarb", "hits": [["home", 1]] },
+            { "query": "quince not rhubarb", "hits": [] },
+            { "query": "quince or rhubarb", "hits": [["home", 1]] }
+          ]
+        },
+        {
+          "write": { "kind": "put", "item": { "collection": "home/Archive", "seq": 1, "link_id": "split-1@example.org", "flags": [], "fixture": "fixtures/mail-split-quince.eml" } },
+          "changed": { "items": [["home/Archive", "split-1@example.org"]], "collections": [], "purged": false },
+          "objects": 1,
+          "split": [],
+          "queries": [
+            { "query": "quince rhubarb", "hits": [] },
+            { "query": "quince not rhubarb", "hits": [["home", 1]] }
+          ]
+        },
+        {
+          "write": { "kind": "put", "item": { "collection": "home/Archive", "seq": 1, "link_id": "split-1@example.org", "flags": [], "fixture": "fixtures/mail-split-rhubarb.eml" } },
+          "changed": { "items": [["home/Archive", "split-1@example.org"]], "collections": [], "purged": false },
+          "objects": 2,
+          "split": [1],
+          "queries": [
+            { "query": "quince rhubarb", "hits": [["home", 1]] },
+            { "query": "quince not rhubarb", "hits": [] }
+          ]
+        },
+        {
+          "write": { "kind": "remove", "collection": "home/Archive", "seq": 1 },
+          "changed": { "items": [["home/Archive", "split-1@example.org"]], "collections": [], "purged": false },
+          "objects": 1,
+          "split": [],
+          "queries": [
+            { "query": "quince rhubarb", "hits": [] },
+            { "query": "quince not rhubarb", "hits": [["home", 1]] }
           ]
         }
       ]

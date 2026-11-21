@@ -10,7 +10,7 @@
   ],
   "additionalProperties": false,
   "properties": {
-    "v": { "const": 4 },
+    "v": { "const": 5 },
     "note": {
       "type": "string"
     },
@@ -230,6 +230,14 @@
         "objects": {
           "type": "integer",
           "minimum": 0
+        },
+        "split": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
         },
         "lagging": {
           "const": true

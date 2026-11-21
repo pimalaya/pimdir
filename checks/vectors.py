@@ -3698,6 +3698,7 @@ def model_placements(collections, collection_kinds, model):
 
 refresh = json.loads((search / "refresh.json").read_text())
 lagging_apart = 0
+split_steps = set()
 for case in refresh["cases"]:
     label = f"refresh {case['label']!r}"
     collections = {c["id"]: c["account"] for c in case["store"]["collections"]}
@@ -3707,7 +3708,7 @@ for case in refresh["cases"]:
         require(f"{label}: {item['link_id']} in a known collection", item["collection"] in collections)
         if "fixture" in item:
             require(f"{label}: {item['fixture']} exists", (root / item["fixture"]).is_file())
-        model[(item["collection"], item["seq"])] = {"link_id": item["link_id"], "live": True, "fixture": item.get("fixture"),
+        model[(item["collection"], item["seq"])] = {"link_id": item["link_id"], "live": True, "fixture": item.get("fixture"), "unreadable": item.get("unreadable", False),
                                                     "flags": set(item.get("flags") or [])}
     properties = [dict(row) for row in case["store"].get("properties", [])]
     check_properties(label, properties, {seq for (_, seq) in model})
@@ -3724,7 +3725,7 @@ for case in refresh["cases"]:
             held = model.get((item["collection"], item["seq"]))
             require(f"{where}: a put keeps the link id of the seq it names",
                     held is None or (held["link_id"] == item["link_id"] and held["live"]))
-            model[(item["collection"], item["seq"])] = {"link_id": item["link_id"], "live": True, "fixture": item.get("fixture"),
+            model[(item["collection"], item["seq"])] = {"link_id": item["link_id"], "live": True, "fixture": item.get("fixture"), "unreadable": item.get("unreadable", False),
                                                         "flags": set(item.get("flags") or [])}
             items.add((item["collection"], item["link_id"]))
         elif write["kind"] in ("remove", "purge", "erase"):
@@ -3793,6 +3794,23 @@ for case in refresh["cases"]:
         if "objects" in step:
             bodies = {held["fixture"] for held in model.values() if held["live"] and held["fixture"]}
             check(f"{where}: the object rows a canonical index holds", step["objects"], len(bodies))
+        # A canonical index records the public ids whose live placements name
+        # two or more documents (SEARCH.md section 3): a body by its bytes, or
+        # a placement's own summary while it has none, a file's and an
+        # unreadable body's placement among them.
+        if "split" in step:
+            documents = {}
+            for (collection, seq), held in model.items():
+                if not held["live"]:
+                    continue
+                if held["fixture"] and not held["unreadable"] and collection_kinds[collection] != "application/octet-stream":
+                    document = ("body", (root / held["fixture"]).read_bytes())
+                else:
+                    document = ("summary", collection, seq)
+                documents.setdefault(seq, set()).add(document)
+            check(f"{where}: the split rows a canonical index holds", step["split"],
+                  sorted(seq for seq, named in documents.items() if len(named) > 1))
+            split_steps.add(bool(step["split"]))
         for query in step["queries"]:
             try:
                 parse(query["query"])
@@ -3821,6 +3839,7 @@ for case in refresh["cases"]:
                 require(f"{where}: {query['query']!r} hit {hit} names a searchable item", tuple(hit) in live)
 require("refresh: a lagging step answers a system flag term otherwise than the index's flags, one write behind, would",
         lagging_apart >= 2)
+require("refresh: a step states a public id split and another states none", split_steps == {True, False})
 
 # Every fixture is a body some case names (summaries.json, a sync case, the
 # search store, a refresh case), so none lies under vectors/fixtures/ that no
