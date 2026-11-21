@@ -10,11 +10,11 @@
 SELECT link_id, collection, seq, name, media_type, size, part, object_hash
 FROM (
   SELECT r.to_link_id AS link_id, i.collection, i.seq, s.name, s.media_type, s.size, s.part,
-         (SELECT h.object_hash FROM items h JOIN collections hc ON hc.id = h.collection
-          WHERE h.link_id = r.to_link_id AND h.deleted = 0 AND h.object_hash IS NOT NULL
+         (SELECT o.hash FROM items h JOIN collections hc ON hc.id = h.collection JOIN objects o ON o.id = h.object
+          WHERE h.link_id = r.to_link_id AND h.deleted = 0 AND h.object IS NOT NULL
             AND hc.kind = 'application/octet-stream' AND hc.account IS :account
           LIMIT 1) AS object_hash,
-         min(i.object_hash IS NOT NULL)
+         min(i.object IS NOT NULL)
   FROM item_reference r
   JOIN items i ON i.link_id = r.to_link_id AND i.deleted = 0
   JOIN collections c ON c.id = i.collection AND c.kind = r.to_kind AND c.account IS :account

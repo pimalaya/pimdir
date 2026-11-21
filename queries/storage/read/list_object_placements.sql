@@ -10,5 +10,5 @@ SELECT i.collection, c.account, i.seq, i.link_id,
                    || coalesce((SELECT group_concat(f.flag, ' ') FROM placement_flag f WHERE f.item = i.id), '')) END AS flags,
        i.level
 FROM items i JOIN collections c ON c.id = i.collection
-WHERE i.object_hash = :hash AND i.deleted = 0 AND i.retained_at IS NULL
+WHERE i.object = (SELECT id FROM objects WHERE hash = :hash) AND i.deleted = 0 AND i.retained_at IS NULL
 ORDER BY c.account IS NULL, c.account, i.collection;

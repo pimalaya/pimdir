@@ -3,4 +3,4 @@
 -- the delete trigger counts the purge (§4.5, §14).
 DELETE FROM items
 WHERE collection = :collection AND seq = :seq AND retained_at IS NOT NULL
-RETURNING object_hash, conflict_object;
+RETURNING (SELECT o.hash FROM objects o WHERE o.id = object) AS object_hash, (SELECT o.hash FROM objects o WHERE o.id = conflict_object) AS conflict_object;

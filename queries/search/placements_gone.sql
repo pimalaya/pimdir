@@ -3,6 +3,6 @@
 -- purge, a collection and a rename all count in (§4); the link id names the
 -- message whose thread is pruned when it was the last placement (§9), and the
 -- hash the body that goes with its last placement (§4).
-SELECT p.collection, p.seq, p.link_id, p.hash FROM placement p
+SELECT p.collection, p.seq, p.link_id, (SELECT o.hash FROM object o WHERE o.id = p.object) AS hash FROM placement p
 LEFT JOIN store.items i ON i.collection = p.collection AND i.seq = p.seq
 WHERE i.seq IS NULL;

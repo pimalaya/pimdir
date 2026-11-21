@@ -5,4 +5,4 @@
 -- is SQLite's. A seek below the cutoff on items_by_retained, so a sweep reads
 -- what it purges. It returns pinned hashes on purge_item's terms.
 DELETE FROM items WHERE retained_at IS NOT NULL AND retained_at < :before
-RETURNING object_hash, conflict_object;
+RETURNING (SELECT o.hash FROM objects o WHERE o.id = object) AS object_hash, (SELECT o.hash FROM objects o WHERE o.id = conflict_object) AS conflict_object;

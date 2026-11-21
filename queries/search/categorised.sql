@@ -2,5 +2,5 @@
 -- card, :value folded as the values are (§8). A task answers on the store's
 -- task_summary instead.
 SELECT p.collection, p.seq FROM object_category c
-JOIN object o ON o.id = c.object JOIN placement p ON p.hash = o.hash
+JOIN placement p ON p.object = c.object
 WHERE c.value = :value;

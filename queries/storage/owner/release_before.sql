@@ -9,9 +9,9 @@
 -- delivers); such an item keeps it. release_bases_before runs first,
 -- recompute_refcounts after, in the same transaction; the bodies fall to the
 -- collector. Returns the seqs released.
-UPDATE items SET object_hash = NULL, level = 1
+UPDATE items SET object = NULL, level = 1
 WHERE items.collection IN (SELECT value FROM temp.param WHERE slot = 'collections')
-  AND items.deleted = 0 AND items.conflicted = 0 AND items.object_hash IS NOT NULL
+  AND items.deleted = 0 AND items.conflicted = 0 AND items.object IS NOT NULL
   AND items.sort_key < coalesce(:before, x'')
   AND (SELECT kind FROM collections c WHERE c.id = items.collection) = 'message/rfc822'
   AND EXISTS (SELECT 1 FROM bindings b
@@ -20,7 +20,7 @@ WHERE items.collection IN (SELECT value FROM temp.param WHERE slot = 'collection
                   WHERE b.item = items.id
                     AND (b.conflicted = 1
                          OR b.base_present = 0
-                         OR (b.base_object IS NOT NULL AND b.base_object != items.object_hash)))
+                         OR (b.base_object IS NOT NULL AND b.base_object != items.object)))
   AND NOT EXISTS (SELECT 1 FROM sources s
                   WHERE s.collection = items.collection
                     AND NOT EXISTS (SELECT 1 FROM bindings b

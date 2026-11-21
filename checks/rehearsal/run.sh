@@ -19,7 +19,7 @@
 #
 # After each of the first three, every row of every table the store held is
 # there, by the columns it had, every schema object is there under its text,
-# both AUTOINCREMENT sequences stand where they stood, a rename still
+# the three AUTOINCREMENT sequences stand where they stood, a rename still
 # cascades, and the store is stamped at version 2.
 #
 # Usage: run.sh <repository root> <sqlite3>
@@ -66,7 +66,7 @@ done
 
 # rows <database>: every row of every table the base store holds, by the
 # columns the base store gave it, sorted; store_meta without the four columns
-# a migration stamps; then the two sequences.
+# a migration stamps; then the three sequences.
 rows() {
     local table columns
     for table in $tables; do
@@ -118,11 +118,12 @@ survives() {
         "$("$shell" "$dir/probe.db" "PRAGMA foreign_keys = ON; UPDATE collections SET id = 'In' WHERE id = 'INBOX';
             SELECT (SELECT count(*) FROM items WHERE collection = 'In'), (SELECT count(*) FROM queue WHERE collection = 'In'),
                    (SELECT count(*) FROM receipts WHERE collection = 'In'), (SELECT count(*) FROM items WHERE collection = 'INBOX');")" "3|2|1|0"
-    expect "$label: the next queue id and the next placement id are above every one handed out" \
+    expect "$label: the next queue id, the next placement id and the next object id are above every one handed out" \
         "$("$shell" "$dir/probe.db" "PRAGMA foreign_keys = ON;
             INSERT INTO queue(created_at, producer, collection, action, payload) VALUES('2026-11-13T00:00:09.000Z', 'p', 'Cal', 'remove', '{\"v\":1,\"seq\":4}');
             INSERT INTO items(collection, link_id, seq, level) VALUES('Cal', 'next', 99, 1);
-            SELECT (SELECT max(id) FROM queue), (SELECT id FROM items WHERE link_id = 'next');")" "4|11"
+            INSERT INTO objects(hash, size) VALUES('dddddddddddddddddddddddddddddddddddddddddddddddddddd', 1);
+            SELECT (SELECT max(id) FROM queue), (SELECT id FROM items WHERE link_id = 'next'), (SELECT max(id) FROM objects);")" "4|11|4"
     rm -f "$dir/probe.db"
 }
 

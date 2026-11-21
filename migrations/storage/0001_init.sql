@@ -231,21 +231,32 @@ CREATE UNIQUE INDEX performers_key ON performers(ifnull(account, ''), capability
 
 -- Content-addressed body index; the bytes live in blob files (§5).
 --
+-- `id` is the object's key, the one every pointer at it carries (§4.3): drawn
+-- at insert above every id drawn before (AUTOINCREMENT), so a new body's
+-- entries land at the end of every index on a pointer, and never reused, so
+-- no pointer comes to name another body. Never shown: a statement takes and
+-- answers a body by its hash (§4.4), which only this row holds.
+--
 -- A hash is a name, never a path: the BLAKE3 digest as 52 characters of
--- lowercase base32 (§5), so no row, and through the foreign keys onto it no
--- pointer and no queued body, names `..`, a separator or anything else a path
--- could be built from.
+-- lowercase base32 (§5), so no row names `..`, a separator or anything else a
+-- path could be built from.
 --
 -- The refcount floor is load-bearing rather than tidy: a double release either
 -- fails every later write on a foreign key that names neither the object nor
 -- the miscount, or goes unnoticed entirely. The CHECK moves the failure to the
 -- statement that caused it (§7).
 CREATE TABLE objects (
-    hash     TEXT PRIMARY KEY CHECK (typeof(hash) = 'text')
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    hash     TEXT NOT NULL CHECK (typeof(hash) = 'text')
              CHECK (length(hash) = 52 AND hash NOT GLOB '*[^a-z2-7]*'),
     size     INTEGER NOT NULL CHECK (typeof(size) = 'integer') CHECK (size >= 0),  -- body length in bytes
     refcount INTEGER NOT NULL DEFAULT 0 CHECK (typeof(refcount) = 'integer') CHECK (refcount >= 0)
 );
+
+-- A body's name, one row each: what a statement naming a body by its hash
+-- seeks (§4.4), and the one key of the object rows an insert does not append
+-- to.
+CREATE UNIQUE INDEX objects_by_hash ON objects(hash);
 
 -- A collected object leaves no stamp either (§4.5): the index holds its text
 -- until it learns the row is gone.
@@ -276,7 +287,7 @@ CREATE TABLE items (
     -- \Answered 2, \Flagged 4, \Draft 8, \Deleted 16; every other flag is a
     -- placement_flag row. 0 while the set is unknown.
     marks           INTEGER NOT NULL DEFAULT 0 CHECK (typeof(marks) = 'integer') CHECK (marks BETWEEN 0 AND 31),
-    object_hash     TEXT CHECK (typeof(object_hash) IN ('text', 'null')) REFERENCES objects(hash),  -- current body, NULL until hydrated
+    object          INTEGER CHECK (typeof(object) IN ('integer', 'null')) REFERENCES objects(id),  -- current body, NULL until hydrated
     sort_key        TEXT NOT NULL DEFAULT '' CHECK (typeof(sort_key) = 'text'),  -- the kind's ordering key, '' when unknown (§9.3)
     -- The detail ladder: 1 meta, 2 full (§13).
     level           INTEGER NOT NULL CHECK (typeof(level) = 'integer') CHECK (level IN (1, 2)),
@@ -285,7 +296,7 @@ CREATE TABLE items (
                     CHECK (retained_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'),
     retained_by     TEXT CHECK (typeof(retained_by) IN ('text', 'null')),  -- the source whose removal retired it, diagnostic
     conflicted      INTEGER NOT NULL DEFAULT 0 CHECK (typeof(conflicted) = 'integer') CHECK (conflicted IN (0, 1)),  -- 1 while a cross-source content conflict is unresolved
-    conflict_object TEXT CHECK (typeof(conflict_object) IN ('text', 'null')) REFERENCES objects(hash),  -- the diverging body a manual conflict recorded
+    conflict_object INTEGER CHECK (typeof(conflict_object) IN ('integer', 'null')) REFERENCES objects(id),  -- the diverging body a manual conflict recorded
     changed         INTEGER NOT NULL DEFAULT 0 CHECK (typeof(changed) = 'integer'),  -- the change stamp (§4.5), trigger-maintained
     UNIQUE (collection, link_id),
     -- What a binding's foreign key names, so its collection is its item's.
@@ -318,7 +329,7 @@ CREATE INDEX items_unread ON items(collection, sort_key, seq) WHERE deleted = 0 
 -- The retained rows by the instant they were retired (§11.2), so a purge below
 -- a cutoff seeks it and retained_bytes reads it alone. Partial: a live row, or
 -- a tombstone a source still binds, is not in it.
-CREATE INDEX items_by_retained ON items(retained_at, object_hash) WHERE retained_at IS NOT NULL;
+CREATE INDEX items_by_retained ON items(retained_at, object) WHERE retained_at IS NOT NULL;
 -- The items waiting for a cross-source decision (list_conflicted_items).
 -- Partial, empty at rest.
 CREATE INDEX items_conflicted ON items(collection, seq) WHERE conflicted = 1;
@@ -342,11 +353,11 @@ BEGIN
 END;
 
 CREATE TRIGGER items_stamp_update AFTER UPDATE OF
-    flags_known, marks, object_hash, sort_key, level, deleted, retained_at, conflicted, conflict_object
+    flags_known, marks, object, sort_key, level, deleted, retained_at, conflicted, conflict_object
 ON items
 WHEN OLD.flags_known IS NOT NEW.flags_known
   OR OLD.marks IS NOT NEW.marks
-  OR OLD.object_hash IS NOT NEW.object_hash
+  OR OLD.object IS NOT NEW.object
   OR OLD.sort_key IS NOT NEW.sort_key
   OR OLD.level IS NOT NEW.level
   OR OLD.deleted IS NOT NEW.deleted
@@ -455,7 +466,7 @@ CREATE TABLE bindings (
     base_flags_known  INTEGER NOT NULL DEFAULT 0 CHECK (typeof(base_flags_known) = 'integer') CHECK (base_flags_known IN (0, 1)),
     -- The base's system flags, as items.marks holds the item's (§13).
     base_marks        INTEGER NOT NULL DEFAULT 0 CHECK (typeof(base_marks) = 'integer') CHECK (base_marks BETWEEN 0 AND 31),
-    base_object       TEXT CHECK (typeof(base_object) IN ('text', 'null')) REFERENCES objects(hash),
+    base_object       INTEGER CHECK (typeof(base_object) IN ('integer', 'null')) REFERENCES objects(id),
     base_revision     TEXT CHECK (typeof(base_revision) IN ('text', 'null')),  -- etag/modseq for mutable-content backends
     -- Whether a base exists at all, which its three value columns cannot say: a
     -- source reporting no revision, no body and no flags still agreed, and that
@@ -469,7 +480,7 @@ CREATE TABLE bindings (
     -- The diverging remote body at that revision, so a resolver reads base,
     -- local and remote from the store and needs no credentials (§13). Pinned
     -- like any other reference while the binding stays conflicted.
-    conflict_object   TEXT CHECK (typeof(conflict_object) IN ('text', 'null')) REFERENCES objects(hash),
+    conflict_object   INTEGER CHECK (typeof(conflict_object) IN ('integer', 'null')) REFERENCES objects(id),
     -- The shared body this source last reconciled against, the base of the
     -- cross-source merge (§10, §13). base_object answers to the source's own
     -- remote and only a sync moves it, so a body this source folded in and has
@@ -477,7 +488,7 @@ CREATE TABLE bindings (
     -- the source disagree with itself. Meaningful whether or not the binding
     -- is conflicted. Pinned like the base (§5): it is the common ancestor a
     -- merge reads, one body per binding, released when the binding next agrees.
-    shared_object     TEXT CHECK (typeof(shared_object) IN ('text', 'null')) REFERENCES objects(hash),
+    shared_object     INTEGER CHECK (typeof(shared_object) IN ('integer', 'null')) REFERENCES objects(id),
     -- The id of the last round whose listing carried this handle (SYNC.md
     -- §5), NULL until one did: a round's last page drops the in-scope
     -- bindings it did not stamp.
@@ -732,7 +743,7 @@ BEGIN
     DELETE FROM items
     WHERE link_id IN (CASE WHEN OLD.from_kind = 'application/octet-stream' THEN OLD.from_link_id END,
                       CASE WHEN OLD.to_kind = 'application/octet-stream' THEN OLD.to_link_id END)
-      AND +object_hash IS NULL
+      AND +object IS NULL
       AND (SELECT kind FROM collections c WHERE c.id = items.collection) = 'application/octet-stream'
       AND NOT EXISTS (SELECT 1 FROM bindings b WHERE b.item = items.id)
       AND NOT EXISTS (SELECT 1 FROM item_reference r
@@ -821,7 +832,7 @@ CREATE TABLE queue (
     -- a superseding `add` replaces (§15.3): written beside the payload, so a
     -- rename follows it, and read in place of the payload's own.
     target_collection TEXT CHECK (typeof(target_collection) IN ('text', 'null')),
-    object_hash TEXT CHECK (typeof(object_hash) IN ('text', 'null')) REFERENCES objects(hash),  -- pins the payload's body against the collector, or NULL
+    object      INTEGER CHECK (typeof(object) IN ('integer', 'null')) REFERENCES objects(id),  -- pins the payload's body against the collector, or NULL
     attempts    INTEGER NOT NULL DEFAULT 0 CHECK (typeof(attempts) = 'integer') CHECK (attempts >= 0),
     error       TEXT CHECK (typeof(error) IN ('text', 'null'))  -- last failure; non-NULL means parked
 );
@@ -864,13 +875,15 @@ END;
 -- Cross-source identity lookup (dedup, thread stitching) and refcount
 -- navigation. A pointer index is partial on the pointer being set: most rows
 -- point at nothing, an equality implies the pointer is set, and so the foreign
--- key check of an object's delete seeks it as it would the whole index.
-CREATE INDEX items_by_object ON items(object_hash) WHERE object_hash IS NOT NULL;
+-- key check of an object's delete seeks it as it would the whole index. A
+-- pointer is the object's id, so a row naming a new body adds its entry at
+-- the index's end.
+CREATE INDEX items_by_object ON items(object) WHERE object IS NOT NULL;
 -- The other side of items_by_object: each collection's live rows holding no
 -- body, which the search part's coverage counts per collection (SEARCH.md
 -- §8.2) by a seek. Partial, so a fully synced collection adds nothing, and
 -- covering, the two columns it is partial on costing a byte each.
-CREATE INDEX items_bodiless ON items(collection, deleted, object_hash) WHERE object_hash IS NULL AND deleted = 0;
+CREATE INDEX items_bodiless ON items(collection, deleted, object) WHERE object IS NULL AND deleted = 0;
 CREATE INDEX bindings_by_object ON bindings(base_object) WHERE base_object IS NOT NULL;
 -- The collector's scan (§5). Partial, so it holds only what is about to be
 -- collected and is empty at rest.
@@ -881,7 +894,7 @@ CREATE INDEX objects_garbage ON objects(refcount) WHERE refcount <= 0;
 CREATE INDEX items_by_conflict_object ON items(conflict_object) WHERE conflict_object IS NOT NULL;
 CREATE INDEX bindings_by_conflict_object ON bindings(conflict_object) WHERE conflict_object IS NOT NULL;
 CREATE INDEX bindings_by_shared_object ON bindings(shared_object) WHERE shared_object IS NOT NULL;
-CREATE INDEX queue_by_object ON queue(object_hash) WHERE object_hash IS NOT NULL;
+CREATE INDEX queue_by_object ON queue(object) WHERE object IS NOT NULL;
 -- The bindings waiting for a decision (list_conflicted_bindings). Partial, so
 -- it holds only what is outstanding and is empty at rest: a run reports that
 -- count on every invocation, and without it the report scans every binding.

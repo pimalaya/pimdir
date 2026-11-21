@@ -4,13 +4,13 @@
 -- The binding stays based, base_present alone saying so (§13). The predicate
 -- is release_before's, which this statement leaves true.
 UPDATE bindings SET
-       base_object = CASE WHEN bindings.base_object = i.object_hash THEN NULL ELSE bindings.base_object END,
-       shared_object = CASE WHEN bindings.shared_object = i.object_hash THEN NULL ELSE bindings.shared_object END
+       base_object = CASE WHEN bindings.base_object = i.object THEN NULL ELSE bindings.base_object END,
+       shared_object = CASE WHEN bindings.shared_object = i.object THEN NULL ELSE bindings.shared_object END
 FROM items i
 WHERE bindings.item = i.id
-  AND (bindings.base_object = i.object_hash OR bindings.shared_object = i.object_hash)
+  AND (bindings.base_object = i.object OR bindings.shared_object = i.object)
   AND i.collection IN (SELECT value FROM temp.param WHERE slot = 'collections')
-  AND i.deleted = 0 AND i.conflicted = 0 AND i.object_hash IS NOT NULL
+  AND i.deleted = 0 AND i.conflicted = 0 AND i.object IS NOT NULL
   AND i.sort_key < coalesce(:before, x'')
   AND (SELECT kind FROM collections c WHERE c.id = i.collection) = 'message/rfc822'
   AND EXISTS (SELECT 1 FROM bindings b
@@ -19,7 +19,7 @@ WHERE bindings.item = i.id
                   WHERE b.item = i.id
                     AND (b.conflicted = 1
                          OR b.base_present = 0
-                         OR (b.base_object IS NOT NULL AND b.base_object != i.object_hash)))
+                         OR (b.base_object IS NOT NULL AND b.base_object != i.object)))
   AND NOT EXISTS (SELECT 1 FROM sources s
                   WHERE s.collection = i.collection
                     AND NOT EXISTS (SELECT 1 FROM bindings b

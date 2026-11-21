@@ -13,5 +13,5 @@ WHERE i.link_id IN (:link_id, CASE WHEN :link_id GLOB 'dup:*'
   AND (i.link_id = :link_id OR 'dup:' || i.link_id || '#' || char(1) || i.link_id = :link_id)
   AND b.source = :source AND b.collection != :collection
   AND b.base_present = 1 AND substr(b.handle, 1, 1) != char(1)
-  AND (:hash IS NULL OR b.base_object = :hash)
+  AND (:hash IS NULL OR b.base_object = (SELECT id FROM objects WHERE hash = :hash))
 ORDER BY i.link_id != :link_id, b.collection LIMIT 1;

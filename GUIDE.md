@@ -146,7 +146,7 @@ A statement ending in `RETURNING` (`add_reference`, `remove_reference`, `evict_b
 
 1. For every `StoreObject` carrying bytes, write the body (§4). One carrying none is already at its path.
 2. `BEGIN`.
-3. `store_object` for every `StoreObject` (the refcount starts at zero and is settled in step 11).
+3. `store_object` for every `StoreObject` (the refcount starts at zero and is settled in step 11). Every write after it names a body by its hash and stores its object's `id`, so a body is stored before a row names it: a hash no object row holds is refused (STORAGE §4.4).
 4. `ensure_collection` for the collection, which inserts an undeclared row and never overwrites a declared one. Read the policy with `load_conflict`. An engine writing its first batch to a store whose `load_store_meta` answers no `sync_version` runs `set_sync_version` with its own here; one naming another draft of SYNC refuses the store before any verb (SYNC §10).
 5. Resolve the batch's keys:
    - Each `DropPlacement` names a handle: `link_for_handle` gives its link id; a handle nothing binds drops nothing.
@@ -603,7 +603,7 @@ SEARCH §3 names each statement under queries/search/ and the profile running it
 5. `load_missing_items`, then `load_changed_items` above the `store_change` recorded by the previous pass, in stamp order, in bounded batches, one index transaction each. A batch may record the `changed` of its last row through `set_index_cursor`, with the purge count the last completed pass recorded. Per row:
    - Fold every text you write into `object_text` and `summary_text` under SEARCH §5 (lowercase, NFD, the marks of U+0300 to U+036F dropped, NFC), the tokenizer folding none; cut the chunks from the text before the fold.
    - `object_indexed`, else read the body, verified (§4), extract it under SEARCH §6, walking a message's parts within the depth and the count STORAGE Annex A.1 bounds them by, the role fields beside `people`, and `insert_object`, with whether the `attachment` field holds any text and, for a card, whether it holds a `TEL`, an `ADR`, a `BDAY` and a `PHOTO`, plus `insert_object_text` and, for a card, `insert_object_category` for each of its folded `CATEGORIES` values, then `insert_chunk` for each chunk SEARCH §6 cuts the `body` and `note` fields into. A blob that is not there or fails its name writes no `object` row: index the placement as bodiless and `insert_missing`. A placement `load_missing_items` answered leaves it through `delete_missing` once you read its body for all this pass needed of it, the indexing and, for a calendar item, the expansion, or once it holds no body any more;
-   - `upsert_placement`;
+   - `upsert_placement` with the body's hash, which writes its `object.id` (a hash no `object` row holds is refused), `NULL` for a bodiless placement;
    - `delete_summary_text` then `insert_summary_text` for a bodiless row, and `delete_summary_text` once it has a body;
    - `replace_flags` then `insert_flag`;
    - `replace_occurrences` then `insert_occurrence` within the horizon when the body changed, within SEARCH §7's bounds on the occurrences an item writes, the periods a rule is followed for and the instances it walks, then `set_cut` with where the first bound stopped it, `NULL` when none did; a calendar placement `load_missing_items` answered is expanded again whether or not its body is indexed, and one whose body cannot be read keeps the occurrences and the cut it has;

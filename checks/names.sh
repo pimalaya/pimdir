@@ -46,7 +46,7 @@ known="$(
         sqlite_schema sqlite_master core_autocrlf recurrence_id base32 body_hex body_len input_hex input_utf8 digest_hex \
         name_chars digest_bytes if_match set_flags no_uid_conflict collect_garbage \
         meta_attachment round_open cursor_rejected interrupted_after scope_bound horizon_left \
-        accept_absences base_flags in_reply_to renamex_np
+        accept_absences base_flags in_reply_to renamex_np object_hash
     # The members the vector formats and the payloads define.
     grep -oh '"[a-z][a-z0-9_]*":' "$root"/vectors/schema/*.json "$root"/payloads/*.json \
         "$root"/conventions/gtd/writers.schema.json | tr -d '":'

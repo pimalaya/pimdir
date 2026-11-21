@@ -4,7 +4,7 @@
 -- same name included. A placement the store no longer holds answers nothing
 -- here: the feed or the key reconciliation drops it. Read from missing
 -- first, so the few rows it holds seek the store rather than its feed.
-SELECT i.collection, i.link_id, i.seq, i.object_hash,
+SELECT i.collection, i.link_id, i.seq, (SELECT o.hash FROM store.objects o WHERE o.id = i.object) AS object_hash,
        CASE WHEN i.flags_known = 1
             THEN trim(CASE WHEN i.marks & 1 THEN '\Seen ' ELSE '' END
                    || CASE WHEN i.marks & 2 THEN '\Answered ' ELSE '' END

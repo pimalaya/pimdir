@@ -1,7 +1,7 @@
 -- The store's feed, joined to what the index needs to fold a row: its
 -- collection's kind and account, whether it holds a body now, and its stamp,
 -- which a batch may record as the cursor it reached (§4).
-SELECT i.collection, i.link_id, i.seq, i.object_hash,
+SELECT i.collection, i.link_id, i.seq, (SELECT o.hash FROM store.objects o WHERE o.id = i.object) AS object_hash,
        CASE WHEN i.flags_known = 1
             THEN trim(CASE WHEN i.marks & 1 THEN '\Seen ' ELSE '' END
                    || CASE WHEN i.marks & 2 THEN '\Answered ' ELSE '' END

@@ -11,7 +11,7 @@ FROM (
     SELECT c.kind AS kind, count(*) AS bodiless, 0 AS missing, 0 AS unparseable, 0 AS encrypted
     FROM store.items i INDEXED BY items_bodiless
     JOIN store.collections c ON c.id = i.collection
-    WHERE i.object_hash IS NULL AND i.deleted = 0
+    WHERE i.object IS NULL AND i.deleted = 0
       AND c.kind <> 'application/octet-stream'
     GROUP BY c.kind
     UNION ALL
@@ -21,7 +21,7 @@ FROM (
     UNION ALL
     SELECT c.kind, 0, 0, sum(o.status <> 'encrypted'), sum(o.status = 'encrypted')
     FROM object o
-    CROSS JOIN placement p ON p.hash = o.hash
+    CROSS JOIN placement p ON p.object = o.id
     JOIN store.collections c ON c.id = p.collection
     WHERE o.status <> 'ok'
     GROUP BY c.kind

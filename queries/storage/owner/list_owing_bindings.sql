@@ -23,5 +23,5 @@ WHERE b.collection = :collection AND b.source = :source
                            WHERE g.item = b.item AND g.source = b.source
                              AND NOT EXISTS (SELECT 1 FROM placement_flag f
                                              WHERE f.item = i.id AND f.flag = g.flag))))
-       OR (i.object_hash IS NOT NULL AND i.object_hash IS NOT b.base_object))
+       OR (i.object IS NOT NULL AND i.object IS NOT b.base_object))
 ORDER BY b.handle;

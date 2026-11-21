@@ -66,12 +66,14 @@ Tagging is a store write through the queue (§10). Nothing writes the store thro
 
 The index holds:
 
-- one `object` row and one `object_text` FTS row per indexed body, keyed on the store's hash, so a body filed in three collections is tokenised once;
-- one `placement` row per live item seen, with where its occurrences were cut (§7);
+- one `object` row and one `object_text` FTS row per indexed body, named by the store's hash, so a body filed in three collections is tokenised once;
+- one `placement` row per live item seen, naming its body, with where its occurrences were cut (§7);
 - a `summary_text` row per placement with no body;
 - a `missing` row per placement whose body could not be read (§4);
 - the derived `flag`, `occurrence`, `thread`, `message` and `chunk` tables;
 - `index_meta`: its version and shape, the store it was built from and the revisions of its extraction (§2), the store cursors folded in (§4), the horizon and the time zones the occurrences stand under (§7).
+
+**A body is keyed by its `object.id`.** In the canonical shape the id is an integer drawn when the body's row is written, above every one drawn before, and never reused, so a new body's rows land at the end of every index on it and an id a pass has not yet cleared names no other body. Every row naming a body carries it: `object_text`'s rowid, `chunk.object`, `object_category.object` and `placement.object`, which every join from a body to its placements seeks (`placement_by_object`). The hash is on the `object` row alone, where the indexer finds a body's blob by it (STORAGE §5). The statements name a body by its hash, as the store's do (STORAGE §4.4), but for the indexer's writes of one body's rows, which carry the id `insert_object` or `object_indexed` answered (`insert_object_text`, `insert_object_category`, `insert_chunk`, `delete_object`): `upsert_placement` takes the hash and writes the body's id, a hash the index does not hold refused, and a read answers a placement's body as its hash.
 
 **Statements.** Each statement under queries/search/ is named here with the profile that runs it: the indexer, a query client, or both. A statement's name, its named parameters and the columns it answers bind on STORAGE §4.4's terms.
 
@@ -154,7 +156,7 @@ Per row:
 
 A deleted row loses its placement, which takes its flags and occurrences by cascade. The indexer deletes its summary text by the rowid the delete returns. A body goes with its last placement: once a placement dropped or repointed leaves a hash no placement names (`object_placed`), the indexer deletes that body's text and its `object` row (`delete_object`, `delete_object_row`) in the same transaction, so a refreshed index holds the bodies its placements name, as one rebuilt does, whatever the store still pins. A mail placement that was its link id's last prunes its thread (§9) in the same transaction.
 
-**A body that cannot be read is tried again.** A body the blob directory no longer holds when the indexer opens it, or whose bytes fail its name (STORAGE §7), is not `unparseable`, and its placement is recorded in `missing` (`insert_missing`). One the index never read writes no `object` row: the placement is indexed as a bodiless one, its `hash` `NULL` and its summary text written. One the index holds already, which a re-expansion opens again (§7), keeps its rows, its occurrences and its cut as they stand.
+**A body that cannot be read is tried again.** A body the blob directory no longer holds when the indexer opens it, or whose bytes fail its name (STORAGE §7), is not `unparseable`, and its placement is recorded in `missing` (`insert_missing`). One the index never read writes no `object` row: the placement is indexed as a bodiless one, naming no body (its `object` `NULL`) and its summary text written. One the index holds already, which a re-expansion opens again (§7), keeps its rows, its occurrences and its cut as they stand.
 
 Every pass first folds the recorded placements again (`load_missing_items`, which answers each as `load_changed_items` does), whether or not the store stamped them again, since a body fetched again under the same name after a quarantine restamps nothing, and expands again each calendar placement among them, its body indexed or not. A placement leaves `missing` (`delete_missing`) only once its body was read for all the pass needed of it, the indexing and, for a calendar item, the expansion. One holding no body any more leaves it too, and one the store no longer holds goes with its placement.
 

@@ -6,5 +6,5 @@ SELECT seq, link_id,
                    || CASE WHEN items.marks & 8 THEN '\Draft ' ELSE '' END
                    || CASE WHEN items.marks & 16 THEN '\Deleted ' ELSE '' END
                    || coalesce((SELECT group_concat(f.flag, ' ') FROM placement_flag f WHERE f.item = items.id), '')) END AS flags,
-       object_hash, sort_key, level FROM items
+       (SELECT o.hash FROM objects o WHERE o.id = items.object) AS object_hash, sort_key, level FROM items
 WHERE collection = :collection AND seq = :seq AND deleted = 0;

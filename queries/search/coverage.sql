@@ -15,7 +15,7 @@ SELECT kind, sum(bodiless) AS bodiless, sum(missing) AS missing,
 FROM (
     SELECT c.kind AS kind, count(*) AS bodiless, 0 AS missing, 0 AS unparseable, 0 AS encrypted
     FROM store.collections c
-    JOIN store.items i ON i.collection = c.id AND i.object_hash IS NULL AND i.deleted = 0
+    JOIN store.items i ON i.collection = c.id AND i.object IS NULL AND i.deleted = 0
     WHERE c.id IN (SELECT value FROM temp.param WHERE slot = 'collections')
       AND c.kind <> 'application/octet-stream'
     GROUP BY c.kind
@@ -27,7 +27,7 @@ FROM (
     UNION ALL
     SELECT c.kind, 0, 0, sum(o.status <> 'encrypted'), sum(o.status = 'encrypted')
     FROM object o
-    CROSS JOIN placement p ON p.hash = o.hash
+    CROSS JOIN placement p ON p.object = o.id
     JOIN store.collections c ON c.id = p.collection
     WHERE o.status <> 'ok'
       AND p.collection IN (SELECT value FROM temp.param WHERE slot = 'collections')

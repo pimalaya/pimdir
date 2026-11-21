@@ -10,7 +10,7 @@ CROSS JOIN items t ON t.id = s.item
 CROSS JOIN items n ON n.id = s.by_item
 WHERE t.collection = :collection AND t.deleted = 1 AND n.deleted = 0
   AND (EXISTS (SELECT 1 FROM bindings b WHERE b.item = n.id AND b.base_present = 0)
-       OR (n.object_hash IS NOT NULL
+       OR (n.object IS NOT NULL
            AND EXISTS (SELECT 1
                        FROM (SELECT source FROM sources WHERE collection = n.collection
                              UNION

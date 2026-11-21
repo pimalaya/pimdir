@@ -2,9 +2,9 @@
 --
 -- A released version 1 store holding at least one row in every table, for the
 -- rehearsal migrations of this directory (STORAGE.md §6). Plain SQL, no
--- canonical statement, so the 3.18.2 floor runs it too. The last queue row
--- and the last item are deleted again, so both AUTOINCREMENT sequences stand
--- above every id their tables still hold.
+-- canonical statement, so the 3.18.2 floor runs it too. The last queue row,
+-- the last item and the last object are deleted again, so the three
+-- AUTOINCREMENT sequences stand above every id their tables still hold.
 INSERT INTO store_meta(id, format, format_version, version, read_version,
     produce_version, store_id, incarnation, hash_algo, created_at, derivation)
 VALUES (1, 'pimdir', 'storage-v1', 1, 1, 1, '0123456789abcdef0123456789abcdef',
@@ -29,23 +29,22 @@ VALUES ('work', 'imap', NULL, 'mail.message.move', 'full', NULL),
 INSERT INTO performers(account, capability, source)
 VALUES ('work', 'mail.submit', 'smtp');
 
-INSERT INTO objects(hash, size, refcount) VALUES
-    ('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 10, 3),
-    ('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 20, 1);
+INSERT INTO objects(id, hash, size, refcount) VALUES
+    (1, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 10, 3),
+    (2, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 20, 1),
+    (3, 'cccccccccccccccccccccccccccccccccccccccccccccccccccc', 30, 0);
+DELETE FROM objects WHERE id = 3;
 
-INSERT INTO items(collection, link_id, seq, flags_known, marks, object_hash,
+INSERT INTO items(collection, link_id, seq, flags_known, marks, object,
     sort_key, level)
 VALUES
-    ('INBOX', 'a@x', 1, 1, 1,
-     'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-     '2026-08-01T10:00:00Z', 2),
+    ('INBOX', 'a@x', 1, 1, 1, 1, '2026-08-01T10:00:00Z', 2),
     ('INBOX', 'b@x', 2, 1, 0, NULL, '2026-08-02T10:00:00Z', 1),
     ('Archive', 'a@x', 1, 0, 0, NULL, '2026-08-01T10:00:00Z', 1),
     ('Cal', 'ev', 3, 0, 0, NULL, '2026-09-01T09:00:00Z', 1),
     ('Cal', 'td', 4, 0, 0, NULL, '', 1),
     ('Cal', 'jn', 5, 0, 0, NULL, '', 1),
-    ('Cards', 'c1', 6, 0, 0,
-     'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'alice', 2),
+    ('Cards', 'c1', 6, 0, 0, 2, 'alice', 2),
     ('Files', 'f1', 7, 0, 0, NULL, 'notes.txt', 1),
     ('INBOX', 'gone@x', 8, 0, 0, NULL, '', 1),
     ('INBOX', 'last@x', 9, 0, 0, NULL, '', 1);
@@ -58,8 +57,7 @@ INSERT INTO placement_flag(item, flag)
 SELECT id, '$label' FROM items WHERE collection = 'INBOX' AND link_id = 'a@x';
 INSERT INTO bindings(item, collection, source, handle, base_flags_known,
     base_marks, base_object, base_revision, base_present, shared_object, round)
-SELECT id, collection, 'imap', '10', 1, 1,
-    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', NULL, 1, NULL, 1
+SELECT id, collection, 'imap', '10', 1, 1, 1, NULL, 1, NULL, 1
 FROM items WHERE collection = 'INBOX' AND link_id = 'a@x';
 INSERT INTO bindings(item, collection, source, handle)
 SELECT id, collection, 'imap', char(1) || 'b@x'
@@ -102,13 +100,13 @@ SELECT seq, 'pimdir/label', 'Receipts' FROM items
 WHERE collection = 'INBOX' AND link_id = 'a@x';
 
 INSERT INTO queue(created_at, producer, collection, action, payload,
-    target_collection, object_hash, attempts, error)
+    target_collection, object, attempts, error)
 VALUES
     ('2026-11-13T00:00:01.000Z', 'p', 'INBOX', 'move',
      '{"v":1,"seq":1,"to":"Archive"}', 'Archive', NULL, 0, NULL),
     ('2026-11-13T00:00:02.000Z', 'p', 'INBOX', 'submit',
      '{"v":1,"source":"smtp","from":"a@example.org","rcpts":["b@example.org"]}',
-     NULL, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 1,
+     NULL, 1, 1,
      'unconfirmed: the connection dropped'),
     ('2026-11-13T00:00:03.000Z', 'p', 'Cal', 'remove', '{"v":1,"seq":4}',
      NULL, NULL, 0, NULL);

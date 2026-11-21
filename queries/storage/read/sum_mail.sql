@@ -19,5 +19,5 @@ FROM (
     AND (:attachment IS NULL OR s.attachment = :attachment)
     AND i.sort_key >= coalesce(:since, '') AND i.sort_key < coalesce(:until, x'')
   GROUP BY i.seq
-  HAVING :held IS NULL OR :held = max(i.object_hash IS NOT NULL)
+  HAVING :held IS NULL OR :held = max(i.object IS NOT NULL)
 );

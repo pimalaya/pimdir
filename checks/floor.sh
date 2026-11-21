@@ -107,7 +107,7 @@ done
     INSERT INTO items(id, collection, link_id, seq, level, deleted, retained_at, retained_by)
         VALUES(2, 'INBOX', 'r', 2, 2, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'imap');
     INSERT INTO bindings(item, collection, source, handle, base_present, base_object, base_revision)
-        VALUES(1, 'INBOX', 'imap', '10', 1, '$well_formed', 'r1');
+        VALUES(1, 'INBOX', 'imap', '10', 1, 1, 'r1');
     INSERT INTO mail_summary(item, subject, date, size, attachment) VALUES(1, 's', '2026-10-06T08:00:00Z', 1, 0);
     INSERT INTO event_summary(item, summary, recurring) VALUES(1, '', 0);
     INSERT INTO task_summary(item, summary, recurring) VALUES(1, '', 0);
@@ -201,7 +201,7 @@ fi
 # set: the program must read the six pointer indexes, never items, bindings or
 # the queue whole.
 opens() {
-    "$1" -separator ' ' "$2" "PRAGMA foreign_keys = ON; EXPLAIN DELETE FROM objects WHERE hash = '$well_formed';" |
+    "$1" -separator ' ' "$2" "PRAGMA foreign_keys = ON; EXPLAIN DELETE FROM objects WHERE id = 1;" |
         awk '$2 == "OpenRead" {print $4}' | sort -u |
         while read -r root; do "$1" "$2" "SELECT name FROM sqlite_master WHERE rootpage = $root;"; done | sort | tr '\n' ' '
 }

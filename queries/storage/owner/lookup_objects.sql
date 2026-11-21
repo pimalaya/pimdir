@@ -15,11 +15,11 @@
 -- body. The three are NULL together for a row with no mail summary, which a
 -- message agrees with never. One row per holder, so the caller picks one
 -- that agrees.
-SELECT i.link_id, i.object_hash, o.size, m.subject, m.date, m.sender FROM items i
+SELECT i.link_id, o.hash AS object_hash, o.size, m.subject, m.date, m.sender FROM items i
 JOIN collections c ON c.id = i.collection
-JOIN objects o ON o.hash = i.object_hash
+JOIN objects o ON o.id = i.object
 LEFT JOIN mail_summary m ON m.item = i.id
-WHERE i.object_hash IS NOT NULL
+WHERE i.object IS NOT NULL
   AND i.link_id IN (SELECT value FROM temp.param WHERE slot = 'links')
   AND NOT (i.link_id GLOB 'alt:*' OR i.link_id GLOB 'hash:*' OR i.link_id GLOB 'dup:*')
   AND c.account IS :account;

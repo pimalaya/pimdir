@@ -49,16 +49,20 @@ CREATE TABLE index_meta (
     extractor     TEXT    NOT NULL
 ) STRICT;
 
--- One row per indexed body, keyed on the store's object hash, a name of
--- STORAGE.md §5 by the same CHECK as the store's. The input is immutable, so
--- a row is written once under a revision of the extraction (§2); it goes when
--- the object goes.
+-- One row per indexed body, named by the store's object hash, a name of
+-- STORAGE.md §5 by the same CHECK as the store's, which the indexer finds the
+-- body's blob by. The input is immutable, so a row is written once under a
+-- revision of the extraction (§2); it goes when the object goes.
 --
--- `id` is an explicit INTEGER PRIMARY KEY, so it is the rowid and stable: a
--- table keyed on anything else has an implicit rowid VACUUM may renumber, and
--- the FTS rows below are joined on it.
+-- `id` is the body's key in the index, the one every row naming the body
+-- carries (§3): an explicit INTEGER PRIMARY KEY, so it is the rowid and
+-- stable, a table keyed on anything else having an implicit rowid VACUUM may
+-- renumber, and the FTS rows below are joined on it. Drawn above every id
+-- drawn before (AUTOINCREMENT), so a new body's rows land at the end of every
+-- index on it, and never reused, so a placement still naming a body the pass
+-- deleted never comes to name another.
 CREATE TABLE object (
-    id     INTEGER PRIMARY KEY,
+    id     INTEGER PRIMARY KEY AUTOINCREMENT,
     hash   TEXT    NOT NULL UNIQUE CHECK (length(hash) = 52 AND hash NOT GLOB '*[^a-z2-7]*'),
     status TEXT    NOT NULL,                 -- 'ok' | 'encrypted' | 'unparseable' (§6)
     -- 1 when the extraction wrote any text into the attachment field (§6),
@@ -77,7 +81,7 @@ CREATE TABLE object (
 -- The bodies the extraction did not read whole (§6), encrypted or
 -- unparseable, so a query's coverage counts them by a seek (coverage, §8.2).
 -- Partial, so it holds those few alone.
-CREATE INDEX object_not_ok ON object(status, hash) WHERE status <> 'ok';
+CREATE INDEX object_not_ok ON object(status) WHERE status <> 'ok';
 
 -- A card's CATEGORIES values (§6), folded, each once, so category: reads a
 -- card by a seek as it reads a task on the store's task_summary. Gone with
@@ -123,9 +127,13 @@ CREATE TABLE placement (
     collection TEXT    NOT NULL,
     seq        INTEGER NOT NULL,
     link_id    TEXT    NOT NULL,
-    -- The body indexed for it, or NULL while bodiless or while its body was
-    -- never read (§4).
-    hash       TEXT    CHECK (length(hash) = 52 AND hash NOT GLOB '*[^a-z2-7]*'),
+    -- The body indexed for it, its object.id, or NULL while bodiless or
+    -- while its body was never read (§4). No foreign key: a pass deleting a
+    -- body the collector took (objects_gone) may come before the one moving a
+    -- placement off it, and the id names no other body meanwhile. A hash the
+    -- index does not hold resolves to 0 (upsert_placement), which the CHECK
+    -- refuses, so naming a body never indexed fails rather than writing none.
+    object     INTEGER CHECK (object > 0),
     -- The instant from which a calendar item's occurrences are not all
     -- written, RFC 3339 Z, when §7's bounds stopped its expansion; NULL
     -- otherwise.
@@ -133,7 +141,10 @@ CREATE TABLE placement (
     UNIQUE (collection, seq)
 ) STRICT;
 
-CREATE INDEX placement_by_hash ON placement(hash);
+-- The placements of a body, which every join from a body to its placements
+-- seeks (§3), and object_placed. Partial on the pointer being set, as the
+-- store's pointer indexes are (STORAGE.md §4.3): an equality implies it.
+CREATE INDEX placement_by_object ON placement(object) WHERE object IS NOT NULL;
 CREATE INDEX placement_by_link ON placement(link_id);
 -- The items a query's coverage reports cut (cut_before, §8.2), by
 -- collection. Partial, so it holds the few cut items alone.

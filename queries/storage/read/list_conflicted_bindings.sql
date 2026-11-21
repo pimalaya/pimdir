@@ -7,7 +7,7 @@
 -- reports this count on every invocation, and answering it by paging each
 -- collection costs a pass over the whole store for a number usually zero.
 SELECT b.collection, i.link_id, b.source, b.handle, b.conflict_revision,
-       b.base_object, i.object_hash, b.conflict_object
+       (SELECT o.hash FROM objects o WHERE o.id = b.base_object) AS base_object, (SELECT o.hash FROM objects o WHERE o.id = i.object) AS object_hash, (SELECT o.hash FROM objects o WHERE o.id = b.conflict_object) AS conflict_object
 FROM bindings b
 JOIN items i ON i.id = b.item
 JOIN collections c ON c.id = b.collection

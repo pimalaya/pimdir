@@ -349,10 +349,10 @@ item INBOX a 1 "'$h1'"
 item Archive a 1 "'$h1'"
 expect "move: a holder with the same body is a move" \
     "$(run owner/held_elsewhere ":collection='INBOX'" ":link_id='a'" ":hash='$h1'")" "1"
-sql "UPDATE items SET object_hash = '$h2' WHERE collection = 'Archive';"
+sql "UPDATE items SET object = (SELECT id FROM objects WHERE hash = '$h2') WHERE collection = 'Archive';"
 expect "move: a holder with another body is not" \
     "$(run owner/held_elsewhere ":collection='INBOX'" ":link_id='a'" ":hash='$h1'")" ""
-sql "UPDATE items SET object_hash = NULL WHERE collection = 'Archive';"
+sql "UPDATE items SET object = NULL WHERE collection = 'Archive';"
 expect "move: a bodiless holder does not take the only body" \
     "$(run owner/held_elsewhere ":collection='INBOX'" ":link_id='a'" ":hash='$h1'")" ""
 # A bodiless retiring message is held elsewhere only by a row that agrees with
@@ -382,7 +382,7 @@ expect "move: a holder stating no sender beside one is another message" "$(bodil
 said INBOX "'Notice'" "NULL" "NULL" 10
 said Archive "'Notice'" "NULL" "NULL" 20
 expect "move: an unknown date and sender match unknown ones" "$(bodiless)" "1"
-sql "UPDATE items SET object_hash = '$h1' WHERE collection = 'Archive';"
+sql "UPDATE items SET object = (SELECT id FROM objects WHERE hash = '$h1') WHERE collection = 'Archive';"
 said Archive "'Other'" "'dan@x'" "'2026-08-03T09:00:00Z'" 1
 expect "move: a holder carrying the retiring body is the same message whatever its row states, and no holder of another body is" \
     "$(run owner/held_elsewhere ":collection='INBOX'" ":link_id='a'" ":hash='$h1'")|$(run owner/held_elsewhere ":collection='INBOX'" ":link_id='a'" ":hash='$h2'")" "1|"
@@ -1058,7 +1058,7 @@ collection INBOX
 collection Archive
 object "$h1"
 mail INBOX old 1 10 "'2026-08-01T10:00:00Z'"
-sql "UPDATE items SET object_hash = '$h1' WHERE link_id = 'old'; UPDATE bindings SET base_object = '$h1' WHERE item IN (SELECT id FROM items WHERE link_id = 'old');"
+sql "UPDATE items SET object = (SELECT id FROM objects WHERE hash = '$h1') WHERE link_id = 'old'; UPDATE bindings SET base_object = (SELECT id FROM objects WHERE hash = '$h1') WHERE item IN (SELECT id FROM items WHERE link_id = 'old');"
 mail INBOX dirty 2 11 "'2026-08-01T10:00:00Z'" '["\\Flagged"]' '[]'
 mail INBOX recent 3 12 "'2026-10-06T08:00:00Z'"
 mail INBOX nodate 4 13 NULL
@@ -1108,7 +1108,7 @@ expect "evict: a mail a person's reference names, from either end, stays; a rule
     "$(run owner/evict_before ":collection='INBOX'" ":before='2026-09-01T00:00:00Z'")|$(sql "SELECT count(*) FROM item_reference WHERE origin = 'user';")" "7|2"
 # A mail no source binds is the store's alone (a copy kept on the device):
 # no relisting restores it, so it owes its own keeping (§11.3).
-sql "INSERT INTO items(collection, link_id, seq, flags_known, object_hash, level) VALUES('INBOX', 'local', 9, 1, '$h1', 2);
+sql "INSERT INTO items(collection, link_id, seq, flags_known, object, level) VALUES('INBOX', 'local', 9, 1, (SELECT id FROM objects WHERE hash = '$h1'), 2);
      INSERT INTO mail_summary(item, subject, date) VALUES((SELECT id FROM items WHERE collection = 'INBOX' AND link_id = 'local'), 'kept here', '2026-08-01T10:00:00Z');"
 expect "evict: a mail no source binds stays, no relisting restoring it" \
     "$(run owner/evict_before ":collection='INBOX'" ":before='2026-09-01T00:00:00Z'")|$(sql "SELECT count(*) FROM items WHERE link_id = 'local';")" "|1"
@@ -1135,22 +1135,22 @@ mail Archive old 1 10 "'2026-08-01T10:00:00Z'"
 mail Both full 9 20 "'2026-08-01T10:00:00Z'"
 mail Both half 10 21 "'2026-08-01T10:00:00Z'"
 sql "UPDATE items SET sort_key = coalesce((SELECT date FROM mail_summary s WHERE s.item = items.id), ''), level = 2;
-     UPDATE items SET object_hash = CASE link_id WHEN 'old' THEN '$h1' WHEN 'dirty' THEN '$h2' WHEN 'nodate' THEN '$h3' WHEN 'recent' THEN '$h4'
-         WHEN 'conflicted' THEN '$h5' WHEN 'diverged' THEN '$h6' WHEN 'edited' THEN '$h7' WHEN 'witness' THEN '$h8' ELSE '$h9' END;
-     UPDATE bindings SET base_object = (SELECT object_hash FROM items i WHERE i.id = bindings.item),
-         shared_object = (SELECT object_hash FROM items i WHERE i.id = bindings.item);
-     UPDATE items SET conflicted = 1, conflict_object = '$hc' WHERE link_id = 'conflicted';
+     UPDATE items SET object = (SELECT id FROM objects WHERE hash = CASE link_id WHEN 'old' THEN '$h1' WHEN 'dirty' THEN '$h2' WHEN 'nodate' THEN '$h3' WHEN 'recent' THEN '$h4'
+         WHEN 'conflicted' THEN '$h5' WHEN 'diverged' THEN '$h6' WHEN 'edited' THEN '$h7' WHEN 'witness' THEN '$h8' ELSE '$h9' END);
+     UPDATE bindings SET base_object = (SELECT object FROM items i WHERE i.id = bindings.item),
+         shared_object = (SELECT object FROM items i WHERE i.id = bindings.item);
+     UPDATE items SET conflicted = 1, conflict_object = (SELECT id FROM objects WHERE hash = '$hc') WHERE link_id = 'conflicted';
      UPDATE bindings SET conflicted = 1 WHERE item IN (SELECT id FROM items WHERE link_id = 'diverged');
-     UPDATE bindings SET base_object = '$h1' WHERE item IN (SELECT id FROM items WHERE link_id = 'edited');
+     UPDATE bindings SET base_object = (SELECT id FROM objects WHERE hash = '$h1') WHERE item IN (SELECT id FROM items WHERE link_id = 'edited');
      UPDATE items SET deleted = 1 WHERE link_id = 'gone';
-     INSERT INTO items(collection, link_id, seq, flags_known, object_hash, sort_key, level) VALUES
-         ('INBOX', 'created', 20, 1, '$h9', '2026-08-01T10:00:00Z', 2),
-         ('INBOX', 'lone', 21, 1, '$h9', '2026-08-01T10:00:00Z', 2),
-         ('Cards', 'card', 22, 0, '$h9', '2026-08-01', 2);
+     INSERT INTO items(collection, link_id, seq, flags_known, object, sort_key, level) VALUES
+         ('INBOX', 'created', 20, 1, (SELECT id FROM objects WHERE hash = '$h9'), '2026-08-01T10:00:00Z', 2),
+         ('INBOX', 'lone', 21, 1, (SELECT id FROM objects WHERE hash = '$h9'), '2026-08-01T10:00:00Z', 2),
+         ('Cards', 'card', 22, 0, (SELECT id FROM objects WHERE hash = '$h9'), '2026-08-01', 2);
      INSERT INTO bindings(item, collection, source, handle) VALUES((SELECT id FROM items WHERE collection = 'INBOX' AND link_id = 'created'), 'INBOX', 'imap', char(1) || 'created');
-     INSERT INTO bindings(item, collection, source, handle, base_present, base_object) VALUES((SELECT id FROM items WHERE collection = 'Cards' AND link_id = 'card'), 'Cards', 'dav', 'c', 1, '$h9');
+     INSERT INTO bindings(item, collection, source, handle, base_present, base_object) VALUES((SELECT id FROM items WHERE collection = 'Cards' AND link_id = 'card'), 'Cards', 'dav', 'c', 1, (SELECT id FROM objects WHERE hash = '$h9'));
      INSERT INTO bindings(item, collection, source, handle, base_flags_known, base_object, base_present)
-         VALUES((SELECT id FROM items WHERE collection = 'Both' AND link_id = 'full'), 'Both', 'graph', 'g20', 1, '$h9', 1);
+         VALUES((SELECT id FROM items WHERE collection = 'Both' AND link_id = 'full'), 'Both', 'graph', 'g20', 1, (SELECT id FROM objects WHERE hash = '$h9'), 1);
      INSERT INTO sources(collection, source) VALUES('Both', 'imap'), ('Both', 'graph');"
 # A base is present iff base_present is 1 (§13): no other base column states
 # one without it, so `witness`, based like the rest, cannot be made a pending
@@ -1167,15 +1167,15 @@ expect "release: below the date, what needs no body, the undated included, two s
     "$(run owner/release_before "$set" ":before='2026-09-01T00:00:00Z'" | sort -n | tr '\n' ' ')" "1 2 3 8 9 "
 run owner/recompute_refcounts
 expect "release: a conflict, a diverged binding, a local edit, a pending create, no binding, an unbound source, another kind, a tombstone, the newer and an unnamed collection keep theirs" \
-    "$(sql "SELECT collection || ':' || link_id FROM items WHERE object_hash IS NOT NULL ORDER BY collection, link_id;" | tr '\n' ' ')" \
+    "$(sql "SELECT collection || ':' || link_id FROM items WHERE object IS NOT NULL ORDER BY collection, link_id;" | tr '\n' ' ')" \
     "Archive:old Both:half Cards:card INBOX:conflicted INBOX:created INBOX:diverged INBOX:edited INBOX:gone INBOX:lone INBOX:recent "
 expect "release: a tombstone, a newer item, a conflicted one and another kind keep their bases" \
-    "$(sql "SELECT count(*) FROM bindings WHERE item IN (SELECT id FROM items WHERE link_id IN ('gone', 'recent', 'conflicted', 'card')) AND base_object IS NOT NULL;")|$(sql "SELECT object_hash FROM items WHERE link_id = 'gone';")" "4|$h9"
+    "$(sql "SELECT count(*) FROM bindings WHERE item IN (SELECT id FROM items WHERE link_id IN ('gone', 'recent', 'conflicted', 'card')) AND base_object IS NOT NULL;")|$(sql "SELECT o.hash FROM items i JOIN objects o ON o.id = i.object WHERE i.link_id = 'gone';")" "4|$h9"
 expect "release: back to Meta, flags, summary and addresses kept" \
     "$(sql "SELECT level, flags_known FROM items WHERE collection = 'INBOX' AND link_id = 'dirty';")|$(flags INBOX dirty)|$(sql "SELECT count(*) FROM mail_summary WHERE item IN (SELECT id FROM items WHERE collection = 'INBOX') AND item IN (SELECT id FROM items WHERE link_id IN ('old', 'dirty', 'nodate', 'witness'));")" \
     '1|1|\Flagged|4'
 expect "release: a shared body naming the released body lets go of it, another stays" \
-    "$(sql "SELECT count(*) FROM bindings WHERE item IN (SELECT id FROM items WHERE link_id IN ('old', 'dirty', 'nodate', 'witness')) AND collection = 'INBOX' AND shared_object IS NULL;")|$(sql "SELECT shared_object FROM bindings WHERE item IN (SELECT id FROM items WHERE link_id = 'edited');")" "4|$h7"
+    "$(sql "SELECT count(*) FROM bindings WHERE item IN (SELECT id FROM items WHERE link_id IN ('old', 'dirty', 'nodate', 'witness')) AND collection = 'INBOX' AND shared_object IS NULL;")|$(sql "SELECT o.hash FROM bindings b JOIN objects o ON o.id = b.shared_object WHERE b.item IN (SELECT id FROM items WHERE link_id = 'edited');")" "4|$h7"
 expect "release: the bases let go of the body, every binding still based, its flags kept" \
     "$(sql "SELECT count(*) FROM bindings WHERE item IN (SELECT id FROM items WHERE link_id IN ('old', 'dirty', 'nodate', 'witness', 'full')) AND collection != 'Archive' AND base_object IS NULL AND base_present = 1;")|$(sql "SELECT base_flags_known FROM bindings WHERE item IN (SELECT id FROM items WHERE link_id = 'dirty');")|$(base_flags INBOX dirty imap)" \
     "6|1|"
@@ -1487,7 +1487,7 @@ expect "file: a stand-in a reference still names from its own end stays" \
     "$(sql "SELECT count(*) FROM items WHERE collection = 'work/Attachments' AND link_id = 'part:m#3';")" "1"
 run owner/remove_reference ":from_kind='$file_kind'" ":from_link_id='part:m#3'" ":to_kind='$file_kind'" ":to_link_id='local'" ":role='related'" >/dev/null
 expect "file: a stand-in no reference names is collected, never a row of another kind under its key" \
-    "$(sql "SELECT group_concat(collection) FROM items WHERE link_id = 'part:m#3' AND (deleted = 0 OR object_hash IS NOT NULL);")" "work/Docs,work/INBOX"
+    "$(sql "SELECT group_concat(collection) FROM items WHERE link_id = 'part:m#3' AND (deleted = 0 OR object IS NOT NULL);")" "work/Docs,work/INBOX"
 for target in local synced; do
     ref $mail_kind m $file_kind $target related user >/dev/null
     run owner/remove_reference ":from_kind='$mail_kind'" ":from_link_id='m'" ":to_kind='$file_kind'" ":to_link_id='$target'" ":role='related'" >/dev/null
@@ -1497,7 +1497,7 @@ expect "file: a file holding a body, or bound by a source, is never collected fo
 sql "UPDATE items SET deleted = 1, retained_at = '2026-10-01T00:00:00.000Z' WHERE link_id = 'm';"
 run owner/purge_item ":collection='work/INBOX'" ":seq=1" >/dev/null
 expect "file: the message's last row gone, its stand-in goes and the saved copy stays with its body" \
-    "$(sql "SELECT collection || ':' || ifnull(object_hash, '') FROM items WHERE link_id = 'part:m#2';")|$(sql "SELECT count(*) FROM item_reference;")" \
+    "$(sql "SELECT i.collection || ':' || ifnull(o.hash, '') FROM items i LEFT JOIN objects o ON o.id = i.object WHERE i.link_id = 'part:m#2';")|$(sql "SELECT count(*) FROM item_reference;")" \
     "work/Docs:$hx|0"
 steps="$(trigger_plan item_reference_collects_files ":old_from_kind='$mail_kind'" ":old_from_link_id='m'" ":old_to_kind='$file_kind'" ":old_to_link_id='x'")"
 expect "file: the collecting trigger seeks the ends' link ids, never every bodiless row" \
@@ -1557,7 +1557,7 @@ run owner/update_item ":collection='Local'" ":link_id='note'" ":flags='[\"\\\\Fl
     ":level=2" ":deleted=0" ":conflicted=0" ":conflict_object=NULL"
 run owner/retain_item ":collection='Local'" ":link_id='gone'" ":source='owner'"
 expect "unbound: a set-flags applies to the item directly and moves its stamp; a remove retains it, its body still pinned" \
-    "$(flags Local note)|$(sql "SELECT changed > $before FROM items WHERE link_id = 'note';")|$(sql "SELECT deleted, retained_at IS NOT NULL, object_hash FROM items WHERE link_id = 'gone';")|$(run read/count_retained ":collection='Local'")" \
+    "$(flags Local note)|$(sql "SELECT changed > $before FROM items WHERE link_id = 'note';")|$(sql "SELECT i.deleted, i.retained_at IS NOT NULL, o.hash FROM items i LEFT JOIN objects o ON o.id = i.object WHERE i.link_id = 'gone';")|$(run read/count_retained ":collection='Local'")" \
     "\\Flagged|1|1|1|$hn|1"
 
 # --- An add superseding an item holds its delete until it is pushed (§15.3) --
@@ -1885,7 +1885,7 @@ collection INBOX
 object "$hb"
 mail INBOX held 10 20 "'2026-10-06T08:00:00Z'"
 mail INBOX bare 11 21 "'2026-10-06T08:00:00Z'"
-sql "UPDATE items SET object_hash = '$hb' WHERE link_id = 'held';"
+sql "UPDATE items SET object = (SELECT id FROM objects WHERE hash = '$hb') WHERE link_id = 'held';"
 expect "derivation: list_held_mail pages the rows holding a body" \
     "$(run owner/list_held_mail ":after_collection=NULL" ":after_link_id=NULL" ":limit=10" | cut -d'|' -f2,4)|$(run owner/list_held_mail ":after_collection='INBOX'" ":after_link_id='held'" ":limit=10")" "held|$hb|"
 run owner/set_collection_kind ":collection='Cal'" ":account=NULL" ":kind='$cal_kind'"
@@ -2124,11 +2124,11 @@ expect "sum: nothing in range sums to zero" \
 expect "sum: a message filed in two collections counts once, at its largest size" \
     "$(run read/sum_mail "$both" ":seen=NULL" ":attachment=NULL" ":since=NULL" ":until=NULL")" "4|150|2"
 object "$hc"
-sql "UPDATE items SET object_hash = '$hc', level = 2 WHERE collection = 'INBOX' AND link_id = 'c';"
+sql "UPDATE items SET object = (SELECT id FROM objects WHERE hash = '$hc'), level = 2 WHERE collection = 'INBOX' AND link_id = 'c';"
 expect "sum: held 1 is what a release frees, held 0 what a download fetches" \
     "$(run read/sum_mail "$both" ":seen=NULL" ":attachment=NULL" ":held=1" ":since=NULL" ":until=NULL")|$(run read/sum_mail "$both" ":seen=NULL" ":attachment=NULL" ":held=0" ":since=NULL" ":until=NULL")" \
     "1|50|0|3|100|2"
-sql "UPDATE items SET object_hash = '$hc', level = 2 WHERE collection = 'Sent' AND link_id = 'a';"
+sql "UPDATE items SET object = (SELECT id FROM objects WHERE hash = '$hc'), level = 2 WHERE collection = 'Sent' AND link_id = 'a';"
 expect "sum: a body one placement holds holds the message" \
     "$(run read/sum_mail "$inbox" ":seen=NULL" ":attachment=NULL" ":held=0" ":since=NULL" ":until=NULL")|$(run read/sum_mail "$both" ":seen=NULL" ":attachment=NULL" ":held=0" ":since=NULL" ":until=NULL")" \
     "3|100|2|2|0|2"
@@ -2219,7 +2219,7 @@ collection INBOX
 collection Archive
 object "$h1"
 mail Archive k 1 10 NULL
-sql "UPDATE bindings SET base_object = '$h1' WHERE item IN (SELECT id FROM items WHERE link_id = 'k');"
+sql "UPDATE bindings SET base_object = (SELECT id FROM objects WHERE hash = '$h1') WHERE item IN (SELECT id FROM items WHERE link_id = 'k');"
 minted="dup:k#$(printf '\001')k"
 sql "INSERT INTO items(collection, link_id, seq, flags_known, level) VALUES('INBOX', '$minted', 2, 1, 2);
      INSERT INTO bindings(item, collection, source, handle) VALUES((SELECT id FROM items WHERE collection = 'INBOX' AND link_id = '$minted'), 'INBOX', 'imap', char(1) || '$minted');"
@@ -2258,7 +2258,7 @@ run owner/insert_binding ":collection='Trash'" ":link_id='landed'" ":source='ima
     ":conflicted=0" ":conflict_revision=NULL" ":conflict_object=NULL" ":shared_object=NULL"
 base() {
     sql "SELECT group_concat(state, ' ') FROM (SELECT i.link_id || ':' || b.base_present || b.base_flags_known || b.base_marks
-         || coalesce(b.base_object, '-') || coalesce(b.base_revision, '-') AS state
+         || coalesce((SELECT hash FROM objects WHERE id = b.base_object), '-') || coalesce(b.base_revision, '-') AS state
          FROM bindings b JOIN items i ON i.id = b.item WHERE b.collection = 'Trash' ORDER BY i.link_id);"
 }
 run owner/deliver_binding ":collection='Trash'" ":source='imap'" ":handle='${p}moved'"
@@ -2404,7 +2404,7 @@ expect "schema: the tables of a few short columns carry no rowid" \
 expect "schema: a pointer index holds the set pointers alone, items_by_object too, and items_bodiless the rest, live, which coverage reads" \
     "$(sql "SELECT group_concat(name, ' ') FROM (SELECT name FROM sqlite_schema WHERE type = 'index' AND name GLOB '*_object'
             AND sql GLOB '* IS NOT NULL' ORDER BY name);")|$(sql "SELECT sql FROM sqlite_schema WHERE name = 'items_bodiless';")" \
-    "bindings_by_conflict_object bindings_by_object bindings_by_shared_object items_by_conflict_object items_by_object queue_by_object|CREATE INDEX items_bodiless ON items(collection, deleted, object_hash) WHERE object_hash IS NULL AND deleted = 0"
+    "bindings_by_conflict_object bindings_by_object bindings_by_shared_object items_by_conflict_object items_by_object queue_by_object|CREATE INDEX items_bodiless ON items(collection, deleted, object) WHERE object IS NULL AND deleted = 0"
 # opens <statement>: the tables and indexes its program reads, foreign keys
 # on, by name.
 opens() {
@@ -2412,8 +2412,80 @@ opens() {
         while read -r root; do sql "SELECT name FROM sqlite_schema WHERE rootpage = $root;"; done | sort | tr '\n' ' '
 }
 expect "schema: an object's delete checks every pointer at it on its index, never reading items, bindings or the queue" \
-    "$(opens "DELETE FROM objects WHERE hash = '$h1';")" \
+    "$(opens "DELETE FROM objects WHERE id = 1;")" \
     "bindings_by_conflict_object bindings_by_object bindings_by_shared_object items_by_conflict_object items_by_object queue_by_object "
+
+# --- An object is keyed by an integer, named by its hash (§4.3, §4.4) -------
+
+# Every pointer at a body is the object's id: each foreign key onto objects
+# names `id`, and a pointer holding a name is refused, so no index on a
+# pointer is keyed by a random 52-character text.
+fresh
+collection INBOX
+item INBOX a 1
+run queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='remove'" ":payload='{\"v\":1,\"seq\":1}'" \
+    ":target_collection=NULL" ":object_hash=NULL" > /dev/null
+run owner/insert_binding ":collection='INBOX'" ":link_id='a'" ":source='imap'" ":handle='1'" ":base_flags=NULL" \
+    ":base_object=NULL" ":base_revision=NULL" ":base_present=1" ":conflicted=1" ":conflict_revision=NULL" \
+    ":conflict_object=NULL" ":shared_object=NULL"
+expect "objects: every pointer at a body is a foreign key onto objects.id, and a pointer holding a name is refused" \
+    "$(sql "SELECT group_concat(name || '.' || \"from\" || '>' || \"to\", ' ') FROM (SELECT t.name, f.\"from\", f.\"to\"
+            FROM sqlite_schema t, pragma_foreign_key_list(t.name) f WHERE t.type = 'table' AND f.\"table\" = 'objects'
+            ORDER BY t.name, f.\"from\");")|$(for write in "items SET object" "items SET conflicted = 1, conflict_object" \
+            "bindings SET base_object" "bindings SET conflict_object" "bindings SET shared_object" "queue SET object"; do
+               sql "UPDATE $write = '$h1';" 2>&1 | grep -c 'CHECK constraint failed: typeof' || true
+           done | tr -d '\n')" \
+    "bindings.base_object>id bindings.conflict_object>id bindings.shared_object>id items.conflict_object>id items.object>id queue.object>id|111111"
+
+# The id is drawn at insert above every id drawn before, so a body stored
+# after the collector took the last one never reuses its id, and an index on
+# a pointer grows at its end.
+fresh
+object "$h1"
+object "$h2"
+run owner/recompute_refcounts
+run owner/delete_garbage_objects
+object "$h3"
+object "$h1"
+object "$h3"
+expect "objects: an id is drawn above every id drawn before, the collected ones' included, and a body stored again keeps its own" \
+    "$(sql "SELECT (SELECT id FROM objects WHERE hash = '$h3') || ' ' || (SELECT id FROM objects WHERE hash = '$h1');")|$(sql "SELECT count(*) FROM objects;")" "3 4|2"
+
+# A statement takes a body by its hash and writes its id: a hash naming no
+# object row fails, whichever statement names it, and every read answers the
+# hash.
+fresh
+collection INBOX
+object "$h1"
+object "$h2"
+item INBOX a 1 "'$h1'"
+mail_row() {
+    run owner/insert_item ":collection='INBOX'" ":link_id='$1'" ":seq=$2" ":flags='[]'" ":object_hash=$3" ":sort_key=''" \
+        ":level=2" ":deleted=0" ":conflicted=$4" ":conflict_object=$5"
+}
+expect "objects: a write naming a body no object row holds is refused, by its hash or its conflict's" \
+    "$(mail_row b 2 "'$h3'" 0 NULL 2>&1 | grep -c 'FOREIGN KEY constraint failed')$(mail_row b 2 "'$h1'" 1 "'$h3'" 2>&1 | grep -c 'FOREIGN KEY constraint failed')$(run owner/update_item ":collection='INBOX'" ":link_id='a'" ":flags='[]'" ":object_hash='$h3'" ":sort_key=''" \
+        ":level=2" ":deleted=0" ":conflicted=0" ":conflict_object=NULL" 2>&1 | grep -c 'FOREIGN KEY constraint failed')$(run owner/insert_binding ":collection='INBOX'" ":link_id='a'" ":source='imap'" ":handle='1'" ":base_flags=NULL" \
+        ":base_object='$h1'" ":base_revision=NULL" ":base_present=1" ":conflicted=0" ":conflict_revision=NULL" \
+        ":conflict_object=NULL" ":shared_object='$h3'" 2>&1 | grep -c 'FOREIGN KEY constraint failed')|$(sql "SELECT count(*) FROM items;")" \
+    "1111|1"
+mail_row b 2 "'$h2'" 1 "'$h1'"
+run owner/insert_binding ":collection='INBOX'" ":link_id='b'" ":source='imap'" ":handle='2'" ":base_flags=NULL" \
+    ":base_object='$h1'" ":base_revision=NULL" ":base_present=1" ":conflicted=0" ":conflict_revision=NULL" \
+    ":conflict_object=NULL" ":shared_object='$h2'"
+expect "objects: a body named by its hash is written as its id and read back as its hash" \
+    "$(sql "SELECT i.object = o.id FROM items i, objects o WHERE i.link_id = 'b' AND o.hash = '$h2';")|$(run owner/load_items ":collection='INBOX'" | grep '^b|' | cut -d'|' -f3,8)|$(run owner/load_bindings ":collection='INBOX'" | cut -d'|' -f5,11)|$(run read/get_item ":collection='INBOX'" ":seq=2" | cut -d'|' -f4)" \
+    "1|$h2|$h1|$h1|$h2|$h2"
+# A hot statement naming a body by its hash seeks each name on
+# objects_by_hash, then the pointer by the id; a read answering the hash
+# reads it by the id, the row's key; and the collector's recount joins ids
+# alone, reading no name.
+expect "objects: a write and a lookup by hash seek objects_by_hash, then the pointer index by id" \
+    "$(plan owner/insert_item ":object_hash='$h1'" ":conflict_object=NULL" | grep -c 'SEARCH objects USING COVERING INDEX objects_by_hash (hash=?)' || true)$(plan read/list_object_placements ":hash='$h1'" | grep -cE 'SEARCH objects USING COVERING INDEX objects_by_hash \(hash=\?\)|SEARCH i USING INDEX items_by_object \(object=\?\)' || true)$(plan owner/held_elsewhere ":collection='INBOX'" ":link_id='a'" ":hash='$h1'" | grep -c 'SEARCH objects USING COVERING INDEX objects_by_hash (hash=?)' || true)" \
+    "221"
+expect "objects: a read answers a body's hash by its id, and the recount joins ids alone" \
+    "$(plan read/list_mail_page_desc ":collection='INBOX'" ":after_key=NULL" ":after_seq=NULL" ":limit=10" | grep -c 'SEARCH o USING INTEGER PRIMARY KEY (rowid=?)' || true)$(plan owner/recompute_refcounts | grep -c 'objects_by_hash' || true)$(plan owner/recompute_refcounts | grep -cE 'SEARCH (items|bindings|queue) USING COVERING INDEX (items_by_object|items_by_conflict_object|bindings_by_object|bindings_by_conflict_object|bindings_by_shared_object|queue_by_object) ' || true)" \
+    "106"
 
 # --- The person axis pages newest first (§14.1) -----------------------------
 
@@ -2471,13 +2543,13 @@ expect "lookup: an account's body for a stated key, with its size, one spelling 
 # the three as NULL, which no message agrees with: its subject is never NULL.
 run owner/upsert_mail_summary ":collection='Work'" ":link_id='k@x'" ":message_id='k@x'" ":subject='Notice'" \
     ":sender='cron@x'" ":sender_name=NULL" ":date='2026-08-01T10:00:00Z'" ":size=1" ":attachment=NULL" ":invitation=NULL"
-sql "UPDATE items SET object_hash = '$h2' WHERE collection = 'Work2' AND link_id = 'k@x';"
+sql "UPDATE items SET object = (SELECT id FROM objects WHERE hash = '$h2') WHERE collection = 'Work2' AND link_id = 'k@x';"
 run owner/upsert_mail_summary ":collection='Work2'" ":link_id='k@x'" ":message_id='k@x'" ":subject='Notice'" \
     ":sender=NULL" ":sender_name=NULL" ":date=NULL" ":size=1" ":attachment=NULL" ":invitation=NULL"
 expect "lookup: each holder of a key answers its body with the subject, date and sender its row states, two messages under one Message-ID as two rows" \
     "$(run owner/lookup_objects ":account='work'" ":links='[\"k@x\"]'" | LC_ALL=C sort | tr '\n' ' ')" \
     "k@x|$h2|1|Notice|| k@x|$h1|1|Notice|2026-08-01T10:00:00Z|cron@x "
-sql "UPDATE items SET object_hash = '$h1' WHERE collection = 'Work2' AND link_id = 'k@x';
+sql "UPDATE items SET object = (SELECT id FROM objects WHERE hash = '$h1') WHERE collection = 'Work2' AND link_id = 'k@x';
      DELETE FROM mail_summary WHERE item IN (SELECT id FROM items WHERE link_id = 'k@x');"
 # summary <collection> <link_id> <attachment> <invitation>: a mail summary
 # stating the two columns a body gives.
@@ -2490,7 +2562,7 @@ summary Work2 'k@x' 1 "'ev@x'"
 summary Home 'k@x' 0 NULL
 summary Work 'alt:s|d|f' 1 "'alt@x'"
 summary Work 'Hash:x' 1 "'cased@x'"
-sql "UPDATE items SET object_hash = '$h1' WHERE link_id = 'alt:s|d|f';"
+sql "UPDATE items SET object = (SELECT id FROM objects WHERE hash = '$h1') WHERE link_id = 'alt:s|d|f';"
 expect "held: a body's columns come from a row of the account holding it, one stating its mark first, never another account's nor a derived key's" \
     "$(run owner/held_mail_summary ":account='work'" ":link_id='k@x'" ":hash='$h1'")|$(run owner/held_mail_summary ":account='home'" ":link_id='k@x'" ":hash='$h1'")|$(run owner/held_mail_summary ":account='home'" ":link_id='k@x'" ":hash='$h2'")|$(run owner/held_mail_summary ":account='work'" ":link_id='alt:s|d|f'" ":hash='$h1'")" \
     "1|ev@x||0||"
@@ -2528,7 +2600,7 @@ expect "retained: retained_item answers a retained row's seq and its pins, a liv
     "$(run owner/retained_item ":collection='INBOX'" ":link_id='a'")|$(run owner/retained_item ":collection='INBOX'" ":link_id='b'")" "7|$h1||"
 run owner/revive_item ":collection='INBOX'" ":link_id='a'"
 expect "revive: the row is live again under its seq and body, retired by no source, the other retained row and the other collection's untouched" \
-    "$(sql "SELECT seq, object_hash, deleted, retained_at IS NULL, retained_by IS NULL FROM items WHERE collection = 'INBOX' AND link_id = 'a';")|$(run read/count_retained ":collection='INBOX'")|$(run owner/retained_item ":collection='INBOX'" ":link_id='a'")|$(sql "SELECT deleted FROM items WHERE collection = 'Archive';")" \
+    "$(sql "SELECT i.seq, o.hash, i.deleted, i.retained_at IS NULL, i.retained_by IS NULL FROM items i LEFT JOIN objects o ON o.id = i.object WHERE i.collection = 'INBOX' AND i.link_id = 'a';")|$(run read/count_retained ":collection='INBOX'")|$(run owner/retained_item ":collection='INBOX'" ":link_id='a'")|$(sql "SELECT deleted FROM items WHERE collection = 'Archive';")" \
     "7|$h1|0|1|1|1||0"
 
 # --- A refcount never falls below zero (§5, §7) -----------------------------
@@ -2892,9 +2964,9 @@ expect "domain: the domain is compared, never a pattern, ASCII letters in either
 bind INBOX k@x imap 10 1
 bind Home k@x imap 10 1
 bind Solo k@x graph g1 1
-sql "UPDATE bindings SET conflicted = 1, conflict_revision = 'r2', conflict_object = '$h3' WHERE collection = 'INBOX';
+sql "UPDATE bindings SET conflicted = 1, conflict_revision = 'r2', conflict_object = (SELECT id FROM objects WHERE hash = '$h3') WHERE collection = 'INBOX';
      UPDATE bindings SET conflicted = 1 WHERE collection = 'Home';
-     UPDATE items SET conflicted = 1, conflict_object = '$h3' WHERE collection = 'INBOX' AND link_id = 'k@x';"
+     UPDATE items SET conflicted = 1, conflict_object = (SELECT id FROM objects WHERE hash = '$h3') WHERE collection = 'INBOX' AND link_id = 'k@x';"
 expect "conflicts: an account's conflicted bindings with base, local and remote, its conflicted items with both bodies, another account's apart" \
     "$(run read/list_conflicted_bindings ":account='work'" | tr '\n' ' ')|$(run read/list_conflicted_items ":account='work'" | tr '\n' ' ')|$(run read/list_conflicted_bindings ":account='home'" | cut -d'|' -f1)|$(run read/list_conflicted_items ":account='home'")" \
     "INBOX|k@x|imap|10|r2||$h1|$h3 |INBOX|k@x|1|$h1|$h3 |Home|"
@@ -2989,9 +3061,28 @@ for label in ha hn ct cf; do
     printf -v "$label" '%s' "$(name "$label")"
 done
 
+# A placement names its body by object.id (§3): an upsert takes the body by
+# its hash and writes its id, a hash the index does not hold refused, and a
+# body's id is drawn above every id drawn before, a deleted body's included,
+# so a placement a pass has not yet moved off a deleted body names no other.
 fresh
 index
-expect "index: an object and a placement name a body as the store does, 52 characters of a-z2-7, never a path" \
+body "$h2" > /dev/null
+isearch upsert_placement ":collection='C'" ":seq=2" ":link_id='y'" ":hash='$h2'" > /dev/null
+isearch delete_object_row ":hash='$h2'"
+body "$h3" > /dev/null
+expect "index: a placement holds its body's object.id, a hash the index does not hold is refused, and an id is never drawn twice" \
+    "$(sqlite3 "$dir/index.db" "SELECT p.object FROM placement p WHERE p.seq = 2;")|$(isearch upsert_placement ":collection='C'" ":seq=3" ":link_id='z'" ":hash='$h4'" 2>&1 | grep -c 'CHECK constraint failed: object > 0')|$(sqlite3 "$dir/index.db" "SELECT id FROM object WHERE hash = '$h3';")|$(isearch placements_gone | grep -c "|y|$")" \
+    "1|1|2|1"
+# Every join from a body to its placements seeks placement_by_object by the
+# body's id, a text term's matches included, never by a name.
+expect "index: a body's placements are sought by its id, a text term's matches joining no object row" \
+    "$(for statement in match_objects categorised object_placed coverage_all; do isplan "$statement" ":match='\"budget\"'" ":value='work'" ":hash='$h1'" | grep -c 'placement_by_object (object=?)' || true; done | tr -d '\n')|$(isplan match_objects ":match='\"budget\"'" | grep -cE 'SEARCH o |SCAN o |sqlite_autoindex_object_1' || true)|$(for statement in attached holding; do isplan "$statement" ":property='phone'" | grep -c 'SEARCH o USING INTEGER PRIMARY KEY (rowid=?)' || true; done | tr -d '\n')" \
+    "1111|0|11"
+
+fresh
+index
+expect "index: an object names a body as the store does, 52 characters of a-z2-7, never a path, and a placement names none other" \
     "$(for hash in ../x "${h1^^}" "${h1:0:26}"; do body "$hash" 2>&1 | grep -c 'CHECK constraint failed'; done | tr -d '\n')|$(isearch upsert_placement ":collection='C'" ":seq=1" ":link_id='x'" ":hash='../x'" 2>&1 | grep -c 'CHECK constraint failed')|$(body "$h1")" \
     "111|1|1"
 object_id="$(sqlite3 "$dir/index.db" "SELECT id FROM object WHERE hash = '$h1';")"
@@ -3085,9 +3176,9 @@ expect "coverage: a status this version does not know is read as unparseable, th
 sqlite3 "$dir/index.db" "DELETE FROM placement WHERE collection = 'Cal2' AND seq = 99; DELETE FROM object WHERE hash = '$hd';"
 steps="$(isplan coverage ":collections='[\"Cal\"]'")"
 expect "coverage: each collection seeks items_bodiless, never the store's other rows" \
-    "$(grep -c 'USING COVERING INDEX items_bodiless (collection=? AND deleted=? AND object_hash=?)' <<<"$steps" || true)$(grep -c 'items_by_object\|SCAN i' <<<"$steps" || true)" "10"
+    "$(grep -c 'USING COVERING INDEX items_bodiless (collection=? AND deleted=? AND object=?)' <<<"$steps" || true)$(grep -c 'items_by_object\|SCAN i' <<<"$steps" || true)" "10"
 expect "coverage: the bodies not read whole are walked on object_not_ok to their placements, and missing is sought on its key, never every placement nor every object" \
-    "$(grep -c 'SCAN o USING COVERING INDEX object_not_ok' <<<"$steps" || true)$(grep -c 'SEARCH p USING INDEX placement_by_hash (hash=?)' <<<"$steps" || true)$(grep -c 'SEARCH m USING COVERING INDEX sqlite_autoindex_missing_1 (collection=?)' <<<"$steps" || true)$(grep -cE 'SCAN (o|p|m)$' <<<"$steps" || true)" "1110"
+    "$(grep -c 'SCAN o USING COVERING INDEX object_not_ok' <<<"$steps" || true)$(grep -c 'SEARCH p USING INDEX placement_by_object (object=?)' <<<"$steps" || true)$(grep -c 'SEARCH m USING COVERING INDEX sqlite_autoindex_missing_1 (collection=?)' <<<"$steps" || true)$(grep -cE 'SCAN (o|p|m)$' <<<"$steps" || true)" "1110"
 every="$(sql "SELECT json_group_array(id) FROM collections;")"
 expect "coverage: coverage_all answers what coverage answers bound to every collection" \
     "$(isearch coverage_all)" "$(isearch coverage ":collections='$every'")"
@@ -3488,11 +3579,12 @@ expect "linked: the live placements at the other end of an item's references, ei
 
 # --- Erasing: a purge leaves nothing in the files (STORAGE.md §11.5) ----------
 
-# erase <secure_delete> <merge>: a mail whose key, subject, body words and
+# erase <secure_delete> <merge>: a mail whose key, subject, body words, body and
 # property no other row holds, beside one that stays, purged as §11.5 runs it,
 # its properties going with its last row (§4.3), its index rows deleted, the
-# text merged by optimize_text when merge is 1; answers how often its word is
-# left in pimdir.db, then in index.db.
+# text merged by optimize_text when merge is 1, its body collected; answers how
+# often its word is left in pimdir.db, then in index.db, then how often its
+# body's name is left in pimdir.db, on the object row or objects_by_hash.
 
 erase() {
     secure_delete="$1"
@@ -3503,23 +3595,28 @@ erase() {
         IFS=: read -r seq word <<<"$spec"
         mail INBOX "$word@x" "$seq" "$seq" "'2026-09-0${seq}T00:00:00Z'"
         label="h$seq"
+        object "${!label}"
+        sql "UPDATE items SET object = (SELECT id FROM objects WHERE hash = '${!label}') WHERE link_id = '$word@x';"
         id="$(body "${!label}")"
         text "$id" "$word report" "$word minutes"
         isearch upsert_placement ":collection='INBOX'" ":seq=$seq" ":link_id='$word@x'" ":hash='${!label}'" > /dev/null
     done
+    run owner/recompute_refcounts
     run owner/add_property ":seq=2" ":key='x/note'" ":value='zanzibar property'"
     run owner/delete_item_bindings ":collection='INBOX'" ":link_id='zanzibar@x'"
     run owner/retain_item ":collection='INBOX'" ":link_id='zanzibar@x'" ":source='imap'"
     run owner/purge_item ":collection='INBOX'" ":seq=2" > /dev/null
+    run owner/release_pins ":hashes='[\"$h2\"]'"
+    run owner/delete_garbage_objects
     isearch delete_placement ":collection='INBOX'" ":seq=2" > /dev/null
     isearch delete_object ":rowid=$id"
     isearch delete_object_row ":hash='$h2'"
     [ "$2" = 0 ] || isearch optimize_text
-    echo "$(grep -ao zanzibar "$dir/pimdir.db" | wc -l)|$(grep -ao zanzibar "$dir/index.db" | wc -l)"
+    echo "$(grep -ao zanzibar "$dir/pimdir.db" | wc -l)|$(grep -ao zanzibar "$dir/index.db" | wc -l)|$(grep -ao "$h2" "$dir/pimdir.db" | wc -l)|$(grep -ao "$h2" "$dir/index.db" | wc -l)"
 }
-expect "erase: a purged mail's key, subject, address and property leave pimdir.db,
- and its body's words index.db, once secure_delete zeroes what a delete frees and optimize_text merges the full-text segments" \
-    "$(erase ON 1)" "0|0"
+expect "erase: a purged mail's key, subject, address, property and body's name leave pimdir.db,
+ and its body's words and name index.db, once secure_delete zeroes what a delete frees and optimize_text merges the full-text segments" \
+    "$(erase ON 1)" "0|0|0|0"
 expect "erase: without optimize_text the deleted body's words stay in a full-text segment" \
     "$(erase ON 0 | cut -d'|' -f2 | grep -c '^0$' || true)" "0"
 expect "erase: without secure_delete a purged row stays in the space its delete freed, in both files" \
@@ -3585,7 +3682,7 @@ sql "UPDATE items SET flags_known = 0, marks = 0 WHERE link_id = 'unknown';
      UPDATE items SET conflicted = 1 WHERE link_id = 'diverged';
      UPDATE items SET deleted = 1 WHERE link_id = 'deleted';
      UPDATE bindings SET base_present = 0, base_flags_known = 0, base_marks = 0 WHERE item IN (SELECT id FROM items WHERE link_id = 'created');
-     UPDATE items SET object_hash = '$h1', level = 2 WHERE link_id = 'edited';
+     UPDATE items SET object = (SELECT id FROM objects WHERE hash = '$h1'), level = 2 WHERE link_id = 'edited';
      INSERT INTO bindings(item, collection, source, handle, base_present) VALUES((SELECT id FROM items WHERE link_id = 'seen'), 'INBOX', 'graph', 'g20', 1);"
 # The delivered creates (SYNC.md §2): based under a provisional handle, the
 # base naming nothing. One holding no body projects Clean and owes nothing;
@@ -3596,7 +3693,7 @@ for key in dbare dbody dgone; do
     sql "INSERT INTO items(collection, link_id, seq, flags_known, marks, level) VALUES('INBOX', '$key', (SELECT max(seq) + 1 FROM items), 1, 1, 1);
          INSERT INTO bindings(item, collection, source, handle, base_present) VALUES((SELECT id FROM items WHERE link_id = '$key'), 'INBOX', 'imap', char(1) || '$key', 1);"
 done
-sql "UPDATE items SET object_hash = '$h1', level = 2 WHERE link_id = 'dbody';
+sql "UPDATE items SET object = (SELECT id FROM objects WHERE hash = '$h1'), level = 2 WHERE link_id = 'dbody';
      UPDATE items SET deleted = 1 WHERE link_id = 'dgone';"
 run owner/recompute_refcounts
 # owing: the handles the statement names, U+0001 written ^A whether the shell

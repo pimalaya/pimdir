@@ -6,4 +6,4 @@ DELETE FROM items
 WHERE collection = :collection AND link_id = :link_id
   AND NOT EXISTS (SELECT 1 FROM bindings b
                   WHERE b.item = items.id)
-RETURNING object_hash, conflict_object;
+RETURNING (SELECT o.hash FROM objects o WHERE o.id = object) AS object_hash, (SELECT o.hash FROM objects o WHERE o.id = conflict_object) AS conflict_object;

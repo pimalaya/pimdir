@@ -14,7 +14,7 @@ WHERE held.link_id = :link_id AND held.collection != :collection
   AND held.deleted = 0
   AND there.account IS here.account
   AND CASE
-        WHEN :hash IS NOT NULL THEN held.object_hash = :hash
+        WHEN :hash IS NOT NULL THEN held.object = (SELECT id FROM objects WHERE hash = :hash)
         WHEN here.kind != 'message/rfc822' THEN 1
         ELSE EXISTS (
           SELECT 1 FROM items AS mine

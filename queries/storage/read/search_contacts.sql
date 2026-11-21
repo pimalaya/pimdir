@@ -13,7 +13,7 @@ SELECT i.collection, i.seq, i.link_id,
                    || CASE WHEN i.marks & 8 THEN '\Draft ' ELSE '' END
                    || CASE WHEN i.marks & 16 THEN '\Deleted ' ELSE '' END
                    || coalesce((SELECT group_concat(f.flag, ' ') FROM placement_flag f WHERE f.item = i.id), '')) END AS flags,
-       i.object_hash, i.sort_key, i.level,
+       (SELECT o.hash FROM objects o WHERE o.id = i.object) AS object_hash, i.sort_key, i.level,
        s.uid, s.fn, s.kind, s.org
 FROM (SELECT DISTINCT value AS id FROM temp.param WHERE slot = 'collections') p
 JOIN items i ON i.rowid IN (
