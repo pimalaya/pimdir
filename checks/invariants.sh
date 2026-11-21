@@ -3088,6 +3088,12 @@ expect "coverage: each collection seeks items_bodiless, never the store's other 
     "$(grep -c 'USING COVERING INDEX items_bodiless (collection=? AND deleted=? AND object_hash=?)' <<<"$steps" || true)$(grep -c 'items_by_object\|SCAN i' <<<"$steps" || true)" "10"
 expect "coverage: the bodies not read whole are walked on object_not_ok to their placements, and missing is sought on its key, never every placement nor every object" \
     "$(grep -c 'SCAN o USING COVERING INDEX object_not_ok' <<<"$steps" || true)$(grep -c 'SEARCH p USING INDEX placement_by_hash (hash=?)' <<<"$steps" || true)$(grep -c 'SEARCH m USING COVERING INDEX sqlite_autoindex_missing_1 (collection=?)' <<<"$steps" || true)$(grep -cE 'SCAN (o|p|m)$' <<<"$steps" || true)" "1110"
+every="$(sql "SELECT json_group_array(id) FROM collections;")"
+expect "coverage: coverage_all answers what coverage answers bound to every collection" \
+    "$(isearch coverage_all)" "$(isearch coverage ":collections='$every'")"
+steps="$(isplan coverage_all)"
+expect "coverage: coverage_all walks items_bodiless once and binds no slot, never seeking a collection's items nor scanning the store's" \
+    "$(grep -c 'items_bodiless' <<<"$steps" || true)$(grep -c 'temp.param\|(collection=?' <<<"$steps" || true)$(grep -cE 'SCAN i$' <<<"$steps" || true)" "100"
 
 # --- A zero-length occurrence falls in the range it starts (SEARCH.md §8.1) --
 

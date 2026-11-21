@@ -4,6 +4,7 @@
 {"name": "search/categorised", "parameters": ["value"], "slots": [], "columns": ["collection", "seq"]},
 {"name": "search/chunks_of", "parameters": ["hash"], "slots": [], "columns": ["ord", "field", "start", "end"]},
 {"name": "search/coverage", "parameters": [], "slots": ["collections"], "columns": ["kind", "bodiless", "missing", "unparseable", "encrypted"]},
+{"name": "search/coverage_all", "parameters": [], "slots": [], "columns": ["kind", "bodiless", "missing", "unparseable", "encrypted"]},
 {"name": "search/cut_before", "parameters": ["end"], "slots": ["collections"], "columns": ["count"]},
 {"name": "search/delete_missing", "parameters": ["collection", "seq"], "slots": [], "columns": []},
 {"name": "search/delete_object", "parameters": ["rowid"], "slots": [], "columns": []},

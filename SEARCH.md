@@ -131,6 +131,7 @@ The index holds:
 | `hit` | query client | §8.2 |
 | `chunks_of` | query client | §6 |
 | `coverage` | query client | §8.2 |
+| `coverage_all` | query client | §8.2 |
 | `cut_before` | query client | §8.2 |
 | `behind` | query client | §8.2 |
 
@@ -321,7 +322,7 @@ A client stating another zone than the index's `floating_zone` reads its days in
 - **Deleted items are excluded.** The trash is the store's (STORAGE §11), not the index's.
 - **The query's collections** are those its terms leave: every collection of the store, less those an `account:`, `collection:`, `folder:` or `kind:` term rules out by its account, its id or its kind, `event`, `task` and `journal` each naming the calendar kind. Only a term standing as a conjunct of the whole query rules any out, joined to the rest by `and`, written or not. A group is read through: one that is itself such a conjunct lends the query its own conjuncts, at any depth, so `(collection:a) x` and `collection:a x`, which answer one hit set, have one scope and one coverage. A term negated, beside an `or`, or inside a group that is negated or stands beside an `or`, rules none out.
 - **Coverage is part of the answer**:
-  - per kind, among the query's collections and the kinds whose body search reads, mail, contacts and calendars, never files (§6), four counts, each a key of its own (`coverage`, bound to those collections):
+  - per kind, among the query's collections and the kinds whose body search reads, mail, contacts and calendars, never files (§6), four counts, each a key of its own (`coverage`, bound to those collections, or `coverage_all` when no conjunct rules a collection out, which answers the same without binding them):
     - `bodiless`, the live items holding no body, read from the store;
     - `missing`, the placements whose body could not be read (§4), read from the index;
     - `unparseable`, the placements whose body the extraction recorded so, or under a status the reader does not know (§6), read from the index;
