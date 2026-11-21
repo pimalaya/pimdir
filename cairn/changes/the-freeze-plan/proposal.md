@@ -45,7 +45,7 @@ SEARCH is released with STORAGE and SYNC (the owner, 2026-11-20), reversing READ
 - **D1, where the generator lives** (agreed 2026-11-20): a Rust crate in this repository, depending on no Pimalaya crate, so io-pimdir takes it as a dev-dependency and the standard owns its own test data.
 - **D2, one-way authority** (agreed 2026-11-20): a remote-only change on a source the store is authoritative over is adopted today (io-pimdir `PimdirHub::reconcile`, SYNC.md:347-349 asking `PreferLocal` only when both sides changed). In sync-v1: a policy value making such a change a divergence, additive to the conflict policies, with a vector; neverest v1 depends on it.
 - **D3, search in io-pimdir 1.0** (decided 2026-11-20): inside io-pimdir 1.0 and its semver, SEARCH being released with the other parts.
-- **D4, the `pimdir` operator binary** (io-pimdir's `cli` feature, agreed 2026-11-20): outside the 1.0 contract, stated so in its help and README.
+- **D4, the `pimdir` operator binary** (io-pimdir's `cli` feature, agreed 2026-11-20, amended 2026-11-21): outside the 1.0 contract but for the JSON output io-pimdir's the-json-output-is-the-integration-point names (what `--json` prints for `search`, `count`, `show`, `thread`, `tag`, `item list`, `item show`, `collection list`, `queue list`, `queue status`, `store info` and `version`, and the failure object `pimdir-error`), stable within a major whose number `pimdir --json version` states as `formatVersion`, io-pimdir's own major; its commands, flags, text output and operator verbs stay outside. Stated so in its help and README.
 - **D5, the stop rule** (agreed 2026-11-20): two campaigns in a row with no spec break.
 
 ## Out of scope

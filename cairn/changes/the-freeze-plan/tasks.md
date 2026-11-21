@@ -47,6 +47,7 @@ change: the-freeze-plan
 - [x] D3 decided (2026-11-20): search inside io-pimdir 1.0, SEARCH released with the other parts
 - [x] D4 decided (2026-11-20): outside
 - [x] D4 stated in the `pimdir` binary's help and README
+- [x] D4 amended (2026-11-21): outside but for the JSON output io-pimdir's the-json-output-is-the-integration-point names, stated in the binary's help and README, pinned by io-pimdir tests/json_contract.rs
 - [x] D5 decided (2026-11-20): two campaigns in a row with no spec break
 
 ## 5b. Search in v1
