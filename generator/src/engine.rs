@@ -663,12 +663,14 @@ impl Model {
     /// one write, each based binding of the source carried onto the member
     /// resolving to its link id (the copy whose base names the listed
     /// revision first, then the one whose base holds the carried body, then
-    /// in old handle order), a member of a mutable kind listed at another
-    /// revision pulled to `Meta`, or recorded in conflict over a local edit,
-    /// and every binding no member resolves to dropped `Deleted`, the
-    /// collection's generation bumped. A rekey missing more than half of at
-    /// least 20, naming no member while any is missing, or capped while any
-    /// is, writes nothing and parks unless the run accepts absences.
+    /// in old handle order), its flags merged with the listed ones over the
+    /// old base, the listed ones the base, a member of a mutable kind listed
+    /// at another revision pulled to `Meta` with its summary and sort key, or
+    /// recorded in conflict over a local edit, and every binding no member
+    /// resolves to dropped `Deleted`, the collection's generation bumped. A
+    /// rekey missing more than half of at least 20, naming no member while
+    /// any is missing, or capped while any is, writes nothing and parks
+    /// unless the run accepts absences.
     pub fn rekey(&mut self, remote: &Remote, options: &Options) -> Run {
         let collection = remote.collection.clone();
         let source = remote.source.clone();
@@ -763,6 +765,7 @@ impl Model {
                     self.file(&collection, filed, placement);
                     continue;
                 };
+                let filed = &remote.members[&member.handle].filed;
                 let item = &mut self.items[*index];
                 let edited = item.object.is_some()
                     && item.object != item.bound(&source).expect("a bound item").base_object;
@@ -771,8 +774,14 @@ impl Model {
                 if moved && !edited {
                     item.object = None;
                     item.level = 1;
+                    item.summary = filed.summary.clone();
+                    item.addresses = filed.addresses.clone();
+                    item.sort_key = filed.sort_key.clone();
                 }
+                let flags = item.flags.clone();
                 let binding = item.bound_mut(&source).expect("a bound item");
+                let merged = merge(flags.as_ref(), binding.base_flags.as_ref(), &member.flags);
+                binding.base_flags = Some(member.flags.clone());
                 binding.handle = member.handle.clone();
                 match (moved, edited) {
                     (true, true) => {
@@ -786,6 +795,7 @@ impl Model {
                     }
                     _ => {}
                 }
+                item.flags = Some(merged);
             }
             let mut gone = absent;
             gone.sort_unstable_by(|a, b| b.cmp(a));
@@ -829,7 +839,8 @@ impl Model {
     /// names a revision of and no body while the item holds one, which an
     /// item conflict recorded unread waits for (SYNC §6, §9), and the
     /// diverging body a binding's conflict asks for, which clears it when
-    /// it is the placement's own (SYNC §5).
+    /// it is the placement's own (SYNC §5). It reports no event but
+    /// `Overruled` (SYNC §5).
     pub fn upgrade(&mut self, remote: &Remote, handles: &[String]) -> Run {
         let collection = remote.collection.clone();
         let source = remote.source.clone();
@@ -893,6 +904,7 @@ impl Model {
                 }
             }
         }
+        events.retain(|event| matches!(event, Event::Overruled { .. }));
 
         Run {
             verb: "upgrade",
@@ -1124,7 +1136,8 @@ impl Model {
     /// takes the body the member carries, none when it carries none, at
     /// `Meta`, the body the row held kept as a retained item over the
     /// member's handle, reported `Overruled`, its server having perhaps
-    /// replaced it.
+    /// replaced it. The binding's `shared_object` names the body only when
+    /// the member carried one (STORAGE §10).
     fn revive(
         &mut self,
         index: usize,
@@ -1165,7 +1178,7 @@ impl Model {
             base_object: object.clone(),
             base_revision: member.revision.clone(),
             base_present: true,
-            shared_object: object,
+            shared_object: object.filter(|_| member.carries),
             conflicted: false,
             conflict_revision: None,
             conflict_object: None,
@@ -1468,7 +1481,10 @@ impl Model {
     /// A listed member over its binding: the flag axis, then for a mutable
     /// kind the content axis under the source's policy (SYNC §5): a divergence
     /// recorded, pulled keeping the local edit, or kept and pushed over; a
-    /// body nobody has read recorded whatever the policy.
+    /// body nobody has read recorded whatever the policy. A body another
+    /// source folded, the item's differing from the binding's
+    /// `shared_object`, is propagation owed: pulled whatever the policy,
+    /// `KeepLocal` aside, the divergence the collection's.
     fn refresh(
         &mut self,
         index: usize,
@@ -1510,10 +1526,16 @@ impl Model {
         let item = &self.items[index];
         let binding = item.bound(source).expect("a bound item");
         let edited = item.object.is_some() && item.object != binding.base_object;
+        let agreed = binding
+            .shared_object
+            .as_ref()
+            .or(binding.base_object.as_ref());
+        let folded = item.object.is_some() && item.object.as_ref() != agreed;
         let conflicted = binding.conflicted || item.conflicted;
 
         let settle = match (policy, edited, conflicted) {
             (_, _, true) => Settle::Record,
+            (policy, true, _) if folded && policy != Policy::KeepLocal => Settle::Pull,
             (Policy::Manual, true, _) => Settle::Record,
             (Policy::PreferRemote, true, _) => Settle::PullKeepingLocal,
             (Policy::PreferLocal, true, _) | (Policy::KeepLocal, _, _) if item.object.is_some() => {

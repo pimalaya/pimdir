@@ -241,6 +241,7 @@
     "vectors/sync/192-a-server-edit-meeting-another-sources-change-is-the-collections-divergence.json": "1b919b01566d0361ae090e821d0df50fd34a09024b7813d345bca3ec5d14f06a",
     "vectors/sync/193-a-server-edit-meeting-another-sources-change-under-manual-conflicts-the-item.json": "fcf4b92435a68bb318bf382162cb105555052572759248c5508f4198f6bf08cb",
     "vectors/sync/194-a-write-draws-named-members-seqs-before-kept-bodies.json": "dedad9a27938ba1d41a20e2c44958dc0a49536de4953fe3f00a58203676b0d0d",
+    "vectors/sync/195-a-rekey-runs-the-flag-axis-on-its-listed-flags.json": "d4b0987619a1d18e3e7148200050cd50fa36fb47a3bccda6449054417818569e",
     "vectors/sync/20-move-source-first-relocates.json": "21729b1c61a5085e531c817866cf1471944a0d22bf4df5ce4a89289cb7edf40d",
     "vectors/sync/21-a-page-lands-a-pending-create.json": "6e6d36fb5836347ca11426072acfd4cad17924e268516fd3ffeee1ca0009cc80",
     "vectors/sync/22-rekey-carries-a-minted-key.json": "86bdf0df6fea79ff71e196cb3ad427d5d84df35ff5a3c1b4472fe489f7c0b15b",
@@ -353,5 +354,5 @@
       "/cases": 24
     }
   },
-  "sync": 194
+  "sync": 195
 }

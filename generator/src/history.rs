@@ -1611,9 +1611,10 @@ impl History {
     /// fills the item, settled by the policy. On work/revived: a card its
     /// server deleted, restored unread. On work/revived-mail: two messages
     /// deleted, one restored as it was and one under its `Message-ID` at
-    /// another size. On work/overruled and work/overruled-unread: `b`
-    /// records its server's edit in conflict over `a`'s, carried or not,
-    /// and an engine overrules it with the item's body.
+    /// another size. On work/overruled and work/overruled-unread: `b`'s
+    /// server edit, carried or not, meets `a`'s, which `b` owes, recorded
+    /// as the item's conflict (SYNC §5), and an engine overrules it with the
+    /// item's body.
     pub fn bodies(seed: u64) -> Self {
         let mut draw = Draw::new(seed);
         let mut model = Model::new();
@@ -1773,7 +1774,7 @@ impl History {
             rb.edit("r1.vcf", renamed(&card, "Edited At B").file());
             let run = model.sync(&mut rb, PAGE);
             record(
-                format!("{id}: b records its edit in conflict"),
+                format!("{id}: b's edit meets the one it owes, the item's conflict"),
                 Some(run),
                 &model,
             );
@@ -1845,7 +1846,7 @@ mod tests {
 
     use crate::{
         body::Card,
-        engine::{Answer, Event, Push, Run},
+        engine::{self, Answer, Event, Push, Run},
         history::{FILLS, History, PAGE, SHARED, UNREAD, drained, set},
         model::{Item, Model, Scope, State},
         name::ObjectName,
@@ -3336,9 +3337,34 @@ mod tests {
         let (before, _) = rekeyed(&history, 2);
         let (model, run) = rekeyed(&history, 3);
         assert!(run.events.is_empty() && run.pushes.is_empty() && run.parked.is_none());
-        let old: BTreeSet<_> = spine(before, inbox).into_values().collect();
+        let keys = |model: &Model| -> BTreeSet<(i64, String)> {
+            spine(model, inbox)
+                .into_values()
+                .map(|(seq, link_id, _)| (seq, link_id))
+                .collect()
+        };
+        assert_eq!(keys(before), keys(model), "every seq and key carried");
+        let listed: BTreeMap<&str, &BTreeSet<String>> = run.pages[0]
+            .items
+            .iter()
+            .map(|member| (member.handle.as_str(), &member.flags))
+            .collect();
+        for item in model.live(inbox) {
+            let was = before
+                .live(inbox)
+                .find(|was| was.link_id == item.link_id)
+                .unwrap();
+            let binding = item.bindings.first().unwrap();
+            let flags = listed[binding.handle.as_str()];
+            let base = was.bindings.first().unwrap().base_flags.as_ref();
+            assert_eq!(binding.base_flags.as_ref(), Some(flags), "the base listed");
+            assert_eq!(
+                item.flags,
+                Some(engine::merge(was.flags.as_ref(), base, flags)),
+                "the flag axis run over the listed flags"
+            );
+        }
         let new: BTreeSet<_> = spine(model, inbox).into_values().collect();
-        assert_eq!(old, new, "every seq, key and flag set carried");
         assert!(
             spine(model, inbox)
                 .keys()
@@ -3747,7 +3773,7 @@ mod tests {
             assert_eq!(item.object, None, "{id}: the item's own body is unread");
             assert!(item.conflicted && item.conflict_object.is_some());
             assert_eq!(item.conflict_object, b.base_object);
-            assert_eq!(run.events, [Event::Conflicted(String::from("r1.vcf"))]);
+            assert!(run.events.is_empty(), "an upgrade reports no Conflicted");
             assert!(
                 kept_in(model, id).is_none(),
                 "nothing kept against a body unread"
@@ -3871,20 +3897,20 @@ mod tests {
         let id = "work/overruled";
         let (before, _) = rekeyed(&history, 25);
         let (model, run) = rekeyed(&history, 26);
-        let was = bodied(before, id)
-            .bound("work/overruled-b")
-            .unwrap()
-            .clone();
+        let held = bodied(before, id);
+        let was = held.bound("work/overruled-b").unwrap().clone();
+        assert!(!was.conflicted, "b owed a's edit: the item's conflict");
+        assert!(held.conflicted && held.conflict_object == was.base_object);
         let item = bodied(model, id);
         let b = item.bound("work/overruled-b").unwrap();
-        assert!(!b.conflicted);
+        assert!(!b.conflicted && !item.conflicted);
         assert_eq!(
             (b.base_object.clone(), b.base_revision.clone()),
-            (was.conflict_object.clone(), was.conflict_revision.clone())
+            (was.base_object.clone(), was.base_revision.clone())
         );
         assert_eq!(b.shared_object, item.object);
         let loser = kept_in(model, id).unwrap();
-        assert_eq!(loser.object, was.conflict_object);
+        assert_eq!(loser.object, held.conflict_object);
         assert_eq!(
             run.events,
             [Event::Overruled {
@@ -3896,7 +3922,7 @@ mod tests {
         let Some(Push::Update { if_match, .. }) = pushed(run, "update", "r1.vcf") else {
             panic!("b owes the item's body");
         };
-        assert_eq!(if_match, &was.conflict_revision);
+        assert_eq!(if_match, &was.base_revision);
 
         let id = "work/overruled-unread";
         let (before, _) = rekeyed(&history, 31);

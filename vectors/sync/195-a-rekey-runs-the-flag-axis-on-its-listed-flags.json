@@ -1,0 +1,25 @@
+{
+  "v": 11,
+  "label": "a rekey merges the flags its listing states over the old base and takes them as the base",
+  "note": "the source renumbered 10 into 20 while the store flagged the message and the server answered it: the item holds \\Flagged and \\Seen over a base of \\Seen, the listing \\Answered and \\Seen. The rekey runs the flag axis: the item takes the merge, \\Answered, \\Flagged and \\Seen, the base the listed flags, which the new checkpoint never lists again; the \\Flagged still owed is the next sync's push, the rekey pushing and reporting nothing (SYNC.md §8, §5)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual", "generation": 1 }],
+    "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },
+    "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Flagged", "\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+    "bindings": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c0" }]
+  },
+  "run": { "verb": "rekey", "collection": "INBOX", "source": "imap" },
+  "remote": { "snapshot": { "items": [{ "handle": "20", "flags": ["\\Answered", "\\Seen"], "revision": null, "meta": { "body": "fixtures/mail-basic.eml" } }], "vanished": [], "complete": true, "checkpoint": "d0" }, "fetch": {} },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual", "generation": 2 }],
+      "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Answered", "\\Flagged", "\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+      "bindings": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "20", "base_flags": ["\\Answered", "\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }],
+      "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "d0" }]
+    }
+  }
+}

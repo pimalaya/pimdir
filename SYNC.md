@@ -520,6 +520,8 @@ A source may renumber every member (an IMAP `UIDVALIDITY` bump, a restore). A re
 
 It carries each placement's body, summary, level, flags, base and pending state onto its new handle **by link id**, the one identifier that survived.
 
+**A rekey runs the flag axis on the flags its listing states.** A carried member's listed flags are the remote side of §5's flag axis, the item's flags the local side and the old base's flags the base: the item takes the merge and the binding's base takes the listed flags, which the rekey's checkpoint never lists again. A flag change still owed is pushed by the next sync, as any merge's is; the rekey pushes nothing.
+
 The batch drops each old handle it re-writes with reason `Rekeyed`, which licenses the binding to move (STORAGE §10, §12), per handle: a genuine duplicate in the same batch is still refused. It is one batch, every drop preceding every upsert, since a new handle may be an old one another member held.
 
 An old binding no member resolves to by link id is dropped `Deleted`, whether or not the new space reuses its handle, since a server restarting its numbering at 1 hands a carried member the handle a gone one held, and an upsert under it before that drop would fold the carried member into the gone one's item (§10).
