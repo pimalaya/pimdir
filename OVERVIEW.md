@@ -52,7 +52,7 @@ Normative: STORAGE §1, §3, §4.1, §4.2, §4.5, §5, §6, §8, §18.
 
 ## 2. The model
 
-Six kinds of thing live in the database.
+Seven kinds of thing live in the database.
 
 A **collection** is a mailbox, an address book, a calendar or a folder of files. It declares the media type of everything it holds, one of the four kinds the standard names, so a store never guesses what an item is. A server's collection of another type is recorded and left unsynced; a fifth kind arrives only as a change to the standard.
 
@@ -72,11 +72,13 @@ A reference is recorded once, by a person or by an owner's rule (a message to it
 
 An attachment is a file standing for a part of its message. It is recorded when the message's body enters the store, holds no bytes of its own until it is saved to a folder, and goes once no reference names it. The walk of a message's parts stops at a fixed depth and count, and a message stands for a fixed number of attachments at most, so a reader finding that many reads the rest from the body.
 
+A **property** is state an item keeps locally that no source carries: a private label, or an application's own value such as when a snoozed message comes back. It is a key and one or more short values, keyed by the item's public id, so it follows the item into every collection and account filing it, through the trash and a restore, and goes when the last copy is purged. It is never synced, never pushed and never part of a sync's comparison; a label is the private counterpart of a flag, which every source carrying keywords shares. Keys are namespaced: the standard keeps one namespace for itself, holding the labels, and each application writes under its own name. A label is kept as written and matched without regard to case, so one item never holds two spellings of it. Another process changes properties through the queue, as it changes flags.
+
 Nothing enters the store unnamed: a source lists each member with its identity and summary, so a listed message is an item from the moment its page lands, its body fetched later or never.
 
 A **task** carries its organisation in standard properties every client reads, nothing of the store's own. Its status, priority, categories, parent, the mail it came from and when it was captured are part of its summary, and the person it waits on is one of the people it names, so a to-do created by any client takes part in every view a search can ask for.
 
-Normative: STORAGE §2, §4.3, §14.2, Annex A.
+Normative: STORAGE §2, §4.3, §14.2, §15.3, Annex A.
 
 ## 3. Four identifiers
 
@@ -176,7 +178,7 @@ Normative: SYNC §9; STORAGE §10.
 
 Removal from every source is not removal from the store. When an item's last binding goes, the row and its body are kept, hidden from sync and from the live reads, and listed in a trash view. Only an explicit purge deletes the row; the body then falls to the collector. A purge deletes the row, not every trace of it: erasing an item, on the user's request, also collects its body, clears it from the search index and leaves nothing of it in the free space of the database files. An identity that comes back revives the retained row, keeping its public id and, for a message, its body, so a restore costs no network. A contact, an event or a file revived without its body comes back to be fetched, its old body kept apart in the trash, since its server may hold another version now. A message revives only when it is the same message, its subject, date, sender and size agreeing; another message reusing the identifier is filed beside it.
 
-Mail older than a sync's window is not removed either. It stays stored and readable until the owner, on the user's request, evicts what lies below a date, which frees the space and tells no server anything. Widening the window later lists it again.
+Mail older than a sync's window is not removed either. It stays stored and readable until the owner, on the user's request, evicts what lies below a date, which frees the space and tells no server anything. Widening the window later lists it again. A message holding a property stays, since a relisted message is a new item and its local state would be lost.
 
 The owner may instead release the bodies below a date and keep the headers: the mail stays listed and searchable, and a message opened later is fetched again. A message whose body is still needed (a conflict, an unsent message, a copy owed to another source) keeps it.
 
@@ -224,6 +226,9 @@ A summary holds what a list row shows and sorts by; the index answers what the s
 - expands every calendar item's occurrences within a rolling horizon;
 - records whether a card holds a phone, a postal address, a birthday or a photo, and its categories;
 - links messages into threads by their reply headers.
+
+Labels and an application's properties are not indexed: a query reads them from the store, a label matched without regard to case, any other value exactly.
+
 
 Text is folded (case and accents) before any full-text engine sees it, so engines that tokenise alike find the same words.
 

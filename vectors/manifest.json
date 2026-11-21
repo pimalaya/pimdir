@@ -12,6 +12,7 @@
     "payloads/remove.v1.schema.json": "d2c7636f7012a4fa7c8ca50fe6b0dbce0722800ad2b645d577518ba0e4c06716",
     "payloads/set-flags.v1.schema.json": "918948f4e7d6a9c8f583c135cb41d15ff1423c8f6ba6f8493917e66217a8c384",
     "payloads/set-performer.v1.schema.json": "e3a3ef1b716fa3cf4632a6b7aedfd916fd7fe0c503f7efbf9f41f37ce62df1ca",
+    "payloads/set-property.v1.schema.json": "4c288003807f9e22e723c6c920d9a585bd55f0e5c1248b0eb4351098b569f6a7",
     "payloads/submit.v1.schema.json": "7b89a35f30f0e897b3c4eef16fd5948d85eacc0dc6a6a391e0dc779ec18a84b0",
     "payloads/update.v1.schema.json": "d7a11e15cb3e32d95f341f3fdc351c52e66ab352c720615e3683179c1c3b0495",
     "vectors/fixtures/card-basic-edited.vcf": "802161b904b64c5827fac3d343a76f17dee9ce70f0901df9c68c6fdf0cb1c9a7",
@@ -111,21 +112,21 @@
     "vectors/fixtures/todo-someday.ics": "cbad49748cacfebee3a43b6b4ad87d09d662edfaebcda29a652eaaff04fcc1ca",
     "vectors/fixtures/todo-waiting.ics": "72a107067723eacc1511a2989385588bd046eb5edd071b47694d101976ca52a4",
     "vectors/objects.json": "b901f40b9612c0e3244a72cc8aaaae1ae10e506c5e48a108d8dc2638ff6efcdd",
-    "vectors/payloads.json": "88690478f5ee325fbbe1e33c528c108426dd7b806d439ae13c2248ba4a0f24ae",
+    "vectors/payloads.json": "af80939e8867754d6be5ecadf95293c4617c4651a4a02e70412d37da0fa517af",
     "vectors/schema/manifest.schema.json": "96f560e9d11124166a2539390a36a1275438ce74bd95e8d8e307415252d6e678",
     "vectors/schema/objects.schema.json": "27d5271230b92359ea242565def4f1fab4bfde465bca7ce263c961c8cf94398b",
     "vectors/schema/payloads.schema.json": "cfeeaef33d63945aa2cd4ee9bce53b9b298595dccbea94b0a1f256e4c1959e8d",
     "vectors/schema/search-chunks.schema.json": "0d98341ffd6455327e176688d4affe359b04dc0317d2a3bb920d4fcc6a0d653c",
     "vectors/schema/search-queries.schema.json": "cb82c08148d7660d74dd1ac4bb0b02090398d701341a56bc8047e44a2ff0cb76",
-    "vectors/schema/search-refresh.schema.json": "abc840cab27ed8e9bc1ed621dd1a601ed38ec8a37aad4790485a724bc2eae72d",
-    "vectors/schema/search-store.schema.json": "ffd9e3bb85ed36c8bf8962d6bd5c8feb26755a2dfe357224650dbc380bc6145a",
+    "vectors/schema/search-refresh.schema.json": "af9ae0cd7d521646301a1a444885883e3e0c0457c799a4d690f46e7dc312102e",
+    "vectors/schema/search-store.schema.json": "056ccdee9ee7ac8dacd7ef8508e92f71d0ca8e7e905ed7c05776b747c9596e49",
     "vectors/schema/summaries.schema.json": "5dcd70af3d37d44420d5b5289ba5643a6e8905f0c9dc63d285e91a57287f4a54",
     "vectors/schema/sync.schema.json": "0f30c8f274692b973bd984f5f32a767129c411048100b8e55dead23c0f280c5b",
     "vectors/schema/versions.schema.json": "189ca52345b56a64626844d8805ebaea10356ae5ecae651a8c9675610a500705",
     "vectors/search/chunks.json": "6fc4e98bdf1306f7d5a2635fa2db4c3d96dc8856fbd61df49bc2f67d4d44de3a",
-    "vectors/search/queries.json": "51e5372782fe10253b22867f5e4e1b022f7e9ba661a4578ff7c589ecd56e478f",
-    "vectors/search/refresh.json": "edb6c955879b7c0ae61c4b3c62a31f34a48d459a3ef8077d0948b287e74bc848",
-    "vectors/search/store.json": "e9456aad4a57e745c978d401e4b1300c3b383ac020b209d5bec7a15b6d6b855a",
+    "vectors/search/queries.json": "7101293206b4e253095645ba7b4a5ad0512a367032edb879addfc25f2a43c80b",
+    "vectors/search/refresh.json": "0cd937bea6b414195d1ae6cdd5634bc114821a93ebec18caf1a1e3d76f5dd403",
+    "vectors/search/store.json": "e782d0e8a53bab0891b4db528a95c8b67ab0b9916451d07f73bcae3bc3b2a9d1",
     "vectors/summaries.json": "6a4eaead0970b91f76d2db33b53215ba35975e171f8c373b45e313d09298aad8",
     "vectors/sync/01-remote-flag-pulled.json": "4c21981d4f790448e14bd822cd8cff8ade79cfea9a7e9fd86d6966e34d2b01ff",
     "vectors/sync/02-local-flag-pushed.json": "b0a6667bc59a01b1ecfac8072175454ad8d2d3cf023469bd8b91305bbf4b8a2a",
@@ -330,21 +331,22 @@
       "/objects": 13
     },
     "vectors/payloads.json": {
-      "/cases": 75
+      "/cases": 102
     },
     "vectors/search/chunks.json": {
       "/cases": 10
     },
     "vectors/search/queries.json": {
-      "/cases": 268,
+      "/cases": 299,
       "/occurrences": 8
     },
     "vectors/search/refresh.json": {
-      "/cases": 4
+      "/cases": 5
     },
     "vectors/search/store.json": {
       "/collections": 11,
       "/items": 37,
+      "/properties": 8,
       "/references": 4
     },
     "vectors/summaries.json": {

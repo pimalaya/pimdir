@@ -97,6 +97,9 @@ INSERT INTO item_reference(from_kind, from_link_id, to_kind, to_link_id, role,
     origin, created_at)
 VALUES ('message/rfc822', 'a@x', 'text/vcard', 'c1', 'sender', 'auto',
     '2026-11-13T00:00:00.000Z');
+INSERT INTO item_property(seq, key, value)
+SELECT seq, 'pimdir/label', 'Receipts' FROM items
+WHERE collection = 'INBOX' AND link_id = 'a@x';
 
 INSERT INTO queue(created_at, producer, collection, action, payload,
     target_collection, object_hash, attempts, error)

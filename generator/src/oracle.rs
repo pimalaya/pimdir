@@ -124,6 +124,7 @@ impl Oracle<'_> {
         oracle.identities();
         oracle.mail()?;
         oracle.people();
+        oracle.properties();
         oracle.conflicts();
         oracle.queue();
         oracle.rights();
@@ -1107,6 +1108,29 @@ impl Oracle<'_> {
             self.expect("load_receipt_refusals", &id, refusals);
         }
         self.expect("storage/owner/load_parked_actions", &[], parked);
+    }
+
+    /// An item's properties (STORAGE §4.3): the model writes none, so every
+    /// item's `seq` lists none, and the label key holds no value and no
+    /// holder.
+    fn properties(&mut self) {
+        let seqs: BTreeSet<i64> = self.model.items.iter().map(|item| item.seq).collect();
+        for seq in seqs {
+            self.expect(
+                "list_item_properties",
+                &[("seq", Value::Integer(seq))],
+                Vec::new(),
+            );
+        }
+        let key = || Value::Text(String::from("pimdir/label"));
+        self.expect("list_property_values", &[("key", key())], Vec::new());
+        self.expect("list_property_holders", &[("key", key())], Vec::new());
+        let value = Value::Text(String::from("Receipts"));
+        self.expect(
+            "list_value_holders",
+            &[("key", key()), ("value", value)],
+            Vec::new(),
+        );
     }
 
     fn people(&mut self) {

@@ -1,5 +1,5 @@
 {
-  "v": 2,
+  "v": 3,
   "note": "a refresh driven by the change feed (STORAGE.md section 4.5, SEARCH.md section 4): each case builds its store as store.json's are built and indexes it, then applies its steps in order, each as an owner would write it. After each step the feed lists, above the cursor read before it, the items and the collections stated in changed, and the purge count moves when purged says so; a refresh then answers each query as stated, as an index rebuilt from the store as it then stands does. A missing stamp leaves the index answering the earlier store.",
   "cases": [
     {
@@ -175,6 +175,87 @@
           "queries": [
             { "query": "stepping", "hits": [["home", 1]] },
             { "query": "kind:event", "hits": [["home", 1]] }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "an item keeps local state",
+      "note": "properties (STORAGE section 4.3) are applied by the owner from set-property actions (section 15.3), keyed by the seq, read from the store by label: and property:, never copied into the index; a change stamps every row holding the seq, a change that moves no row stamps nothing",
+      "store": {
+        "collections": [
+          { "id": "home/INBOX", "account": "home", "kind": "message/rfc822" },
+          { "id": "work/INBOX", "account": "work", "kind": "message/rfc822" }
+        ],
+        "items": [
+          { "collection": "home/INBOX", "seq": 1, "link_id": "basic-1@example.org", "flags": [], "fixture": "fixtures/mail-basic.eml" },
+          { "collection": "work/INBOX", "seq": 1, "link_id": "basic-1@example.org", "flags": [], "fixture": "fixtures/mail-basic.eml" },
+          { "collection": "home/INBOX", "seq": 2, "link_id": "reply-1@example.org", "flags": [], "fixture": "fixtures/mail-reply.eml" }
+        ],
+        "references": [],
+        "properties": [
+          { "seq": 2, "key": "himalaya/snooze-until", "value": "2026-12-01T09:00:00Z" }
+        ]
+      },
+      "steps": [
+        {
+          "note": "a label added stamps every row holding the item's seq, in both accounts (STORAGE section 4.5)",
+          "write": { "kind": "property", "collection": "home/INBOX", "seq": 1, "key": "pimdir/label", "add": ["Receipts"] },
+          "changed": { "items": [["home/INBOX", "basic-1@example.org"], ["work/INBOX", "basic-1@example.org"]], "collections": [], "purged": false },
+          "queries": [
+            { "query": "label:receipts", "hits": [["home", 1], ["work", 1]] },
+            { "query": "property:pimdir/label=Receipts", "hits": [["home", 1], ["work", 1]] }
+          ]
+        },
+        {
+          "note": "a label whose fold the item holds already adds nothing and stamps nothing (STORAGE section 15.3), queued on the other collection",
+          "write": { "kind": "property", "collection": "work/INBOX", "seq": 1, "key": "pimdir/label", "add": ["RECEIPTS"] },
+          "changed": { "items": [], "collections": [], "purged": false },
+          "queries": [
+            { "query": "property:pimdir/label=RECEIPTS", "hits": [] },
+            { "query": "label:receipts", "hits": [["home", 1], ["work", 1]] }
+          ]
+        },
+        {
+          "note": "respelled: the remove takes the label whose fold is its own, then the add writes the new spelling",
+          "write": { "kind": "property", "collection": "home/INBOX", "seq": 1, "key": "pimdir/label", "remove": ["receipts"], "add": ["receipts"] },
+          "changed": { "items": [["home/INBOX", "basic-1@example.org"], ["work/INBOX", "basic-1@example.org"]], "collections": [], "purged": false },
+          "queries": [
+            { "query": "property:pimdir/label=receipts", "hits": [["home", 1], ["work", 1]] },
+            { "query": "property:pimdir/label=Receipts", "hits": [] }
+          ]
+        },
+        {
+          "note": "a value the item does not hold, removed, changes nothing",
+          "write": { "kind": "property", "collection": "home/INBOX", "seq": 1, "key": "pimdir/label", "remove": ["Tax returns"] },
+          "changed": { "items": [], "collections": [], "purged": false },
+          "queries": [
+            { "query": "label:\"tax returns\"", "hits": [] }
+          ]
+        },
+        {
+          "note": "one row retained: its item keeps its properties, read from the live row alone",
+          "write": { "kind": "remove", "collection": "work/INBOX", "seq": 1 },
+          "changed": { "items": [["work/INBOX", "basic-1@example.org"]], "collections": [], "purged": false },
+          "queries": [
+            { "query": "label:receipts", "hits": [["home", 1]] }
+          ]
+        },
+        {
+          "note": "that row purged: another row holds the seq, so the properties stay",
+          "write": { "kind": "purge", "collection": "work/INBOX", "seq": 1 },
+          "changed": { "items": [], "collections": [], "purged": true },
+          "queries": [
+            { "query": "label:receipts", "hits": [["home", 1]] }
+          ]
+        },
+        {
+          "note": "an application's own value removed",
+          "write": { "kind": "property", "collection": "home/INBOX", "seq": 2, "key": "himalaya/snooze-until", "remove": ["2026-12-01T09:00:00Z"] },
+          "changed": { "items": [["home/INBOX", "reply-1@example.org"]], "collections": [], "purged": false },
+          "queries": [
+            { "query": "property:himalaya/snooze-until=2026-12-01T09:00:00Z", "hits": [] },
+            { "query": "id:reply-1@example.org", "hits": [["home", 2]] }
           ]
         }
       ]

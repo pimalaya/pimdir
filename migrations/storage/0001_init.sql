@@ -740,6 +740,73 @@ BEGIN
                          OR (r.to_link_id = items.link_id AND r.to_kind = 'application/octet-stream'));
 END;
 
+-- An item's properties (§4.3): local state a person or an application keeps
+-- on an item and no source carries, a local label among them. Keyed by the
+-- public id (§9.1), so a property follows the item into every collection and
+-- account filing it, through its retention, its restore and a rekey, and goes
+-- with the last row holding the seq. Multi-valued, each value held once per
+-- key. No foreign key, since a seq is no row's key: the triggers below hold
+-- it. Never read by sync, never in a binding, never pushed (SYNC.md §3). A
+-- key is `<namespace>/<name>`, each part of [a-z0-9._-], at most 64 bytes; a
+-- value is 1 to 1,024 bytes of UTF-8 holding no NUL (§13).
+CREATE TABLE item_property (
+    seq   INTEGER NOT NULL CHECK (typeof(seq) = 'integer') CHECK (seq >= 1),
+    key   TEXT    NOT NULL CHECK (typeof(key) = 'text')
+          CHECK (length(key) <= 64 AND key NOT GLOB '*[^a-z0-9._/-]*'
+                 AND instr(key, '/') > 1 AND instr(key, '/') < length(key)
+                 AND instr(substr(key, instr(key, '/') + 1), '/') = 0),
+    value TEXT    NOT NULL CHECK (typeof(value) = 'text')
+          CHECK (length(CAST(value AS BLOB)) BETWEEN 1 AND 1024
+                 AND instr(CAST(value AS BLOB), x'00') = 0),
+    PRIMARY KEY (seq, key, value)
+) WITHOUT ROWID;
+
+-- The holders of a key and a value (list_value_holders), and the values a key
+-- holds (list_property_values), which label: and property: read (SEARCH.md
+-- §8). The table has no rowid, so the index carries the seq and names each
+-- holder without reading the row.
+CREATE INDEX item_property_by_value ON item_property(key, value);
+
+-- A property names an item the store holds, live, tombstoned or retained: a
+-- seq no row of items holds takes none.
+CREATE TRIGGER item_property_needs_item BEFORE INSERT ON item_property
+WHEN NOT EXISTS (SELECT 1 FROM items WHERE seq = NEW.seq)
+BEGIN
+    SELECT RAISE(ABORT, 'no item holds the seq');
+END;
+
+-- At most 64 values per key and item (§13): the 65th is refused, a value the
+-- key holds already being no new one.
+CREATE TRIGGER item_property_bounded BEFORE INSERT ON item_property
+WHEN (SELECT count(*) FROM item_property WHERE seq = NEW.seq AND key = NEW.key) >= 64
+ AND NOT EXISTS (SELECT 1 FROM item_property
+                 WHERE seq = NEW.seq AND key = NEW.key AND value = NEW.value)
+BEGIN
+    SELECT RAISE(ABORT, 'a key holds 64 values');
+END;
+
+-- A value added or removed requests the stamp of every row holding the seq
+-- (§4.5), live or not, so the change feed carries it; a value added again,
+-- which moves no row, stamps nothing.
+CREATE TRIGGER item_property_stamp_insert AFTER INSERT ON item_property
+BEGIN
+    UPDATE items SET changed = -1 WHERE seq = NEW.seq;
+END;
+
+CREATE TRIGGER item_property_stamp_delete AFTER DELETE ON item_property
+BEGIN
+    UPDATE items SET changed = -1 WHERE seq = OLD.seq;
+END;
+
+-- A property goes with the last row holding its seq (§11.2, §11.5): a purge,
+-- an eviction, an unbound item's delete or its collection's. A retention, a
+-- move and the loss of one row among several keep it.
+CREATE TRIGGER items_drop_properties AFTER DELETE ON items
+WHEN NOT EXISTS (SELECT 1 FROM items WHERE seq = OLD.seq)
+BEGIN
+    DELETE FROM item_property WHERE seq = OLD.seq;
+END;
+
 -- The action queue (§15): mutations requested by processes that do not own the
 -- store, applied by the owner in append order.
 CREATE TABLE queue (

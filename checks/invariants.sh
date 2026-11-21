@@ -2399,7 +2399,8 @@ done
 fresh
 expect "schema: the tables of a few short columns carry no rowid" \
     "$(sql "SELECT group_concat(name, ' ') FROM (SELECT name FROM pragma_table_list WHERE schema = 'main' AND wr = 1 ORDER BY name);")" \
-    "binding_base_flag item_address item_reference mail_in_reply_to placement_flag supersessions task_category"
+    "binding_base_flag item_address item_property item_reference mail_in_reply_to placement_flag supersessions task_category"
+
 expect "schema: a pointer index holds the set pointers alone, items_by_object too, and items_bodiless the rest, live, which coverage reads" \
     "$(sql "SELECT group_concat(name, ' ') FROM (SELECT name FROM sqlite_schema WHERE type = 'index' AND name GLOB '*_object'
             AND sql GLOB '* IS NOT NULL' ORDER BY name);")|$(sql "SELECT sql FROM sqlite_schema WHERE name = 'items_bodiless';")" \
@@ -3481,10 +3482,12 @@ expect "linked: the live placements at the other end of an item's references, ei
 
 # --- Erasing: a purge leaves nothing in the files (STORAGE.md §11.5) ----------
 
-# erase <secure_delete> <merge>: a mail whose key, subject and body words no
-# other row holds, beside one that stays, purged as §11.5 runs it, its index
-# rows deleted, the text merged by optimize_text when merge is 1; answers how
-# often its word is left in pimdir.db, then in index.db.
+# erase <secure_delete> <merge>: a mail whose key, subject, body words and
+# property no other row holds, beside one that stays, purged as §11.5 runs it,
+# its properties going with its last row (§4.3), its index rows deleted, the
+# text merged by optimize_text when merge is 1; answers how often its word is
+# left in pimdir.db, then in index.db.
+
 erase() {
     secure_delete="$1"
     fresh
@@ -3498,6 +3501,7 @@ erase() {
         text "$id" "$word report" "$word minutes"
         isearch upsert_placement ":collection='INBOX'" ":seq=$seq" ":link_id='$word@x'" ":hash='${!label}'" > /dev/null
     done
+    run owner/add_property ":seq=2" ":key='x/note'" ":value='zanzibar property'"
     run owner/delete_item_bindings ":collection='INBOX'" ":link_id='zanzibar@x'"
     run owner/retain_item ":collection='INBOX'" ":link_id='zanzibar@x'" ":source='imap'"
     run owner/purge_item ":collection='INBOX'" ":seq=2" > /dev/null
@@ -3507,7 +3511,8 @@ erase() {
     [ "$2" = 0 ] || isearch optimize_text
     echo "$(grep -ao zanzibar "$dir/pimdir.db" | wc -l)|$(grep -ao zanzibar "$dir/index.db" | wc -l)"
 }
-expect "erase: a purged mail's key, subject and address leave pimdir.db, and its body's words index.db, once secure_delete zeroes what a delete frees and optimize_text merges the full-text segments" \
+expect "erase: a purged mail's key, subject, address and property leave pimdir.db,
+ and its body's words index.db, once secure_delete zeroes what a delete frees and optimize_text merges the full-text segments" \
     "$(erase ON 1)" "0|0"
 expect "erase: without optimize_text the deleted body's words stay in a full-text segment" \
     "$(erase ON 0 | cut -d'|' -f2 | grep -c '^0$' || true)" "0"
@@ -3639,6 +3644,116 @@ run owner/link_senders_of_by_link ":links='[\"m1\", \"m3\"]'"
 expect "senders: the page's mail is tied to its senders' cards, and no other mail" \
     "$(sql "SELECT group_concat(from_link_id || '>' || to_link_id, ' ') FROM (SELECT * FROM item_reference ORDER BY from_link_id);")" \
     "m1>c1 m3>c1"
+
+# --- An item keeps local state, keyed by its public id (§4.3, §9.1, §11) ----
+
+# prop <seq> <key> <value>: add_property, answering the refusal it meets, the
+# schema's CHECK or one of its triggers, or nothing when it is taken.
+prop() {
+    run owner/add_property ":seq=$1" ":key='$2'" ":value='$3'" 2>&1 |
+        grep -o 'CHECK constraint failed\|no item holds the seq\|a key holds 64 values' | head -n 1 || true
+}
+props() {
+    run read/list_item_properties ":seq=$1" | tr '\n' ' '
+}
+
+fresh
+collection INBOX
+collection Archive
+mail INBOX a 1 10 "'2026-08-01T10:00:00Z'" '["\\Seen"]' '["\\Seen"]'
+mail Archive a 1 11 "'2026-08-01T10:00:00Z'" '["\\Seen"]' '["\\Seen"]'
+mail INBOX b 2 12 "'2026-08-02T10:00:00Z'"
+owing="$(run owner/list_owing_bindings ":collection='INBOX'" ":source='imap'")|$(run owner/list_lacking_items ":collection='INBOX'" ":source='imap'")"
+loaded="$(run owner/load_items ":collection='INBOX'")"
+cursor="$(run read/load_change_cursor | cut -d'|' -f1)"
+run queue/enqueue_action ":producer='p'" ":collection='INBOX'" ":action='set-property'" ":payload='{\"v\":1,\"seq\":1,\"key\":\"pimdir/label\",\"add\":[\"Receipts\"]}'" ":target_collection=NULL" ":object_hash=NULL"
+id="$(run owner/list_pending_actions | cut -d'|' -f1)"
+run owner/claim_action ":id=$id" > /dev/null
+run owner/add_property ":seq=1" ":key='pimdir/label'" ":value='Receipts'"
+run owner/record_receipt ":id=$id" ":collection='INBOX'" ":seq=1"
+expect "property: a set-property applied leaves the value under the seq, read whatever collection files it, and its receipt" \
+    "$(props 1)|$(run read/load_receipt ":id=$id" | cut -d'|' -f2,3)" "pimdir/label|Receipts |INBOX|1"
+expect "property: a value added stamps every row holding the seq, in every collection" \
+    "$(run read/list_items_changed_since ":since=$cursor" ":limit=10" | cut -d'|' -f1,2 | sort | tr '\n' ' ')" "Archive|a INBOX|a "
+expect "property: a property derives no push and moves nothing a load compares but the stamp (SYNC.md §3)" \
+    "$(run owner/list_owing_bindings ":collection='INBOX'" ":source='imap'")|$(run owner/list_lacking_items ":collection='INBOX'" ":source='imap'")|$(run owner/load_items ":collection='INBOX'")" \
+    "$owing|$loaded"
+cursor="$(run read/load_change_cursor | cut -d'|' -f1)"
+run owner/add_property ":seq=1" ":key='pimdir/label'" ":value='Receipts'"
+run owner/remove_property ":seq=1" ":key='pimdir/label'" ":value='absent'"
+expect "property: a value added again, or one removed that is not held, moves no row and stamps nothing" \
+    "$(run read/list_items_changed_since ":since=$cursor" ":limit=10")|$(props 1)" "|pimdir/label|Receipts "
+run owner/remove_property ":seq=1" ":key='pimdir/label'" ":value='Receipts'"
+expect "property: a value removed stamps every row holding the seq" \
+    "$(run read/list_items_changed_since ":since=$cursor" ":limit=10" | cut -d'|' -f1,2 | sort | tr '\n' ' ')|$(props 1)" "Archive|a INBOX|a |"
+
+key64="a/$(printf '%062d' 0)"
+expect "property: the schema refuses a key past its bounds: uppercase, no namespace, an empty part, three parts, a space, 65 bytes; 64 bytes and every character a part takes are taken" \
+    "$(for key in Pimdir/label label /x x/ a/b/c 'a b/c' "${key64}0" "$key64" x.y_z-0/a.b_c-9; do echo "[$(prop 2 "$key" v)]"; done | tr -d '\n')" \
+    "[CHECK constraint failed][CHECK constraint failed][CHECK constraint failed][CHECK constraint failed][CHECK constraint failed][CHECK constraint failed][CHECK constraint failed][][]"
+expect "property: the schema refuses a value past its bounds: empty, 1,025 bytes of ASCII, 1,026 bytes in 513 characters, a NUL; 1,024 bytes in either are taken" \
+    "$(for value in '' "$(printf 'a%.0s' $(seq 1025))" "$(printf 'é%.0s' $(seq 513))" "$(printf 'a%.0s' $(seq 1024))" "$(printf 'é%.0s' $(seq 512))"; do echo "[$(prop 2 x/y "$value")]"; done | tr -d '\n')|$(sql "INSERT INTO item_property(seq, key, value) VALUES(2, 'x/y', 'a' || char(0) || 'b');" 2>&1 | grep -c 'CHECK constraint failed')" \
+    "[CHECK constraint failed][CHECK constraint failed][CHECK constraint failed][][]|1"
+expect "property: a seq no row of items holds takes none" "$(prop 99 x/y v)" "no item holds the seq"
+sql "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 64) INSERT INTO item_property(seq, key, value) SELECT 2, 'x/many', 'v' || i FROM n;"
+expect "property: 64 values under one key are taken, the 65th refused, one held added again changing nothing" \
+    "$(sql "SELECT count(*) FROM item_property WHERE seq = 2 AND key = 'x/many';")|$(prop 2 x/many v65)|$(prop 2 x/many v1)" "64|a key holds 64 values|"
+sql "DELETE FROM item_property WHERE seq = 2;"
+
+prop 1 pimdir/label Receipts
+prop 1 pimdir/label 'Tax returns'
+prop 2 pimdir/label receipts
+prop 2 himalaya/snooze-until 2026-12-01T09:00:00Z
+expect "property: the values a key holds, each once in byte order; the live placements holding a key, or one value of it byte for byte" \
+    "$(run read/list_property_values ":key='pimdir/label'" | tr '\n' ' ')|$(run read/list_property_holders ":key='pimdir/label'" | tr '\n' ' ')|$(run read/list_value_holders ":key='pimdir/label'" ":value='Receipts'" | tr '\n' ' ')|$(run read/list_value_holders ":key='pimdir/label'" ":value='RECEIPTS'")|$(run read/list_property_values ":key='x/none'")" \
+    "Receipts Tax returns receipts |Archive|1 INBOX|1 INBOX|2 |Archive|1 INBOX|1 ||"
+expect "property: label: and property: seek the value index, an item's properties its key, a holder its public id" \
+    "$(plan read/list_value_holders ":key='k'" ":value='v'" | grep -c 'item_property_by_value (key=? AND value=?)\|items_by_seq_global (seq=?)')|$(plan read/list_property_values ":key='k'" | grep -c 'item_property_by_value (key=?')|$(plan read/list_property_holders ":key='k'" | grep -c 'item_property_by_value (key=?)\|items_by_seq_global (seq=?)')|$(plan read/list_item_properties ":seq=1" | grep -c 'PRIMARY KEY (seq=?)')" \
+    "2|2|2|1"
+expect "property: the triggers seek the seq: the stamp on items_by_seq_global, the drop on the table's key" \
+    "$(trigger_plan item_property_stamp_delete ":old_seq=1" | grep -c 'items_by_seq_global (seq=?)')|$(trigger_plan items_drop_properties ":old_seq=1" | grep -c 'PRIMARY KEY (seq=?)')" "1|1"
+
+run owner/delete_binding ":collection='INBOX'" ":link_id='b'" ":source='imap'"
+run owner/insert_binding ":collection='INBOX'" ":link_id='b'" ":source='imap'" ":handle='99'" \
+    ":base_flags='[]'" ":base_object=NULL" ":base_revision=NULL" ":base_present=1" \
+    ":conflicted=0" ":conflict_revision=NULL" ":conflict_object=NULL" ":shared_object=NULL"
+run owner/bump_generation ":collection='INBOX'" > /dev/null
+expect "property: a rekey moves the handle under the item, its seq and its properties kept (§12)" \
+    "$(run read/seq_by_link ":collection='INBOX'" ":link_id='b'")|$(props 2)" "2|himalaya/snooze-until|2026-12-01T09:00:00Z pimdir/label|receipts "
+
+run owner/delete_item_bindings ":collection='INBOX'" ":link_id='a'"
+run owner/retain_item ":collection='INBOX'" ":link_id='a'" ":source='imap'"
+expect "property: a retained row keeps the properties, which a trash view reads, and a holder lists live rows alone" \
+    "$(props 1)|$(run read/list_value_holders ":key='pimdir/label'" ":value='Receipts'" | tr '\n' ' ')" \
+    "pimdir/label|Receipts pimdir/label|Tax returns |Archive|1 "
+run owner/purge_item ":collection='INBOX'" ":seq=1" > /dev/null
+expect "property: a purge leaving another row of the seq keeps them" \
+    "$(props 1)" "pimdir/label|Receipts pimdir/label|Tax returns "
+run owner/delete_item_bindings ":collection='Archive'" ":link_id='a'"
+run owner/retain_item ":collection='Archive'" ":link_id='a'" ":source='imap'"
+run owner/retained_item ":collection='Archive'" ":link_id='a'" > /dev/null
+run owner/revive_item ":collection='Archive'" ":link_id='a'"
+expect "property: a restore revives the row under its seq, the properties with it" \
+    "$(run read/seq_by_link ":collection='Archive'" ":link_id='a'")|$(props 1)" "1|pimdir/label|Receipts pimdir/label|Tax returns "
+run owner/retain_item ":collection='Archive'" ":link_id='a'" ":source='imap'"
+run owner/purge_item ":collection='Archive'" ":seq=1" > /dev/null
+expect "property: the purge of the last row holding the seq takes them, and no other seq's" \
+    "$(props 1)|$(sql "SELECT count(*) FROM item_property WHERE seq = 1;")|$(props 2)" \
+    "|0|himalaya/snooze-until|2026-12-01T09:00:00Z pimdir/label|receipts "
+run owner/delete_collection ":collection='INBOX'"
+run owner/recompute_refcounts
+expect "property: a collection's delete takes the properties of the last rows it held" \
+    "$(sql "SELECT count(*) FROM item_property;")" "0"
+
+# An eviction keeps an item holding a property (§11.3): no relisting would
+# restore it, a widening naming the member again under a new seq.
+fresh
+collection INBOX
+mail INBOX kept 1 10 "'2026-08-01T10:00:00Z'"
+mail INBOX gone 2 11 "'2026-08-01T10:00:00Z'"
+prop 1 himalaya/muted 1
+expect "property: an eviction keeps an item whose seq holds a property, its properties with it" \
+    "$(run owner/evict_before ":collection='INBOX'" ":before='2026-09-01T00:00:00Z'" | tr '\n' ' ')|$(props 1)" "2 |himalaya/muted|1 "
 
 # --- Every statement runs (AGENTS.md §4) --------------------------------------
 

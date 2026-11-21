@@ -15,8 +15,9 @@
 # sentence naming the key words. A reader's and a producer's statements are
 # each named in a section its profile's row of STORAGE.md §17 lists, and the
 # paragraphs the guide's reading paths quote are STORAGE.md's. A version of a
-# vector format a document states is the one its schema holds. Needs sqlite3
-# alone, to read the tables and columns off the schemas.
+# vector format a document states is the one its schema holds. No statement
+# the load, the write or the sync part names reads an item's properties. Needs
+# sqlite3 alone, to read the tables and columns off the schemas.
 set -euo pipefail
 
 root="${1:-$PWD}"
@@ -442,6 +443,26 @@ while read -r word; do
         failures=$((failures + 1))
     fi
 done < <(grep -oh '`[a-z][a-z0-9]*`' "${documents[@]/#/$root/}" | tr -d '`' | sort -u)
+
+# An item's properties are local (STORAGE.md §4.3, SYNC.md §3): no statement
+# of the load and the write STORAGE.md §14 opens with, nor one SYNC.md names,
+# reads item_property, so no property reaches a projection, a base or a push.
+engine="$(
+    { grep -o '`[a-z][a-z0-9_]*`' "$root/SYNC.md"
+      sed -n '/^## 14\. Operations$/,/^\*\*The batch\.\*\*/p' "$root/STORAGE.md" | grep -o '`[a-z][a-z0-9_]*`'
+    } | tr -d '`' | sort -u
+)"
+while read -r name; do
+    file="$(find "$root/queries/storage" -name "$name.sql" | head -n 1)"
+    if [ -n "$file" ] && sed 's/--.*//' "$file" | grep -qw item_property; then
+        echo "$name: a statement of the load, the write or the sync part reads item_property, which no engine reads" >&2
+        failures=$((failures + 1))
+    fi
+done <<< "$engine"
+if [ "$(grep -c . <<< "$engine")" -lt 20 ]; then
+    echo "STORAGE.md §14 and SYNC.md name fewer statements than the load and the write run" >&2
+    failures=$((failures + 1))
+fi
 
 if [ "$failures" -gt 0 ]; then
     echo "$failures name(s) out of step between the documents and queries/" >&2

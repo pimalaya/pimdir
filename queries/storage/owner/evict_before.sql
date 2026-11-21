@@ -6,14 +6,15 @@
 -- pending create), a binding of it is a delivered create's, based under a
 -- provisional handle no listing has named yet (SYNC.md §5), its flags differ
 -- from a binding's base flags, both known (an unpushed flag change), or a
--- person's reference names it, which no relisting restores; such an item
--- stays. The two sets differ by a system flag's bit or by a row either holds
--- and the other lacks, each direction an anti-join on the other's key, so no
--- set is gathered to be compared. An unknown `date` is never older. No
--- tombstone and no push: the remote keeps every member, and a widening
--- relists them. Retained rows are the purge's, not this. The cascade drops
--- pins no statement returns, so recompute_refcounts follows in the same
--- transaction; the delete trigger counts each row in `purges` (§4.5). Returns
+-- person's reference names it, or its seq holds a property (§4.3), neither
+-- of which a relisting restores; such an item stays. The two sets differ by
+-- a system flag's bit or by a row either holds and the other lacks, each
+-- direction an anti-join on the other's key, so no set is gathered to be
+-- compared. An unknown `date` is never older. No tombstone and no push: the
+-- remote keeps every member, and a widening relists them. Retained rows are
+-- the purge's, not this. The cascade drops pins no statement returns, so
+-- recompute_refcounts follows in the same transaction; the delete trigger
+-- counts each row in `purges` (§4.5). Returns
 -- the seqs evicted.
 DELETE FROM items
 WHERE collection = :collection AND deleted = 0 AND conflicted = 0
@@ -43,4 +44,5 @@ WHERE collection = :collection AND deleted = 0 AND conflicted = 0
                   WHERE r.origin = 'user'
                     AND ((r.from_link_id = items.link_id AND r.from_kind = 'message/rfc822')
                          OR (r.to_link_id = items.link_id AND r.to_kind = 'message/rfc822')))
+  AND NOT EXISTS (SELECT 1 FROM item_property p WHERE p.seq = items.seq)
 RETURNING seq;

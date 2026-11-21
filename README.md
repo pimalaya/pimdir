@@ -26,6 +26,7 @@ The canonical part is the schema, the reference statements, the payload schemas 
 - **Transactional**: a flag change or a multi-item move is one atomic commit
 - **Deduplicated**: a body is stored once, by content hash
 - **Retentive**: an upstream expunge never removes the local copy; only an explicit purge does, and an erasure clears it from the files
+- **Local state**: private labels and per-item application state, keyed by the item, searchable, never synced
 - **Offline-first**: every edit is staged locally and reconciled by a three-way merge
 - **Searchable**: a full-text index over bodies, occurrences and threads
 

@@ -83,11 +83,14 @@ An edit has three names, one per place it stands in: the **action** a producer q
 | `copy` | `Copy` | `Add`, carrying its origin where the source holds one (§3) |
 | `move` | `Move` | `Remove`, carrying its destination where the source holds one (§3), and `Add` for a create no relocation delivered |
 
-An intent and `set-performer` stage no mutation and derive no change (STORAGE §15.3, Annex B.2). One mutation has no queue action: `Abandon` (§7), which the owner stages on a person's request, as it evicts (STORAGE §11.3).
+An intent, `set-performer` and `set-property` stage no mutation and derive no change (STORAGE §15.3, Annex B.2). One mutation has no queue action: `Abandon` (§7), which the owner stages on a person's request, as it evicts (STORAGE §11.3).
 
 ## 3. The projection
 
 Placements are read from the store, never stored. For a collection and a source, the projection MUST yield one placement per item the source binds, and one `Created` placement per item the source lacks and the store holds a body for. A retained item (STORAGE §11) MUST be projected for nobody.
+
+**Properties are no part of a placement.** An item's properties (STORAGE §4.3) are local state no source carries: an engine never reads `item_property`, no projection, base, status or change holds a property, and none derives a push. A property added or removed stamps the item (STORAGE §4.5), which moves nothing an engine compares.
+
 
 **Status**, the first that applies:
 

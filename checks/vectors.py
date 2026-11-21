@@ -132,7 +132,7 @@ CLOSED_FIELDS = {
 # (SEARCH.md sections 8, 8.3): the role fields and with:.
 ADDRESS_FIELDS = {"from", "to", "cc", "bcc", "attendee", "organizer", "email", "with"}
 DATE_FIELDS = {"date", "when"}
-OPEN_FIELDS = {"tag", "flag", "account", "collection", "folder", "thread", "id", "mid", "linked", "category"}
+OPEN_FIELDS = {"tag", "flag", "account", "collection", "folder", "thread", "id", "mid", "linked", "category", "label", "property"}
 FIELDS = TEXT_FIELDS | set(CLOSED_FIELDS) | DATE_FIELDS | {"changed"} | OPEN_FIELDS
 CODES = {
     "empty-query", "unknown-field", "invalid-value", "invalid-date", "unterminated-phrase",
@@ -269,6 +269,14 @@ def check_term(query, token):
         raise Refused("invalid-date", colon + 1, end)
     if name == "changed" and not range_of(value, lambda side: side.isascii() and side.isdigit() and len(side) <= DIGITS["stamp"]):
         raise Refused("invalid-value", colon + 1, end)
+    # A label and a property's value are values a property may hold, and a
+    # property's key one it may be held under (STORAGE section 4.3).
+    if name == "label" and not property_value(value):
+        raise Refused("invalid-value", colon + 1, end)
+    if name == "property":
+        key, equals, held = value.partition("=")
+        if not equals or not property_key(key) or not property_value(held):
+            raise Refused("invalid-value", colon + 1, end)
 
 
 def parse(query):
@@ -1402,10 +1410,10 @@ for path in sorted((root / "schema").glob("*.schema.json")):
 # payloads/ is one action's at one version, and the prose writes its shape
 # once: the same members, optional where the schema requires none, typed as
 # the shape's placeholder says, two members joined in `( a | b )` the schema's
-# one of two. Every case of payloads.json states the outcome its action's
-# schema gives it, valid or malformed, or unknown where its action and v name
-# no schema, so a schema loosened, a malformed payload or a version read as
-# another fails here.
+# one of two, and in `( a / b )` its any of two. Every case of payloads.json
+# states the outcome its action's schema gives it, valid or malformed, or
+# unknown where its action and v name no schema, so a schema loosened, a
+# malformed payload or a version read as another fails here.
 NONEMPTY = {"type": "string", "minLength": 1}
 PLACEHOLDERS = {
     "n": {"type": "integer", "minimum": 1},
@@ -1416,12 +1424,18 @@ PLACEHOLDERS = {
     "[…]": {"type": "array", "uniqueItems": True, "items": {"type": "string", "pattern": "^[!-~]+$"}},
     "[addr…]": {"type": "array", "minItems": 1, "items": NONEMPTY},
     "[hash…]": {"type": "array", "minItems": 1, "uniqueItems": True, "items": {"type": "string", "pattern": "^[a-z2-7]{52}$"}},
+    # A property's key and its values (STORAGE section 4.3): `pimdir/` is the
+    # standard's, `pimdir/label` alone defined; a value's bound in bytes is
+    # the text's (payload_outcome), a schema counting characters.
+    "property": {"type": "string", "maxLength": 64, "pattern": "^(pimdir/label|(?!pimdir/)[a-z0-9._-]+/[a-z0-9._-]+)$"},
+    "[value…]": {"type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": True,
+                 "items": {"type": "string", "minLength": 1, "maxLength": 1024, "pattern": "^[^\\u0000]+$"}},
 }
 
 
 def shape(text):
-    """A payload shape as a schema: its members, those `?` marks optional and
-    those a `( a | b )` joins one of two."""
+    """A payload shape as a schema: its members, those `?` marks optional, those
+    a `( a | b )` joins one of two and those a `( a / b )` joins any of two."""
     tokens = re.findall(r'"[^"]*"|\[[^\]]*\]|[{}(),:?|]|[^\s{}(),:?|"]+', text)
     at = 0
 
@@ -1461,15 +1475,17 @@ def shape(text):
 
     def members():
         take("{")
-        properties, required, one_of = {}, [], []
+        properties, required, one_of, any_of = {}, [], [], []
         while True:
             if tokens[at] == "(":
                 take("(")
-                pair = []
-                for index in range(2):
-                    pair.append(member(properties, []))
-                    take("|" if index == 0 else ")")
-                one_of.append(pair)
+                pair = [member(properties, [])]
+                joined = take()
+                if joined not in ("|", "/"):
+                    raise ValueError(f"| or / expected at {joined!r}")
+                pair.append(member(properties, []))
+                take(")")
+                (one_of if joined == "|" else any_of).append(pair)
             else:
                 member(properties, required)
             if take() == "}":
@@ -1477,6 +1493,8 @@ def shape(text):
         result = {"type": "object", "required": sorted(required), "additionalProperties": False, "properties": properties}
         if one_of:
             result["oneOf"] = [{"required": [key]} for pair in one_of for key in pair]
+        if any_of:
+            result["anyOf"] = [{"required": [key]} for pair in any_of for key in pair]
         return result
 
     return members()
@@ -1489,8 +1507,9 @@ def schema_shape(schema):
     result = {"type": "object", "required": sorted(schema.get("required", [])),
               "additionalProperties": schema.get("additionalProperties", True)}
     result["properties"] = {key: schema_shape(fragment) for key, fragment in schema.get("properties", {}).items()}
-    if "oneOf" in schema:
-        result["oneOf"] = schema["oneOf"]
+    for keyword in ("oneOf", "anyOf"):
+        if keyword in schema:
+            result[keyword] = schema[keyword]
     return result
 
 
@@ -1525,6 +1544,25 @@ require("payloads.json: the queue's payload cases", bool(payload_cases))
 known_actions = {action_version.rsplit(".v", 1)[0] for action_version in payload_schemas}
 
 
+def property_value(value):
+    """Whether a text is a property's value (STORAGE section 4.3): 1 to
+    1,024 bytes of UTF-8 holding no NUL, a lone surrogate encoding to none."""
+    try:
+        encoded = value.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return 1 <= len(encoded) <= 1024 and b"\x00" not in encoded
+
+
+# A property's key (STORAGE section 4.3): `<namespace>/<name>`, each part of
+# [a-z0-9._-], at most 64 bytes.
+PROPERTY_KEY = re.compile(r"[a-z0-9._-]+/[a-z0-9._-]+")
+
+
+def property_key(key):
+    return len(key) <= 64 and PROPERTY_KEY.fullmatch(key) is not None
+
+
 def payload_outcome(action, payload):
     """A payload's outcome for an owner and a producer of this version
     (STORAGE.md sections 15.2 and 15.3): one whose action and v name a schema
@@ -1532,14 +1570,20 @@ def payload_outcome(action, payload):
     otherwise; one whose action, or whose v for a known action, names none is
     unknown, whatever else it holds. A payload of a known action stating no
     v, or one that is no integer, states no version to wait for, and is
-    malformed."""
+    malformed. A property's value is at most 1,024 bytes of UTF-8 (STORAGE.md
+    sections 4.3 and 15.3), which a schema counting characters cannot state:
+    one past it, or no UTF-8 at all, is malformed by the text."""
     version = payload.get("v")
     if action in known_actions and (isinstance(version, bool) or not isinstance(version, int)):
         return "malformed"
     schema = payload_schemas.get(f"{action}.v{version}")
     if schema is None:
         return "unknown"
-    return "malformed" if list(Draft202012Validator(schema).iter_errors(payload)) else "valid"
+    if list(Draft202012Validator(schema).iter_errors(payload)):
+        return "malformed"
+    if action == "set-property" and not all(property_value(value) for value in payload.get("add", []) + payload.get("remove", [])):
+        return "malformed"
+    return "valid"
 
 
 for index, case in enumerate(payload_cases):
@@ -1567,6 +1611,15 @@ require("payloads.json: a known action stating a whole v written as no integer, 
             and case["outcome"] == "malformed"
             and not list(Draft202012Validator(payload_schemas[f"{case['action']}.v{int(case['payload']['v'])}"]).iter_errors(case["payload"]))
             for case in payload_cases))
+# A property's value is bounded in bytes of UTF-8, which a schema counting
+# characters reads as within its bound: the text's rule, pinned by a value
+# past it in two-byte characters and one in four-byte characters, each one
+# its schema accepts.
+
+require("payloads.json: a set-property whose schema accepts it and whose value is past 1,024 bytes, or no UTF-8, malformed",
+        sum(case["action"] == "set-property" and case["outcome"] == "malformed"
+            and not list(Draft202012Validator(payload_schemas["set-property.v1"]).iter_errors(case["payload"]))
+            for case in payload_cases) >= 2)
 # The three ways a payload is unknown: a known action at a v no schema
 # defines, an action no schema defines, and an application's own, x-.
 unknown_cases = [case for case in payload_cases if case["outcome"] == "unknown"]
@@ -2657,6 +2710,67 @@ for reference in store.get("references", []):
         endpoint = (reference[f"{end}_kind"], reference[f"{end}_link_id"])
         require(f"search store: reference {end} {endpoint} is held", endpoint in endpoints)
 
+# A property names an item the store holds (STORAGE section 4.3), under a key
+# and with a value of their bounds, `pimdir/label` the one key the standard
+# defines under its namespace, at most 64 values under one key, and no two
+# labels of one item folding alike, which the owner's add never writes.
+def label_fold(text):
+    """A label as STORAGE Annex A.2 folds `fn`: lowercased, then trimmed of
+    the White_Space characters."""
+    return folded(text).strip(WHITE_SPACE)
+
+
+def check_properties(where, properties, seqs):
+    held = {}
+    for row in properties:
+        seq, key, value = row["seq"], row["key"], row["value"]
+        require(f"{where}: property {key} names seq {seq}, which an item holds", seq in seqs)
+        require(f"{where}: property key {key!r} is one a property takes",
+                property_key(key) and (not key.startswith("pimdir/") or key == "pimdir/label"))
+        require(f"{where}: property value {value[:20]!r} is one a property holds", property_value(value))
+        values = held.setdefault((seq, key), [])
+        require(f"{where}: seq {seq} holds {value[:20]!r} under {key} once", value not in values)
+        values.append(value)
+    for (seq, key), values in held.items():
+        require(f"{where}: seq {seq} holds at most 64 values under {key}", len(values) <= 64)
+        if key == "pimdir/label":
+            require(f"{where}: seq {seq} holds no two labels folding alike",
+                    len({label_fold(value) for value in values}) == len(values))
+
+
+def property_holders(query, properties):
+    """The seqs a query of one label: or property: term names (SEARCH.md
+    section 8): a label folded both sides, a property's value byte for byte;
+    None for any other query."""
+    tokens = lex(query)
+    if len(tokens) != 1 or tokens[0]["kind"] != "field":
+        return None
+    token = tokens[0]
+    name = query[token["start"]:token["colon"]]
+    value = query[token["colon"] + 1:token["end"]]
+    value = value[1:-1] if token["phrase"] else value
+    if name == "label":
+
+        return {row["seq"] for row in properties
+                if row["key"] == "pimdir/label" and label_fold(row["value"]) == label_fold(value)}
+    if name == "property":
+        key, _, held = value.partition("=")
+        return {row["seq"] for row in properties if row["key"] == key and row["value"] == held}
+    return None
+
+
+check_properties("search store", store["properties"], {item["seq"] for item in store["items"]})
+derived_properties = 0
+for case in queries["cases"]:
+    holders = property_holders(case["query"], store["properties"]) if "hits" in case else None
+    if holders is None:
+        continue
+    check(f"search {case['query']!r}: the items holding the property",
+          sorted(map(tuple, case["hits"])),
+          sorted({(accounts[item["collection"]], item["seq"]) for item in store["items"] if item["seq"] in holders}))
+    derived_properties += 1
+require("search: label: and property: cases re-derived, each field several times", derived_properties >= 10)
+
 # A case's now and zone (SEARCH.md section 11), the file's now and UTC by
 # default.
 def clock_of(case):
@@ -3529,6 +3643,8 @@ for case in refresh["cases"]:
         if "fixture" in item:
             require(f"{label}: {item['fixture']} exists", (root / item["fixture"]).is_file())
         model[(item["collection"], item["seq"])] = {"link_id": item["link_id"], "live": True, "fixture": item.get("fixture")}
+    properties = [dict(row) for row in case["store"].get("properties", [])]
+    check_properties(label, properties, {seq for (_, seq) in model})
     for number, step in enumerate(case["steps"], 1):
         where = f"{label} step {number}"
         write = step["write"]
@@ -3557,6 +3673,35 @@ for case in refresh["cases"]:
                 require(f"{where}: a {write['kind']} names a retained item", not held["live"])
                 del model[key]
                 purged = True
+                # A property goes with the last row holding its seq (STORAGE
+                # section 4.3).
+                if all(seq != write["seq"] for (_, seq) in model):
+                    properties = [row for row in properties if row["seq"] != write["seq"]]
+        elif write["kind"] == "property":
+            # A set-property as the owner applies it (STORAGE section 15.3):
+            # on the item a live row of the collection holds, its removes,
+            # then its adds in order, a label compared folded; a change
+            # stamps every row holding the seq, live or not, and none that
+            # moves no row stamps nothing.
+            seq, key = write["seq"], write["key"]
+            held = model.get((write["collection"], seq))
+            require(f"{where}: a property names a live row of its collection", held is not None and held["live"])
+            require(f"{where}: a property's key is one a property takes",
+                    property_key(key) and (not key.startswith("pimdir/") or key == "pimdir/label"))
+            same = (lambda a, b: label_fold(a) == label_fold(b)) if key == "pimdir/label" else (lambda a, b: a == b)
+            before = sorted(row["value"] for row in properties if row["seq"] == seq and row["key"] == key)
+            values = list(before)
+            for value in write.get("remove", []):
+                values = [v for v in values if not same(v, value)]
+            for value in write.get("add", []):
+                require(f"{where}: an added value is one a property holds", property_value(value))
+                if not any(same(v, value) for v in values):
+                    values.append(value)
+            require(f"{where}: a key holds at most 64 values", len(values) <= 64)
+            properties = [row for row in properties if not (row["seq"] == seq and row["key"] == key)] + \
+                [{"seq": seq, "key": key, "value": value} for value in values]
+            if sorted(values) != before:
+                items |= {(collection, row["link_id"]) for (collection, s), row in model.items() if s == seq}
         elif write["kind"] == "rename":
             require(f"{where}: {write['collection']} is held and {write['to']} is not",
                     write["collection"] in collections and write["to"] not in collections)
@@ -3584,6 +3729,14 @@ for case in refresh["cases"]:
                 parse(query["query"])
             except Refused as refused:
                 failures.append(f"{where}: {query['query']!r} is refused ({refused.code})")
+            holders = property_holders(query["query"], properties) if "hits" in query else None
+            if holders is not None:
+                check(f"{where}: {query['query']!r}, the live items holding the property",
+                      sorted(map(tuple, query["hits"])),
+                      sorted({(collections[collection], seq) for (collection, seq), row in model.items()
+                              if row["live"] and seq in holders}))
+                derived_properties += 1
+
             hits = query.get("hits", []) + [hit for thread in query.get("threads", []) for hit in thread["hits"]]
             for hit in hits:
                 require(f"{where}: {query['query']!r} hit {hit} names a searchable item", tuple(hit) in live)

@@ -4,10 +4,10 @@
   "$comment": "SPDX-License-Identifier: MIT OR Apache-2.0",
   "title": "The search fixture store (SEARCH.md section 11), vectors/search/store.json",
   "type": "object",
-  "required": ["v", "collections", "items", "references"],
+  "required": ["v", "collections", "items", "references", "properties"],
   "additionalProperties": false,
   "properties": {
-    "v": { "const": 2 },
+    "v": { "const": 3 },
     "note": { "type": "string" },
     "collections": {
       "type": "array",
@@ -69,6 +69,19 @@
           "to_link_id": { "type": "string" },
           "role": { "type": "string" },
           "origin": { "enum": ["auto", "user"] }
+        }
+      }
+    },
+    "properties": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["seq", "key", "value"],
+        "additionalProperties": false,
+        "properties": {
+          "seq": { "type": "integer", "minimum": 1 },
+          "key": { "type": "string", "minLength": 3, "maxLength": 64 },
+          "value": { "type": "string", "minLength": 1 }
         }
       }
     }
