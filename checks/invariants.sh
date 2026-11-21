@@ -3189,7 +3189,7 @@ fresh
 index
 isearch init_index_meta ":version=1" ":tokenizer='unicode61 remove_diacritics 0'" ":extraction=1" ":extractor='scenario 1'"
 expect "index: init_index_meta stamps this draft and the canonical shape, which load_index_meta answers" \
-    "$(isearch load_index_meta | cut -d'|' -f10,11)" "search-draft-15|canonical"
+    "$(isearch load_index_meta | cut -d'|' -f10,11)" "search-draft-16|canonical"
 expect "index: init_index_meta records the store and the incarnation it is built from" \
     "$(isearch load_index_meta | cut -d'|' -f8,9)" "$(run read/load_change_cursor | cut -d'|' -f3,4)"
 run owner/raise_incarnation ":replaced=NULL"

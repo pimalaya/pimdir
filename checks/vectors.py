@@ -132,7 +132,7 @@ CLOSED_FIELDS = {
 # (SEARCH.md sections 8, 8.3): the role fields and with:.
 ADDRESS_FIELDS = {"from", "to", "cc", "bcc", "attendee", "organizer", "email", "with"}
 DATE_FIELDS = {"date", "when"}
-OPEN_FIELDS = {"tag", "flag", "account", "collection", "folder", "thread", "id", "linked", "category"}
+OPEN_FIELDS = {"tag", "flag", "account", "collection", "folder", "thread", "id", "mid", "linked", "category"}
 FIELDS = TEXT_FIELDS | set(CLOSED_FIELDS) | DATE_FIELDS | {"changed"} | OPEN_FIELDS
 CODES = {
     "empty-query", "unknown-field", "invalid-value", "invalid-date", "unterminated-phrase",
@@ -200,8 +200,23 @@ def check_wildcard(word, offset, allowed):
         raise Refused("invalid-wildcard", offset + star, offset + star + 1)
 
 
+# The orders a search answers (SEARCH.md section 8.2).
+SORTS = {"newest-first", "oldest-first", "title", "sender", "relevance"}
+INSTANT = re.compile(r"(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(Z|[+-](\d{2}):(\d{2}))?")
+RELATIVE = re.compile(r"(\d+)(min|mo|h|d|w|y)")
+
+
 def date_point(value):
-    amount = re.fullmatch(r"(\d+)[dwy]", value)
+    instant = INSTANT.fullmatch(value)
+    if instant:
+        day, hour, minute, second, offset, off_hour, off_minute = instant.groups()
+        try:
+            date.fromisoformat(day)
+        except ValueError:
+            return False
+        return (int(hour) <= 23 and int(minute) <= 59 and int(second or 0) <= 59
+                and (offset in (None, "Z") or (int(off_hour) <= 23 and int(off_minute) <= 59)))
+    amount = RELATIVE.fullmatch(value)
     if re.fullmatch(r"\d{4}", value) or value in {"today", "yesterday"} or (amount and len(amount.group(1)) <= DIGITS["relative"]):
         return True
     if re.fullmatch(r"\d{4}-\d{2}", value):
@@ -419,11 +434,32 @@ def point_span(point, now, zone=timezone.utc):
         return midnight(*today.timetuple()[:3]), midnight(*day_after(today))
     if point == "yesterday":
         return midnight(*(today - timedelta(days=1)).timetuple()[:3]), midnight(*today.timetuple()[:3])
-    amount = re.fullmatch(r"(\d+)([dwy])", point)
+    instant = INSTANT.fullmatch(point)
+    if instant:
+        day, hour, minute, second, offset, off_hour, off_minute = instant.groups()
+        if offset == "Z":
+            stated = timezone.utc
+        elif offset:
+            sign = -1 if offset[0] == "-" else 1
+            stated = timezone(sign * timedelta(hours=int(off_hour), minutes=int(off_minute)))
+        else:
+            stated = zone
+        day = date.fromisoformat(day)
+        # Fold 0: a skipped time at the earlier offset, a repeated one first.
+        start = datetime(day.year, day.month, day.day, int(hour), int(minute), int(second or 0),
+                         tzinfo=stated).astimezone(timezone.utc)
+        return start, start + (timedelta(seconds=1) if second else timedelta(minutes=1))
+    amount = RELATIVE.fullmatch(point)
     if amount:
         n, unit = int(amount.group(1)), amount.group(2)
         try:
-            start = now.replace(year=now.year - n) if unit == "y" else now - timedelta(days=n * (7 if unit == "w" else 1))
+            if unit in ("mo", "y"):
+                utc = now.astimezone(timezone.utc)
+                months = utc.year * 12 + utc.month - 1 - (n * 12 if unit == "y" else n)
+                year, month = divmod(months, 12)
+                start = utc.replace(year=year, month=month + 1, day=min(utc.day, monthrange(year, month + 1)[1]))
+            else:
+                start = now - timedelta(minutes=n * {"min": 1, "h": 60, "d": 1440, "w": 10080}[unit])
         except (ValueError, OverflowError):
             start = None
         return start, now
@@ -2637,7 +2673,7 @@ for case in queries["cases"]:
             not re.search(r"\b(date|when):\"?(\S*\.\.)?0000", case["query"]))
     answers = [key for key in ("hits", "threads", "error") if key in case]
     require(f"{label}: answers one of hits, threads or error", len(answers) == 1)
-    require(f"{label}: a known sort", case.get("sort", "date") in {"date", "name", "relevance"})
+    require(f"{label}: a known sort", case.get("sort", "newest-first") in SORTS)
     require(f"{label}: ordered and horizon_left are booleans",
             isinstance(case.get("ordered", False), bool) and isinstance(case.get("horizon_left", False), bool))
     for hit in case.get("hits", []) + [hit for thread in case.get("threads", []) for hit in thread["hits"]]:

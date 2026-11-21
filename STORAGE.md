@@ -1057,7 +1057,7 @@ Every file under vectors/ states the version of its format as a top-level `v` an
 
 ## 17. Conformance
 
-An implementation conforms to this part by one profile, each holding the one before. It MUST meet every section its row names, keep §4.4's terms for the statements of its directories, each run under its canonical name or its effect reached through statements of its own, and pass the vectors its row names, and MUST state its conformance as each part's version and the profile it meets there, the layers' by SYNC.md §12 and SEARCH.md §12: `storage-draft-15 owner, sync-draft-15 engine, search-draft-15 indexer (canonical)`. One running text of its own for any statement of its directories, or reaching an effect through statements of its own (§4.4), adds `(own statement text)` after its profile: `storage-draft-15 owner (own statement text), sync-draft-15 engine`.
+An implementation conforms to this part by one profile, each holding the one before. It MUST meet every section its row names, keep §4.4's terms for the statements of its directories, each run under its canonical name or its effect reached through statements of its own, and pass the vectors its row names, and MUST state its conformance as each part's version and the profile it meets there, the layers' by SYNC.md §12 and SEARCH.md §12: `storage-draft-15 owner, sync-draft-15 engine, search-draft-16 indexer (canonical)`. One running text of its own for any statement of its directories, or reaching an effect through statements of its own (§4.4), adds `(own statement text)` after its profile: `storage-draft-15 owner (own statement text), sync-draft-15 engine`.
 
 | Profile | What it does | Owes | Statements | Vectors |
 | --- | --- | --- | --- | --- |
