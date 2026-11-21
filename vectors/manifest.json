@@ -124,7 +124,7 @@
     "vectors/schema/sync.schema.json": "0f30c8f274692b973bd984f5f32a767129c411048100b8e55dead23c0f280c5b",
     "vectors/schema/versions.schema.json": "189ca52345b56a64626844d8805ebaea10356ae5ecae651a8c9675610a500705",
     "vectors/search/chunks.json": "6fc4e98bdf1306f7d5a2635fa2db4c3d96dc8856fbd61df49bc2f67d4d44de3a",
-    "vectors/search/queries.json": "93ae2083e91a2cf75dc27d99cd70df431bd96db8ca4243388590ee8d85736567",
+    "vectors/search/queries.json": "7fcae2db132e7d21f68632225e6dbdad5249447fa8171d424bfe06a77e2500cd",
     "vectors/search/refresh.json": "48a2ec367fc25b9014302cacca2cbc536472db0c738f502d2f0204d552d77544",
     "vectors/search/store.json": "e782d0e8a53bab0891b4db528a95c8b67ab0b9916451d07f73bcae3bc3b2a9d1",
     "vectors/summaries.json": "6a4eaead0970b91f76d2db33b53215ba35975e171f8c373b45e313d09298aad8",
@@ -337,7 +337,7 @@
       "/cases": 10
     },
     "vectors/search/queries.json": {
-      "/cases": 301,
+      "/cases": 302,
       "/occurrences": 8
     },
     "vectors/search/refresh.json": {

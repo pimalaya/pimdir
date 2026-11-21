@@ -42,6 +42,7 @@
     { "query": "-kind:mail kind:contact", "hits": [["home", 4], ["home", 5], ["home", 25]], "note": "a leading - is not, binding as not does" },
     { "query": "-(kind:mail or kind:contact or kind:event or kind:task)", "hits": [["home", 10], ["home", 14], ["home", 24]], "note": "a leading - before a group negates the group" },
     { "query": "(reunion or forecast) kind:file", "hits": [["home", 10]], "note": "parentheses group: without them reunion would match alone" },
+    { "query": "(stand-up or reunion) not nothing", "hits": [["home", 2]], "note": "text terms alone, a negated one taking its hits away: the body of item 1 says nothing, so only reunion's hit is left" },
     { "query": "\"not\"", "hits": [["home", 11]], "note": "a quoted operator is a word" },
     { "query": "subject:\"weekly sync\"", "hits": [["home", 6], ["home", 9]], "note": "a phrase as a field's value; an event's SUMMARY is its title" },
     { "query": "\"\" or reunion", "hits": [["home", 2]], "note": "a text with no token matches nothing" },
