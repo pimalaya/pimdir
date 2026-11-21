@@ -1,0 +1,17 @@
+[package]
+name = "pimdir-notmuch-bench"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "pimbench"
+path = "src/main.rs"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+debug = false
+
+[dependencies]
+io-pimdir = { path = "../io-pimdir", default-features = false, features = ["client", "search", "vendored"] }

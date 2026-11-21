@@ -1,0 +1,17 @@
+all mail	*	kind:mail
+unread	tag:unread	is:unread
+flagged	tag:flagged	is:flagged
+from address	from:jeff.dasovich@enron.com	from:jeff.dasovich@enron.com
+from name	from:dasovich	from:dasovich
+subject word	subject:meeting	subject:meeting
+common word	enron	enron
+mid word	california	california
+rare word	kiwi	kiwi
+phrase	"natural gas"	"natural gas"
+two words	power california	power california
+negation	california and not gas	california not gas
+prefix	deriv*	deriv*
+date month	date:2001-05-01..2001-05-31	date:2001-05-01..2001-05-31
+combined	from:dasovich date:2001-01-01..2001-12-31 california	from:dasovich date:2001-01-01..2001-12-31 california
+unread word	tag:unread california	is:unread california
+folder	folder:dasovich-j/inbox	folder:dasovich-j/inbox
