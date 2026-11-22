@@ -35,36 +35,32 @@ INSERT INTO objects(id, hash, size, refcount) VALUES
     (3, 'cccccccccccccccccccccccccccccccccccccccccccccccccccc', 30, 0);
 DELETE FROM objects WHERE id = 3;
 
-INSERT INTO items(collection, link_id, seq, flags_known, marks, object,
-    sort_key, level)
+INSERT INTO items(collection, link_id, seq, flags_known, marks, keywords,
+    object, sort_key, level)
 VALUES
-    ('INBOX', 'a@x', 1, 1, 1, 1, '2026-08-01T10:00:00Z', 2),
-    ('INBOX', 'b@x', 2, 1, 0, NULL, '2026-08-02T10:00:00Z', 1),
-    ('Archive', 'a@x', 1, 0, 0, NULL, '2026-08-01T10:00:00Z', 1),
-    ('Cal', 'ev', 3, 0, 0, NULL, '2026-09-01T09:00:00Z', 1),
-    ('Cal', 'td', 4, 0, 0, NULL, '', 1),
-    ('Cal', 'jn', 5, 0, 0, NULL, '', 1),
-    ('Cards', 'c1', 6, 0, 0, 2, 'alice', 2),
-    ('Files', 'f1', 7, 0, 0, NULL, 'notes.txt', 1),
-    ('INBOX', 'gone@x', 8, 0, 0, NULL, '', 1),
-    ('INBOX', 'last@x', 9, 0, 0, NULL, '', 1);
+    ('INBOX', 'a@x', 1, 1, 1, '$label', 1, '2026-08-01T10:00:00Z', 2),
+    ('INBOX', 'b@x', 2, 1, 0, '', NULL, '2026-08-02T10:00:00Z', 1),
+    ('Archive', 'a@x', 1, 0, 0, '', NULL, '2026-08-01T10:00:00Z', 1),
+    ('Cal', 'ev', 3, 0, 0, '', NULL, '2026-09-01T09:00:00Z', 1),
+    ('Cal', 'td', 4, 0, 0, '', NULL, '', 1),
+    ('Cal', 'jn', 5, 0, 0, '', NULL, '', 1),
+    ('Cards', 'c1', 6, 0, 0, '', 2, 'alice', 2),
+    ('Files', 'f1', 7, 0, 0, '', NULL, 'notes.txt', 1),
+    ('INBOX', 'gone@x', 8, 0, 0, '', NULL, '', 1),
+    ('INBOX', 'last@x', 9, 0, 0, '', NULL, '', 1);
 UPDATE items SET deleted = 1, retained_at = '2026-11-01T00:00:00.000Z',
     retained_by = 'imap'
 WHERE link_id = 'gone@x';
 DELETE FROM items WHERE link_id = 'last@x';
 
-INSERT INTO placement_flag(item, flag)
-SELECT id, '$label' FROM items WHERE collection = 'INBOX' AND link_id = 'a@x';
 INSERT INTO bindings(item, collection, source, handle, base_flags_known,
-    base_marks, base_object, base_revision, base_present, shared_object, round)
-SELECT id, collection, 'imap', '10', 1, 1, 1, NULL, 1, NULL, 1
+    base_marks, base_keywords, base_object, base_revision, base_present,
+    shared_object, round)
+SELECT id, collection, 'imap', '10', 1, 1, '$label', 1, NULL, 1, NULL, 1
 FROM items WHERE collection = 'INBOX' AND link_id = 'a@x';
 INSERT INTO bindings(item, collection, source, handle)
 SELECT id, collection, 'imap', char(1) || 'b@x'
 FROM items WHERE collection = 'INBOX' AND link_id = 'b@x';
-INSERT INTO binding_base_flag(item, source, flag)
-SELECT id, 'imap', '$label' FROM items
-WHERE collection = 'INBOX' AND link_id = 'a@x';
 INSERT INTO supersessions(item, by_item)
 SELECT (SELECT id FROM items WHERE collection = 'Cal' AND link_id = 'td'),
        (SELECT id FROM items WHERE collection = 'Cal' AND link_id = 'jn');

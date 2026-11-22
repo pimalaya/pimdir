@@ -178,17 +178,30 @@ UPDATE items SET retained_at = NULL WHERE link_id = 'r'
 UPDATE bindings SET base_present = 0
 UPDATE bindings SET base_present = 0, base_object = NULL
 UPDATE bindings SET base_present = 0, base_object = NULL, base_revision = NULL, base_flags_known = 1
+UPDATE items SET keywords = '$x' WHERE link_id = 'a'
+UPDATE items SET flags_known = 1, keywords = ' $x' WHERE link_id = 'a'
+UPDATE items SET flags_known = 1, keywords = '$x ' WHERE link_id = 'a'
+UPDATE items SET flags_known = 1, keywords = '$x  $y' WHERE link_id = 'a'
+UPDATE items SET flags_known = 1, keywords = '$x' || char(9) || '$y' WHERE link_id = 'a'
+UPDATE items SET flags_known = 1, keywords = 'caf' || char(233) WHERE link_id = 'a'
+UPDATE items SET flags_known = 1, keywords = x'2478' WHERE link_id = 'a'
+UPDATE bindings SET base_keywords = '$x'
+UPDATE bindings SET base_flags_known = 1, base_keywords = '$x '
+UPDATE bindings SET base_flags_known = 1, base_keywords = 'caf' || char(233)
 SHAPES
 if [ "$("$floor" "$dir/shapes.db" .dump)" != "$shapes" ]; then
     echo "a refused write moved a row on SQLite $version" >&2
     exit 1
 fi
 # What each column may also hold is taken there: a NULL where one is allowed,
-# a size of none, a base let go whole.
+# a size of none, a known flag set's keywords, a base let go whole.
 "$floor" "$dir/shapes.db" "PRAGMA foreign_keys = ON;
     UPDATE mail_summary SET date = NULL, size = NULL, attachment = NULL; UPDATE event_summary SET recurring = NULL;
     UPDATE task_summary SET recurring = 1; UPDATE sources SET covered_since = NULL, round_until = NULL;
     UPDATE receipts SET seq = NULL; UPDATE items SET retained_by = NULL WHERE link_id = 'r'; UPDATE objects SET size = 0;
+    UPDATE items SET flags_known = 1, keywords = '\$Junk \\seen ~x' WHERE link_id = 'a';
+    UPDATE bindings SET base_flags_known = 1, base_keywords = '\$Junk';
+    UPDATE bindings SET base_flags_known = 0, base_keywords = '';
     UPDATE bindings SET base_present = 0, base_object = NULL, base_revision = NULL;" || {
     echo "a shape §13 allows is refused on SQLite $version" >&2
     exit 1

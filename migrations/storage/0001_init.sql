@@ -289,13 +289,21 @@ CREATE TABLE items (
     collection      TEXT NOT NULL CHECK (typeof(collection) = 'text') REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
     link_id         TEXT NOT NULL CHECK (typeof(link_id) = 'text') CHECK (link_id != ''),  -- never empty; the key the item is filed under: the identity hint, escaped as esc:<hint> when it begins like a derived key, a kind fallback, or a minted dup:<hint>#<handle> (§9)
     seq             INTEGER NOT NULL CHECK (typeof(seq) = 'integer') CHECK (seq >= 1),  -- public id, shared by every placement of the link id (§9.1)
-    -- Whether the flag set is known: 1 its placement_flag rows are the set,
-    -- none being known-empty; 0 unknown, and then it holds no row.
+    -- Whether the flag set is known: 1 marks and keywords are the set, both
+    -- empty being known-empty; 0 unknown, and then both are empty.
     flags_known     INTEGER NOT NULL DEFAULT 0 CHECK (typeof(flags_known) = 'integer') CHECK (flags_known IN (0, 1)),
     -- The system flags of the set (§13), by their exact bytes: \Seen 1,
-    -- \Answered 2, \Flagged 4, \Draft 8, \Deleted 16; every other flag is a
-    -- placement_flag row. 0 while the set is unknown.
+    -- \Answered 2, \Flagged 4, \Draft 8, \Deleted 16; every other flag is in
+    -- keywords. 0 while the set is unknown.
     marks           INTEGER NOT NULL DEFAULT 0 CHECK (typeof(marks) = 'integer') CHECK (marks BETWEEN 0 AND 31),
+    -- Every other flag of the set (§13), each printable and holding no space,
+    -- sorted bytewise and joined by one space, '' for none: a reader appends
+    -- it to the system flags and splits the set back (§14.1). The sort, the
+    -- single spelling of each flag and the exclusion of the five system
+    -- flags are the writer's duty; the schema holds the shape alone.
+    keywords        TEXT NOT NULL DEFAULT '' CHECK (typeof(keywords) = 'text')
+                    CHECK (keywords NOT GLOB '*[^ -~]*' AND keywords NOT GLOB ' *'
+                           AND keywords NOT GLOB '* ' AND keywords NOT GLOB '*  *'),
     object          INTEGER CHECK (typeof(object) IN ('integer', 'null')) REFERENCES objects(id),  -- current body, NULL until hydrated
     sort_key        TEXT NOT NULL DEFAULT '' CHECK (typeof(sort_key) = 'text'),  -- the kind's ordering key, '' when unknown (§9.3)
     -- The detail ladder: 1 meta, 2 full (§13).
@@ -317,7 +325,7 @@ CREATE TABLE items (
     CHECK (retained_at IS NULL OR deleted = 1),
     CHECK (retained_by IS NULL OR retained_at IS NOT NULL),
     CHECK (conflicted = 1 OR conflict_object IS NULL),
-    CHECK (flags_known = 1 OR marks = 0)
+    CHECK (flags_known = 1 OR (marks = 0 AND keywords = ''))
 );
 
 -- Resolves a public id back to the internal link id.
@@ -365,10 +373,11 @@ BEGIN
 END;
 
 CREATE TRIGGER items_stamp_update AFTER UPDATE OF
-    flags_known, marks, object, sort_key, level, deleted, retained_at, conflicted, conflict_object
+    flags_known, marks, keywords, object, sort_key, level, deleted, retained_at, conflicted, conflict_object
 ON items
 WHEN OLD.flags_known IS NOT NEW.flags_known
   OR OLD.marks IS NOT NEW.marks
+  OR OLD.keywords IS NOT NEW.keywords
   OR OLD.object IS NOT NEW.object
   OR OLD.sort_key IS NOT NEW.sort_key
   OR OLD.level IS NOT NEW.level
@@ -393,45 +402,6 @@ END;
 CREATE TRIGGER items_count_purge AFTER DELETE ON items
 BEGIN
     UPDATE store_meta SET purges = purges + 1 WHERE id = 1;
-END;
-
--- A placement's flags other than the system flags items.marks holds (§13),
--- one row per flag, while items.flags_known is 1. A flag is printable and
--- holds no space, so a reader joins a set with spaces and splits it back
--- (§14.1). The flag index answers a flag predicate by a seek rather than a
--- scan of every placement.
-CREATE TABLE placement_flag (
-    item INTEGER NOT NULL CHECK (typeof(item) = 'integer') REFERENCES items(id) ON DELETE CASCADE,
-    flag TEXT    NOT NULL CHECK (typeof(flag) = 'text') CHECK (flag != '' AND flag NOT GLOB '*[^!-~]*'),
-    PRIMARY KEY (item, flag)
-) WITHOUT ROWID;
-
-CREATE INDEX placement_flag_by_flag ON placement_flag(flag);
-
--- An unknown set holds no row: a flag written under it fails here, and a set
--- becoming unknown loses its rows.
-CREATE TRIGGER placement_flag_needs_known BEFORE INSERT ON placement_flag
-WHEN (SELECT flags_known FROM items WHERE id = NEW.item) IS NOT 1
-BEGIN
-    SELECT RAISE(ABORT, 'flags unknown');
-END;
-
-CREATE TRIGGER items_forget_flags AFTER UPDATE OF flags_known ON items
-WHEN NEW.flags_known = 0
-BEGIN
-    DELETE FROM placement_flag WHERE item = NEW.id;
-END;
-
--- A flag added or removed requests the placement's stamp (§4.5), so a set
--- written again as it was, which moves no row, stamps nothing.
-CREATE TRIGGER placement_flag_stamp_insert AFTER INSERT ON placement_flag
-BEGIN
-    UPDATE items SET changed = -1 WHERE id = NEW.item;
-END;
-
-CREATE TRIGGER placement_flag_stamp_delete AFTER DELETE ON placement_flag
-BEGIN
-    UPDATE items SET changed = -1 WHERE id = OLD.item;
 END;
 
 CREATE TRIGGER collections_stamp_insert AFTER INSERT ON collections
@@ -473,11 +443,15 @@ CREATE TABLE bindings (
     -- licensed rebind is the handle-space rebuild (§10, §12).
     handle            TEXT NOT NULL CHECK (typeof(handle) = 'text') CHECK (handle != ''),
     -- Whether the base flag set is known, as items.flags_known says of the
-    -- item's: 1 base_marks and its binding_base_flag rows are the set, 0
-    -- unknown.
+    -- item's: 1 base_marks and base_keywords are the set, 0 unknown.
     base_flags_known  INTEGER NOT NULL DEFAULT 0 CHECK (typeof(base_flags_known) = 'integer') CHECK (base_flags_known IN (0, 1)),
     -- The base's system flags, as items.marks holds the item's (§13).
     base_marks        INTEGER NOT NULL DEFAULT 0 CHECK (typeof(base_marks) = 'integer') CHECK (base_marks BETWEEN 0 AND 31),
+    -- The base's other flags, spelled as items.keywords and written on the
+    -- same duty: sorted bytewise, no system flag. A base carries no stamp.
+    base_keywords     TEXT NOT NULL DEFAULT '' CHECK (typeof(base_keywords) = 'text')
+                      CHECK (base_keywords NOT GLOB '*[^ -~]*' AND base_keywords NOT GLOB ' *'
+                             AND base_keywords NOT GLOB '* ' AND base_keywords NOT GLOB '*  *'),
     base_object       INTEGER CHECK (typeof(base_object) IN ('integer', 'null')) REFERENCES objects(id),
     base_revision     TEXT CHECK (typeof(base_revision) IN ('text', 'null')),  -- etag/modseq for mutable-content backends
     -- Whether a base exists at all, which its three value columns cannot say: a
@@ -530,35 +504,12 @@ CREATE TABLE bindings (
     CHECK ((refusal IS NULL) = (refused_key IS NULL) AND (refusal IS NULL) = (refused_at IS NULL)),
     -- A binding that is not conflicted carries neither (§13).
     CHECK (conflicted = 1 OR (conflict_revision IS NULL AND conflict_object IS NULL)),
-    CHECK (base_flags_known = 1 OR base_marks = 0),
+    CHECK (base_flags_known = 1 OR (base_marks = 0 AND base_keywords = '')),
     CHECK (base_present = 1 OR (base_flags_known = 0 AND base_object IS NULL AND base_revision IS NULL)),
     -- ON UPDATE as well as ON DELETE: renaming a collection cascades into
     -- items.collection, so its bindings follow it (§14).
     FOREIGN KEY (item, collection) REFERENCES items(id, collection) ON UPDATE CASCADE ON DELETE CASCADE
 );
-
--- A binding's base flags other than its base_marks (§13), one row per flag,
--- while bindings.base_flags_known is 1, spelled as placement_flag's. A base
--- carries no stamp, so its writes draw none.
-CREATE TABLE binding_base_flag (
-    item   INTEGER NOT NULL CHECK (typeof(item) = 'integer'),
-    source TEXT    NOT NULL CHECK (typeof(source) = 'text'),
-    flag   TEXT    NOT NULL CHECK (typeof(flag) = 'text') CHECK (flag != '' AND flag NOT GLOB '*[^!-~]*'),
-    PRIMARY KEY (item, source, flag),
-    FOREIGN KEY (item, source) REFERENCES bindings(item, source) ON DELETE CASCADE
-) WITHOUT ROWID;
-
-CREATE TRIGGER binding_base_flag_needs_known BEFORE INSERT ON binding_base_flag
-WHEN (SELECT base_flags_known FROM bindings WHERE item = NEW.item AND source = NEW.source) IS NOT 1
-BEGIN
-    SELECT RAISE(ABORT, 'base flags unknown');
-END;
-
-CREATE TRIGGER bindings_forget_base_flags AFTER UPDATE OF base_flags_known ON bindings
-WHEN NEW.base_flags_known = 0
-BEGIN
-    DELETE FROM binding_base_flag WHERE item = NEW.item AND source = NEW.source;
-END;
 
 -- What an `add` carrying `supersedes` replaced (§15.3): the item it tombstoned,
 -- keyed as that item, and the item the add created. The tombstone's remove is
@@ -944,24 +895,16 @@ CREATE INDEX bindings_refused ON bindings(collection, source) WHERE refusal IS N
 
 -- A binding may owe a push or a decision: it or its item is conflicted, the
 -- item is deleted, the binding has no base, a known flag set differs from a
--- known base (the system flags' bits, then the other flags' rows, compared by
--- an anti-join each way on the other's key), or the item holds a body other
--- than the base's (SYNC.md §3). A superset of the placements not Clean.
+-- known base (the system flags' bits, then the other flags' texts, which
+-- their writers sort, so equal sets are equal texts), or the item holds a
+-- body other than the base's (SYNC.md §3). A superset of the placements not
+-- Clean.
 CREATE VIEW binding_owes(item, source, owes) AS
 SELECT b.item, b.source,
        b.conflicted = 1 OR i.conflicted = 1 OR i.deleted = 1
        OR b.base_present = 0
        OR (i.flags_known = 1 AND b.base_flags_known = 1
-           AND (i.marks != b.base_marks
-                OR EXISTS (SELECT 1 FROM placement_flag f
-                           WHERE f.item = i.id
-                             AND NOT EXISTS (SELECT 1 FROM binding_base_flag g
-                                             WHERE g.item = b.item AND g.source = b.source
-                                               AND g.flag = f.flag))
-                OR EXISTS (SELECT 1 FROM binding_base_flag g
-                           WHERE g.item = b.item AND g.source = b.source
-                             AND NOT EXISTS (SELECT 1 FROM placement_flag f
-                                             WHERE f.item = i.id AND f.flag = g.flag))))
+           AND (i.marks != b.base_marks OR i.keywords != b.base_keywords))
        OR (i.object IS NOT NULL AND i.object IS NOT b.base_object)
 FROM bindings b JOIN items i ON i.id = b.item;
 
@@ -977,9 +920,9 @@ SELECT i.id,
                                      WHERE b.item = i.id AND b.source = s.source))
 FROM items i;
 
--- The owing mark follows the binding's own columns, its item's, and both
--- flag sets' rows. A binding without its item is marked, a superset. A flag
--- of an item no source binds yet, as an import writes it, moves no mark.
+-- The owing mark follows the binding's own columns and its item's, the two
+-- flag sets among them. A binding without its item is marked, a superset. A
+-- flag of an item no source binds yet, as an import writes it, moves no mark.
 CREATE TRIGGER bindings_owes_insert AFTER INSERT ON bindings
 BEGIN
     UPDATE bindings SET owes = 1 - owes
@@ -989,7 +932,7 @@ BEGIN
 END;
 
 CREATE TRIGGER bindings_owes_update AFTER UPDATE OF
-    item, source, conflicted, base_present, base_flags_known, base_marks, base_object
+    item, source, conflicted, base_present, base_flags_known, base_marks, base_keywords, base_object
 ON bindings
 WHEN OLD.item IS NOT NEW.item
   OR OLD.source IS NOT NEW.source
@@ -997,6 +940,7 @@ WHEN OLD.item IS NOT NEW.item
   OR OLD.base_present IS NOT NEW.base_present
   OR OLD.base_flags_known IS NOT NEW.base_flags_known
   OR OLD.base_marks IS NOT NEW.base_marks
+  OR OLD.base_keywords IS NOT NEW.base_keywords
   OR OLD.base_object IS NOT NEW.base_object
 BEGIN
     UPDATE bindings SET owes = 1 - owes
@@ -1006,64 +950,19 @@ BEGIN
 END;
 
 CREATE TRIGGER items_owes_update AFTER UPDATE OF
-    conflicted, deleted, flags_known, marks, object
+    conflicted, deleted, flags_known, marks, keywords, object
 ON items
 WHEN OLD.conflicted IS NOT NEW.conflicted
   OR OLD.deleted IS NOT NEW.deleted
   OR OLD.flags_known IS NOT NEW.flags_known
   OR OLD.marks IS NOT NEW.marks
+  OR OLD.keywords IS NOT NEW.keywords
   OR OLD.object IS NOT NEW.object
 BEGIN
     UPDATE bindings SET owes = 1 - owes
     WHERE item = NEW.id
       AND owes != coalesce((SELECT o.owes FROM binding_owes o
                             WHERE o.item = bindings.item AND o.source = bindings.source), 1);
-END;
-
-CREATE TRIGGER placement_flag_owes_insert AFTER INSERT ON placement_flag
-WHEN EXISTS (SELECT 1 FROM bindings WHERE item = NEW.item)
-BEGIN
-    UPDATE bindings SET owes = 1 - owes
-    WHERE item = NEW.item
-      AND owes != coalesce((SELECT o.owes FROM binding_owes o
-                            WHERE o.item = bindings.item AND o.source = bindings.source), 1);
-END;
-
-CREATE TRIGGER placement_flag_owes_delete AFTER DELETE ON placement_flag
-WHEN EXISTS (SELECT 1 FROM bindings WHERE item = OLD.item)
-BEGIN
-    UPDATE bindings SET owes = 1 - owes
-    WHERE item = OLD.item
-      AND owes != coalesce((SELECT o.owes FROM binding_owes o
-                            WHERE o.item = bindings.item AND o.source = bindings.source), 1);
-END;
-
-CREATE TRIGGER binding_base_flag_owes_insert AFTER INSERT ON binding_base_flag
-BEGIN
-    UPDATE bindings SET owes = 1 - owes
-    WHERE item = NEW.item AND source = NEW.source
-      AND owes != coalesce((SELECT o.owes FROM binding_owes o
-                            WHERE o.item = bindings.item AND o.source = bindings.source), 1);
-END;
-
-CREATE TRIGGER binding_base_flag_owes_delete AFTER DELETE ON binding_base_flag
-BEGIN
-    UPDATE bindings SET owes = 1 - owes
-    WHERE item = OLD.item AND source = OLD.source
-      AND owes != coalesce((SELECT o.owes FROM binding_owes o
-                            WHERE o.item = bindings.item AND o.source = bindings.source), 1);
-END;
-
--- A flag row is added or removed, never rewritten in place: the owing mark
--- and the stamp (§4.5) follow its insert and its delete alone.
-CREATE TRIGGER placement_flag_keep_row BEFORE UPDATE ON placement_flag
-BEGIN
-    SELECT RAISE(ABORT, 'a flag is added or removed');
-END;
-
-CREATE TRIGGER binding_base_flag_keep_row BEFORE UPDATE ON binding_base_flag
-BEGIN
-    SELECT RAISE(ABORT, 'a flag is added or removed');
 END;
 
 -- The lacking mark follows the item's own columns, the bindings it gains and
