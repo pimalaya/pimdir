@@ -1,0 +1,523 @@
+trigger	table	timing	event	of	when	action	target_table	column	source	via_fk
+store_meta_identity	store_meta	BEFORE	UPDATE	store_id,incarnation	1	READ	store_meta	incarnation	store_meta_identity	0
+store_meta_identity	store_meta	BEFORE	UPDATE	store_id,incarnation	1	READ	store_meta	store_id	store_meta_identity	0
+collections_role_moves	collections	BEFORE	UPDATE	role	1	READ	collections	account	collections_role_moves	0
+collections_role_moves	collections	BEFORE	UPDATE	role	1	READ	collections	id	collections_role_moves	0
+collections_role_moves	collections	BEFORE	UPDATE	role	1	READ	collections	kind	collections_role_moves	0
+collections_role_moves	collections	BEFORE	UPDATE	role	1	READ	collections	role	collections_role_moves	0
+collections_role_moves	collections	BEFORE	UPDATE	role	1	UPDATE	collections	role	collections_role_moves	0
+collections_restamp_items	collections	AFTER	UPDATE	id	1	READ	collections	id	collections_restamp_items	0
+collections_restamp_items	collections	AFTER	UPDATE	id	1	READ	items	collection	collections_restamp_items	0
+collections_restamp_items	collections	AFTER	UPDATE	id	1	READ	store_meta	id	collections_restamp_items	0
+collections_restamp_items	collections	AFTER	UPDATE	id	1	READ	store_meta	purges	collections_restamp_items	0
+collections_restamp_items	collections	AFTER	UPDATE	id	1	UPDATE	items	changed	collections_restamp_items	0
+collections_restamp_items	collections	AFTER	UPDATE	id	1	UPDATE	store_meta	purges	collections_restamp_items	0
+collections_count_delete	collections	AFTER	DELETE		0	READ	store_meta	id	collections_count_delete	0
+collections_count_delete	collections	AFTER	DELETE		0	READ	store_meta	purges	collections_count_delete	0
+collections_count_delete	collections	AFTER	DELETE		0	UPDATE	store_meta	purges	collections_count_delete	0
+sources_stamp_coverage	sources	AFTER	UPDATE	covered_since,covered_until,covered_at	1	READ	collections	id	sources_stamp_coverage	0
+sources_stamp_coverage	sources	AFTER	UPDATE	covered_since,covered_until,covered_at	1	READ	sources	collection	sources_stamp_coverage	0
+sources_stamp_coverage	sources	AFTER	UPDATE	covered_since,covered_until,covered_at	1	READ	sources	covered_at	sources_stamp_coverage	0
+sources_stamp_coverage	sources	AFTER	UPDATE	covered_since,covered_until,covered_at	1	READ	sources	covered_since	sources_stamp_coverage	0
+sources_stamp_coverage	sources	AFTER	UPDATE	covered_since,covered_until,covered_at	1	READ	sources	covered_until	sources_stamp_coverage	0
+sources_stamp_coverage	sources	AFTER	UPDATE	covered_since,covered_until,covered_at	1	READ	store_meta	id	sources_stamp_coverage	0
+sources_stamp_coverage	sources	AFTER	UPDATE	covered_since,covered_until,covered_at	1	READ	store_meta	next_change	sources_stamp_coverage	0
+sources_stamp_coverage	sources	AFTER	UPDATE	covered_since,covered_until,covered_at	1	UPDATE	collections	changed	sources_stamp_coverage	0
+sources_stamp_coverage	sources	AFTER	UPDATE	covered_since,covered_until,covered_at	1	UPDATE	store_meta	next_change	sources_stamp_coverage	0
+objects_count_collect	objects	AFTER	DELETE		0	READ	store_meta	id	objects_count_collect	0
+objects_count_collect	objects	AFTER	DELETE		0	READ	store_meta	purges	objects_count_collect	0
+objects_count_collect	objects	AFTER	DELETE		0	UPDATE	store_meta	purges	objects_count_collect	0
+items_stamp_insert	items	AFTER	INSERT		0	READ	bindings	collection		1
+items_stamp_insert	items	AFTER	INSERT		0	READ	bindings	item		1
+items_stamp_insert	items	AFTER	INSERT		0	READ	contact_summary	item		1
+items_stamp_insert	items	AFTER	INSERT		0	READ	event_summary	item		1
+items_stamp_insert	items	AFTER	INSERT		0	READ	file_summary	item		1
+items_stamp_insert	items	AFTER	INSERT		0	READ	item_address	item		1
+items_stamp_insert	items	AFTER	INSERT		0	READ	items	id	items_stamp_insert	0
+items_stamp_insert	items	AFTER	INSERT		0	READ	journal_summary	item		1
+items_stamp_insert	items	AFTER	INSERT		0	READ	mail_summary	item		1
+items_stamp_insert	items	AFTER	INSERT		0	READ	placement_flag	item		1
+items_stamp_insert	items	AFTER	INSERT		0	READ	store_meta	id	items_stamp_insert	0
+items_stamp_insert	items	AFTER	INSERT		0	READ	store_meta	next_change	items_stamp_insert	0
+items_stamp_insert	items	AFTER	INSERT		0	READ	supersessions	by_item		1
+items_stamp_insert	items	AFTER	INSERT		0	READ	supersessions	item		1
+items_stamp_insert	items	AFTER	INSERT		0	READ	task_summary	item		1
+items_stamp_insert	items	AFTER	INSERT		0	UPDATE	items	changed	items_stamp_insert	0
+items_stamp_insert	items	AFTER	INSERT		0	UPDATE	store_meta	next_change	items_stamp_insert	0
+items_stamp_update	items	AFTER	UPDATE	flags_known,marks,object,sort_key,level,deleted,retained_at,conflicted,conflict_object	1	READ	items	conflict_object	items_stamp_update	0
+items_stamp_update	items	AFTER	UPDATE	flags_known,marks,object,sort_key,level,deleted,retained_at,conflicted,conflict_object	1	READ	items	conflicted	items_stamp_update	0
+items_stamp_update	items	AFTER	UPDATE	flags_known,marks,object,sort_key,level,deleted,retained_at,conflicted,conflict_object	1	READ	items	deleted	items_stamp_update	0
+items_stamp_update	items	AFTER	UPDATE	flags_known,marks,object,sort_key,level,deleted,retained_at,conflicted,conflict_object	1	READ	items	flags_known	items_stamp_update	0
+items_stamp_update	items	AFTER	UPDATE	flags_known,marks,object,sort_key,level,deleted,retained_at,conflicted,conflict_object	1	READ	items	id	items_stamp_update	0
+items_stamp_update	items	AFTER	UPDATE	flags_known,marks,object,sort_key,level,deleted,retained_at,conflicted,conflict_object	1	READ	items	level	items_stamp_update	0
+items_stamp_update	items	AFTER	UPDATE	flags_known,marks,object,sort_key,level,deleted,retained_at,conflicted,conflict_object	1	READ	items	marks	items_stamp_update	0
+items_stamp_update	items	AFTER	UPDATE	flags_known,marks,object,sort_key,level,deleted,retained_at,conflicted,conflict_object	1	READ	items	object	items_stamp_update	0
+items_stamp_update	items	AFTER	UPDATE	flags_known,marks,object,sort_key,level,deleted,retained_at,conflicted,conflict_object	1	READ	items	retained_at	items_stamp_update	0
+items_stamp_update	items	AFTER	UPDATE	flags_known,marks,object,sort_key,level,deleted,retained_at,conflicted,conflict_object	1	READ	items	sort_key	items_stamp_update	0
+items_stamp_update	items	AFTER	UPDATE	flags_known,marks,object,sort_key,level,deleted,retained_at,conflicted,conflict_object	1	READ	store_meta	id	items_stamp_update	0
+items_stamp_update	items	AFTER	UPDATE	flags_known,marks,object,sort_key,level,deleted,retained_at,conflicted,conflict_object	1	READ	store_meta	next_change	items_stamp_update	0
+items_stamp_update	items	AFTER	UPDATE	flags_known,marks,object,sort_key,level,deleted,retained_at,conflicted,conflict_object	1	UPDATE	items	changed	items_stamp_update	0
+items_stamp_update	items	AFTER	UPDATE	flags_known,marks,object,sort_key,level,deleted,retained_at,conflicted,conflict_object	1	UPDATE	store_meta	next_change	items_stamp_update	0
+items_stamp_request	items	AFTER	UPDATE	changed	1	READ	items	changed	items_stamp_request	0
+items_stamp_request	items	AFTER	UPDATE	changed	1	READ	items	id	items_stamp_request	0
+items_stamp_request	items	AFTER	UPDATE	changed	1	READ	store_meta	id	items_stamp_request	0
+items_stamp_request	items	AFTER	UPDATE	changed	1	READ	store_meta	next_change	items_stamp_request	0
+items_stamp_request	items	AFTER	UPDATE	changed	1	UPDATE	items	changed	items_stamp_request	0
+items_stamp_request	items	AFTER	UPDATE	changed	1	UPDATE	store_meta	next_change	items_stamp_request	0
+items_count_purge	items	AFTER	DELETE		0	READ	store_meta	id	items_count_purge	0
+items_count_purge	items	AFTER	DELETE		0	READ	store_meta	purges	items_count_purge	0
+items_count_purge	items	AFTER	DELETE		0	UPDATE	store_meta	purges	items_count_purge	0
+placement_flag_needs_known	placement_flag	BEFORE	INSERT		1	READ	items	flags_known	placement_flag_needs_known	0
+placement_flag_needs_known	placement_flag	BEFORE	INSERT		1	READ	items	id	placement_flag_needs_known	0
+placement_flag_needs_known	placement_flag	BEFORE	INSERT		1	READ	placement_flag	item	placement_flag_needs_known	0
+items_forget_flags	items	AFTER	UPDATE	flags_known	1	DELETE	placement_flag		items_forget_flags	0
+items_forget_flags	items	AFTER	UPDATE	flags_known	1	READ	items	flags_known	items_forget_flags	0
+items_forget_flags	items	AFTER	UPDATE	flags_known	1	READ	items	id	items_forget_flags	0
+items_forget_flags	items	AFTER	UPDATE	flags_known	1	READ	placement_flag	item	items_forget_flags	0
+placement_flag_stamp_insert	placement_flag	AFTER	INSERT		0	READ	items	id	placement_flag_stamp_insert	0
+placement_flag_stamp_insert	placement_flag	AFTER	INSERT		0	READ	placement_flag	item	placement_flag_stamp_insert	0
+placement_flag_stamp_insert	placement_flag	AFTER	INSERT		0	UPDATE	items	changed	placement_flag_stamp_insert	0
+placement_flag_stamp_delete	placement_flag	AFTER	DELETE		0	READ	items	id	placement_flag_stamp_delete	0
+placement_flag_stamp_delete	placement_flag	AFTER	DELETE		0	READ	placement_flag	item	placement_flag_stamp_delete	0
+placement_flag_stamp_delete	placement_flag	AFTER	DELETE		0	UPDATE	items	changed	placement_flag_stamp_delete	0
+collections_stamp_insert	collections	AFTER	INSERT		0	READ	capabilities	collection		1
+collections_stamp_insert	collections	AFTER	INSERT		0	READ	collections	id	collections_stamp_insert	0
+collections_stamp_insert	collections	AFTER	INSERT		0	READ	collections	parent		1
+collections_stamp_insert	collections	AFTER	INSERT		0	READ	items	collection		1
+collections_stamp_insert	collections	AFTER	INSERT		0	READ	queue	collection		1
+collections_stamp_insert	collections	AFTER	INSERT		0	READ	receipts	collection		1
+collections_stamp_insert	collections	AFTER	INSERT		0	READ	sources	collection		1
+collections_stamp_insert	collections	AFTER	INSERT		0	READ	store_meta	id	collections_stamp_insert	0
+collections_stamp_insert	collections	AFTER	INSERT		0	READ	store_meta	next_change	collections_stamp_insert	0
+collections_stamp_insert	collections	AFTER	INSERT		0	UPDATE	collections	changed	collections_stamp_insert	0
+collections_stamp_insert	collections	AFTER	INSERT		0	UPDATE	store_meta	next_change	collections_stamp_insert	0
+collections_stamp_update	collections	AFTER	UPDATE	id,account,kind,name,parent,color,description,sort_order,role,generation	1	READ	collections	account	collections_stamp_update	0
+collections_stamp_update	collections	AFTER	UPDATE	id,account,kind,name,parent,color,description,sort_order,role,generation	1	READ	collections	color	collections_stamp_update	0
+collections_stamp_update	collections	AFTER	UPDATE	id,account,kind,name,parent,color,description,sort_order,role,generation	1	READ	collections	description	collections_stamp_update	0
+collections_stamp_update	collections	AFTER	UPDATE	id,account,kind,name,parent,color,description,sort_order,role,generation	1	READ	collections	generation	collections_stamp_update	0
+collections_stamp_update	collections	AFTER	UPDATE	id,account,kind,name,parent,color,description,sort_order,role,generation	1	READ	collections	id	collections_stamp_update	0
+collections_stamp_update	collections	AFTER	UPDATE	id,account,kind,name,parent,color,description,sort_order,role,generation	1	READ	collections	kind	collections_stamp_update	0
+collections_stamp_update	collections	AFTER	UPDATE	id,account,kind,name,parent,color,description,sort_order,role,generation	1	READ	collections	name	collections_stamp_update	0
+collections_stamp_update	collections	AFTER	UPDATE	id,account,kind,name,parent,color,description,sort_order,role,generation	1	READ	collections	parent	collections_stamp_update	0
+collections_stamp_update	collections	AFTER	UPDATE	id,account,kind,name,parent,color,description,sort_order,role,generation	1	READ	collections	role	collections_stamp_update	0
+collections_stamp_update	collections	AFTER	UPDATE	id,account,kind,name,parent,color,description,sort_order,role,generation	1	READ	collections	sort_order	collections_stamp_update	0
+collections_stamp_update	collections	AFTER	UPDATE	id,account,kind,name,parent,color,description,sort_order,role,generation	1	READ	store_meta	id	collections_stamp_update	0
+collections_stamp_update	collections	AFTER	UPDATE	id,account,kind,name,parent,color,description,sort_order,role,generation	1	READ	store_meta	next_change	collections_stamp_update	0
+collections_stamp_update	collections	AFTER	UPDATE	id,account,kind,name,parent,color,description,sort_order,role,generation	1	UPDATE	collections	changed	collections_stamp_update	0
+collections_stamp_update	collections	AFTER	UPDATE	id,account,kind,name,parent,color,description,sort_order,role,generation	1	UPDATE	store_meta	next_change	collections_stamp_update	0
+binding_base_flag_needs_known	binding_base_flag	BEFORE	INSERT		1	READ	binding_base_flag	item	binding_base_flag_needs_known	0
+binding_base_flag_needs_known	binding_base_flag	BEFORE	INSERT		1	READ	binding_base_flag	source	binding_base_flag_needs_known	0
+binding_base_flag_needs_known	binding_base_flag	BEFORE	INSERT		1	READ	bindings	base_flags_known	binding_base_flag_needs_known	0
+binding_base_flag_needs_known	binding_base_flag	BEFORE	INSERT		1	READ	bindings	item	binding_base_flag_needs_known	0
+binding_base_flag_needs_known	binding_base_flag	BEFORE	INSERT		1	READ	bindings	source	binding_base_flag_needs_known	0
+bindings_forget_base_flags	bindings	AFTER	UPDATE	base_flags_known	1	DELETE	binding_base_flag		bindings_forget_base_flags	0
+bindings_forget_base_flags	bindings	AFTER	UPDATE	base_flags_known	1	READ	binding_base_flag	item	bindings_forget_base_flags	0
+bindings_forget_base_flags	bindings	AFTER	UPDATE	base_flags_known	1	READ	binding_base_flag	source	bindings_forget_base_flags	0
+bindings_forget_base_flags	bindings	AFTER	UPDATE	base_flags_known	1	READ	bindings	base_flags_known	bindings_forget_base_flags	0
+bindings_forget_base_flags	bindings	AFTER	UPDATE	base_flags_known	1	READ	bindings	item	bindings_forget_base_flags	0
+bindings_forget_base_flags	bindings	AFTER	UPDATE	base_flags_known	1	READ	bindings	source	bindings_forget_base_flags	0
+items_drop_references	items	AFTER	DELETE		0	DELETE	item_reference		items_drop_references	0
+items_drop_references	items	AFTER	DELETE		0	READ	collections	id	items_drop_references	0
+items_drop_references	items	AFTER	DELETE		0	READ	collections	kind	items_drop_references	0
+items_drop_references	items	AFTER	DELETE		0	READ	item_reference	from_kind	items_drop_references	0
+items_drop_references	items	AFTER	DELETE		0	READ	item_reference	from_link_id	items_drop_references	0
+items_drop_references	items	AFTER	DELETE		0	READ	item_reference	to_kind	items_drop_references	0
+items_drop_references	items	AFTER	DELETE		0	READ	item_reference	to_link_id	items_drop_references	0
+items_drop_references	items	AFTER	DELETE		0	READ	items	collection	items_drop_references	0
+items_drop_references	items	AFTER	DELETE		0	READ	items	link_id	items_drop_references	0
+item_reference_collects_files	item_reference	AFTER	DELETE		1	DELETE	binding_base_flag			1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	DELETE	bindings			1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	DELETE	contact_summary			1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	DELETE	event_summary			1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	DELETE	file_summary			1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	DELETE	item_address			1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	DELETE	items		item_reference_collects_files	0
+item_reference_collects_files	item_reference	AFTER	DELETE		1	DELETE	journal_summary			1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	DELETE	mail_in_reply_to			1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	DELETE	mail_summary			1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	DELETE	placement_flag			1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	DELETE	supersessions			1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	DELETE	task_category			1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	DELETE	task_summary			1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	binding_base_flag	item		1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	binding_base_flag	source		1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	bindings	collection	item_reference_collects_files	1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	bindings	collection		1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	bindings	item	item_reference_collects_files	0
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	bindings	item		1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	bindings	source		1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	collections	id	item_reference_collects_files	0
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	collections	kind	item_reference_collects_files	0
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	contact_summary	item	item_reference_collects_files	1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	contact_summary	item		1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	event_summary	item	item_reference_collects_files	1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	event_summary	item		1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	file_summary	item	item_reference_collects_files	1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	file_summary	item		1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	item_address	item	item_reference_collects_files	1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	item_address	item		1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	item_reference	from_kind	item_reference_collects_files	0
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	item_reference	from_link_id	item_reference_collects_files	0
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	item_reference	to_kind	item_reference_collects_files	0
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	item_reference	to_link_id	item_reference_collects_files	0
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	items	collection	item_reference_collects_files	0
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	items	collection		1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	items	id	item_reference_collects_files	0
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	items	id		1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	items	link_id	item_reference_collects_files	0
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	items	object	item_reference_collects_files	0
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	journal_summary	item	item_reference_collects_files	1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	journal_summary	item		1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	mail_in_reply_to	item		1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	mail_summary	item	item_reference_collects_files	1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	mail_summary	item		1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	objects	id	item_reference_collects_files	1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	objects	id		1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	placement_flag	item	item_reference_collects_files	1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	placement_flag	item		1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	supersessions	by_item	item_reference_collects_files	1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	supersessions	by_item		1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	supersessions	item	item_reference_collects_files	1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	supersessions	item		1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	task_category	item		1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	task_summary	item	item_reference_collects_files	1
+item_reference_collects_files	item_reference	AFTER	DELETE		1	READ	task_summary	item		1
+item_property_needs_item	item_property	BEFORE	INSERT		1	READ	item_property	seq	item_property_needs_item	0
+item_property_needs_item	item_property	BEFORE	INSERT		1	READ	items	seq	item_property_needs_item	0
+item_property_bounded	item_property	BEFORE	INSERT		1	READ	item_property	key	item_property_bounded	0
+item_property_bounded	item_property	BEFORE	INSERT		1	READ	item_property	seq	item_property_bounded	0
+item_property_bounded	item_property	BEFORE	INSERT		1	READ	item_property	value	item_property_bounded	0
+item_property_stamp_insert	item_property	AFTER	INSERT		0	READ	item_property	seq	item_property_stamp_insert	0
+item_property_stamp_insert	item_property	AFTER	INSERT		0	READ	items	seq	item_property_stamp_insert	0
+item_property_stamp_insert	item_property	AFTER	INSERT		0	UPDATE	items	changed	item_property_stamp_insert	0
+item_property_stamp_delete	item_property	AFTER	DELETE		0	READ	item_property	seq	item_property_stamp_delete	0
+item_property_stamp_delete	item_property	AFTER	DELETE		0	READ	items	seq	item_property_stamp_delete	0
+item_property_stamp_delete	item_property	AFTER	DELETE		0	UPDATE	items	changed	item_property_stamp_delete	0
+items_drop_properties	items	AFTER	DELETE		1	DELETE	item_property		items_drop_properties	0
+items_drop_properties	items	AFTER	DELETE		1	READ	item_property	seq	items_drop_properties	0
+items_drop_properties	items	AFTER	DELETE		1	READ	items	seq	items_drop_properties	0
+collections_keep_queued	collections	BEFORE	DELETE		1	READ	collections	id	collections_keep_queued	0
+collections_keep_queued	collections	BEFORE	DELETE		1	READ	queue	collection	collections_keep_queued	0
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	binding_base_flag	flag	binding_owes	0
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	binding_base_flag	item	binding_owes	0
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	binding_base_flag	item		1
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	binding_base_flag	source	binding_owes	0
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	binding_base_flag	source		1
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	binding_owes	item	bindings_owes_insert	0
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	binding_owes	owes	bindings_owes_insert	0
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	binding_owes	source	bindings_owes_insert	0
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	bindings	base_flags_known	binding_owes	0
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	bindings	base_marks	binding_owes	0
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	bindings	base_object	binding_owes	0
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	bindings	base_present	binding_owes	0
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	bindings	conflicted	binding_owes	0
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	bindings	item	binding_owes	0
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	bindings	item	bindings_owes_insert	0
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	bindings	owes	bindings_owes_insert	0
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	bindings	source	binding_owes	0
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	bindings	source	bindings_owes_insert	0
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	items	conflicted	binding_owes	0
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	items	deleted	binding_owes	0
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	items	flags_known	binding_owes	0
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	items	id	binding_owes	0
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	items	marks	binding_owes	0
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	items	object	binding_owes	0
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	placement_flag	flag	binding_owes	0
+bindings_owes_insert	bindings	AFTER	INSERT		0	READ	placement_flag	item	binding_owes	0
+bindings_owes_insert	bindings	AFTER	INSERT		0	UPDATE	bindings	owes	bindings_owes_insert	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	binding_base_flag	flag	binding_owes	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	binding_base_flag	item	binding_owes	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	binding_base_flag	source	binding_owes	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	binding_owes	item	bindings_owes_update	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	binding_owes	owes	bindings_owes_update	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	binding_owes	source	bindings_owes_update	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	bindings	base_flags_known	binding_owes	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	bindings	base_flags_known	bindings_owes_update	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	bindings	base_marks	binding_owes	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	bindings	base_marks	bindings_owes_update	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	bindings	base_object	binding_owes	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	bindings	base_object	bindings_owes_update	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	bindings	base_present	binding_owes	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	bindings	base_present	bindings_owes_update	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	bindings	conflicted	binding_owes	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	bindings	conflicted	bindings_owes_update	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	bindings	item	binding_owes	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	bindings	item	bindings_owes_update	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	bindings	owes	bindings_owes_update	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	bindings	source	binding_owes	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	bindings	source	bindings_owes_update	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	items	conflicted	binding_owes	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	items	deleted	binding_owes	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	items	flags_known	binding_owes	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	items	id	binding_owes	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	items	marks	binding_owes	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	items	object	binding_owes	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	placement_flag	flag	binding_owes	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	READ	placement_flag	item	binding_owes	0
+bindings_owes_update	bindings	AFTER	UPDATE	item,source,conflicted,base_present,base_flags_known,base_marks,base_object	1	UPDATE	bindings	owes	bindings_owes_update	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	binding_base_flag	flag	binding_owes	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	binding_base_flag	item	binding_owes	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	binding_base_flag	source	binding_owes	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	binding_owes	item	items_owes_update	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	binding_owes	owes	items_owes_update	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	binding_owes	source	items_owes_update	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	bindings	base_flags_known	binding_owes	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	bindings	base_marks	binding_owes	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	bindings	base_object	binding_owes	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	bindings	base_present	binding_owes	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	bindings	conflicted	binding_owes	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	bindings	item	binding_owes	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	bindings	item	items_owes_update	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	bindings	owes	items_owes_update	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	bindings	source	binding_owes	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	bindings	source	items_owes_update	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	items	conflicted	binding_owes	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	items	conflicted	items_owes_update	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	items	deleted	binding_owes	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	items	deleted	items_owes_update	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	items	flags_known	binding_owes	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	items	flags_known	items_owes_update	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	items	id	binding_owes	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	items	id	items_owes_update	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	items	marks	binding_owes	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	items	marks	items_owes_update	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	items	object	binding_owes	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	items	object	items_owes_update	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	placement_flag	flag	binding_owes	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	READ	placement_flag	item	binding_owes	0
+items_owes_update	items	AFTER	UPDATE	conflicted,deleted,flags_known,marks,object	1	UPDATE	bindings	owes	items_owes_update	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	READ	binding_base_flag	flag	binding_owes	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	READ	binding_base_flag	item	binding_owes	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	READ	binding_base_flag	source	binding_owes	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	READ	binding_owes	item	placement_flag_owes_insert	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	READ	binding_owes	owes	placement_flag_owes_insert	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	READ	binding_owes	source	placement_flag_owes_insert	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	READ	bindings	base_flags_known	binding_owes	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	READ	bindings	base_marks	binding_owes	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	READ	bindings	base_object	binding_owes	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	READ	bindings	base_present	binding_owes	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	READ	bindings	conflicted	binding_owes	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	READ	bindings	item	binding_owes	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	READ	bindings	item	placement_flag_owes_insert	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	READ	bindings	owes	placement_flag_owes_insert	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	READ	bindings	source	binding_owes	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	READ	bindings	source	placement_flag_owes_insert	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	READ	items	conflicted	binding_owes	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	READ	items	deleted	binding_owes	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	READ	items	flags_known	binding_owes	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	READ	items	id	binding_owes	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	READ	items	marks	binding_owes	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	READ	items	object	binding_owes	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	READ	placement_flag	flag	binding_owes	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	READ	placement_flag	item	binding_owes	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	READ	placement_flag	item	placement_flag_owes_insert	0
+placement_flag_owes_insert	placement_flag	AFTER	INSERT		1	UPDATE	bindings	owes	placement_flag_owes_insert	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	READ	binding_base_flag	flag	binding_owes	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	READ	binding_base_flag	item	binding_owes	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	READ	binding_base_flag	source	binding_owes	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	READ	binding_owes	item	placement_flag_owes_delete	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	READ	binding_owes	owes	placement_flag_owes_delete	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	READ	binding_owes	source	placement_flag_owes_delete	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	READ	bindings	base_flags_known	binding_owes	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	READ	bindings	base_marks	binding_owes	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	READ	bindings	base_object	binding_owes	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	READ	bindings	base_present	binding_owes	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	READ	bindings	conflicted	binding_owes	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	READ	bindings	item	binding_owes	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	READ	bindings	item	placement_flag_owes_delete	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	READ	bindings	owes	placement_flag_owes_delete	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	READ	bindings	source	binding_owes	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	READ	bindings	source	placement_flag_owes_delete	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	READ	items	conflicted	binding_owes	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	READ	items	deleted	binding_owes	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	READ	items	flags_known	binding_owes	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	READ	items	id	binding_owes	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	READ	items	marks	binding_owes	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	READ	items	object	binding_owes	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	READ	placement_flag	flag	binding_owes	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	READ	placement_flag	item	binding_owes	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	READ	placement_flag	item	placement_flag_owes_delete	0
+placement_flag_owes_delete	placement_flag	AFTER	DELETE		1	UPDATE	bindings	owes	placement_flag_owes_delete	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	binding_base_flag	flag	binding_owes	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	binding_base_flag	item	binding_base_flag_owes_insert	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	binding_base_flag	item	binding_owes	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	binding_base_flag	source	binding_base_flag_owes_insert	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	binding_base_flag	source	binding_owes	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	binding_owes	item	binding_base_flag_owes_insert	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	binding_owes	owes	binding_base_flag_owes_insert	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	binding_owes	source	binding_base_flag_owes_insert	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	bindings	base_flags_known	binding_owes	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	bindings	base_marks	binding_owes	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	bindings	base_object	binding_owes	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	bindings	base_present	binding_owes	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	bindings	conflicted	binding_owes	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	bindings	item	binding_base_flag_owes_insert	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	bindings	item	binding_owes	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	bindings	owes	binding_base_flag_owes_insert	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	bindings	source	binding_base_flag_owes_insert	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	bindings	source	binding_owes	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	items	conflicted	binding_owes	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	items	deleted	binding_owes	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	items	flags_known	binding_owes	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	items	id	binding_owes	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	items	marks	binding_owes	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	items	object	binding_owes	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	placement_flag	flag	binding_owes	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	READ	placement_flag	item	binding_owes	0
+binding_base_flag_owes_insert	binding_base_flag	AFTER	INSERT		0	UPDATE	bindings	owes	binding_base_flag_owes_insert	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	binding_base_flag	flag	binding_owes	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	binding_base_flag	item	binding_base_flag_owes_delete	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	binding_base_flag	item	binding_owes	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	binding_base_flag	source	binding_base_flag_owes_delete	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	binding_base_flag	source	binding_owes	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	binding_owes	item	binding_base_flag_owes_delete	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	binding_owes	owes	binding_base_flag_owes_delete	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	binding_owes	source	binding_base_flag_owes_delete	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	bindings	base_flags_known	binding_owes	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	bindings	base_marks	binding_owes	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	bindings	base_object	binding_owes	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	bindings	base_present	binding_owes	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	bindings	conflicted	binding_owes	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	bindings	item	binding_base_flag_owes_delete	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	bindings	item	binding_owes	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	bindings	owes	binding_base_flag_owes_delete	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	bindings	source	binding_base_flag_owes_delete	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	bindings	source	binding_owes	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	items	conflicted	binding_owes	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	items	deleted	binding_owes	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	items	flags_known	binding_owes	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	items	id	binding_owes	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	items	marks	binding_owes	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	items	object	binding_owes	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	placement_flag	flag	binding_owes	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	READ	placement_flag	item	binding_owes	0
+binding_base_flag_owes_delete	binding_base_flag	AFTER	DELETE		0	UPDATE	bindings	owes	binding_base_flag_owes_delete	0
+items_lacks_insert	items	AFTER	INSERT		1	READ	bindings	collection		1
+items_lacks_insert	items	AFTER	INSERT		1	READ	bindings	item	item_lacks	0
+items_lacks_insert	items	AFTER	INSERT		1	READ	bindings	item		1
+items_lacks_insert	items	AFTER	INSERT		1	READ	bindings	source	item_lacks	0
+items_lacks_insert	items	AFTER	INSERT		1	READ	contact_summary	item		1
+items_lacks_insert	items	AFTER	INSERT		1	READ	event_summary	item		1
+items_lacks_insert	items	AFTER	INSERT		1	READ	file_summary	item		1
+items_lacks_insert	items	AFTER	INSERT		1	READ	item_address	item		1
+items_lacks_insert	items	AFTER	INSERT		1	READ	item_lacks	item	items_lacks_insert	0
+items_lacks_insert	items	AFTER	INSERT		1	READ	item_lacks	lacks	items_lacks_insert	0
+items_lacks_insert	items	AFTER	INSERT		1	READ	items	collection	item_lacks	0
+items_lacks_insert	items	AFTER	INSERT		1	READ	items	deleted	item_lacks	0
+items_lacks_insert	items	AFTER	INSERT		1	READ	items	deleted	items_lacks_insert	0
+items_lacks_insert	items	AFTER	INSERT		1	READ	items	id	item_lacks	0
+items_lacks_insert	items	AFTER	INSERT		1	READ	items	id	items_lacks_insert	0
+items_lacks_insert	items	AFTER	INSERT		1	READ	items	lacks	items_lacks_insert	0
+items_lacks_insert	items	AFTER	INSERT		1	READ	items	object	item_lacks	0
+items_lacks_insert	items	AFTER	INSERT		1	READ	items	object	items_lacks_insert	0
+items_lacks_insert	items	AFTER	INSERT		1	READ	journal_summary	item		1
+items_lacks_insert	items	AFTER	INSERT		1	READ	mail_summary	item		1
+items_lacks_insert	items	AFTER	INSERT		1	READ	placement_flag	item		1
+items_lacks_insert	items	AFTER	INSERT		1	READ	sources	collection	item_lacks	0
+items_lacks_insert	items	AFTER	INSERT		1	READ	sources	source	item_lacks	0
+items_lacks_insert	items	AFTER	INSERT		1	READ	supersessions	by_item		1
+items_lacks_insert	items	AFTER	INSERT		1	READ	supersessions	item		1
+items_lacks_insert	items	AFTER	INSERT		1	READ	task_summary	item		1
+items_lacks_insert	items	AFTER	INSERT		1	UPDATE	items	lacks	items_lacks_insert	0
+items_lacks_update	items	AFTER	UPDATE	collection,deleted,object	1	READ	bindings	item	item_lacks	0
+items_lacks_update	items	AFTER	UPDATE	collection,deleted,object	1	READ	bindings	source	item_lacks	0
+items_lacks_update	items	AFTER	UPDATE	collection,deleted,object	1	READ	item_lacks	item	items_lacks_update	0
+items_lacks_update	items	AFTER	UPDATE	collection,deleted,object	1	READ	item_lacks	lacks	items_lacks_update	0
+items_lacks_update	items	AFTER	UPDATE	collection,deleted,object	1	READ	items	collection	item_lacks	0
+items_lacks_update	items	AFTER	UPDATE	collection,deleted,object	1	READ	items	collection	items_lacks_update	0
+items_lacks_update	items	AFTER	UPDATE	collection,deleted,object	1	READ	items	deleted	item_lacks	0
+items_lacks_update	items	AFTER	UPDATE	collection,deleted,object	1	READ	items	deleted	items_lacks_update	0
+items_lacks_update	items	AFTER	UPDATE	collection,deleted,object	1	READ	items	id	item_lacks	0
+items_lacks_update	items	AFTER	UPDATE	collection,deleted,object	1	READ	items	id	items_lacks_update	0
+items_lacks_update	items	AFTER	UPDATE	collection,deleted,object	1	READ	items	lacks	items_lacks_update	0
+items_lacks_update	items	AFTER	UPDATE	collection,deleted,object	1	READ	items	object	item_lacks	0
+items_lacks_update	items	AFTER	UPDATE	collection,deleted,object	1	READ	items	object	items_lacks_update	0
+items_lacks_update	items	AFTER	UPDATE	collection,deleted,object	1	READ	sources	collection	item_lacks	0
+items_lacks_update	items	AFTER	UPDATE	collection,deleted,object	1	READ	sources	source	item_lacks	0
+items_lacks_update	items	AFTER	UPDATE	collection,deleted,object	1	UPDATE	items	lacks	items_lacks_update	0
+bindings_lacks_insert	bindings	AFTER	INSERT		1	READ	binding_base_flag	item		1
+bindings_lacks_insert	bindings	AFTER	INSERT		1	READ	binding_base_flag	source		1
+bindings_lacks_insert	bindings	AFTER	INSERT		1	READ	bindings	item	bindings_lacks_insert	0
+bindings_lacks_insert	bindings	AFTER	INSERT		1	READ	bindings	item	item_lacks	0
+bindings_lacks_insert	bindings	AFTER	INSERT		1	READ	bindings	source	item_lacks	0
+bindings_lacks_insert	bindings	AFTER	INSERT		1	READ	item_lacks	item	bindings_lacks_insert	0
+bindings_lacks_insert	bindings	AFTER	INSERT		1	READ	item_lacks	lacks	bindings_lacks_insert	0
+bindings_lacks_insert	bindings	AFTER	INSERT		1	READ	items	collection	item_lacks	0
+bindings_lacks_insert	bindings	AFTER	INSERT		1	READ	items	deleted	item_lacks	0
+bindings_lacks_insert	bindings	AFTER	INSERT		1	READ	items	id	bindings_lacks_insert	0
+bindings_lacks_insert	bindings	AFTER	INSERT		1	READ	items	id	item_lacks	0
+bindings_lacks_insert	bindings	AFTER	INSERT		1	READ	items	lacks	bindings_lacks_insert	0
+bindings_lacks_insert	bindings	AFTER	INSERT		1	READ	items	object	item_lacks	0
+bindings_lacks_insert	bindings	AFTER	INSERT		1	READ	sources	collection	item_lacks	0
+bindings_lacks_insert	bindings	AFTER	INSERT		1	READ	sources	source	item_lacks	0
+bindings_lacks_insert	bindings	AFTER	INSERT		1	UPDATE	items	lacks	bindings_lacks_insert	0
+bindings_lacks_delete	bindings	AFTER	DELETE		0	READ	bindings	item	bindings_lacks_delete	0
+bindings_lacks_delete	bindings	AFTER	DELETE		0	READ	bindings	item	item_lacks	0
+bindings_lacks_delete	bindings	AFTER	DELETE		0	READ	bindings	source	item_lacks	0
+bindings_lacks_delete	bindings	AFTER	DELETE		0	READ	item_lacks	item	bindings_lacks_delete	0
+bindings_lacks_delete	bindings	AFTER	DELETE		0	READ	item_lacks	lacks	bindings_lacks_delete	0
+bindings_lacks_delete	bindings	AFTER	DELETE		0	READ	items	collection	item_lacks	0
+bindings_lacks_delete	bindings	AFTER	DELETE		0	READ	items	deleted	item_lacks	0
+bindings_lacks_delete	bindings	AFTER	DELETE		0	READ	items	id	bindings_lacks_delete	0
+bindings_lacks_delete	bindings	AFTER	DELETE		0	READ	items	id	item_lacks	0
+bindings_lacks_delete	bindings	AFTER	DELETE		0	READ	items	lacks	bindings_lacks_delete	0
+bindings_lacks_delete	bindings	AFTER	DELETE		0	READ	items	object	item_lacks	0
+bindings_lacks_delete	bindings	AFTER	DELETE		0	READ	sources	collection	item_lacks	0
+bindings_lacks_delete	bindings	AFTER	DELETE		0	READ	sources	source	item_lacks	0
+bindings_lacks_delete	bindings	AFTER	DELETE		0	UPDATE	items	lacks	bindings_lacks_delete	0
+bindings_lacks_update	bindings	AFTER	UPDATE	item,source	1	READ	bindings	item	bindings_lacks_update	0
+bindings_lacks_update	bindings	AFTER	UPDATE	item,source	1	READ	bindings	item	item_lacks	0
+bindings_lacks_update	bindings	AFTER	UPDATE	item,source	1	READ	bindings	source	bindings_lacks_update	0
+bindings_lacks_update	bindings	AFTER	UPDATE	item,source	1	READ	bindings	source	item_lacks	0
+bindings_lacks_update	bindings	AFTER	UPDATE	item,source	1	READ	item_lacks	item	bindings_lacks_update	0
+bindings_lacks_update	bindings	AFTER	UPDATE	item,source	1	READ	item_lacks	lacks	bindings_lacks_update	0
+bindings_lacks_update	bindings	AFTER	UPDATE	item,source	1	READ	items	collection	item_lacks	0
+bindings_lacks_update	bindings	AFTER	UPDATE	item,source	1	READ	items	deleted	item_lacks	0
+bindings_lacks_update	bindings	AFTER	UPDATE	item,source	1	READ	items	id	bindings_lacks_update	0
+bindings_lacks_update	bindings	AFTER	UPDATE	item,source	1	READ	items	id	item_lacks	0
+bindings_lacks_update	bindings	AFTER	UPDATE	item,source	1	READ	items	lacks	bindings_lacks_update	0
+bindings_lacks_update	bindings	AFTER	UPDATE	item,source	1	READ	items	object	item_lacks	0
+bindings_lacks_update	bindings	AFTER	UPDATE	item,source	1	READ	sources	collection	item_lacks	0
+bindings_lacks_update	bindings	AFTER	UPDATE	item,source	1	READ	sources	source	item_lacks	0
+bindings_lacks_update	bindings	AFTER	UPDATE	item,source	1	UPDATE	items	lacks	bindings_lacks_update	0
+sources_lacks_insert	sources	AFTER	INSERT		0	READ	bindings	item	sources_lacks_insert	0
+sources_lacks_insert	sources	AFTER	INSERT		0	READ	bindings	source	sources_lacks_insert	0
+sources_lacks_insert	sources	AFTER	INSERT		0	READ	items	collection	sources_lacks_insert	0
+sources_lacks_insert	sources	AFTER	INSERT		0	READ	items	deleted	sources_lacks_insert	0
+sources_lacks_insert	sources	AFTER	INSERT		0	READ	items	id	sources_lacks_insert	0
+sources_lacks_insert	sources	AFTER	INSERT		0	READ	items	lacks	sources_lacks_insert	0
+sources_lacks_insert	sources	AFTER	INSERT		0	READ	items	object	sources_lacks_insert	0
+sources_lacks_insert	sources	AFTER	INSERT		0	READ	sources	collection	sources_lacks_insert	0
+sources_lacks_insert	sources	AFTER	INSERT		0	READ	sources	source	sources_lacks_insert	0
+sources_lacks_insert	sources	AFTER	INSERT		0	UPDATE	items	lacks	sources_lacks_insert	0
+sources_lacks_delete	sources	AFTER	DELETE		0	READ	bindings	item	item_lacks	0
+sources_lacks_delete	sources	AFTER	DELETE		0	READ	bindings	source	item_lacks	0
+sources_lacks_delete	sources	AFTER	DELETE		0	READ	item_lacks	item	sources_lacks_delete	0
+sources_lacks_delete	sources	AFTER	DELETE		0	READ	item_lacks	lacks	sources_lacks_delete	0
+sources_lacks_delete	sources	AFTER	DELETE		0	READ	items	collection	item_lacks	0
+sources_lacks_delete	sources	AFTER	DELETE		0	READ	items	collection	sources_lacks_delete	0
+sources_lacks_delete	sources	AFTER	DELETE		0	READ	items	deleted	item_lacks	0
+sources_lacks_delete	sources	AFTER	DELETE		0	READ	items	id	item_lacks	0
+sources_lacks_delete	sources	AFTER	DELETE		0	READ	items	id	sources_lacks_delete	0
+sources_lacks_delete	sources	AFTER	DELETE		0	READ	items	lacks	sources_lacks_delete	0
+sources_lacks_delete	sources	AFTER	DELETE		0	READ	items	object	item_lacks	0
+sources_lacks_delete	sources	AFTER	DELETE		0	READ	sources	collection	item_lacks	0
+sources_lacks_delete	sources	AFTER	DELETE		0	READ	sources	collection	sources_lacks_delete	0
+sources_lacks_delete	sources	AFTER	DELETE		0	READ	sources	source	item_lacks	0
+sources_lacks_delete	sources	AFTER	DELETE		0	UPDATE	items	lacks	sources_lacks_delete	0
+sources_lacks_update	sources	AFTER	UPDATE	collection,source	1	READ	bindings	item	item_lacks	0
+sources_lacks_update	sources	AFTER	UPDATE	collection,source	1	READ	bindings	source	item_lacks	0
+sources_lacks_update	sources	AFTER	UPDATE	collection,source	1	READ	item_lacks	item	sources_lacks_update	0
+sources_lacks_update	sources	AFTER	UPDATE	collection,source	1	READ	item_lacks	lacks	sources_lacks_update	0
+sources_lacks_update	sources	AFTER	UPDATE	collection,source	1	READ	items	collection	item_lacks	0
+sources_lacks_update	sources	AFTER	UPDATE	collection,source	1	READ	items	collection	sources_lacks_update	0
+sources_lacks_update	sources	AFTER	UPDATE	collection,source	1	READ	items	deleted	item_lacks	0
+sources_lacks_update	sources	AFTER	UPDATE	collection,source	1	READ	items	id	item_lacks	0
+sources_lacks_update	sources	AFTER	UPDATE	collection,source	1	READ	items	id	sources_lacks_update	0
+sources_lacks_update	sources	AFTER	UPDATE	collection,source	1	READ	items	lacks	sources_lacks_update	0
+sources_lacks_update	sources	AFTER	UPDATE	collection,source	1	READ	items	object	item_lacks	0
+sources_lacks_update	sources	AFTER	UPDATE	collection,source	1	READ	sources	collection	item_lacks	0
+sources_lacks_update	sources	AFTER	UPDATE	collection,source	1	READ	sources	collection	sources_lacks_update	0
+sources_lacks_update	sources	AFTER	UPDATE	collection,source	1	READ	sources	source	item_lacks	0
+sources_lacks_update	sources	AFTER	UPDATE	collection,source	1	READ	sources	source	sources_lacks_update	0
+sources_lacks_update	sources	AFTER	UPDATE	collection,source	1	UPDATE	items	lacks	sources_lacks_update	0
