@@ -763,7 +763,10 @@ CREATE TABLE queue (
     created_at  TEXT    NOT NULL CHECK (typeof(created_at) = 'text')  -- stamped by SQLite, the shape of §13
                 CHECK (created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'),
     producer    TEXT    NOT NULL CHECK (typeof(producer) = 'text'),  -- enqueuing process, diagnostic
-    collection  TEXT    NOT NULL CHECK (typeof(collection) = 'text') REFERENCES collections(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    -- A collection holding a pending or parked action is not deleted (§14): a
+    -- cascade would drop the action, an intent included, with no receipt and
+    -- no report. The operator cancels or lets the drain apply each row first.
+    collection  TEXT    NOT NULL CHECK (typeof(collection) = 'text') REFERENCES collections(id) ON UPDATE CASCADE ON DELETE RESTRICT,
     action      TEXT    NOT NULL CHECK (typeof(action) = 'text'),  -- 'add' | 'set-flags' | 'remove' | 'move' | 'copy' | 'update' | 'set-performer' | an intent (§15.3, Annex B)
     payload     TEXT    NOT NULL CHECK (typeof(payload) = 'text'),  -- versioned JSON, shape per action (§15)
     -- The collection a `move` or a `copy` targets, or the one holding the item
@@ -800,15 +803,6 @@ CREATE INDEX queue_by_collection ON queue(collection, id);
 -- The owner's drain, store-wide in append order, skipping the parked rows
 -- (§15.2). Partial, so it holds only what is pending.
 CREATE INDEX queue_pending ON queue(id) WHERE error IS NULL;
-
--- A collection holding a pending or parked action is not deleted (§14): the
--- cascade would drop the action, an intent included, with no receipt and no
--- report. The operator cancels or lets the drain apply each row first.
-CREATE TRIGGER collections_keep_queued BEFORE DELETE ON collections
-WHEN EXISTS (SELECT 1 FROM queue WHERE collection = OLD.id)
-BEGIN
-    SELECT RAISE(ABORT, 'collection holds queued actions');
-END;
 
 -- Cross-source identity lookup (dedup, thread stitching) and refcount
 -- navigation. A pointer index is partial on the pointer being set: most rows
