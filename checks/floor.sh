@@ -206,6 +206,16 @@ if [ "$("$floor" "$dir/shapes.db" .dump)" != "$shapes" ]; then
     echo "a refused write moved a row on SQLite $version" >&2
     exit 1
 fi
+# A collection a queued action names is not deleted (STORAGE §4.3): the
+# queue's foreign key restricts it, on the floor as on a current SQLite.
+for shell in "$floor" sqlite3; do
+    answer="$("$shell" "$dir/shapes.db" "PRAGMA foreign_keys = ON; DELETE FROM collections WHERE id = 'INBOX';" 2>&1 || true)"
+    if [[ "$answer" != *"FOREIGN KEY constraint failed"* ]]; then
+        echo "a collection holding a queued action is deleted on SQLite $("$shell" :memory: 'SELECT sqlite_version();')" >&2
+        exit 1
+    fi
+done
+refusals=$((refusals + 1))
 # What each column may also hold is taken there: a NULL where one is allowed,
 # a size of none, a known flag set's keywords, a base let go whole.
 "$floor" "$dir/shapes.db" "PRAGMA foreign_keys = ON;
