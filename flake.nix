@@ -43,7 +43,6 @@
           ./STORAGE.md
           ./SYNC.md
           ./SEARCH.md
-          ./GUIDE.md
           ./conventions
           ./README.md
           ./AGENTS.md

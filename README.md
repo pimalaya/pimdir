@@ -38,14 +38,13 @@ Three normative parts (BCP 14), each versioned apart:
 - [SYNC.md](./SYNC.md), the **sync** layer: sources reconciled through the store, merge rules, connector seam.
 - [SEARCH.md](./SEARCH.md), the **search** layer: the derived index and the query language.
 
-Two informative documents around them:
+One informative document around them:
 
 - [OVERVIEW.md](./OVERVIEW.md), the **model**: entities, identifiers and how the parts fit. Read it first.
-- [GUIDE.md](./GUIDE.md), the **implementation guide**: procedures, decision tables and a conformance checklist.
 
 [conventions/gtd.md](./conventions/gtd.md) holds the task conventions Pimalaya's apps share. It builds on the standard but is not part of it.
 
-Sync and search are optional, but neither stands without the store. Where the overview or the guide disagrees with a part, the part wins.
+Sync and search are optional, but neither stands without the store. Where the overview disagrees with a part, the part wins.
 
 Two things to know first: removal is a **soft delete** (only an explicit purge removes, and an erasure clears what it leaves in the files), and the **action queue** is how any process other than the store's owner writes to it.
 
@@ -55,7 +54,7 @@ There are three ways to use the standard, from the most work to the least. They 
 
 ###   Implement the documents
 
-Write the store yourself, in any language with a SQLite binding, from the three parts and the guide. Create the store with the canonical schema, which loads on SQLite 3.18 or newer, and read and write its tables with statements of your own (STORAGE §4.1). The test vectors say when you are done: the model vectors bind every implementation, checks/ the canonical schema.
+Write the store yourself, in any language with a SQLite binding, from the three parts. Create the store with the canonical schema, which loads on SQLite 3.18 or newer, and read and write its tables with statements of your own (STORAGE §4.1). The test vectors say when you are done: the model vectors bind every implementation, checks/ the canonical schema.
 
 This suits the small profiles: readers, producers and query clients.
 
@@ -78,7 +77,6 @@ OVERVIEW.md     the model (informative, read first)
 STORAGE.md      the store, the base (normative)
 SYNC.md         the sync layer (normative, optional)
 SEARCH.md       the search layer (normative, optional)
-GUIDE.md        the implementation guide (informative)
 migrations/     canonical store schema migrations, under storage/
 payloads/       the JSON Schemas of the queue's payloads
 vectors/        the normative test data

@@ -1547,7 +1547,7 @@ def schema_shape(schema):
 payload_schemas = {path.name.removesuffix(".schema.json"): json.loads(path.read_text())
                    for path in sorted((root.parent / "payloads").glob("*.schema.json"))}
 shapes = {}
-for document in ("STORAGE.md", "SYNC.md", "SEARCH.md", "GUIDE.md", "OVERVIEW.md"):
+for document in ("STORAGE.md", "SYNC.md", "SEARCH.md", "OVERVIEW.md"):
     for number, line in enumerate((root.parent / document).read_text().splitlines(), 1):
         for span in re.findall(r"`(\{ \"v\": [^`]*\})`", line):
             if line.startswith("| `"):

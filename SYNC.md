@@ -10,7 +10,7 @@ The sync part of the pimdir standard: how one or more sources reconcile through 
 
 It fixes no protocol: what a connector hands the engine is §4; how it gets it over IMAP, JMAP or DAV is the connector's.
 
-[OVERVIEW.md](./OVERVIEW.md) §5 and §6 explain the model; [GUIDE.md](./GUIDE.md) §9 to §12 run the verbs as procedures. Both are informative and this part wins on any disagreement.
+[OVERVIEW.md](./OVERVIEW.md) §5 and §6 explain the model. It is informative and this part wins on any disagreement.
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in BCP 14 (RFC 2119, RFC 8174) when, and only when, they appear in all capitals, as shown here. Every statement of behaviour in this part is normative: a key word marks its requirement level, and a statement carrying none binds as one carrying MUST. Notes, examples and rationale are informative and marked as such: a paragraph opening with *Note:*, an instance of what a sentence states given in parentheses or after "for example", and a reason given with "so", "since" or "because", none of which adds a requirement. §n of STORAGE.md is written STORAGE §n.
 
@@ -148,15 +148,13 @@ A connector whose checkpoint the source rejects because the handle space changed
 - Mail reads it in the listing itself, from the summary the source serves: an IMAP `FETCH` of `UID FLAGS INTERNALDATE ENVELOPE` and the header fields Annex A needs, `Content-Type` among them; a JMAP `Email/get` with summary properties.
 - A kind whose meta is the body (DAV) fetches each page's bodies (`multiget`) before handing the page over, and its members MAY carry the body, as a `Full` fetch does.
 
-GUIDE §10 lists what each provider's connector reads.
-
 **A server object id names content.** A connector MAY state, with a member's meta at a listing or a fetch, the member's server object id (§2): RFC 8474's `EMAILID` where the IMAP server announces `OBJECTID`, Gmail's `X-GM-MSGID`, JMAP's `Email/id`, one kind of id per source, so two of its members state one id only for one content. It MUST state only an id its server keeps with the content, never one it derives from the content or a listing itself. The write records it on the member's binding (`bindings.server_object_id`, STORAGE §4.3) beside the meta it came with; a listing naming the member stating none clears it, a fetch stating none leaves it. Two ids are compared byte for byte and only between bindings of one source in one account: an id says nothing of another source's. §6 reads it before linking a body.
 
 **The compared fields are read raw.** A message's `subject`, `date` and `sender` decide, compared byte for byte with a row another reading wrote, whether its member lands a create, joins an item, revives a row or links a body (§6, STORAGE §9). A connector MUST read the three raw, as the content carries them and by STORAGE Annex A.1's rules, where its source serves them raw, Annex A.1 naming each protocol's read. It MAY name its members from the values its source decodes itself, and MUST then read the three raw at least for every member whose decoded summary disagrees with a row holding its hint, before it hands the member over. How it learns of that row is its own, as a reader of the store (STORAGE §14.1) or otherwise; reading every member raw always meets this.
 
 Where a source serves a member nothing raw (Annex A.1 says which), the connector names it from what the source serves. Such a member may disagree with a row of the very message it is, and is then minted apart (§6): a missed dedup, which the engine reports where the row is this source's own create (§5).
 
-**Files.** A source syncing a folder (STORAGE §14.3) MUST state, for every member, an id its server keeps across a rename and a move, unique across the servers the source reaches (GUIDE §10 names the providers' ids). That id is the member's handle and its hint, so its link id.
+**Files.** A source syncing a folder (STORAGE §14.3) MUST state, for every member, an id its server keeps across a rename and a move, unique across the servers the source reaches. That id is the member's handle and its hint, so its link id.
 
 The remote path is the folder and the member's name, which the connector derives. A rename on the server is the same handle listed under a new name: a summary write on the same placement. A move between two folders the source syncs is the member leaving one and joining the other under the same key, as a move of a message is.
 
@@ -168,7 +166,7 @@ A file is a mutable kind. An edit is a new body under the same key, pushed as an
 
 **Pages.** A round MAY be answered in pages, newest first in the source's own recency order (IMAP by UID descending, JMAP by `receivedAt` descending). Each page is one request (or one batch of requests) and one write (§5). A connector that does not page answers a round of one page.
 
-A connector chooses its page size within what the source accepts, small enough to resume cheaply on a slow network, and SHOULD lower it after a timeout or a `413`. GUIDE §10 gives the sizes measured per provider.
+A connector chooses its page size within what the source accepts, small enough to resume cheaply on a slow network, and SHOULD lower it after a timeout or a `413`.
 
 **The resume cursor** is the connector's and opaque to the engine. A connector whose cursor the source rejects (an expired skip or page token) MUST fail the enumeration and name a restart (§5), rather than answer from the beginning as if it resumed.
 
@@ -251,7 +249,7 @@ A `Created` placement is a candidate with no remote side. The engine MUST walk b
 
 The `Date` header always decides. A received date is never stored and never decides.
 
-A connector MAY narrow its listing by the provider's received-date filter (JMAP's `after`, and those GUIDE §10 lists) to the scope, and MUST then take it with a margin of two days below `since`, so it misses as little of the scope as it can. IMAP narrows with `SENTSINCE` and `SENTBEFORE` with a margin of one day, their whole days being the server's.
+A connector MAY narrow its listing by the provider's received-date filter (such as JMAP's `after`) to the scope, and MUST then take it with a margin of two days below `since`, so it misses as little of the scope as it can. IMAP narrows with `SENTSINCE` and `SENTBEFORE` with a margin of one day, their whole days being the server's.
 
 **A narrowed listing says so.** A filter lists a member only when it matches, and no margin makes a filter on another date than the `Date` list a superset of the scope: a received-date filter misses an undated member received before its window, one whose `Date` runs ahead of its arrival past its lower bound, and one whose `Date` runs behind its arrival past its upper bound (a message appended, imported or delivered long after its `Date`), and a server reading the `Date` itself may skip an undated one. A connector narrowing a round's listing by any date filter MUST set `narrowed` on every page of that round, and MUST NOT set it otherwise. On the last page of a narrowed round it MAY hand `enumerated`: every handle the collection holds on the source, read by an enumeration no date filter narrowed (IMAP's `UID SEARCH ALL`, JMAP's `Email/query` filtered by the mailbox alone, Graph's message ids). A connector offering such an enumeration SHOULD hand it, on a band round's last page as on any other: a narrowed round handing none finds no member absent (below).
 

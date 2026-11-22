@@ -10,7 +10,7 @@ The standard is a base and two layers:
 - [SYNC.md](./SYNC.md): how sources reconcile through it.
 - [SEARCH.md](./SEARCH.md): the index and query language over it.
 
-Either layer can be left out, and neither works without the store. [GUIDE.md](./GUIDE.md) turns their rules into procedures for an implementer.
+Either layer can be left out, and neither works without the store.
 
 ## Contents
 
@@ -263,7 +263,7 @@ Normative: SEARCH.
 
 The three parts bind by profile: the store's reader, producer and owner, the sync part's engine and connector, the search part's indexer and query client, each part's conformance section saying what each owes and how an implementation states the ones it meets. The vectors under vectors/, the store's schema under migrations/, and the schemas of the queue's payloads bind every implementation. The schema is the contract: its tables and their columns are the store's one format on disk, and no statement is part of the standard, the SQL an implementation runs being its own, held to the schema, the parts' rules and the vectors.
 
-Most implementations are readers or producers; the owner, the engine and the index are what io-pimdir, the reference implementation, is for. Its statements, the layout of its search index and the generator of its tests are its own, and bind no other implementation. The vectors exist because the values that matter most fail silently: two implementations naming a body differently never error, they only stop sharing bodies. [GUIDE.md](./GUIDE.md) §1 orders the build.
+Most implementations are readers or producers; the owner, the engine and the index are what io-pimdir, the reference implementation, is for. Its statements, the layout of its search index and the generator of its tests are its own, and bind no other implementation. The vectors exist because the values that matter most fail silently: two implementations naming a body differently never error, they only stop sharing bodies.
 
 Once the store is released, a change to its schema is a new major version, applied to a store in place; a minor version adds a rule or a vector and breaks no store. Each part has a version of its own, and an implementation states which version of each it conforms to. The store's major version is its schema version, so a store written under one major is opened by every owner of that major, and by older readers and producers as far as the levels it records allow.
 

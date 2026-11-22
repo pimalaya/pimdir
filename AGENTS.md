@@ -14,7 +14,7 @@ This repository is a specification, so its current truth is already normative do
 
 Fold a change into the document it belongs to exactly as you would fold a delta into a capability file: the section that states the rule now states the new one, and nothing records the old one but the log.
 
-[OVERVIEW.md](./OVERVIEW.md) and [GUIDE.md](./GUIDE.md) are informative and stay so: no RFC 2119 word, no rule the parts do not state, and the parts win on any disagreement. The overview names no table, column or statement; the guide names them at every step. Rationale, history and measurements belong to the log, not to any of the five documents.
+[OVERVIEW.md](./OVERVIEW.md) is informative and stays so: no RFC 2119 word, no rule the parts do not state, and the parts win on any disagreement. It names no table, column or statement. Rationale, history and measurements belong to the log, not to any of the four documents.
 
 [conventions/](./conventions) holds Pimalaya's own conventions built on the parts, which are no part of the standard: conventions/gtd.md, the task conventions unfog and the Android app share, versioned apart (`gtd-draft-05` on its Status line) with its vectors under conventions/gtd/, guarded by checks/vectors.py. A change to it bumps its own number and is logged like any other.
 
@@ -33,7 +33,7 @@ When a part leaves `draft`, this relaxation ends for it: a change then carries `
 
 > A change that affects behaviour is not *done* until the spec is updated and the log entry is written.
 
-Here that reads: the document that owns the rule (and the canonical SQL under migrations/, and the data under vectors/, when the change touches them) reflects the new truth, and `cairn/log/` records that it moved. A change that moves a procedure, a statement name or a concept the overview explains updates GUIDE.md or OVERVIEW.md in the same change, so the informative layer never lags the parts. Log entries are immutable; a correction is a new entry, never an edit.
+Here that reads: the document that owns the rule (and the canonical SQL under migrations/, and the data under vectors/, when the change touches them) reflects the new truth, and `cairn/log/` records that it moved. A change that moves a concept the overview explains updates OVERVIEW.md in the same change, so the informative layer never lags the parts. Log entries are immutable; a correction is a new entry, never an edit.
 
 ### 4. A rule lands with the check that fails without it
 
