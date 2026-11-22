@@ -1813,11 +1813,11 @@ expect "format: init_store_meta stamps this part's version, version 1 with both 
 case "$own_format" in
     storage-draft-*)
         expect "format: a draft's store opens under that draft alone, never under another nor a release" \
-            "$(opens "$own_format") $(opens storage-draft-14) $(opens storage-draft-99) $(opens storage-v1)" \
+            "$(opens "$own_format") $(opens storage-draft-15) $(opens storage-draft-99) $(opens storage-v1)" \
             "opened refused refused refused" ;;
     *)
         expect "format: a released store opens under its release, and under no draft" \
-            "$(opens "$own_format") $(opens storage-draft-15) $(opens storage-draft-99)" \
+            "$(opens "$own_format") $(opens storage-draft-16) $(opens storage-draft-99)" \
             "opened refused refused" ;;
 esac
 sql "ALTER TABLE store_meta DROP COLUMN format_version;"
@@ -1894,7 +1894,7 @@ judged() {
 fresh
 collection INBOX
 item INBOX a 1
-sql "UPDATE store_meta SET format_version = 'storage-draft-15';"
+sql "UPDATE store_meta SET format_version = 'storage-draft-16';"
 expect "released: a released program refuses a draft's store, whatever its profile" "$(judged 1)" "refused refused refused"
 sql "CREATE TABLE x_later (id INTEGER PRIMARY KEY, note TEXT);
      CREATE INDEX x_items_by_level ON items(level);
@@ -1915,7 +1915,7 @@ run owner/set_store_version ":version=2" ":read_version=2" ":produce_version=2"
 expect "released: a version 2 program opens it under every profile" "$(judged 2)" "opened opened opened"
 sql "PRAGMA user_version = 3;"
 expect "released: a store whose version disagrees with user_version is corrupt, and refused" "$(judged 3)" "refused refused refused"
-sql "PRAGMA user_version = 2; UPDATE store_meta SET format_version = 'storage-draft-15';"
+sql "PRAGMA user_version = 2; UPDATE store_meta SET format_version = 'storage-draft-16';"
 expect "released: a draft's name over a later version is refused all the same" "$(judged 2)" "refused refused refused"
 
 # --- A migration keeps every row; one rebuilding a table owes more (§6) ----
@@ -3293,6 +3293,20 @@ expect "coverage: coverage_all answers what coverage answers bound to every coll
 steps="$(isplan coverage_all)"
 expect "coverage: coverage_all walks items_bodiless once and binds no slot, never seeking a collection's items nor scanning the store's" \
     "$(grep -c 'items_bodiless' <<<"$steps" || true)$(grep -c 'temp.param\|(collection=?' <<<"$steps" || true)$(grep -cE 'SCAN i$' <<<"$steps" || true)" "100"
+expect "coverage: covered_all over a store no source syncs bounds nothing and is filling nowhere" \
+    "$(isearch covered_all)" "||0"
+sql "INSERT INTO sources(collection, source, covered_at, covered_since, covered_until) VALUES
+     ('Cal', 'a', '2026-11-01T00:00:00.000Z', '2026-01-01T00:00:00Z', '2026-12-01T00:00:00Z'),
+     ('Cal2', 'a', '2026-11-01T00:00:00.000Z', '2026-03-01T00:00:00Z', NULL),
+     ('Docs', 'a', NULL, NULL, NULL),
+     ('Docs', 'b', '2026-11-01T00:00:00.000Z', NULL, '2026-10-01T00:00:00Z');"
+expect "coverage: covered_all rolls up every collection's sources, the highest floor and the lowest ceiling among those that closed a round, and those that never did" \
+    "$(isearch covered_all)|$(sql "SELECT max(covered_since) FILTER (WHERE covered_at IS NOT NULL), min(covered_until) FILTER (WHERE covered_at IS NOT NULL), count(*) - count(covered_at) FROM sources;")" \
+    "2026-03-01T00:00:00Z|2026-10-01T00:00:00Z|1|2026-03-01T00:00:00Z|2026-10-01T00:00:00Z|1"
+steps="$(isplan covered_all)"
+expect "coverage: covered_all seeks sources_by_since, sources_by_until and sources_filling, never reading every source" \
+    "$(grep -c 'sources_by_since\|sources_by_until\|sources_filling' <<<"$steps" || true)$(grep -cE 'SCAN (store\.)?sources$|USING (COVERING )?INDEX sqlite_autoindex_sources' <<<"$steps" || true)" "30"
+sql "DELETE FROM sources WHERE collection IN ('Cal', 'Cal2', 'Docs');"
 
 # --- A zero-length occurrence falls in the range it starts (SEARCH.md §8.1) --
 

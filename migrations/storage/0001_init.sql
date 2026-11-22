@@ -183,6 +183,15 @@ CREATE TABLE sources (
     PRIMARY KEY (collection, source)
 );
 
+-- The temporal coverage over every collection (SEARCH.md §8.2, covered_all):
+-- the latest floor and the earliest ceiling among the sources that closed a
+-- round, each the end of its index, and the sources that never closed one,
+-- an index empty at rest, so the roll seeks three entries rather than
+-- reading every source. Partial, so a source with no bound adds nothing.
+CREATE INDEX sources_by_since ON sources(covered_since) WHERE covered_at IS NOT NULL AND covered_since IS NOT NULL;
+CREATE INDEX sources_by_until ON sources(covered_until) WHERE covered_at IS NOT NULL AND covered_until IS NOT NULL;
+CREATE INDEX sources_filling ON sources(collection) WHERE covered_at IS NULL;
+
 -- A coverage a reader lists with the collection (list_collections) moves
 -- the collection's stamp (§4.5), so a window saying "mail since" follows the
 -- feed rather than polling the sync state.

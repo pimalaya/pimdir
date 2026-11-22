@@ -1,6 +1,6 @@
 # Pimdir search specification
 
-Status: search-draft-16, requiring storage-draft-15, released together with the storage and sync parts
+Status: search-draft-16, requiring storage-draft-16, released together with the storage and sync parts
 
 The search part of the pimdir standard: a full-text index over a store ([STORAGE.md](./STORAGE.md)) and the query language over it, cross-domain.
 
@@ -141,6 +141,7 @@ The index holds:
 | `chunks_of` | query client | §6 |
 | `coverage` | query client | §8.2 |
 | `coverage_all` | query client | §8.2 |
+| `covered_all` | query client | §8.2 |
 | `cut_before` | query client | §8.2 |
 | `behind` | query client | §8.2 |
 
@@ -362,7 +363,7 @@ A client stating another zone than the index's `floating_zone` reads its days in
 - An encrypted body's headers are indexed (§6), so a mailbox holding encrypted mail answers complete to a query of structured terms, and to one whose text terms read the header fields alone. A collection holding items without their bodies, a mailbox listed and not yet fetched, likewise answers complete to a query none of whose terms reads a body of their kind (`is:unread`, `tag:`, `label:`, a `date:` over mail): the store answers such a term whole, and a body arriving later changes nothing of it. A zone that differs is reported apart and leaves an answer complete.
 - **The lag, `behind`**, is store-wide: the stamps the store drew above `index_meta.store_change` (`behind`). It is zero exactly when the index has folded every change, else an upper bound on the rows a refresh has yet to fold, since a row changed twice draws two stamps. A purge draws none, and a hit the store no longer holds is never answered (§1). A one-shot answer says it.
 - **Flags are as fresh as the store.** A system flag term (`is:read`, `is:unread`, `is:flagged`, `is:answered`, `is:draft`, and a `tag:` or `flag:` naming a system flag) reads the store as it stands when the query runs, while a text term, a keyword and every other term the index answers read the store as the index last folded it. While the index lags, a query's flag terms are thus fresher than its text terms: an item marked read since the last refresh is no hit of `is:unread` and one marked unread since is one, whatever their text matched as last indexed. The lag bounds the gap as it bounds every other, and an answer is complete only at zero lag, whatever its terms read.
-- **Coverage has a temporal axis**: whether the store holds every member of the queried collections over the query's date range, open on a side the query does not bound, read from their sources' coverage (STORAGE §10, `list_coverage`). It is `full`, or `bounded` with:
+- **Coverage has a temporal axis**: whether the store holds every member of the queried collections over the query's date range, open on a side the query does not bound, read from their sources' coverage (STORAGE §10, `list_coverage`, or `covered_all` when no conjunct rules a collection out, which answers the roll-up below over every collection without reading each source). It is `full`, or `bounded` with:
   - `since`, the instant below which a queried collection is not known complete (a `covered_since` above the range's start, `null` when no floor is the cause);
   - `until`, the instant from which one is not (a `covered_until` below the range's end, `null` likewise);
   - `filling`, true when a source of a queried collection never closed a round, so nothing there is known complete.
