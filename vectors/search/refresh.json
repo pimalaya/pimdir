@@ -1,5 +1,5 @@
 {
-  "v": 5,
+  "v": 6,
   "note": "a refresh driven by the change feed (STORAGE.md section 4.5, SEARCH.md section 4): each case builds its store as store.json's are built and indexes it, then applies its steps in order, each as an owner would write it. After each step the feed lists, above the cursor read before it, the items and the collections stated in changed, and the purge count moves when purged says so; a refresh then answers each query as stated, as an index rebuilt from the store as it then stands does, but in a step stating lagging, which answers its queries before the refresh. A missing stamp leaves the index answering the earlier store.",
   "cases": [
     {
@@ -109,7 +109,7 @@
     },
     {
       "label": "a body goes with its last placement",
-      "note": "the card's first body is replaced, then the card retained: each body leaves the index with the last placement naming it, though the store still holds it, uncollected or pinned by the retained row, as an index rebuilt then would hold it (SEARCH.md section 4). objects counts the object rows a canonical index holds",
+      "note": "the card's first body is replaced, then the card retained: each body leaves the index with the last placement naming it, though the store still holds it, uncollected or pinned by the retained row, as an index rebuilt then would hold it (SEARCH.md section 4)",
       "store": {
         "collections": [{ "id": "home/Contacts", "account": "home", "kind": "text/vcard" }],
         "items": [
@@ -121,7 +121,6 @@
         {
           "write": { "kind": "put", "item": { "collection": "home/Contacts", "seq": 1, "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "flags": [], "fixture": "fixtures/card-basic-renamed.vcf" } },
           "changed": { "items": [["home/Contacts", "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40"]], "collections": [], "purged": false },
-          "objects": 1,
           "queries": [
             { "query": "smith", "hits": [["home", 1]] }
           ]
@@ -129,7 +128,6 @@
         {
           "write": { "kind": "remove", "collection": "home/Contacts", "seq": 1 },
           "changed": { "items": [["home/Contacts", "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40"]], "collections": [], "purged": false },
-          "objects": 0,
           "queries": [
             { "query": "smith", "hits": [] }
           ]
@@ -171,7 +169,6 @@
         {
           "write": { "kind": "cover", "collection": "home/Calendar", "source": "mirror", "covered_since": null, "covered_until": null },
           "changed": { "items": [], "collections": ["home/Calendar"], "purged": false },
-          "objects": 1,
           "queries": [
             { "query": "stepping", "hits": [["home", 1]] },
             { "query": "kind:event", "hits": [["home", 1]] }
@@ -313,7 +310,7 @@
     },
     {
       "label": "a hit holding two bodies holds a text term through either",
-      "note": "split-1 is filed in two collections of one account, one seq, the INBOX copy under a body saying quince and the Archive copy under one saying rhubarb, as two clients may file one Message-ID under bodies differing in a header. A text term holds for the hit when any of its placements matches it (SEARCH.md section 8.2), so quince rhubarb holds and quince not rhubarb does not, though no body holds both words: a count matching whole documents answers otherwise unless it evaluates the seq per placement. split lists the seqs a canonical index records as naming two documents (SEARCH.md section 3): the Archive copy filed under the other body, repointed to the INBOX body, back to its own, then removed",
+      "note": "split-1 is filed in two collections of one account, one seq, the INBOX copy under a body saying quince and the Archive copy under one saying rhubarb, as two clients may file one Message-ID under bodies differing in a header. A text term holds for the hit when any of its placements matches it (SEARCH.md section 8.2), so quince rhubarb holds and quince not rhubarb does not, though no body holds both words: a count matching whole documents answers otherwise unless it evaluates the seq per placement. The steps file the Archive copy under the other body, repoint it to the INBOX body, back to its own, then remove it",
       "store": {
         "collections": [
           { "id": "home/INBOX", "account": "home", "kind": "message/rfc822" },
@@ -328,8 +325,6 @@
         {
           "write": { "kind": "put", "item": { "collection": "home/Archive", "seq": 1, "link_id": "split-1@example.org", "flags": [], "fixture": "fixtures/mail-split-rhubarb.eml" } },
           "changed": { "items": [["home/Archive", "split-1@example.org"]], "collections": [], "purged": false },
-          "objects": 2,
-          "split": [1],
           "queries": [
             { "query": "quince rhubarb", "hits": [["home", 1]] },
             { "query": "quince not rhubarb", "hits": [] },
@@ -339,8 +334,6 @@
         {
           "write": { "kind": "put", "item": { "collection": "home/Archive", "seq": 1, "link_id": "split-1@example.org", "flags": [], "fixture": "fixtures/mail-split-quince.eml" } },
           "changed": { "items": [["home/Archive", "split-1@example.org"]], "collections": [], "purged": false },
-          "objects": 1,
-          "split": [],
           "queries": [
             { "query": "quince rhubarb", "hits": [] },
             { "query": "quince not rhubarb", "hits": [["home", 1]] }
@@ -349,8 +342,6 @@
         {
           "write": { "kind": "put", "item": { "collection": "home/Archive", "seq": 1, "link_id": "split-1@example.org", "flags": [], "fixture": "fixtures/mail-split-rhubarb.eml" } },
           "changed": { "items": [["home/Archive", "split-1@example.org"]], "collections": [], "purged": false },
-          "objects": 2,
-          "split": [1],
           "queries": [
             { "query": "quince rhubarb", "hits": [["home", 1]] },
             { "query": "quince not rhubarb", "hits": [] }
@@ -359,8 +350,6 @@
         {
           "write": { "kind": "remove", "collection": "home/Archive", "seq": 1 },
           "changed": { "items": [["home/Archive", "split-1@example.org"]], "collections": [], "purged": false },
-          "objects": 1,
-          "split": [],
           "queries": [
             { "query": "quince rhubarb", "hits": [] },
             { "query": "quince not rhubarb", "hits": [["home", 1]] }

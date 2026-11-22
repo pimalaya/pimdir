@@ -40,7 +40,7 @@ The index is derived. Every row is recomputed from the store and the bodies, and
 ## 2. Requirements
 
 - The index MUST be a SQLite database named index.db in the store directory (STORAGE §3), `PRAGMA foreign_keys = ON`, `PRAGMA journal_mode = WAL` RECOMMENDED so query clients read while a refresh writes.
-- The **canonical shape** is [migrations/search/0001_init.sql](./migrations/search/0001_init.sql) and the statements under queries/search/, every table `STRICT`, and is the RECOMMENDED one. It needs **SQLite ≥ 3.43** with FTS5, for `contentless_delete`, a floor above the store's.
+- The **canonical shape** is migrations/search/0001_init.sql and the statements under queries/search/, every table `STRICT`, and is the RECOMMENDED one. It needs **SQLite ≥ 3.43** with FTS5, for `contentless_delete`, a floor above the store's.
 - An index of another shape (FTS4, FTS3, or no full-text module) MAY answer the same language: every query's hit set is the one vectors/search/ gives, its text folded as §5 says and its text terms matched as §8.5 says. Its order by relevance is its own (§8.2), and so is how it keeps itself current.
 - **The hit-set guarantee leaves out text reduced from HTML, and a part's text beyond seven-bit ASCII in a charset other than UTF-8.** §6 pins neither how a `text/html` part becomes text nor, but as a recommendation, how another charset is decoded, so a word that text alone holds MAY be a hit in one conforming index and not in another. The vectors hold no such word.
 - **An index names its version and its shape.** Whatever its shape, an index holds a one-row table `index_meta` whose `format` is `pimdir-index`, whose `format_version` names the version of this part it follows, this draft's name, `search-draft-16`, while this part is a draft and `search-vN` once released (N its major), and whose `shape` names its shape: `canonical` for the canonical one, written by `init_index_meta`, and a name of the implementation's own for another, never `canonical`. Versions are ordered: drafts by their number, every draft below every release, releases by their major.
@@ -50,7 +50,7 @@ The index is derived. Every row is recomputed from the store and the bodies, and
 - **A query client reads only an index it implements.** It MUST refuse an index whose `shape` or `format_version` it does not implement, naming both, rather than answer from it; while this part is a draft it implements its own draft alone, as STORAGE §4.2 has a program open only its own draft's store.
 - The canonical schema's version is the index's own `PRAGMA user_version`, mirrored in `index_meta.version`. While this part is a draft a schema change is folded into 0001_init.sql, the version staying 1, `format_version` telling one draft's index from another's.
 - The schema text is compared object by object: each table, index and trigger 0001_init.sql creates, by name, against the index's own by its `sqlite_master` text, `--` comments removed and whitespace collapsed, the shadow tables FTS5 creates and a table of the implementation's own beside them left out.
-- The statements are under [queries/search/](./queries/search/), one file per statement named after it, prepared with the store attached read-only as `store`; §3 names each and the profile that runs it.
+- The statements are under queries/search/, one file per statement named after it, prepared with the store attached read-only as `store`; §3 names each and the profile that runs it.
 
 ## 3. The index
 

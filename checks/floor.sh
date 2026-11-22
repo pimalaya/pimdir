@@ -90,11 +90,10 @@ for malformed in ../x "${well_formed^^}" "${well_formed:0:26}"; do
 done
 
 # The shapes §13 fixes are refused on the floor as on a current SQLite
-# (STORAGE.md §13): one row of each table they bind, well formed, then the
-# writes checks/invariants.sh shows refused by the CHECK naming each column,
-# each of which must fail here on a constraint and leave the store as it was.
-# The floor names the table alone in its message, so the CHECK is told by the
-# scenario there and its effect here.
+# (STORAGE.md §13): one row of each table they bind, well formed, then writes
+# a CHECK naming each column refuses, each of which must fail here, on the
+# floor and on the sqlite3 on PATH, on a constraint and leave the store as it
+# was.
 for migration in "$root"/migrations/storage/*.sql; do
     "$floor" "$dir/shapes.db" "BEGIN; $(cat "$migration")"$'\n'"COMMIT;"
 done
@@ -213,80 +212,9 @@ for shell in "$floor" sqlite3; do
     }
 done
 
-# The keyset reads seek on the floor as invariants.sh asserts they do on a
-# current SQLite (STORAGE.md §9.3, §14.1), which is where the Android app runs
-# them verbatim. The floor has no STRICT, so the list parameters' table there
-# leaves `value` untyped: declared `ANY` outside a STRICT table it would take
-# NUMERIC affinity, and `x.collection = p.id` would no longer seek its
-# collection, a page then sorting the whole collection. The floor's shell has
-# no .parameter either, so each parameter is spelled as a literal.
-param="CREATE TEMP TABLE param (slot TEXT NOT NULL, position INTEGER NOT NULL, value, PRIMARY KEY (slot, position));
-INSERT INTO temp.param VALUES ('collections', 0, 'INBOX'), ('collections', 1, 'Sent');"
-floor_plan() {
-    local file="$1"; shift
-    local text
-    case "$file" in */*) ;; *) file="read/$file" ;; esac
-    text="$(grep -v '^ *--' "$root/queries/storage/$file.sql")"
-    for binding in "$@"; do
-        text="${text//${binding%%=*}/${binding#*=}}"
-    done
-    "$floor" "$dir/floor.db" "$param EXPLAIN QUERY PLAN $text"
-}
-floor_failures=0
-floor_expect() {
-    if [ "$2" != "$3" ]; then
-        echo "$1: expected [$3], got [$2] on SQLite $version" >&2
-        floor_failures=$((floor_failures + 1))
-    fi
-}
-pages=(":after_collection=NULL" ":after_key=NULL" ":after_seq=NULL" ":limit=10" ":pattern='%a%'"
-       ":seen=NULL" ":attachment=NULL" ":since=NULL")
-for statement in list_mail_page_filtered search_mail; do
-    steps="$(floor_plan "$statement" "${pages[@]}")"
-    floor_expect "page: $statement merges each collection's seek below the cursor, scanning nothing" \
-        "$(grep -c 'CORRELATED LIST SUBQUERY' <<<"$steps" || true)$(grep -cE 'USING (COVERING )?INDEX items_by_sort \(collection=\? AND .*\(sort_key,seq\)<\(\?,\?\)\)' <<<"$steps" || true)$(grep -c 'SCAN TABLE items AS i\b' <<<"$steps" || true)" "110"
-done
-for statement in search_contacts search_calendar search_files; do
-    steps="$(floor_plan "$statement" "${pages[@]}")"
-    floor_expect "page: $statement merges each collection's seek above the cursor, scanning nothing" \
-        "$(grep -c 'CORRELATED LIST SUBQUERY' <<<"$steps" || true)$(grep -cE 'USING (COVERING )?INDEX items_by_sort \(collection=\? AND \(sort_key,seq\)>\(\?,\?\)\)' <<<"$steps" || true)$(grep -c 'SCAN TABLE items AS i\b' <<<"$steps" || true)" "110"
-done
-for statement in list_mail_page_desc list_items_page_desc; do
-    floor_expect "page: $statement seeks its cursor on items_by_sort, the first page's too" \
-        "$(floor_plan "$statement" ":after_key=NULL" ":after_seq=NULL" ":limit=10" ":collection='INBOX'" | grep -c 'items_by_sort (collection=? AND (sort_key,seq)<(?,?))' || true)" "1"
-done
-for statement in list_items_page_asc list_contacts_page_asc list_events_page_asc list_tasks_page_asc list_journals_page_asc list_files_page_asc; do
-    floor_expect "page: $statement seeks its cursor on items_by_sort" \
-        "$(floor_plan "$statement" ":after_key=''" ":after_seq=0" ":limit=10" ":collection='INBOX'" | grep -c 'items_by_sort (collection=? AND (sort_key,seq)>(?,?))' || true)" "1"
-    floor_expect "page: $statement seeks a NULL cursor, the first page, on items_by_sort" \
-        "$(floor_plan "$statement" ":after_key=NULL" ":after_seq=NULL" ":limit=10" ":collection='INBOX'" | grep -c 'items_by_sort (collection=? AND (sort_key,seq)>(?,?))' || true)" "1"
-done
-floor_expect "page: list_items_page and list_retained_page seek a NULL cursor on their key" \
-    "$(floor_plan list_items_page ":after=NULL" ":limit=10" ":collection='INBOX'" | grep -c 'sqlite_autoindex_items_1 (collection=? AND link_id>?)' || true)$(floor_plan list_retained_page ":after=NULL" ":limit=10" ":collection='INBOX'" | grep -c 'items_deleted (collection=? AND seq>?)' || true)" "11"
-for statement in count_mail count_mail_by_day; do
-    floor_expect "since: $statement seeks the floor on items_by_sort" \
-        "$(floor_plan "$statement" ":seen=NULL" ":attachment=NULL" ":since='2026-10-06T00:00:00Z'" ":shift=NULL" | grep -c 'items_by_sort (collection=? AND sort_key>?)' || true)" "1"
-done
-# The sources of a collection and of the store are read by a loose scan there
-# too (§14.1): the recursive text compiles on the floor and seeks the next
-# source above the last.
-for statement in owner/collection_sources list_sources; do
-    floor_expect "sources: ${statement#*/} seeks the next source on bindings_by_handle" \
-        "$(floor_plan "$statement" ":collection='INBOX'" | grep -c 'SEARCH TABLE bindings AS b USING COVERING INDEX bindings_by_handle (collection=? AND source>?)' || true)" "1"
-done
-# The unread count reads items_unread there too (§14.1): the floor ignores a
-# hint it cannot use rather than failing on it, so only its plan says the
-# partial index, whose WHERE the statement spells term for term, is the one
-# read.
-for since in NULL "'2026-10-06T00:00:00Z'"; do
-    floor_expect "count: count_unread seeks items_unread, never items_by_sort, with :since $since" \
-        "$(floor_plan count_unread ":attachment=NULL" ":since=$since" | grep -c 'SEARCH TABLE items AS i USING INDEX items_unread (collection=? AND sort_key>?)' || true)$(floor_plan count_unread ":attachment=NULL" ":since=$since" | grep -c 'items_by_sort' || true)" "10"
-done
-[ "$floor_failures" = 0 ] || exit 1
-
 # A migration keeps every row on the floor too (§6): the additive one, the
 # rebuild with foreign keys off before the transaction and the edit of a
 # CHECK, with the rebuild §6 forbids, which loses the rows there silently.
 bash "$rehearsal/run.sh" "$root" "$floor"
 
-echo "the store schema loads on SQLite $version, $(wc -l < <("$floor" "$dir/floor.db" "$objects")) objects, every write to its $tables tables compiling, a body's name checked, $refusals mis-shaped writes refused, an object's delete seeking its pointers, its keyset reads seeking their collection and bound, its triggers stored as the canonical text writes them and no trusted_schema there"
+echo "the store schema loads on SQLite $version, $(wc -l < <("$floor" "$dir/floor.db" "$objects")) objects, every write to its $tables tables compiling, a body's name checked, $refusals mis-shaped writes refused, an object's delete seeking its pointers, its triggers stored as the canonical text writes them and no trusted_schema there"

@@ -2,7 +2,7 @@
 
 Pimdir is a **local-first standard** for **personal information**: mail, contacts, calendars, tasks and files in **one portable store**, kept **a replica of every source**, and **searchable** through one query language.
 
-The canonical part is the schema, the reference statements, the payload schemas and the test vectors, so every implementation agrees on the same store. [io-pimdir](https://github.com/pimalaya/io-pimdir) is the reference implementation.
+The canonical part is the store schema, the payload schemas and the test vectors, so every implementation agrees on the same store. [io-pimdir](https://github.com/pimalaya/io-pimdir) is the reference implementation: its statements, its index schema and its test generator are its own.
 
 ## Table of contents
 
@@ -55,7 +55,7 @@ There are three ways to use the standard, from the most work to the least. They 
 
 ###   Implement the documents
 
-Write the store yourself, in any language with a SQLite binding, from the three parts and the guide. Create the store with the canonical schema, which loads on SQLite 3.18 or newer, and run the canonical statements verbatim on SQLite 3.37 or newer, or statements of your own on an older one, keeping the parameters, the results and the effect of each canonical name you run, or reaching its effect under names of your own (STORAGE §4.1, §4.4). The test vectors say when you are done: the model vectors bind every implementation, checks/ the canonical text.
+Write the store yourself, in any language with a SQLite binding, from the three parts and the guide. Create the store with the canonical schema, which loads on SQLite 3.18 or newer, and read and write its tables with statements of your own (STORAGE §4.1). The test vectors say when you are done: the model vectors bind every implementation, checks/ the canonical schema.
 
 This suits the small profiles: readers, producers and query clients.
 
@@ -79,11 +79,10 @@ STORAGE.md      the store, the base (normative)
 SYNC.md         the sync layer (normative, optional)
 SEARCH.md       the search layer (normative, optional)
 GUIDE.md        the implementation guide (informative)
-migrations/     canonical schema migrations: storage/ and search/
-queries/        the reference statements, one file each, and signatures.json, what each binds
+migrations/     canonical store schema migrations, under storage/
 payloads/       the JSON Schemas of the queue's payloads
 vectors/        the normative test data
-checks/         schema, floor, statement, signature, name, vector, reference and frozen checks (nix flake check), rehearsal migrations, tags and implementation (CI)
+checks/         schema, floor, vector, reference and frozen checks (nix flake check), rehearsal migrations, tags and implementation (CI)
 conventions/    Pimalaya's own conventions, outside the standard (gtd.md)
 cairn/          the dated history (log/) and audit ledgers (changes/)
 ```
@@ -94,7 +93,7 @@ The history follows [Cairn](https://github.com/pimalaya/cairn), the documents th
 
 Draft: **storage-draft-16**, **sync-draft-15** and **search-draft-16**, each named by a git tag. An implementation states the version of each part it conforms to.
 
-A released part is versioned `<part>-vX.Y.Z`: STORAGE's major is the store schema version, SEARCH's the index schema version, SYNC's a breaking change to the connector seam or the engine.
+A released part is versioned `<part>-vX.Y.Z`: STORAGE's major is the store schema version, SEARCH's a breaking change to the query language or to what an answer states, SYNC's a breaking change to the connector seam or the engine.
 
 While STORAGE is a draft, a store opens only under the exact draft that wrote it, every other draft and every release refusing it: a program built on a draft is reinstalled over a new store, never upgraded.
 
@@ -109,7 +108,7 @@ This project is licensed under either of:
 - [MIT license](LICENSE-MIT)
 - [Apache License, Version 2.0](LICENSE-APACHE)
 
-at your option. That covers all of it: the documents, the canonical SQL under migrations/ and queries/, the payload schemas under payloads/, the vectors, their fixtures and their schemas under vectors/, the conventions and the checks. Each JSON Schema and each check script states it as `SPDX-License-Identifier: MIT OR Apache-2.0`.
+at your option. That covers all of it: the documents, the canonical SQL under migrations/, the payload schemas under payloads/, the vectors, their fixtures and their schemas under vectors/, the conventions and the checks. Each JSON Schema and each check script states it as `SPDX-License-Identifier: MIT OR Apache-2.0`.
 
 ## Social
 

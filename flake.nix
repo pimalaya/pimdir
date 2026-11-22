@@ -26,23 +26,19 @@
         root = ./.;
         fileset = lib.fileset.unions [
           ./migrations
-          ./queries
           ./payloads
           ./vectors
         ];
       };
 
-      # The canonical files with the documents that name them, and the
-      # scenarios, whose capability names checks/names.sh reads, and AGENTS.md,
+      # The canonical files with the documents that name them, and AGENTS.md,
       # which names each part's version.
       standard = lib.fileset.toSource {
         root = ./.;
         fileset = lib.fileset.unions [
           ./migrations
-          ./queries
           ./payloads
           ./vectors
-          ./checks/invariants.sh
           ./OVERVIEW.md
           ./STORAGE.md
           ./SYNC.md
@@ -51,22 +47,6 @@
           ./conventions
           ./README.md
           ./AGENTS.md
-        ];
-      };
-
-      # The generator's crate, with the canonical text it loads from the
-      # directory above it and STORAGE.md, whose Annex A revision it follows.
-      generator = lib.fileset.toSource {
-        root = ./.;
-        fileset = lib.fileset.unions [
-          ./generator/Cargo.toml
-          ./generator/Cargo.lock
-          ./generator/src
-          ./migrations
-          ./queries
-          ./payloads
-          ./vectors
-          ./STORAGE.md
         ];
       };
 
@@ -121,25 +101,11 @@
     {
       checks = eachSystem (pkgs: {
         schema = pkgs.runCommand "pimdir-schema" { nativeBuildInputs = [ pkgs.sqlite ]; } ''
-          bash ${./checks/schema.sh} ${format} | tee $out
-        '';
-
-        invariants = pkgs.runCommand "pimdir-invariants" { nativeBuildInputs = [ pkgs.sqlite ]; } ''
-          bash ${./checks/invariants.sh} ${format} ${./checks/waivers.txt} ${./checks/rehearsal} | tee $out
-        '';
-
-        names = pkgs.runCommand "pimdir-names" { nativeBuildInputs = [ pkgs.sqlite ]; } ''
-          bash ${./checks/names.sh} ${standard} | tee $out
+          bash ${./checks/schema.sh} ${format} ${./checks/rehearsal} | tee $out
         '';
 
         vectors = pkgs.runCommand "pimdir-vectors" { } ''
           ${python pkgs}/bin/python3 ${./checks/vectors.py} ${standard} | tee $out
-        '';
-
-        # The parameters, slots and columns each statement states, against
-        # queries/signatures.json, so a change of signature shows in a diff.
-        signatures = pkgs.runCommand "pimdir-signatures" { } ''
-          ${python pkgs}/bin/python3 ${./checks/signatures.py} ${format} | tee $out
         '';
 
         # The bytes a release froze, against checks/frozen.sha256: nothing
@@ -147,17 +113,6 @@
         frozen = pkgs.runCommand "pimdir-frozen" { } ''
           bash ${./checks/frozen.sh} ${format} ${./checks/frozen.sha256} | tee $out
         '';
-
-        # The generator's own tests: its known answers, and the stores it
-        # writes through the canonical statements alone.
-        generator = pkgs.rustPlatform.buildRustPackage {
-          pname = "pimdir-generator";
-          version = "0.1.0";
-          src = generator;
-          cargoRoot = "generator";
-          buildAndTestSubdir = "generator";
-          cargoLock.lockFile = ./generator/Cargo.lock;
-        };
 
         # Every markdown file outside cairn/, and every file a link names, so
         # the whole source rather than a fileset.
@@ -177,10 +132,6 @@
             pkgs.sqlite
             pkgs.perl
             (python pkgs)
-            pkgs.cargo
-            pkgs.rustc
-            pkgs.clippy
-            pkgs.rustfmt
           ];
         };
       });

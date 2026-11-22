@@ -1630,53 +1630,6 @@ require("payloads.json: an unknown payload of an action no schema defines",
 require("payloads.json: an unknown payload of an application's own action",
         any(case["action"].startswith("x-") for case in unknown_cases))
 
-
-def shell_word(text):
-    """A double-quoted shell word's value: a backslash quoting `$`, a
-    backquote, `"` or itself, and a variable, `$h1` or `${h1}`, standing for
-    a body's name, which is all checks/invariants.sh interpolates into a
-    payload."""
-    out, at = [], 0
-    while at < len(text):
-        if text[at] == "\\" and text[at + 1:at + 2] in ("$", "`", '"', "\\"):
-            out.append(text[at + 1])
-            at += 2
-        elif text[at] == "$" and re.match(r"\{?[a-z_][a-z0-9_]*\}?", text[at + 1:]):
-            out.append("a" * 52)
-            at += 1 + re.match(r"\{?[a-z_][a-z0-9_]*\}?", text[at + 1:]).end()
-        else:
-            out.append(text[at])
-            at += 1
-    return "".join(out)
-
-
-# The scenarios enqueue well-formed payloads (STORAGE.md section 15.3), the
-# store reading none: each payload checks/invariants.sh writes is valid against
-# its action's schema, but one whose call a comment opening `# A malformed
-# payload` heads, which must be malformed, and one a comment opening `# An
-# unknown payload` heads, whose action and v must name no schema.
-harness = (root.parent / "checks" / "invariants.sh").read_text().replace("\\\n", " ")
-enqueued = 0
-for number, line in enumerate(harness.splitlines()):
-    if "queue/enqueue_action" not in line or line.lstrip().startswith("#"):
-        continue
-    action = re.search(r'":action=\'([a-z-]+)\'"', line)
-    payload = re.search(r'":payload=\'((?:[^"\\]|\\.)*)\'"', line)
-    if action is None or payload is None:
-        failures.append(f"checks/invariants.sh: an enqueue states no literal action and payload: {line.strip()[:80]}")
-        continue
-    above = number - 1
-    while above >= 0 and harness.splitlines()[above].lstrip().startswith("#"):
-        above -= 1
-    heading = harness.splitlines()[above + 1].lstrip()
-    stated = "malformed" if heading.startswith("# A malformed payload") else \
-        "unknown" if heading.startswith("# An unknown payload") else "valid"
-    document = json.loads(shell_word(payload.group(1)))
-    check(f"checks/invariants.sh: the {action.group(1)} payload {json.dumps(document)[:60]} outcome",
-          payload_outcome(action.group(1), document), stated)
-    enqueued += 1
-require("checks/invariants.sh: enqueues payloads", enqueued > 0)
-
 for case in objects["base32"]["cases"]:
     encoded = name(bytes.fromhex(case["input_hex"]))
     check(f"base32 of {case['input_utf8']!r}", encoded, case["base32"])
@@ -3699,7 +3652,6 @@ def model_placements(collections, collection_kinds, model):
 
 refresh = json.loads((search / "refresh.json").read_text())
 lagging_apart = 0
-split_steps = set()
 for case in refresh["cases"]:
     label = f"refresh {case['label']!r}"
     collections = {c["id"]: c["account"] for c in case["store"]["collections"]}
@@ -3790,28 +3742,6 @@ for case in refresh["cases"]:
         check(f"{where}: the collections the feed lists", sorted(step["changed"]["collections"]), sorted(touched))
         check(f"{where}: whether the purge count moves", step["changed"]["purged"], purged)
         live = {(collections[collection], seq) for (collection, seq), held in model.items() if held["live"]}
-        # A canonical index holds the bodies its live placements name, each
-        # once (SEARCH.md section 4).
-        if "objects" in step:
-            bodies = {held["fixture"] for held in model.values() if held["live"] and held["fixture"]}
-            check(f"{where}: the object rows a canonical index holds", step["objects"], len(bodies))
-        # A canonical index records the public ids whose live placements name
-        # two or more documents (SEARCH.md section 3): a body by its bytes, or
-        # a placement's own summary while it has none, a file's and an
-        # unreadable body's placement among them.
-        if "split" in step:
-            documents = {}
-            for (collection, seq), held in model.items():
-                if not held["live"]:
-                    continue
-                if held["fixture"] and not held["unreadable"] and collection_kinds[collection] != "application/octet-stream":
-                    document = ("body", (root / held["fixture"]).read_bytes())
-                else:
-                    document = ("summary", collection, seq)
-                documents.setdefault(seq, set()).add(document)
-            check(f"{where}: the split rows a canonical index holds", step["split"],
-                  sorted(seq for seq, named in documents.items() if len(named) > 1))
-            split_steps.add(bool(step["split"]))
         for query in step["queries"]:
             try:
                 parse(query["query"])
@@ -3840,7 +3770,6 @@ for case in refresh["cases"]:
                 require(f"{where}: {query['query']!r} hit {hit} names a searchable item", tuple(hit) in live)
 require("refresh: a lagging step answers a system flag term otherwise than the index's flags, one write behind, would",
         lagging_apart >= 2)
-require("refresh: a step states a public id split and another states none", split_steps == {True, False})
 
 # Every fixture is a body some case names (summaries.json, a sync case, the
 # search store, a refresh case), so none lies under vectors/fixtures/ that no
@@ -3861,6 +3790,6 @@ print(
     f"{len(summaries['cases'])} summaries over {len(fixtures)} fixtures, "
     f"{sum('hint' in case for case in summaries['cases'])} minted link ids, "
     f"{len(sync_cases)} sync cases, {len(queries['cases'])} search cases, {sum(len(case['steps']) for case in refresh['cases'])} refresh steps, {len(chunk_cases)} chunk cases, "
-    f"{len(writers['cases'])} task writer cases, {len(payload_cases)} payloads and {enqueued} scenario payloads check, "
+    f"{len(writers['cases'])} task writer cases, {len(payload_cases)} payloads check, "
     f"every file the manifest's"
 )

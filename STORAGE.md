@@ -195,7 +195,7 @@ An item plus one binding per source is the whole model. Single-source is the N=1
 
 ### 4.4 Queries
 
-The named, parameterised statements servicing §14 live under [queries/storage/](./queries/storage/), one file per statement named after it, sorted by the profile that runs it: read/ is the reader's (§14.1), queue/ the producer's (§15.1), owner/ the rest, an owner running all three. An implementation reads them by listing its directories. A file's leading comment says what the statement alone cannot; the rules are this document's.
+The named, parameterised statements servicing §14 live under queries/storage/, one file per statement named after it, sorted by the profile that runs it: read/ is the reader's (§14.1), queue/ the producer's (§15.1), owner/ the rest, an owner running all three. An implementation reads them by listing its directories. A file's leading comment says what the statement alone cannot; the rules are this document's.
 
 **What a name binds.** A canonical name binds the text run under that name: the name, its named parameters, the columns it answers, in order, and its effect. The canonical text is a reference, RECOMMENDED verbatim (§4.1). An implementation running text of its own under a canonical name MUST keep all four, the rules this document states and §7's invariants. Its text for one name MAY be several statements, run in order in one transaction, the caller's or one it opens, so long as it keeps them: no other connection's write comes between them, and the name answers the rows the one statement answers.
 

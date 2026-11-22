@@ -8,10 +8,10 @@
 # its files moving freely until tagged, unless the check runs with --released,
 # as CI does on the push of a release tag: every normative part's version is
 # then tagged, a draft's as a release's, so no part is released beside one
-# nothing pins. The files a part owns: its migrations,
-# statements and vectors with their schemas, STORAGE the payload schemas too,
-# and the fixtures its vectors name (a fixture no vector names being
-# STORAGE's); vectors/manifest.json, which lists every part's, is none's.
+# nothing pins. The files a part owns: its vectors with their schemas, STORAGE
+# the store migrations and the payload schemas too, and the fixtures its
+# vectors name (a fixture no vector names being STORAGE's);
+# vectors/manifest.json, which lists every part's, is none's.
 #
 # Needs git and the repository's history and tags, so it runs outside the nix
 # sandbox, in .github/workflows/tests.yml on a checkout with its tags.
@@ -66,11 +66,11 @@ part() {
 named="$(fixtures vectors/summaries.json vectors/sync/*.json vectors/search/store.json vectors/search/refresh.json)"
 unnamed="$(comm -23 <(find vectors/fixtures -type f | sort) <(echo "$named"))"
 
-part STORAGE.md migrations/storage queries/storage payloads vectors/objects.json vectors/summaries.json \
+part STORAGE.md migrations/storage payloads vectors/objects.json vectors/summaries.json \
     vectors/payloads.json vectors/schema/objects.schema.json vectors/schema/summaries.schema.json \
     vectors/schema/payloads.schema.json $(fixtures vectors/summaries.json) $unnamed
 part SYNC.md vectors/sync vectors/schema/sync.schema.json $(fixtures vectors/sync/*.json)
-part SEARCH.md migrations/search queries/search vectors/search vectors/schema/search-store.schema.json \
+part SEARCH.md vectors/search vectors/schema/search-store.schema.json \
     vectors/schema/search-queries.schema.json vectors/schema/search-chunks.schema.json \
     vectors/schema/search-refresh.schema.json $(fixtures vectors/search/store.json vectors/search/refresh.json)
 part conventions/gtd.md conventions/gtd

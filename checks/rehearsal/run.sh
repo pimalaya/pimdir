@@ -3,7 +3,7 @@
 #
 # Rehearses the migrations STORAGE.md §6 foresees and none ships yet, on a
 # populated version 1 store, with the sqlite3 shell the second argument names:
-# checks/invariants.sh runs it on the sqlite3 on PATH, checks/floor.sh on the
+# checks/schema.sh runs it on the sqlite3 on PATH, checks/floor.sh on the
 # 3.18.2 floor. Four runs, each from a fresh copy of the populated store:
 #
 # - additive.sql, as §6 step 3 runs any migration;
