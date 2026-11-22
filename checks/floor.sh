@@ -107,10 +107,15 @@ done
         VALUES(2, 'INBOX', 'r', 2, 2, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'imap');
     INSERT INTO bindings(item, collection, source, handle, base_present, base_object, base_revision)
         VALUES(1, 'INBOX', 'imap', '10', 1, 1, 'r1');
-    INSERT INTO mail_summary(item, subject, date, size, attachment) VALUES(1, 's', '2026-10-06T08:00:00Z', 1, 0);
-    INSERT INTO event_summary(item, summary, recurring) VALUES(1, '', 0);
-    INSERT INTO task_summary(item, summary, recurring) VALUES(1, '', 0);
-    INSERT INTO file_summary(item, name, size) VALUES(1, '', 0);
+    INSERT INTO items(id, collection, link_id, seq, level) VALUES(3, 'INBOX', 'e', 3, 2);
+    INSERT INTO items(id, collection, link_id, seq, level) VALUES(4, 'INBOX', 't', 4, 2);
+    INSERT INTO items(id, collection, link_id, seq, level) VALUES(5, 'INBOX', 'f', 5, 2);
+    INSERT INTO summary(item, component, title, date, size, attachment) VALUES(1, 'mail', 's', '2026-10-06T08:00:00Z', 1, 0);
+    INSERT INTO summary(item, component, title, recurring) VALUES(3, 'event', '', 0);
+    INSERT INTO summary(item, component, title, recurring) VALUES(4, 'task', '', 0);
+    INSERT INTO summary(item, component, title, size) VALUES(5, 'file', '', 0);
+    INSERT INTO summary_value(item, role, position, value, name) VALUES(1, 'from', 0, 'a@example.org', 'A');
+    INSERT INTO summary_value(item, role, position, value) VALUES(1, 'in-reply-to', 0, 'b@example.org');
     INSERT INTO sources(collection, source, covered_since, covered_until, covered_at, round_since, round_until, round_started_at)
         VALUES('INBOX', 'imap', '2026-09-01T00:00:00Z', '2026-10-01T00:00:00Z', strftime('%Y-%m-%dT%H:%M:%fZ','now'),
                '2026-09-01T00:00:00Z', '2026-10-01T00:00:00Z', strftime('%Y-%m-%dT%H:%M:%fZ','now'));
@@ -164,15 +169,23 @@ UPDATE capabilities SET source = ''
 UPDATE performers SET source = ''
 UPDATE bindings SET handle = ''
 UPDATE objects SET size = -5
-UPDATE mail_summary SET date = '12 Nov 2026'
-UPDATE mail_summary SET date = '2026-10-06T08:00:00.000Z'
-UPDATE mail_summary SET date = '2026-10-06T08:00:00+00:00'
-UPDATE mail_summary SET size = -1
-UPDATE file_summary SET size = -1
+UPDATE summary SET date = '12 Nov 2026' WHERE component = 'mail'
+UPDATE summary SET date = '2026-10-06T08:00:00.000Z' WHERE component = 'mail'
+UPDATE summary SET date = '2026-10-06T08:00:00+00:00' WHERE component = 'mail'
+UPDATE summary SET size = -1 WHERE component = 'mail'
+UPDATE summary SET size = -1 WHERE component = 'file'
 UPDATE queue SET attempts = -1
-UPDATE mail_summary SET attachment = 7
-UPDATE event_summary SET recurring = 2
-UPDATE task_summary SET recurring = -1
+UPDATE summary SET attachment = 7 WHERE component = 'mail'
+UPDATE summary SET recurring = 2 WHERE component = 'event'
+UPDATE summary SET recurring = -1 WHERE component = 'task'
+UPDATE summary SET component = 'note' WHERE item = 1
+UPDATE summary SET dtstart = '20261006' WHERE component = 'mail'
+UPDATE summary SET sender = 'a@example.org' WHERE component = 'event'
+UPDATE summary SET due = '20261006' WHERE component = 'event'
+UPDATE summary SET card_kind = 'individual' WHERE component = 'task'
+UPDATE summary SET uid = 'x' WHERE component = 'file'
+UPDATE summary SET part = '2' WHERE component = 'mail'
+UPDATE summary_value SET name = 'B' WHERE role = 'in-reply-to'
 UPDATE items SET retained_by = 'imap' WHERE link_id = 'a'
 UPDATE items SET retained_at = NULL WHERE link_id = 'r'
 UPDATE bindings SET base_present = 0
@@ -196,8 +209,9 @@ fi
 # What each column may also hold is taken there: a NULL where one is allowed,
 # a size of none, a known flag set's keywords, a base let go whole.
 "$floor" "$dir/shapes.db" "PRAGMA foreign_keys = ON;
-    UPDATE mail_summary SET date = NULL, size = NULL, attachment = NULL; UPDATE event_summary SET recurring = NULL;
-    UPDATE task_summary SET recurring = 1; UPDATE sources SET covered_since = NULL, round_until = NULL;
+    UPDATE summary SET date = NULL, size = NULL, attachment = NULL WHERE component = 'mail';
+    UPDATE summary SET recurring = NULL WHERE component = 'event'; UPDATE summary_value SET name = NULL WHERE role = 'from';
+    UPDATE summary SET recurring = 1 WHERE component = 'task'; UPDATE sources SET covered_since = NULL, round_until = NULL;
     UPDATE receipts SET seq = NULL; UPDATE items SET retained_by = NULL WHERE link_id = 'r'; UPDATE objects SET size = 0;
     UPDATE items SET flags_known = 1, keywords = '\$Junk \\seen ~x' WHERE link_id = 'a';
     UPDATE bindings SET base_flags_known = 1, base_keywords = '\$Junk';

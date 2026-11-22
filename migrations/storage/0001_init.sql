@@ -153,7 +153,7 @@ CREATE TABLE sources (
     source           TEXT NOT NULL CHECK (typeof(source) = 'text') CHECK (source != ''),  -- source id ('left', 'right', 'phone'), never empty
     checkpoint       BLOB CHECK (typeof(checkpoint) IN ('blob', 'null')),  -- opaque remote cursor (QRESYNC/JMAP state, DAV sync-token)
     -- The coverage's floor and its exclusive ceiling, NULL unbounded: an
-    -- instant at seconds precision, as mail_summary.date (§13).
+    -- instant at seconds precision, as summary.date (§13).
     covered_since    TEXT CHECK (typeof(covered_since) IN ('text', 'null'))
                      CHECK (covered_since GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     covered_until    TEXT CHECK (typeof(covered_until) IN ('text', 'null'))
@@ -279,7 +279,7 @@ END;
 -- last one has dropped it the row is retained rather than deleted (non-NULL
 -- `retained_at`), keeping its body pinned until an explicit purge (§11).
 --
--- What the item says about itself is its kind's summary row (§4.4).
+-- What the item says about itself is its summary row (§4.4).
 --
 -- `id` is the placement's own key, which every child of it carries: never
 -- reused (AUTOINCREMENT) and never shown, a consumer keeping (collection,
@@ -524,136 +524,101 @@ CREATE TABLE supersessions (
 -- The superseding end, which a purge of that item cascades by.
 CREATE INDEX supersessions_by ON supersessions(by_item);
 
--- The summaries (§4.4, Annex A): what a reader lists an item from without
--- its body, one table per kind, at most one row per item, cascading with it.
--- Written by the item's writer under Annex A; none references an object.
-
--- message/rfc822 (Annex A.1). Every address is also an item_address row.
-CREATE TABLE mail_summary (
-    item INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
-    message_id   TEXT CHECK (typeof(message_id) IN ('text', 'null')),  -- bare Message-ID, angle brackets stripped
-    subject      TEXT NOT NULL CHECK (typeof(subject) = 'text'),  -- decoded (RFC 2047), may be empty
-    sender       TEXT CHECK (typeof(sender) IN ('text', 'null')),  -- first From address, canonical (Annex A.6)
-    sender_name  TEXT CHECK (typeof(sender_name) IN ('text', 'null')),  -- its display name, decoded, or NULL
-    date         TEXT CHECK (typeof(date) IN ('text', 'null'))  -- RFC 3339 UTC Z at seconds precision, or NULL
-                 CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
-    size         INTEGER CHECK (typeof(size) IN ('integer', 'null')) CHECK (size >= 0),  -- the body's octets, else the source's figure (Annex A.1), or NULL
-    attachment   INTEGER CHECK (typeof(attachment) IN ('integer', 'null')) CHECK (attachment IN (0, 1)),  -- 1 has one, 0 has none, NULL not examined
-    invitation   TEXT CHECK (typeof(invitation) IN ('text', 'null'))  -- the UID its first text/calendar part carries, NULL none or not examined
-);
-
--- The mail inviting to a calendar item, for link_invitations_to (§14.2).
--- Partial: most mail invites to nothing.
-CREATE INDEX mail_summary_by_invitation ON mail_summary(invitation) WHERE invitation IS NOT NULL;
-
--- A message's In-Reply-To ids (Annex A.1), bare, `position` their 0-based
--- document order. By id, for list_replied.
-CREATE TABLE mail_in_reply_to (
-    item       INTEGER NOT NULL CHECK (typeof(item) = 'integer') REFERENCES mail_summary(item) ON DELETE CASCADE,
-    position   INTEGER NOT NULL CHECK (typeof(position) = 'integer'),
-    message_id TEXT    NOT NULL CHECK (typeof(message_id) = 'text'),
-    PRIMARY KEY (item, position)
-) WITHOUT ROWID;
-
-CREATE INDEX mail_in_reply_to_by_id ON mail_in_reply_to(message_id);
-
--- text/vcard (Annex A.2). Every EMAIL is an item_address row.
-CREATE TABLE contact_summary (
-    item INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
-    uid        TEXT CHECK (typeof(uid) IN ('text', 'null')),  -- the UID verbatim
-    fn         TEXT NOT NULL CHECK (typeof(fn) = 'text'),  -- FN decoded (Annex A.2), '' when absent
-    kind       TEXT CHECK (typeof(kind) IN ('text', 'null')),  -- KIND lowercased: individual, group, org, location; NULL when absent
-    org        TEXT CHECK (typeof(org) IN ('text', 'null'))  -- first ORG component, unescaped, or NULL
-);
-
--- text/calendar, one table per component (Annex A.3 to A.5): a resource is
--- one VEVENT, VTODO or VJOURNAL set. A start is carried verbatim with its
--- parameters; the one resolved instant is items.sort_key.
-CREATE TABLE event_summary (
-    item INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
-    uid           TEXT CHECK (typeof(uid) IN ('text', 'null')),  -- the UID verbatim
-    summary       TEXT NOT NULL CHECK (typeof(summary) = 'text'),  -- SUMMARY unescaped, may be empty
+-- The summary (§4.4, Annex A): what a reader lists an item from without its
+-- body, one row per item whatever its kind, cascading with it. Written by the
+-- item's writer under Annex A; it references no object. `component` names the
+-- Annex A section the row follows, and a column another component owns stays
+-- NULL. A calendar resource is one VEVENT, VTODO or VJOURNAL set (Annex A.3 to
+-- A.5): a start is carried verbatim with its parameters, the one resolved
+-- instant being items.sort_key. A file (Annex A.7) is what its source or its
+-- writer states, the bytes saying nothing of it: one row per placement, so a
+-- file in two folders may carry two names, and `part` stays with the file
+-- wherever it is placed.
+CREATE TABLE summary (
+    item          INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+    component     TEXT NOT NULL CHECK (typeof(component) = 'text')
+                  CHECK (component IN ('mail', 'contact', 'event', 'task', 'journal', 'file')),
+    uid           TEXT CHECK (typeof(uid) IN ('text', 'null')),  -- mail: the bare Message-ID, angle brackets stripped; contact, event, task, journal: the UID verbatim; file: NULL
+    title         TEXT NOT NULL CHECK (typeof(title) = 'text'),  -- mail: the subject decoded (RFC 2047); contact: FN decoded (Annex A.2); event, task, journal: SUMMARY unescaped; file: its name in this collection; each may be empty
+    -- mail (Annex A.1); every address is also a summary_value row
+    sender        TEXT CHECK (typeof(sender) IN ('text', 'null')),  -- first From address, canonical (Annex A.6)
+    sender_name   TEXT CHECK (typeof(sender_name) IN ('text', 'null')),  -- its display name, decoded, or NULL
+    date          TEXT CHECK (typeof(date) IN ('text', 'null'))  -- RFC 3339 UTC Z at seconds precision, or NULL
+                  CHECK (date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    size          INTEGER CHECK (typeof(size) IN ('integer', 'null')) CHECK (size >= 0),  -- mail: the body's octets, else the source's figure (Annex A.1); file: the body's when held, else as stated; or NULL
+    attachment    INTEGER CHECK (typeof(attachment) IN ('integer', 'null')) CHECK (attachment IN (0, 1)),  -- 1 has one, 0 has none, NULL not examined
+    invitation    TEXT CHECK (typeof(invitation) IN ('text', 'null')),  -- the UID its first text/calendar part carries, NULL none or not examined
+    -- contact (Annex A.2); every EMAIL is a summary_value row
+    card_kind     TEXT CHECK (typeof(card_kind) IN ('text', 'null')),  -- KIND lowercased: individual, group, org, location; NULL when absent
+    org           TEXT CHECK (typeof(org) IN ('text', 'null')),  -- first ORG component, unescaped, or NULL
+    -- event, task, journal (Annex A.3 to A.5)
     location      TEXT CHECK (typeof(location) IN ('text', 'null')),  -- LOCATION unescaped, or NULL
     dtstart       TEXT CHECK (typeof(dtstart) IN ('text', 'null')),  -- the value verbatim
     dtstart_tzid  TEXT CHECK (typeof(dtstart_tzid) IN ('text', 'null')),  -- the TZID parameter, or NULL
     dtstart_value TEXT CHECK (typeof(dtstart_value) IN ('text', 'null')),  -- 'date-time' or 'date'
     dtend         TEXT CHECK (typeof(dtend) IN ('text', 'null')),  -- the value verbatim, or NULL
     recurring     INTEGER CHECK (typeof(recurring) IN ('integer', 'null')) CHECK (recurring IN (0, 1)),  -- 1 carries an RRULE or RDATE, 0 none, NULL not examined
-    until         TEXT CHECK (typeof(until) IN ('text', 'null'))  -- the RRULE's UNTIL verbatim, or NULL
-);
-
-CREATE TABLE task_summary (
-    item INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
-    uid           TEXT CHECK (typeof(uid) IN ('text', 'null')),
-    summary       TEXT NOT NULL CHECK (typeof(summary) = 'text'),
-    dtstart       TEXT CHECK (typeof(dtstart) IN ('text', 'null')),
-    dtstart_tzid  TEXT CHECK (typeof(dtstart_tzid) IN ('text', 'null')),
-    dtstart_value TEXT CHECK (typeof(dtstart_value) IN ('text', 'null')),
+    until         TEXT CHECK (typeof(until) IN ('text', 'null')),  -- the RRULE's UNTIL verbatim, or NULL
+    -- task (Annex A.4)
     due           TEXT CHECK (typeof(due) IN ('text', 'null')),  -- the DUE value verbatim, or NULL
     due_tzid      TEXT CHECK (typeof(due_tzid) IN ('text', 'null')),
     due_value     TEXT CHECK (typeof(due_value) IN ('text', 'null')),
     status        TEXT CHECK (typeof(status) IN ('text', 'null')),  -- STATUS uppercased verbatim, or NULL
     completed     TEXT CHECK (typeof(completed) IN ('text', 'null')),  -- COMPLETED verbatim (always UTC per RFC 5545), or NULL
     percent       INTEGER CHECK (typeof(percent) IN ('integer', 'null')),  -- PERCENT-COMPLETE, or NULL
-    recurring     INTEGER CHECK (typeof(recurring) IN ('integer', 'null')) CHECK (recurring IN (0, 1)),
-    until         TEXT CHECK (typeof(until) IN ('text', 'null')),
     priority      INTEGER CHECK (typeof(priority) IN ('integer', 'null')) CHECK (priority BETWEEN 0 AND 9),  -- PRIORITY, or NULL
     parent        TEXT CHECK (typeof(parent) IN ('text', 'null')),  -- the UID the first parent RELATED-TO names, or NULL
     mid           TEXT CHECK (typeof(mid) IN ('text', 'null')),  -- the Message-ID the first mid: URI names, bare, or NULL
-    created       TEXT CHECK (typeof(created) IN ('text', 'null'))  -- CREATED, else DTSTAMP, as an instant (Annex A.4), or NULL
+    created       TEXT CHECK (typeof(created) IN ('text', 'null')),  -- CREATED, else DTSTAMP, as an instant (Annex A.4), or NULL
+    -- file (Annex A.7)
+    media_type    TEXT CHECK (typeof(media_type) IN ('text', 'null')),  -- type/subtype lowercased, no parameter, or NULL
+    part          TEXT CHECK (typeof(part) IN ('text', 'null')),  -- an attachment's IMAP section in its message, or NULL
+    -- A column another component owns is NULL.
+    CHECK (component = 'mail'
+           OR (sender IS NULL AND sender_name IS NULL AND date IS NULL
+               AND attachment IS NULL AND invitation IS NULL)),
+    CHECK (component IN ('mail', 'file') OR size IS NULL),
+    CHECK (component <> 'file' OR uid IS NULL),
+    CHECK (component = 'contact' OR (card_kind IS NULL AND org IS NULL)),
+    CHECK (component = 'event' OR (location IS NULL AND dtend IS NULL)),
+    CHECK (component IN ('event', 'task', 'journal')
+           OR (dtstart IS NULL AND dtstart_tzid IS NULL AND dtstart_value IS NULL)),
+    CHECK (component IN ('event', 'task') OR (recurring IS NULL AND until IS NULL)),
+    CHECK (component = 'task'
+           OR (due IS NULL AND due_tzid IS NULL AND due_value IS NULL AND status IS NULL
+               AND completed IS NULL AND percent IS NULL AND priority IS NULL
+               AND parent IS NULL AND mid IS NULL AND created IS NULL)),
+    CHECK (component = 'file' OR (media_type IS NULL AND part IS NULL))
 );
 
--- The tasks naming a calendar item their parent, and those naming a mail, for
--- link_parents_to and link_sources_to (§14.2). Partial: most tasks name
--- neither.
-CREATE INDEX task_summary_by_parent ON task_summary(parent) WHERE parent IS NOT NULL;
-CREATE INDEX task_summary_by_mid ON task_summary(mid) WHERE mid IS NOT NULL;
+-- The mail inviting to a calendar item, for link_invitations_to (§14.2), the
+-- tasks naming a calendar item their parent, and those naming a mail, for
+-- link_parents_to and link_sources_to. Partial: most items name none.
+CREATE INDEX summary_by_invitation ON summary(invitation) WHERE invitation IS NOT NULL;
+CREATE INDEX summary_by_parent ON summary(parent) WHERE parent IS NOT NULL;
+CREATE INDEX summary_by_mid ON summary(mid) WHERE mid IS NOT NULL;
 
--- A task's CATEGORIES values (Annex A.4), decoded, `position` their 0-based
--- document order.
-CREATE TABLE task_category (
-    item       INTEGER NOT NULL CHECK (typeof(item) = 'integer') REFERENCES task_summary(item) ON DELETE CASCADE,
-    position   INTEGER NOT NULL CHECK (typeof(position) = 'integer'),
-    value      TEXT    NOT NULL CHECK (typeof(value) = 'text'),
-    PRIMARY KEY (item, position)
-) WITHOUT ROWID;
-
-CREATE TABLE journal_summary (
-    item INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
-    uid           TEXT CHECK (typeof(uid) IN ('text', 'null')),
-    summary       TEXT NOT NULL CHECK (typeof(summary) = 'text'),
-    dtstart       TEXT CHECK (typeof(dtstart) IN ('text', 'null')),
-    dtstart_tzid  TEXT CHECK (typeof(dtstart_tzid) IN ('text', 'null')),
-    dtstart_value TEXT CHECK (typeof(dtstart_value) IN ('text', 'null'))
-);
-
--- application/octet-stream, a file (Annex A.7): what its source or its writer
--- states, the bytes saying nothing of it. One row per placement, so a file
--- in two folders may carry two names. `part` stays with the file wherever it
--- is placed.
-CREATE TABLE file_summary (
-    item INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
-    name       TEXT NOT NULL CHECK (typeof(name) = 'text'),  -- the file's name in this collection, may be empty
-    media_type TEXT CHECK (typeof(media_type) IN ('text', 'null')),  -- type/subtype lowercased, no parameter, or NULL
-    size       INTEGER CHECK (typeof(size) IN ('integer', 'null')) CHECK (size >= 0),  -- octets: the body's when held, else as stated
-    part       TEXT CHECK (typeof(part) IN ('text', 'null'))  -- an attachment's IMAP section in its message, or NULL
-);
-
--- The people an item names, whatever its kind (§4.4, Annex A.6). One generic
--- table, since "everything about this address" is asked across every kind.
-CREATE TABLE item_address (
+-- The lists a summary carries (§4.4, Annex A), whatever the item's kind,
+-- `position` their 0-based document order within the role. The people an item
+-- names (Annex A.6) under the roles from, to, cc, bcc, email, organizer,
+-- attendee and contact (§13), `value` the canonical addr-spec and `name` its
+-- display name; a message's In-Reply-To ids (Annex A.1) under `in-reply-to`,
+-- bare; a task's CATEGORIES values (Annex A.4) under `category`, decoded.
+CREATE TABLE summary_value (
     item       INTEGER NOT NULL CHECK (typeof(item) = 'integer') REFERENCES items(id) ON DELETE CASCADE,
-    role       TEXT NOT NULL CHECK (typeof(role) = 'text'),  -- from, to, cc, bcc, email, organizer, attendee, contact (§13)
-    position   INTEGER NOT NULL CHECK (typeof(position) = 'integer'),  -- 0-based document order within the role
-    address    TEXT NOT NULL CHECK (typeof(address) = 'text'),  -- canonical addr-spec (§13)
-    name       TEXT CHECK (typeof(name) IN ('text', 'null')),  -- display name, decoded, or NULL
+    role       TEXT NOT NULL CHECK (typeof(role) = 'text'),
+    position   INTEGER NOT NULL CHECK (typeof(position) = 'integer'),
+    value      TEXT NOT NULL CHECK (typeof(value) = 'text'),
+    name       TEXT CHECK (typeof(name) IN ('text', 'null')),  -- an address's display name, decoded, or NULL
+    CHECK (role NOT IN ('in-reply-to', 'category') OR name IS NULL),
     PRIMARY KEY (item, role, position)
 ) WITHOUT ROWID;
 
--- The person axis: every placement naming one address, by role. The table has
--- no rowid, so the index carries the rest of its key and names each placement
--- without reading the row.
-CREATE INDEX item_address_by_address ON item_address(address, role);
+-- The person axis and the reply axis: every placement naming one address, by
+-- role, and every message replying to one id. The table has no rowid, so the
+-- index carries the rest of its key and names each placement without reading
+-- the row.
+CREATE INDEX summary_value_by_value ON summary_value(value, role);
 
 -- A reference from one item to another, whatever their kinds and wherever they
 -- are filed (§4.3, §14.2): an endpoint is a kind and a link id, so one held in

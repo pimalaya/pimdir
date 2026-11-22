@@ -1387,18 +1387,49 @@ for case in versions["cases"]:
 for order in ("earlier", "same", "later", "unknown"):
     require(f"versions.json: a case of a store {order}", any(case["order"] == order for case in versions["cases"]))
 
-# A summary row in any format names the columns of its table in the canonical
-# schema (STORAGE.md section 4.3), read off migrations/storage/, a list column
-# standing for its child table (mail_in_reply_to as in_reply_to, task_category
-# as categories), so a column misspelt or dropped in a format's $defs, or in
-# the columns read below, fails here.
+# A summary row in any format names the columns its component holds in the
+# canonical schema (STORAGE.md section 4.4), read off migrations/storage/: the
+# columns of `summary` a row of that component may set, which its CHECKs say
+# by refusing the others, under the names the formats keep (uid as a mail's
+# message_id, title as its subject, a card's fn, a calendar item's summary or
+# a file's name, card_kind as a card's kind), a list column standing for its
+# role of summary_value (in-reply-to as in_reply_to, category as
+# categories), so a column misspelt or dropped in a format's $defs, or in the
+# columns read below, fails here.
 store_schema = sqlite3.connect(":memory:")
 for migration in sorted((root.parent / "migrations" / "storage").glob("*.sql")):
     store_schema.executescript(migration.read_text())
-SQL_TABLES = {table: {row[0] for row in store_schema.execute("SELECT name FROM pragma_table_info(?)", (table,))} - {"collection", "link_id", "item"}
-              for table in (*TABLES, "file_summary")}
+COMPONENTS = {"mail_summary": "mail", "contact_summary": "contact", "event_summary": "event",
+              "task_summary": "task", "journal_summary": "journal", "file_summary": "file"}
+FORMAT_NAMES = {"mail_summary": {"uid": "message_id", "title": "subject"},
+                "contact_summary": {"title": "fn", "card_kind": "kind"},
+                "event_summary": {"title": "summary"}, "task_summary": {"title": "summary"},
+                "journal_summary": {"title": "summary"}, "file_summary": {"title": "name"}}
+
+
+def holds(component, column):
+    """Whether a summary row of `component` may set `column`."""
+    value = 0 if column in {"size", "attachment", "recurring", "percent", "priority"} else "2026-01-01T00:00:00Z"
+    try:
+        store_schema.execute("SAVEPOINT probe")
+        store_schema.execute(f"INSERT INTO summary(item, component, title, {column}) VALUES(1, ?, '', ?)"
+                             if column != "title" else "INSERT INTO summary(item, component, title) VALUES(1, ?, ?)",
+                             (component, value))
+        return True
+    except sqlite3.IntegrityError:
+        return False
+    finally:
+        store_schema.execute("ROLLBACK TO probe")
+        store_schema.execute("RELEASE probe")
+
+
+SUMMARY_COLUMNS = {row[0] for row in store_schema.execute("SELECT name FROM pragma_table_info('summary')")} - {"item", "component"}
+SQL_TABLES = {table: {FORMAT_NAMES[table].get(column, column) for column in SUMMARY_COLUMNS if holds(component, column)}
+              for table, component in COMPONENTS.items()}
 SQL_TABLES["mail_summary"] |= {"in_reply_to"}
 SQL_TABLES["task_summary"] |= {"categories"}
+check("every summary column a component holds", SUMMARY_COLUMNS,
+      {column for table, component in COMPONENTS.items() for column in SUMMARY_COLUMNS if holds(component, column)})
 check("the summary columns checks/vectors.py reads", TABLES, {table: SQL_TABLES[table] for table in TABLES})
 check("the file summary columns checks/vectors.py reads", FILE_SUMMARY, SQL_TABLES["file_summary"])
 for path in sorted((root / "schema").glob("*.schema.json")):

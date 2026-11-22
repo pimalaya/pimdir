@@ -65,26 +65,26 @@ INSERT INTO supersessions(item, by_item)
 SELECT (SELECT id FROM items WHERE collection = 'Cal' AND link_id = 'td'),
        (SELECT id FROM items WHERE collection = 'Cal' AND link_id = 'jn');
 
-INSERT INTO mail_summary(item, message_id, subject, sender, date, size)
-SELECT id, link_id, 'hello', 'alice@example.org', '2026-08-01T10:00:00Z', 10
+INSERT INTO summary(item, component, uid, title, sender, date, size)
+SELECT id, 'mail', link_id, 'hello', 'alice@example.org', '2026-08-01T10:00:00Z', 10
 FROM items WHERE link_id IN ('a@x', 'b@x');
-INSERT INTO mail_in_reply_to(item, position, message_id)
-SELECT id, 0, 'parent@x' FROM items
+INSERT INTO summary_value(item, role, position, value)
+SELECT id, 'in-reply-to', 0, 'parent@x' FROM items
 WHERE collection = 'INBOX' AND link_id = 'b@x';
-INSERT INTO event_summary(item, uid, summary, dtstart, dtstart_value)
-SELECT id, 'ev', 'Stand-up', '20260901T090000Z', 'date-time'
+INSERT INTO summary(item, component, uid, title, dtstart, dtstart_value)
+SELECT id, 'event', 'ev', 'Stand-up', '20260901T090000Z', 'date-time'
 FROM items WHERE link_id = 'ev';
-INSERT INTO task_summary(item, uid, summary)
-SELECT id, 'td', 'File the report' FROM items WHERE link_id = 'td';
-INSERT INTO task_category(item, position, value)
-SELECT id, 0, 'work' FROM items WHERE link_id = 'td';
-INSERT INTO journal_summary(item, uid, summary)
-SELECT id, 'jn', 'Notes' FROM items WHERE link_id = 'jn';
-INSERT INTO contact_summary(item, uid, fn)
-SELECT id, 'c1', 'Alice Example' FROM items WHERE link_id = 'c1';
-INSERT INTO file_summary(item, name, media_type, size)
-SELECT id, 'notes.txt', 'text/plain', 12 FROM items WHERE link_id = 'f1';
-INSERT INTO item_address(item, role, position, address, name)
+INSERT INTO summary(item, component, uid, title)
+SELECT id, 'task', 'td', 'File the report' FROM items WHERE link_id = 'td';
+INSERT INTO summary_value(item, role, position, value)
+SELECT id, 'category', 0, 'work' FROM items WHERE link_id = 'td';
+INSERT INTO summary(item, component, uid, title)
+SELECT id, 'journal', 'jn', 'Notes' FROM items WHERE link_id = 'jn';
+INSERT INTO summary(item, component, uid, title)
+SELECT id, 'contact', 'c1', 'Alice Example' FROM items WHERE link_id = 'c1';
+INSERT INTO summary(item, component, title, media_type, size)
+SELECT id, 'file', 'notes.txt', 'text/plain', 12 FROM items WHERE link_id = 'f1';
+INSERT INTO summary_value(item, role, position, value, name)
 SELECT id, 'from', 0, 'alice@example.org', 'Alice' FROM items
 WHERE collection = 'INBOX' AND link_id = 'a@x';
 INSERT INTO item_reference(from_kind, from_link_id, to_kind, to_link_id, role,
