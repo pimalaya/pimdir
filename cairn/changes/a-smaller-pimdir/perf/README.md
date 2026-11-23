@@ -48,3 +48,7 @@ The new binary holds the old one's level (every difference within noise). Behind
 | incr | 14 | the no-op, the incremental and the whole rewrite of index.hits |
 
 Each agent works on its own copy of io-pimdir db31aab and of the 517k store; the lead re-measures every patch head to head on core 12, keeps it only when it is better beyond noise with identical answers, runs the gate and commits.
+
+## Outcome (05:55)
+
+Five patches kept, every one better beyond noise with the 51 outputs identical: io-pimdir cde1896 (pages and threads), 187f31f (proven body hits), 6908421 (index.hits patched), f8eae7a (the query floor), efa2bc5 (the index build merges once). The final table at 1M (notmuch / round 4 / tonight, 20 runs, core 12) is in report.md: ahead of notmuch on 50 of 51 measures, the combined count a tie (three more pairs of 50 runs: 6.1/5.6, 5.0/5.1, 4.5/4.7 ms). Imports, quiet, core 12: 1M 750 s (403 s CPU) against notmuch 1,137 s (1,005 s); 517k 331 s (185 s) against round 4's 363 s (208 s) and notmuch's 522 s (483 s). Logs: .pimdir-night/perf/logs (vs3-x2-*.txt, imports-*.log, import-*.log).

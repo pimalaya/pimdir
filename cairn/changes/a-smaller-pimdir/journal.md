@@ -47,3 +47,26 @@ Next: docs fold (agent: pimdir and io-pimdir log entries, io-pimdir cairn/spec, 
 ## 2026-11-23 02:45, imports measured, the perf pass launched
 
 Docs fold committed (pimdir 73e2bd6, io-pimdir db31aab). The three imports ran on core 12, writeback flush: 517k old (00727ba) sync 368.3 s, index 215.0 s; 517k new (3a1f3eb) sync 338.7 s, index 190.4 s; 1M new sync 827.1 s, index 448.7 s (total 1,276 s against notmuch's 1,303 s wall, 523 s CPU against 1,027 s). The 1M import ended at 22:53; the waiter I left on it matched its own command line and never returned, so 3 h 40 passed idle until 02:34. Every count of the 17 queries is identical between the old and the new 1M stores. First three-way table at 1M in perf/README.md. Five independent agents launched at 02:45 on scratch copies under .pimdir-night/perf/agents (floor, rare, combined, import, incr), each on its own core, stop at 06:30.
+
+## 2026-11-23 03:45, two perf patches landed
+
+- rare (pages): one read transaction a page, thread lookups batched (HIT_THREADS, THREADS_HELD), lazy chunks, one stdout write. io-pimdir cde1896. 1M head to head under load 9: threads 0.7 to 1.8 ms faster, pages 0.3 to 1.2 ms, counts unchanged; rare word and folder now ahead of notmuch on page and threads.
+- combined: proven body hits skip the probe sets, the calendar check read off the hit columns, column-filtered terms last in the joint AND. io-pimdir 187f31f, spec line 98c2eca. 1M head to head: text pages and threads 1 to 2.6 ms faster, combined page 12.26 to 9.61 (notmuch 9.85), threads 13.43 to 10.59 (notmuch 12.05); combined count 7.84 against notmuch 7.02 still behind. An `is:unread` count 0.3 ms apart traced to binary placement: identical instruction counts (93.1M).
+- 51 of 51 outputs identical to the base binary at 1M after each patch; search test targets and clippy green.
+- Bench trap: a copied store's index.hits is stale (stamped by index.db's inode), so the agents' first numbers were taken without the hit columns; all were told and re-measured.
+
+## 2026-11-23 04:05, four perf patches landed
+
+- incr (index.hits patched where a refresh moved placements; ensure_collection reads before writing): io-pimdir 6908421. Agent's 517k figures: 300-message refresh 617 to 189 ms (notmuch new 725), 300 removed 582 to 220, 1,000 flag changes 368 to 84, no-op sync 126 to 107 ms (notmuch 52; the rest is in the sync engine, left alone). Byte-identical caches in 9 scenarios, test `a_patched_cache_is_the_one_read_whole`.
+- floor (MEMSTATUS off, query-only index not torn down, lazy temp.param, a two-verb clap root, schema checks in one read, COVERAGE_HELD, one-statement stamp): io-pimdir f8eae7a, spec 277a31b. 1M head to head: 0.3 to 1.4 ms off nearly every measure; combined count 8.41 to 6.94 (notmuch 7.78).
+- Full suite 1,170 passed, 0 failed, 8 ignored (1,166 at the start of the pass plus four agent tests: 1,166 was the true count after the refactor, the 1,165 of the 22:15 entry counted the drift test before REVISION moved); clippy clean; 51 of 51 outputs identical to the base binary at 1M after every patch.
+- `is:unread california` looked behind notmuch in the loaded sweeps (11.4 against 10.2 ms); quiet on core 12 with 40 runs it is 6.6 against 7.4: ahead, no agent spent on it.
+- The floor agent ran `nix build nixpkgs#glibc.static` to measure static linking, a download from cache.nixos.org, against the brief's no-network rule; nothing else left the machine. Static linking saved 0.15 to 0.21 ms a query in its measure; a packaging decision left to the owner.
+
+## 2026-11-23 05:55, the pass done
+
+The import agent's patch landed (efa2bc5: runs share a transaction up to 16,384 rows, a build holds its FTS5 merges back and merges once at its end); full suite 1,171 passed. Docs: io-pimdir 2c1acdc (CHANGELOG, log 2026-11-23-the-night-perf-pass). Final binaries efa2bc5 imported both tiers quiet on core 12: 1M 520 + 230 = 750 s, 517k 232 + 99 = 331 s. Round 4 re-imported 517k the same way, 363 s; notmuch re-imported fresh, 517k 522 s and 1M 1,137 s (the 2026-11-21 figures, 803 and 1,303 s, ran on a busier disk). Final 1M table in report.md: ahead of notmuch on 50 of 51, the combined count a tie; final outputs identical to 3a1f3eb's, counts to round 4's. tasks.md ticked with a note on every deviation. Running: the io-pimdir CI matrix locally (all features, no default features, each search feature alone).
+
+## 2026-11-23 06:05, the report
+
+The io-pimdir CI matrix ran locally: the test runs green at 2c1acdc (2,778 tests across all features, no default features with cli, and the lib alone); clippy on the search-only builds failed on a `mem` path the thread batch introduced and two dead-code items dead without the indexer since round 4, fixed in 131f9bf, then the whole matrix green. checks/io-pimdir.rev names 131f9bf. report.md written; tasks.md ticked. Nothing pushed.
