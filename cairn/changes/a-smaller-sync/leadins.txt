@@ -1,0 +1,107 @@
+open
+sync
+upgrade
+mutate
+rekey
+Source
+Engine
+Connector
+Run
+Projected placement
+Status
+Base
+Pending create
+Delivered create
+Provisional handle
+Origin
+Destination
+Tier
+Meta
+Server object id
+Page
+Round
+Delta
+Head
+Scope
+Coverage
+Resume cursor
+Change
+Outcome
+Refusal
+Properties are no part of a placement.
+Status
+Level
+Origin.
+Superseded.
+Destination.
+The same identity
+Enumerate
+A removal is stated, never guessed.
+!Members arrive named.
+A server object id names content.
+The compared fields are read raw.
+Files.
+Pages.
+The resume cursor
+The checkpoint
+Heads.
+Fetch
+Push
+!A relocation names the member it made.
+Outcomes.
+!An add accepted without a handle.
+The unguarded window.
+!The idempotency key.
+A candidate's change is derived before its write.
+The scope.
+!A narrowed listing says so.
+!A capped listing says so.
+Absence means deleted only in scope.
+Local changes push whatever the scope.
+!Which absences delete.
+!A sync never deletes on the server on its own account.
+A collection is deleted on a server only when enabled.
+Choosing the listing.
+Rounds.
+!Deletes are inferred once
+!A narrowed listing proves only what its enumeration lacks.
+!A capped listing proves no absence.
+!A mass absence parks.
+!An empty listing parks.
+Heads.
+A delta head
+A band head
+Creates wait for the page that lands them.
+The flag axis
+The content axis
+Conflict policy
+Deletes.
+Push direction and rights.
+!A refused delete
+A move
+!A delivered create waits for its arrival
+A delivered create is given up only on request.
+!Push discipline.
+!A refused change is held.
+Events.
+Identity is resolved once
+!A pending create is landed by its arrival.
+!A fetch moves the base.
+Linking instead of fetching.
+!A server object id decides where both state one.
+Claims are revisited.
+A conflict's body.
+Rows.
+A rekey runs the flag axis on the flags its listing states.
+A rekey missing most members parks.
+!A rekey from a capped listing parks on any absence.
+Absorbing a write
+Two bases.
+!Cross-source content
+A body not held.
+!A policy's loser is kept.
+Deletes propagate.
+!Propagation is hydration-safe.
+A per-source conflict is its own fact.
+The write keys another message apart.
+The version of the sync state.

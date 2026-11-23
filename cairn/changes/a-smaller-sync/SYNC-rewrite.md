@@ -1,0 +1,698 @@
+# Pimdir sync specification
+
+Status: sync-draft-15, requiring storage-draft-17, released together with it and the search part
+
+The pimdir standard's sync part: how one or more sources reconcile through a store ([STORAGE.md](./STORAGE.md)), so the store is an offline replica of each source and each sees the others' changes. It fixes what an engine derives from the store's rows and a source's answers and writes back.
+
+§12 states what an engine and a connector owe, STORAGE §10 to §12 and §14 what every writer owes the store, the write's interface among them.
+
+It fixes no protocol: what a connector hands the engine is §4, how it gets it (IMAP, JMAP, DAV) the connector's.
+
+[OVERVIEW.md](./OVERVIEW.md) §5 and §6, informative, explain the model; this part wins on any disagreement.
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in BCP 14 (RFC 2119, RFC 8174) when, and only when, they appear in all capitals, as shown here. Every statement of behaviour in this part is normative: a key word marks its requirement level, and a statement carrying none binds as one carrying MUST. Notes, examples and rationale are informative and marked as such: a paragraph opening with *Note:*, an instance of what a sentence states given in parentheses or after "for example", and a reason given with "so", "since" or "because", none of which adds a requirement. §n of STORAGE.md is written STORAGE §n.
+
+## Contents
+
+1. [Scope](#1-scope)
+2. [Terminology](#2-terminology)
+3. [The projection](#3-the-projection)
+4. [The remote seam](#4-the-remote-seam)
+5. [Sync](#5-sync)
+6. [Upgrade](#6-upgrade)
+7. [Mutate](#7-mutate)
+8. [Rekey](#8-rekey)
+9. [Several sources](#9-several-sources)
+10. [The load and the write](#10-the-load-and-the-write)
+11. [Test vectors](#11-test-vectors)
+12. [Conformance](#12-conformance)
+
+## 1. Scope
+
+An engine reads a store as one source, derives what each owes the other, and writes the result. Five verbs:
+
+- **open**: read the projection, no network;
+- **sync**: reconcile against a listing, a delta or a round of pages;
+- **upgrade**: raise items to their body, or revisit a claim;
+- **mutate**: stage a local edit offline;
+- **rekey**: rebuild a collection onto a new handle space.
+
+Every verb MUST be a pure function of the rows it loads and the answers it receives, its only effects a write batch (§10) and requests to the remote (§4).
+
+The store is the base of every merge (its bindings, STORAGE §4.3): this part defines no reconciliation of two sources against each other.
+
+No language or coroutine form is required. A collection of a media type outside STORAGE §13's kinds is recorded with no kind and never synced (STORAGE §14): an engine names none of its members.
+
+## 2. Terminology
+
+- **Source**: one remote a collection syncs with, named in `bindings.source` and `sources.source`.
+- **Engine**: the program that runs this part's verbs over a store as its owner (STORAGE §8, §17).
+- **Connector**: what answers an engine's requests for one source over one protocol (§4).
+- **Run**: one verb executed for one collection and one source: its load, the requests it makes, its batches (STORAGE §2) and the events it reports.
+- **Projected placement**: one source's view of one placement (STORAGE §2): the placement's flags, object, level, summary and sort key, the source's binding of it (handle, base and conflict columns) and the status the projection derives. Derived by the projection (§3), never stored, written back by the write (§10). This part writes it *placement* where no other is meant.
+- **Status**: what a placement owes: `Clean`, `Dirty` (a flag or content push), `Tombstone` (a delete), `Conflict` (a decision), `Created` (an append).
+- **Base**: what the source last agreed with its remote: flags, object, revision, and `base_present`, which alone says whether there is one (STORAGE §13).
+- **Pending create**: a `Created` placement the source binds under a provisional handle, a binding with no base, waiting for its add to be accepted.
+- **Delivered create**: a pending create recorded delivered (§4) once its `Add`, or a `Remove` relocating into it, was accepted stating no handle before any listing named the member: the source binds it under its provisional handle holding a base naming nothing, no flag set, revision nor body. It waits for its arrival (§5, §6).
+- **Provisional handle**: `U+0001` followed by the link id. No protocol hands out such a name, so it never collides with a member the next enumeration lists.
+- **Origin**: where the same source already holds a `Created` placement's identity and body, so its add is a server-side copy (§3).
+- **Destination**: where the same source holds a pending create of a `Tombstone` placement's identity, so its remove is a relocation (§3).
+- **Tier**: what a fetch returns, `Meta`, identity and summary, or `Full`, the body too (STORAGE §2).
+- **Meta**: what names a member without its body: the identity hint, the summary and address rows, and the `sort_key` STORAGE Annex A derives, and the member's server object id where its source states one (§4).
+- **Server object id**: the id a source's server gives a member's content, which it keeps while the content stays (RFC 8474's `EMAILID`, Gmail's `X-GM-MSGID`, JMAP's `Email/id`): opaque, and comparable only between bindings of one source (§4, §6).
+- **Page**: what one enumeration request returned, of a round, a head or a delta; §4 lists its fields.
+- **Round**: one complete listing of a scope, in one page or several, under an id drawn when it opens. It stamps the bindings it lists and closes when its last page lands (§5).
+- **Delta**: a listing of what changed since the checkpoint, one page, always the last.
+- **Head**: one page listed while a round is open, of what changed in the collection since the round began, so what arrives during a long round shows before it closes. A **delta head** lists from the round's checkpoint; a **band head** lists the members the source dates from the instant the round opened (§4, §5).
+- **Scope**: `[since, until)` on a message's summary `date`, either bound open: what a round lists, and the only place its absence means anything (§5). Mail only.
+- **Coverage**: the scope of the last round that closed, and when it closed: the scope the checkpoint serves (STORAGE §4.3).
+- **Resume cursor**: the connector's opaque position in an open round, landed with each page.
+- **Change**: what the engine asks a source to do, one of `Add`, `Remove`, `SetFlags` and `Update`, each with an idempotency key (§4). A **push** is a change sent, in a batch of them.
+- **Outcome**: a source's answer to a change, carrying what §4 says: `Accepted`; `Rejected`, a precondition the base failed; or `Refused`, the remote refusing the change itself for good.
+- **Refusal**: a `Refused` outcome recorded on the binding the change was pushed for, which holds that change (§5, STORAGE §13).
+
+An edit has three names, one per place it stands in: the **action** a producer queues (STORAGE §15.3), the **mutation** the engine stages for it in the store (§7), and the **change** a source is then asked to make (§4, §5).
+
+| Queue action | Mutation | Change |
+| --- | --- | --- |
+| `add` | `Add` | `Add` |
+| `set-flags` | `SetFlags` | `SetFlags` |
+| `update` | `Edit` | `Update` |
+| `remove` | `Remove` | `Remove` |
+| `copy` | `Copy` | `Add`, carrying its origin where the source holds one (§3) |
+| `move` | `Move` | `Remove`, carrying its destination where the source holds one (§3), and `Add` for a create no relocation delivered |
+
+An intent, `set-performer` and `set-property` stage no mutation and derive no change (STORAGE §15.3, Annex B.2). One mutation has no queue action: `Abandon` (§5, §7).
+
+## 3. The projection
+
+Placements are read from the store, never stored. For a collection and a source, the projection MUST yield one placement per item the source binds, and one `Created` placement per item the source lacks and the store holds a body for. A retained item (STORAGE §11) MUST be projected for nobody.
+
+**Properties are no part of a placement.** An item's properties (STORAGE §4.3) are local state no source carries: an engine never reads `item_property`, no projection, base, status or change holds a property, and none derives a push. A property added or removed stamps the item (STORAGE §4.5), which moves nothing an engine compares.
+
+
+**Status**, the first that applies:
+
+1. `Tombstone` when `items.deleted` is 1 and the source binds the item, whatever conflict stands; the content is kept so an edit still beats the delete (§5). A delete settles no conflict: the placement carries its binding's `conflict_revision` and `conflict_object`, a server edit its `conflict_revision` names beating the delete (§5), and the item's conflict stays on the item (§9). A tombstone whose binding has no base is a create the consumer withdrew: it derives no `Remove`, the write drops the binding and the item is retained (STORAGE §11).
+2. `Conflict` when `bindings.conflicted` is 1, carrying `conflict_revision` and `conflict_object`; or when `items.conflicted` is 1, two sources disagreeing on the body (§9), which every live binding of the item projects until an `Edit` or a `Remove` settles it (§7). Neither is downgraded but to a tombstone (rule 1).
+3. `Created` when the binding has no base, `base_present` 0, or when the source does not bind the item, `items.deleted` is 0 and `items.object` is present.
+4. `Dirty` when the flags differ from the base flags as sets, both known (STORAGE §13); or, for a mutable kind, when `items.object` is present and differs from `base_object` (a base naming no body differs from every body). A placement holding no body owes no body, whatever its base names.
+5. `Clean` otherwise.
+
+An unknown flag set (`flags_known` or `base_flags_known` 0) holds no opinion: neither an addition nor a removal. An unknown base is no base on the flag axis.
+
+An immutable kind never owes a body, its base adopting the shared one (§9).
+
+**Level** MUST be `Full` only when `items.object` is present, whatever `items.level` claims: an item whose body a remote change dropped projects at most `Meta`, and an upgrade refetches it.
+
+**Origin.** A `Created` placement carries an origin when the same source binds the same identity in another collection with a base present, under a handle that is not provisional, and, when the placement has a body, with that body as `base_object`. Its add is then a server-side copy from that handle rather than an upload.
+
+**Superseded.** A `Created` placement whose item superseded an item of its own identity in another collection (STORAGE §15.3) names the binding it may be moved from, which the load answers (STORAGE §14), when the same source binds that item with a base: its collection, its handle and its base revision. Unlike an origin it holds whatever body, written over the moved member (§4).
+
+**Destination.** A `Tombstone` placement carries a destination when the same source holds a pending create of the same identity in another collection, or a delivered one, named by that create's handle: the relocation its remove offers (§5).
+
+**The same identity**, for both, is the same `link_id`, or the one minted over the provisional handle the other derives (STORAGE §9): the key a `Copy` or a `Move` gives its create beside a live holder (§7). The bare key MUST be preferred.
+
+Origins and destinations are derived from bindings, never stored, so both read the same after a crash and after another source's write folded the item.
+
+## 4. The remote seam
+
+A connector answers three requests: enumerate, fetch and push.
+
+**Enumerate** takes the checkpoint, the scope (§5) and, resuming a round, its resume cursor, or, for a head, the checkpoint or the instant it lists from (below). It returns a page:
+
+| Field | On which pages | What it holds | The connector's duty |
+| --- | --- | --- | --- |
+| `items` | every page | every member with its handle, its known flags, an optional revision and its meta | MUST be sorted by handle in byte order and list each member once |
+| `vanished` | every page but a band head (below) | the handles the source states removed | below |
+| `complete` | every page | whether the page belongs to a round (every member of the scope listed across its pages, save what a narrowing filter cannot list and what a cap leaves out, §5) rather than to a delta | MUST be set only on a page of a round |
+| `last` | every page | whether it closes its listing, which a delta's one page always does | MUST be set only once its listing is exhausted, every member of the scope listed across the round's pages |
+| `cursor` | every page of a round but the last | an opaque resume cursor | MUST be handed with every such page |
+| `checkpoint` | the page where the source gives one | the checkpoint | |
+| `narrowed` | every page of a round | whether a date filter narrowed its listing (§5) | |
+| `enumerated` | the last page of a narrowed round, optionally | every handle the collection holds on the source, read by an enumeration no date filter narrowed (§5) | |
+| `capped` | every page of a round | whether the source caps what it lists of the collection (§5) | |
+
+**A removal is stated, never guessed.** A connector MUST put in `vanished` only a handle its source states removed (an IMAP `VANISHED`, a JMAP `destroyed`, a delta's removed entry). It MUST NOT state as vanished a handle it only failed to list: one a listing, a fresh delta or an enumeration it started again did not return. A stated removal is applied on any page, whatever the date, and no guard counts it (§5); a removal a connector would infer from its own listing is the engine's to infer under §5's guards, so the connector answers a round instead, handing `enumerated` where a filter narrowed it, and the absence is found in scope, counted and parked as any other.
+
+An engine MUST refuse a page that is neither `last` nor carrying a cursor: the run fails before that page's write, and the round stays open as the pages before it left it. An engine MUST sort an unsorted page and keep a duplicate's first entry.
+
+A connector whose checkpoint the source rejects because the handle space changed MUST fail the enumeration and name a rekey (§8), rather than answer a round of new handles.
+
+**Members arrive named.** A member's meta MUST come with it, as a `Meta` fetch would return it: the identity hint, the summary inputs and the `sort_key` of STORAGE Annex A. Nothing reaches the store unnamed.
+
+- Mail reads it in the listing itself, from the summary the source serves and the header fields Annex A needs, `Content-Type` among them.
+- A kind whose meta is the body (DAV) fetches each page's bodies (`multiget`) before handing the page over, and its members MAY carry the body, as a `Full` fetch does.
+
+**A server object id names content.** A connector MAY state, with a member's meta at a listing or a fetch, the member's server object id (§2), one kind of id per source, so two of its members state one id only for one content. It MUST state only an id its server keeps with the content, never one it derives from the content or a listing itself. The write records it on the member's binding (`bindings.server_object_id`, STORAGE §4.3) beside the meta it came with; a listing naming the member stating none clears it, a fetch stating none leaves it. Two ids are compared byte for byte and only between bindings of one source in one account. §6 reads it before linking a body.
+
+**The compared fields are read raw.** A message's `subject`, `date` and `sender` decide, compared byte for byte with a row another reading wrote, whether its member lands a create, joins an item, revives a row or links a body (§6, STORAGE §9). A connector MUST read the three raw, as the content carries them and by STORAGE Annex A.1's rules, where its source serves them raw, Annex A.1 naming each protocol's read. It MAY name its members from the values its source decodes itself, and MUST then read the three raw at least for every member whose decoded summary disagrees with a row holding its hint, before it hands the member over. How it learns of that row is its own, as a reader of the store (STORAGE §14.1) or otherwise; reading every member raw always meets this.
+
+Where a source serves a member nothing raw (Annex A.1 says which), the connector names it from what the source serves. Such a member may disagree with a row of the very message it is, and is then minted apart (§6): a missed dedup, which the engine reports where the row is this source's own create (§5).
+
+**Files.** A source syncing a folder (STORAGE §14.3) MUST state, for every member, an id its server keeps across a rename and a move, unique across the servers the source reaches. That id is the member's handle and its hint, so its link id. A server stating no such id is not a file source in this draft.
+
+The remote path is the folder and the member's name, which the connector derives. A rename on the server is the same handle listed under a new name: a summary write on the same placement. A move between two folders the source syncs is the member leaving one and joining the other under the same key, as a move of a message is.
+
+A file's meta is what its listing states, never its bytes (STORAGE Annex A.7): its decoded name, its media type and its length; the listing carries no body. A file stays at `Meta` until a `Full` upgrade fetches its bytes, which then fix its size. Its revision is its ETag (`getetag`), and a source stating none for a file MUST NOT push its content.
+
+A file is a mutable kind. An edit is a new body under the same key, pushed as an `Update` gated on the base ETag; a server edit is a pull; both is a conflict under the source's policy (§5). Under `Manual` a person keeps both (the local body saved as a new file with an `Add`, before an `Edit` adopts the server's) or picks one with an `Edit`. A local rename or move pushes nothing in this draft: no change names a file's name.
+
+**Pages.** A round MAY be answered in pages, newest first in the source's own recency order. Each page is one request (or one batch of requests) and one write (§5). A connector that does not page answers a round of one page.
+
+A connector chooses its page size within what the source accepts, small enough to resume cheaply on a slow network, and SHOULD lower it after a timeout or a `413`.
+
+**The resume cursor** is the connector's and opaque to the engine. A connector whose cursor the source rejects MUST fail the enumeration and name a restart (§5), rather than answer from the beginning as if it resumed.
+
+**The checkpoint** a round carries is the one taken when it began, where the source gives one up front, handed with the first page. What moves during the round is caught by the round's next head (below) or, once it closes, by the next delta. A source giving its checkpoint only on the round's last page hands it there, and that checkpoint covers the round itself.
+
+A connector states whether its checkpoint is **bound to the scope** it was made under: one the source made under a filter is; IMAP `CHANGEDSINCE` and JMAP's state, filtered locally, are not.
+
+**Heads.** A connector states which heads it lists: delta heads, band heads, both or none. A head is one page, checked against the scope as a delta is. It carries no resume cursor and never moves the round's.
+
+- A **delta head** takes a checkpoint and answers what changed since it, as a delta does: the members added or changed (each with its flags and meta), the handles the source states removed, and the checkpoint the source holds now, which it MUST carry. A source whose checkpoint arrives only with a round's last page has none to list from before that round closes.
+- A **band head** takes an instant and lists every member the source dates at or after it, less a margin of two days (the margin a received-date narrowing takes, §5). The date is an instant the source keeps for each member and never moves back: the member's last change where the source states it and can filter on it, else its arrival.
+- A band head carries no checkpoint and no vanished handle: a listing by date states no removal and proves none by an absence.
+
+A connector whose head position the source rejects MUST fail the head and name a restart, as for a rejected cursor, rather than answer a round. One meeting a moved handle space fails it and names a rekey, as a delta does (§8). One that cannot list the head it is asked for at all answers none.
+
+A connector listing band heads MUST list again, in the last page of every round, every member a band head of that round would list then, read no earlier than the checkpoint that page carries.
+
+A connector listing delta heads MUST read every page's members no earlier than the head before it. One reading a page's handles from an earlier listing reads their flags and meta anew, as every page does, and leaves out a member the source no longer holds in the collection. A page thus never lists a member as it stood before a removal a head stated.
+
+**Fetch** takes a tier and a batch of handles and returns, per handle, the identity hint and summary inputs of Annex A, at `Full` a body (inline or already streamed to its blob path, STORAGE §14), and the body's revision. A batch has no order: a connector MAY fetch concurrently and MUST key results by handle; the engine matches by handle.
+
+**Push** takes a batch of changes and returns an outcome each:
+
+- `Add { handle, link_id, flags, origin, supersedes, object }`: create by server-side copy from `origin` when present, else by uploading `object`; accepted with the assigned handle. A connector to a mutable kind MUST report the revision the member holds once accepted.
+  - With `supersedes` (§3), a connector whose source moves a member between collections MAY deliver it by moving that member into the collection, gated on its revision, then writing `object` over it; accepted with the moved member's handle and the revision the write left.
+  - A source answering the move as one it cannot do (`405`, `501`, or a `404` for the member it binds) MUST have the change delivered by an upload instead, as without `supersedes`. One refusing it for the member's identity rejects the change, as a refused upload would.
+- `Remove { handle, to, link_id, if_match }`: delete when `to` is absent or already holds `link_id` (§5); relocate into `to` otherwise.
+  - A delete takes the member out of the collection `handle` names, never out of another. A connector to a source naming one message by one id in several collections MUST take it out of that collection alone while the source holds it in another, and delete it for good only where it is held nowhere else.
+  - `link_id` is the tombstone's key, and MUST be absent when its destination is a create under a minted key (§3).
+  - A connector that cannot relocate MUST reject the change rather than delete.
+  - A delete of a member already gone is accepted: pushes are at least once (below), and a create delivered by a move (`Add`) takes the member it supersedes along.
+  - A connector MUST state, with an accepted `Remove` carrying `to`, whether it relocated the member or deleted it, `to` already holding `link_id`. Only a relocation delivers: the pending create its destination names (§3), when a listing can land it (§6), is recorded delivered (§2, `DeliverPlacement`, §10) in the write recording the outcome, and the target's listing lands it (§6). A delete leaves it pending, the target holding the identity under another binding or none. A create since landed, withdrawn or delivered is left as it stands. An owner whose consumer stages mutations while a push is in flight MAY record the create delivered before the relocation leaves: a delivered create stays its tombstone's destination (§3), so a relocation that never went is pushed again.
+  - **A relocation names the member it made.** A connector MAY state, with an accepted `Remove` that relocated, the handle the member now has in `to`, where its source answers one (an IMAP `COPYUID`, RFC 4315, which `UID MOVE` and `UID COPY` answer). The engine MUST then land the destination's create on that handle in the write recording the outcome, pending or delivered, whether or not a listing could land it (§6), as an `Add` accepted with its handle is (`LandPlacement`, §10): a `Superseded` drop of the provisional handle, the binding moved to the stated handle, and its base set to the flags and body staged on the create and to the revision the outcome states. It is never left delivered for a listing to land, so a later listing's other member stating its hint meets a based binding of this source under another handle and is minted apart (§6), never landed on in its place. The landing reports nothing, the relocation being the consumer's (§5). A create since landed or withdrawn is left as it stands, and one whose stated handle this source already binds in `to` is recorded delivered as without one. Without a stated handle, the paragraph above stands.
+- `SetFlags { handle, add, remove }`: add the flags of `add` and remove those of `remove`, leaving every other flag the member holds.
+  - The engine derives both from the placement's flags after the flag merge (§5), against the set the source holds (the one the run listed, else the base): `add` what the placement carries and that set lacks, `remove` what that set carries and the placement lacks.
+  - A placement whose flags are unknown pushes none, and one deriving two empty sets pushes nothing.
+- `Update { handle, object, if_match }`: replace a mutable body, gated on `if_match` where supported; accepted with the revision the member holds, on `Add`'s terms.
+
+**Outcomes.** A connector answers each change `Accepted`, on the terms above, `Rejected` or `Refused { reason }`, or leaves it unreported:
+
+- `Rejected`: a precondition the base failed (a stale `If-Match` answered `412` or `409`, a `STORE` refused under `UNCHANGEDSINCE`), which a later listing moves past.
+- `Refused`: the remote refusing the change itself, as it stands, whatever the base: a status naming the request (an HTTP status from 400 to 499 but 401, 407, 408, 409, 412, 423, 425 and 429, an IMAP `NO` naming the command), or an error naming a rule the change breaks (an append into a Graph folder other than Drafts, a floating time a calendar API refuses, a size exceeded, a collection the account may not write). `reason` is the text the remote gave, which the engine records once scrubbed (STORAGE §18).
+- A connector that cannot tell a refusal from a stale base MUST answer `Rejected`. A failure that is not the change's own is no outcome, and the change is left unreported: one of the transport (a timeout, a dropped connection, a `5xx`, a `408`, `425` or `429`), credentials the remote or a proxy refuses (a `401` or a `407`), a lock another client holds (a `423`, RFC 4918 §11.3), or a quota the account has exceeded (an IMAP `NO [OVERQUOTA]`, RFC 9208).
+
+**An add accepted without a handle.** A source that creates a member without saying which (an IMAP `APPEND` on a server without UIDPLUS, RFC 4315) is answered `Accepted` with no assigned handle. The engine then MUST record the create delivered (§2, `DeliverPlacement`, §10), its provisional binding, staged body and flags kept, no `Superseded` drop written and no `Created` reported, and so pushes it no second time. A create no listing can land (§6) is left pending instead, and MUST NOT be pushed again in that run.
+
+The next listing names the member, and the page naming it lands the create (§6), as for an add whose record was lost.
+
+*Note:* **The unguarded window.** A precondition guards a push only where the source enforces it. A source enforcing none leaves a window between the listing a push was derived from and the push. A change made on the server in that window is lost: a body under an `Update`, the member under a `Remove`, the flags a `SetFlags` names.
+
+**The idempotency key.** Every change carries a key naming it, so a connector logging keys recognises the replay of a push whose record was lost, and a chunk replayed after a crash (§5) applies once. The key MUST be derived as follows, so two engines over one store key one change alike:
+
+- FNV-1a, 64 bits (offset basis `cbf29ce484222325`, prime `100000001b3`), over a sequence of fields, each field's bytes followed by one `0x00` byte, rendered as sixteen lowercase hexadecimal digits.
+- The fields, in order: the collection id, the handle, the change as `add`, `remove`, `set-flags` or `update`, then the change's own. An optional value is the field `1` followed by the value's field, or the field `0` alone. A flag set is the field `unknown` when unknown, else the field `known`, the count in decimal ASCII, then each flag in code point order.
+- `add`: the link id (optional), the flags, the origin as `1`, its collection and its handle, or `0` alone, then the object hash (optional). `supersedes` is not part of it: a create delivered by a move or by an upload is one change. `remove`: `to` (optional). `set-flags`: `add`, then `remove`, each a flag set. `update`: the object hash.
+
+A precondition (`if_match`) is not part of the key: a retry of one operation is one operation. The key names a push within one run, not for ever: a flag set restored, or a body pushed again against a newer revision, is a new change under an old key.
+
+A connector logging keys MUST forget them once the checkpoint after their chunk has landed, and MUST NOT answer a key it remembers from an earlier checkpoint as a replay. §11's vectors carry the key of every push.
+## 5. Sync
+
+A sync reconciles one collection against one listing: a delta from the checkpoint, or a round of one page or several. Its **candidates** are:
+
+- for a round's last page: every projected placement and the page's members;
+- for a delta: the changed and vanished handles, plus every projected placement that is not `Clean`;
+- for a page before the last and for a head: its members and vanished handles alone.
+
+A `Created` placement is a candidate with no remote side. The engine MUST walk both sides in handle order. Every member a page carries is named in the page's write on §6's identity rules: minting decided against the whole collection, and a pending create landed rather than minted.
+
+**A candidate's change is derived before its write.** The axes below derive each candidate's change from its placement and its member as the run merges them, before the write folds the candidate into the shared item (§9). What that fold leaves the binding owing, the item's body a collection's policy kept over the member's, is pushed by the source's next run, never by this one.
+
+**The scope.** A source MAY sync a mail collection under a scope `[since, until)`, `until` open in the usual case. A member is in scope when its summary `date` (STORAGE Annex A.1) falls in it, or when it has no usable `date`.
+
+The `Date` header always decides. A received date is never stored and never decides.
+
+A connector MAY narrow its listing by the provider's received-date filter (such as JMAP's `after`) to the scope, and MUST then take it with a margin of two days below `since`. IMAP narrows with `SENTSINCE` and `SENTBEFORE` with a margin of one day.
+
+**A narrowed listing says so.** A connector narrowing a round's listing by any date filter MUST set `narrowed` on every page of that round, and MUST NOT set it otherwise. On the last page of a narrowed round it MAY hand `enumerated`: every handle the collection holds on the source, read by an enumeration no date filter narrowed (IMAP's `UID SEARCH ALL`, JMAP's `Email/query` filtered by the mailbox alone, Graph's message ids). A connector offering such an enumeration SHOULD hand it, on a band round's last page as on any other.
+
+**A capped listing says so.** A source may list at most a number of members of a collection, whatever it holds, so a member past the cap is missing from every round, not once. A connector knowing that the source caps a collection's listing, by the source stating it or by its configuration, MUST set `capped` on every page of that collection's rounds, and MUST NOT set it otherwise.
+
+The connector drops what its own check on the `Date` puts out of scope; the engine filters no page by date and names every member a page carries. A scope on a collection of another kind MUST be refused, naming the kind.
+
+**Absence means deleted only in scope.** A round MUST reconcile the placements in its scope alone: a placement out of scope that no page listed MUST NOT be dropped, pulled or pushed on the evidence of its absence. A removal the source states, a vanished handle, applies whatever the date (§4).
+
+**Local changes push whatever the scope.** Tombstones, moves, flag changes, creates and intents are the consumer's, owed to no listing: no scope holds them back, save the one create below.
+
+**Which absences delete.** An absence is a delete only when a closed, complete round of the source did not list a member in its scope (table C, below). That member is dropped `Deleted`, which marks the shared item deleted; every other source binding it then projects a `Tombstone` and pushes its `Remove` (§9), as for a removal a source stated.
+
+**A sync never deletes on the server on its own account.** A `Remove` MUST be derived from a tombstone and from nothing else: one the consumer staged (§7), or one a delete another source inferred or stated, or an `Abandon` staged for it (§7), left on the shared item (§9).
+
+A scope, a narrowing, a widening, an eviction (STORAGE §11.3) and whatever table C finds no absence derive none. What a sync infers from its own remote it applies to the store, never back to that remote.
+
+**A collection is deleted on a server only when enabled.** An engine mirroring collections between sources MUST NOT delete a collection on one source's server because another source no longer lists it, unless its configuration enables it, and then only when that collection is empty or every member of it was reconciled in the same run.
+
+**Choosing the listing.** The checkpoint serves the scope it was made under, which is the coverage (STORAGE §4.3), and any scope inside it. A run under a scope:
+
+1. resumes the open round when the round's scope is the one asked for and the round lists a band exactly when the run would: from its cursor, or from its first page when it holds none (a parked round, below), listing the round's head first (below);
+2. else opens a round over the scope asked for when no round has closed (no coverage, a checkpoint held without one included), when a round is open over another scope or listing a band where the run would not (or the reverse), or when the scope reaches outside the coverage;
+3. else runs a delta from the checkpoint, its listing checked against the scope asked for, and records that scope as the coverage when it is narrower (`SetCoverage`, STORAGE §10).
+
+In case 2, a connector whose checkpoint is bound to no scope MAY instead list only the band the coverage lacks, when that band adjoins the coverage. The round's scope is then the band, recorded as a band round when it opens (`OpenRound`, STORAGE §10). Its listing need carry no undated member, and the connector keeps its checkpoint and hands none with its pages, a head alone moving it (below).
+
+**Rounds.** A round MUST open in the write of its first page (`OpenRound`, STORAGE §10), which draws its id. Each page MUST be merged as a delta whose only removals are the vanished handles it carries, and MUST land in one write: its members named, its bindings stamped with the round's id after its upserts (`Stamp`) whether a member moved or not, its cursor and the checkpoint it carries recorded (`SetRoundCursor`).
+
+A round whose cursor the source rejects MUST restart: a round over the same scope opens under a new id, so the abandoned listing's stamps protect nothing, and the members it named are matched again by handle (a relisting, no fetch). A round belongs to its source: it stamps that source's bindings alone, and another source's stamps, round and coverage are its own.
+
+**Deletes are inferred once**, when the last page lands, and in scope only, as table C says. A member found absent is handled as the deletes below say. A round resumed from the store and one the run opened MUST infer the same deletes. A create under a provisional handle, pending or delivered, is no member a listing names under it and is never absent, nor counted among the based bindings below.
+
+**A narrowed listing proves only what its enumeration lacks.** A narrowed round whose last page hands no `enumerated` MUST find no member absent: a removal is applied there only when the source states it, a vanished handle, and every other member is left as it stands, neither dropped nor pushed, for a stated removal, an unnarrowed round or a later enumeration to decide.
+
+**A capped listing proves no absence.** A round whose last page is `capped` (§4) MUST find no member absent: a removal is applied there only when the source states it, a vanished handle.
+
+Table C, what a listing's absence proves (*absent* is a delete as above, *no* none):
+
+| Listing | Stated removals | An in-scope dated member unlisted | An undated one | An out-of-scope one | A provisional create | The guard | Closes | Reports |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| delta | applied | no | no | no | no |  |  |  |
+| delta head | applied | no | no | no | no |  | never the round |  |
+| band head | none (§4) | no | no | no | no |  | never the round |  |
+| a page before the last | applied | no | no | no | no |  | no |  |
+| the last page of a whole-scope round | applied | absent: every based binding of this source the round did not stamp whose item's `date` falls in the round's scope, its last page narrowing it as below (STORAGE §10) | absent likewise, the `date` unknown | no | no | mass absence, empty listing | unless parked |  |
+| a band round | applied | absent as above | MUST NOT be inferred deleted: undated members are reconciled by rounds over a whole scope and by deltas, a stated removal applying to them whatever the round | no | no | same | unless parked |  |
+| `narrowed`, with `enumerated` | applied | MUST be absent only when the `enumerated` list that page hands lacks its handle, and never when it holds it, whatever its `date` | same, but in a band round (above) | no | no | same | unless parked |  |
+| `narrowed`, without `enumerated` | applied | no | no | no | no |  | as any round does | the run MUST report how many based bindings it left unlisted, counted as the deletes are |
+| `capped` | applied | no | no | no | no |  | as any round does | the run MUST report the unlisted count, counted as the deletes are, as a narrowed round handing no enumeration does |
+| interrupted between pages, or restarted | what landed kept | no | no | no | no |  | no: resumes from its cursor, or opens anew (Rounds) |  |
+| parked | applied | no: it drops nothing | no | no | no | the one parking it | no: it writes no `CloseRound` | the park (below) |
+| rekey | §8 | §8 | §8 |  | no, nor counted (§8) | §8 |  | §8 |
+| capped rekey | §8 | §8 | §8 |  | no, nor counted (§8) | §8 |  | §8 |
+
+The round closes in the write after its last chunk (`CloseRound`, STORAGE §10):
+
+- the checkpoint it carries becomes the source's: the last page's when that page carries one, else the latest a head or an earlier page landed, the old one kept when it carries none;
+- the coverage becomes the round's scope, or for a band round the span of the band and the coverage it adjoins, stamped with the instant.
+
+**A mass absence parks.** A round whose last page finds absent more than half of the based bindings of this source in the round's scope, counted as above, MUST NOT close when those bindings number at least 20, unless the run carries the `accept_absences` option.
+
+**An empty listing parks.** A round that named no member, none of its pages nor heads listing one so that no binding carries its id once its last page lands, MUST NOT close while it finds absent any based binding of this source, whatever their number, unless the run carries `accept_absences`.
+
+A parked round's last page lands as a page before the last does (members named and stamped, the checkpoint it carries recorded with no cursor, `SetRoundCursor`), and the run reports the round parked with the absent and the bound counts. Nothing records the park but the open round. A later run resumes it from its first page, the round holding no cursor, and decides again; a run carrying `accept_absences` closes it as above.
+
+**Heads.** A run resuming an open round SHOULD list the round's head before the round's next page when the connector lists heads (§4), and MAY list one between two pages; never between a round's last page and its close, and never before a round's first page has landed. The head is:
+
+- a delta head from the round's checkpoint, or, for a band round, which carries none of its own, from the source's checkpoint, when there is one and the connector lists delta heads;
+- else a band head from the instant the round opened (`round_started_at`), when the connector lists band heads;
+- else none, and the round resumes as it would without.
+
+A head is checked against the scope the run asks for, not the band a band round lists.
+
+A head is merged as a page before the last (above), a vanished handle dropped at once, whatever its date, as the deletes below say. It lands in the write after the chunks of its pushes:
+
+- **A delta head** stamps the bindings of the members it listed with the round's id after its upserts (`Stamp`). It records the checkpoint it carries as the round's (`SetRoundCursor` with no cursor, the page's staying). A member it named whose removal it has not seen yet is the next head's, or the next delta's once the round closes on that checkpoint.
+- **A band head** stamps nothing and records no checkpoint. A member it named is decided by the last page, which lists again what the band holds (§4), the rest being found absent.
+
+A head never moves the round's cursor, scope or coverage, derives no `Add` (creates wait for the round's last page, below) and infers no delete from an absence. A member a head named and a later page lists is one member under one handle, refreshed as any listed member is. A page listing a member a delta head stated removed lists it present again, and names it as any page does.
+
+A head whose position the source rejects restarts the round over the scope the run asks for, never a band: the checkpoint the round would close with is void, and the round, under a new id, takes a fresh one from its first page.
+
+**Creates wait for the page that lands them.** An `Add` MUST NOT be derived before the last page of an open round has landed, a head's write included, nor in a delta before its members are named, since a member a page carries may be that create's own arrival (§6), and pushing before it lands would make a second copy. The page naming it lands the create (§6), and the run pushes what is left.
+
+The `Add` of a pending create carrying no origin MUST NOT be derived by a run whose scope excludes its `date`: it may be an arrival no page of that scope lists (a relocated message keeps its `Date`). It waits for a round over a scope holding it, and an engine SHOULD report it while it waits.
+
+**The flag axis** merges element-wise over `(local, base, remote)` and never conflicts. A flag is in the result when both sides carry it, or when one side carries it and the base does not (an addition); it is out when the base carries it and either side does not (a removal). With no base, the result is the union of the two known sets.
+
+It MUST run for every placement present on both sides, one whose content axis derived a push included. One handle yields at most one change, so the flag axis then withholds its push and still merges and writes. A content push accepted in the same run MUST rebase the placement the flag merge wrote, never the one read before it.
+
+The flag axis leaves the status alone while the content axis still owes a push, and leaves an unresolved conflict alone.
+
+**The content axis** applies to a mutable kind, which reports a revision. Mail reports no revision and never reaches this axis. A file (STORAGE §14.3) is mutable: a connector to a folder MUST report a revision, an edit being a new body under the same key. A local body the base does not hold is an `Update` gated on the base revision.
+
+A placement holding no body (a pull having emptied it) owes nothing, whatever its base names, until the upgrade refetches it. One holding a local body over a base that names a revision and no body (an edit staged after such a pull) MUST derive no `Update`, nor the `Remove` a move's staged edit rides ahead of (below): the body the server holds at that revision is one nobody has read, and pushing over it would lose it unkept. It waits for the upgrade, which fetches that body into the base (§6), after which the local body is an edit over a body read. A placement whose local body the run keeps, pushed or conflicted, keeps that body's summary.
+
+Both is a conflict, resolved by the source's policy, when the local body is the binding's own: the item's body the one the binding last agreed with the shared item (`shared_object`, its base until it folded once, §9), an edit made through it. A local body another source folded into the item since, the item's body differing from that one, is no edit of this binding's but propagation it owes: whatever the source's policy, `KeepLocal` aside, the member is pulled and the write folds it, the divergence settled by the collection's `conflict` (§9).
+
+**Conflict policy** is the source's, settling it against its own remote; the collection's `conflict` (STORAGE §4.3) is the other axis, settling the shared item between sources (§9):
+
+- `Manual` (default) marks the binding conflicted with the observed revision, and records the diverging body in `conflict_object` when the member carries it, else asks the upgrade for it (§6).
+- `PreferRemote` pulls, the local edit it drops kept as a retained item and reported (§9). A member carrying no body is pulled as any pull is, the item emptied for the upgrade to fetch: nothing is written to the remote, and the local edit is kept.
+- `PreferLocal` keeps the member's body and pushes the local one over it. In a write that commits before the push, the binding's base adopts the observed revision and the member's body, as a person's `Edit` adopts a conflict (§7), and that body is kept as a retained item, reported `Overruled` (§9); the local body, an edit over that base, is then pushed gated on the observed revision. A push rejected, interrupted or replayed finds the body kept and the base moved, so nothing is kept twice, and one that landed unrecorded is read back as the push whose record was lost (table A). It falls back to `Manual` when content pushes are forbidden.
+- `KeepLocal` is `PreferLocal` for a source the store is authoritative over, a copy the store writes from its other sources: a remote revision the base does not hold is a divergence whether or not a local body is staged, so a change made on that remote alone is never pulled. It is settled as `PreferLocal` settles a both-changed case, the store's body, the staged edit or the base's, pushed over the member's, which is kept and reported `Overruled`. A placement holding no body has nothing to keep and pulls as any. It falls back to `Manual` when content pushes are forbidden, the divergence recorded rather than pulled.
+
+No policy pushes over a body nobody has read. Table A, the source's policy by case:
+
+| Case | `Manual` | `PreferRemote` | `PreferLocal` | `KeepLocal` |
+| --- | --- | --- | --- | --- |
+| remote changed (a revision the base does not hold), body carried | a pull: the member's meta becomes the summary, address rows and sort key, and its body the body and the base at its revision, as a fetch's does (§6) | a pull | a pull | a divergence (above) |
+| remote changed, no body carried | a pull, the member carrying none dropping the local body and lowering the level to `Meta` | same | same | as both changed, no body carried |
+| both changed, body carried | the policy (above) | same | same | same |
+| both changed, no body carried | the policy (above) | the policy (above) | MUST be recorded as `Manual` records it, conflicted at the observed revision with no `conflict_object`, the upgrade fetching that body settling it by the policy then (§6) | same, and so MUST a remote-only change |
+| a `Conflict` placement carrying no `conflict_revision` (the item's conflict, §9) meeting a revision its base does not hold | MUST mark the binding conflicted with that revision and ask for the diverging body, reported `Conflicted` | same | same | same |
+| a fold (above) | pulled, the write folding it | same | same | settled as any remote change, the store being authoritative |
+| an equal body: a member carrying, at a revision its base does not hold, the very body the placement holds over that base | no divergence, whatever the policy: the binding adopts the listed revision and that body as its base; nothing is recorded, pushed or reported | same | same | same |
+| a conflict meeting a newer revision than its `conflict_revision` (a `Conflict` placement) | the new one recorded and the `conflict_object`, which described the old revision, dropped; the upgrade fetches it anew (§6) | same | same | same |
+| a body read later by the upgrade | one equal to the placement's own is no divergence (the push whose record was lost had landed): the binding adopts the revision and body as its base and the conflict clears; any other is settled as §6 says | same | same | same |
+| a tombstone and a remote edit | as Deletes says | same | same | same |
+| an arrival landing a create | as §6 says | same | same | same |
+| content pushes forbidden |  |  | falls back to `Manual` (above) | falls back to `Manual` (above) |
+| no body held | owes nothing (above), and pulls as any placement does | same | same | same, having nothing to keep (above) |
+
+**Deletes.** A `Tombstone` derives a `Remove`, carrying its destination when it has one (§3).
+
+A tombstone an add superseded, whose created item is still a pending create (STORAGE §15.3; the load names it, STORAGE §14), is **held**: it derives no `Remove`, nor the `Update` a move's staged edit rides ahead on, and is not dropped for it. A remote edit over it still revives it.
+
+Once that create is accepted, withdrawn or gone, the hold lifts and the `Remove` is a plain delete, no pending create of its identity being left to relocate into. A create delivered by a move took the member along, so that delete finds it gone and is accepted (§4).
+
+A member a round found absent, or a vanished handle, is dropped with reason `Deleted` (§10), unless its placement holds a body its base does not: a local edit the remote never saw. That placement is re-staged instead as a pending create under a provisional handle, its binding kept without a base, and the next run adds it.
+
+A remote edit over a local tombstone MUST revive it and pull; a tombstone also holding a local edit is the both-changed case and follows the policy. A tombstone whose binding is conflicted holds such an edit, the one its `conflict_revision` names, whether or not the run lists the member: it MUST derive no `Remove`, and is revived or follows the policy as a listing at that revision would have it (§3).
+
+A revision the tombstone's base does not name is a remote edit, an enumeration carrying no body to say otherwise. A move whose staged edit was pushed ahead of its remove, and whose push record was lost, is therefore abandoned rather than half-applied: the member stays in the source, live and clean at the pushed revision, and the consumer restages the move.
+
+**Push direction and rights.** A source has a master `push` switch and four rights: `flags`, `content`, `add`, `remove`. With `push` false nothing is pushed and remote changes are still pulled. A change a right forbids stays pending while the others propagate. A rejected or a refused push is pending like any other and follows no policy.
+
+**A refused delete**, one the source's rights forbid, is decided per collection from the other sources syncing it, any holding a binding or a checkpoint there:
+
+- Beside another source the tombstone is held, and the other source pushes the delete. The row stays in the trash view until that source has dropped it (STORAGE §11).
+- A source alone in the collection reverts the delete, and the placement lands on what it still owes.
+
+**A move** is a `Created` placement in the target plus a `Tombstone` in the source, each derived by its own collection's sync in either order and each able to deliver alone. An engine MUST NOT drop either half for the other.
+
+The create delivers by copy from its origin, or by upload when the store holds the body. The remove delivers by relocating into its destination, which the connector MUST reject when it cannot relocate (§4). It is a plain delete once the destination holds the identity the move delivered, a copy the target held before the move not being that delivery (§4). A create landed first, by its copy from the origin, leaves no destination, and the remove is then a plain delete.
+
+A relocated member is landed on the handle the relocation stated, in the write recording it (§4). One whose relocation stated none is listed by the target's next listing under a new handle, and the page naming it lands the create (§6); until then the create waits, as every create waits for the page that lands it.
+
+A relocation accepted stating no handle makes that create a delivered one (§2, §4). **A delivered create waits for its arrival**: until the page naming its member lands it (§6), it MUST derive no change, its handle naming no member to push one to, nor one an upgrade could fetch. It derives no `Add`, its add being made, and no `SetFlags` nor `Update`; tombstoned by a `Remove` or a `Move` staged on it (§7), it derives no `Remove`, the delete or the relocation being **held** for that page, never withdrawn. No absence finds it (above), and no run drops it but the one landing it.
+
+A delivered create waits whatever the listings say: a round landing it on none of its pages proves nothing of a member that may have arrived after its first pages, or under another binding when the source deleted rather than relocated (§4). An engine SHOULD report every delivered create its run holds while it waits, as a create waiting for its scope is reported.
+
+**A delivered create is given up only on request.** One whose member never arrives waits for ever, and what was staged on it with it. No run gives it up, no round's absence and no count of runs: a person does, by an `Abandon` (§7) the owner stages on their request as it evicts (STORAGE §11.3), which drops its binding and leaves the item retained, reported by its handle.
+
+Landed, a delivered create keeps what was staged on it, a tombstone included, and the run pushes what it owes against the handle it landed on.
+
+**Push discipline.** A push MUST be confirmed before local state moves. `Accepted` rebases the placement and, for an add assigned a handle, supersedes the provisional handle in the same batch (one assigned none is delivered, §4), and, for a relocation stating the handle its member has in `to`, lands the destination's create on it in that batch (§4). `Rejected`, `Refused` or unreported leaves it pending.
+
+**A refused change is held.** The write recording a `Refused` outcome MUST record the refusal on the binding the change was pushed for (`RefusePlacement`, §10): the reason, the change's key (§4) and when, replacing a refusal standing there. A placement whose derived change carries the key a refusal standing on its binding names MUST NOT push it: the change is held, pending, neither dropped nor reverted, for as long as that refusal stands. A change derived since under another key (a body edited, a flag set changed, the item moved) is pushed as any other, and its own outcome replaces or clears the refusal.
+
+The write recording an accepted push of a binding a refusal stands on MUST clear it (`ClearRefusal`, §10). A refusal goes with its binding: a create withdrawn (§7) or landed (§6), a member dropped, a handle a rekey renumbered. A create the source binds not, one the store offers it (§3, §9), is bound by the write recording its refusal: that write MUST upsert it as a pending create of this source, under the provisional handle it was pushed under, with no base and the item's flags and body, before the `RefusePlacement`. It is from then the source's own pending create (§2), on every rule above and below: held by its key, reported every run, landed by a listing naming its member (§6), withdrawn by a `Remove` or with the item's delete (§3, §7), and pushed again once its key changes.
+
+Pushes go in bounded chunks, each followed by the write recording its outcomes, and the owner MUST NOT collect between two chunks (STORAGE §5). The checkpoint, a delta's or the one a round closes with, MUST land in the write after the last chunk and in no earlier one. A page's cursor and the checkpoint an open round carries are not the source's checkpoint, and land with the page or the head carrying them.
+
+**Events.** An event MUST be reported only once the write recording it has committed, and every event a committed write records MUST be reported: a run failing between two writes reports what the writes before it committed and nothing of the one that failed.
+
+A sync reports per item, in order, what the remote changed locally and what the run settled:
+
+| Event | Reported on | Names |
+| --- | --- | --- |
+| `Added` | a member named, one joining an item other sources bind included (§6), never `Created`, which names this source's own create | |
+| `Disagreed` | after its `Added`, a member minted apart from a pending or a delivered create of this source holding its hint, its summary not agreeing with the create's (§6): the create is then pushed beside it, or, delivered, goes on waiting, a decoded summary among the causes (§4) | the member by its handle and the create by its link id |
+| `FlagsChanged`, `ContentChanged` and `Vanished` | a pull, `ContentChanged` naming a body the item took, a joining member's a policy adopted included (§9), and never one a policy kept apart, the item keeping its own | |
+| `Conflicted` | a divergence, the source's own or one its write records on the item (§9) | |
+| `Overruled` | a body a policy did not adopt (§9), or a revive set aside (§6) | the retained item that keeps it |
+| `Abandoned` | a delivered create an `Abandon` gave up (§7) | its provisional handle |
+| `Created` | an accepted add, and a create a listing landed | the assigned handle; the handle the listing lists |
+| `Refused` | a change the remote refused this run, and one the run holds for a refusal standing (above): every run reports a refusal for as long as it holds its change; a held change's is reported with the write after its merge, which records it as standing | the handle and the reason |
+
+A run also reports a round it parked (above), as a rekey reports itself parked (§8). A pushed flag, body or delete reports nothing.
+
+Only a sync and a rekey report events: a rekey reports `Added` for a member no old binding resolves to (§8), its checkpoint listing it no more, and an upgrade and a mutation report none, save `Overruled`, which any verb whose write kept a body no one asked to lose reports, and `Abandoned`, which the mutation giving a create up reports.
+## 6. Upgrade
+
+An upgrade raises placements to `Full`, or revisits at `Meta` a claim the row does not hold. A listing names every member at `Meta` (§4); hydration is what a consumer runs for the members it wants. The identity rules below are those a page names its members by.
+
+**Identity is resolved once**, at the first meta carrying a hint, a listing's or a fetch's; a later one MUST NOT re-identify a linked placement of an immutable kind. A mutable resource whose later meta states another hint under the same handle is a new identity there, on the terms STORAGE §9 sets for a changed `hash:` key: the old binding is retired and the resource keyed afresh.
+
+Naming a member inserts its item and binding in the write of the page that lists it. Its key is the one STORAGE §9's table gives for what holds its hint in the collection: the hint when free, a pending create of this source landed (below), an item other sources or none bind joined, a tombstone or a retained row revived, and a key minted over the member's handle, `dup:<hint>#<handle>`, when this source already binds the hint under another handle or the row holding it is another message (below), minted again over a held key.
+
+A member of a mutable kind reviving a retained row without carrying a body revives it holding none, at `Meta` (STORAGE §11.1): the body the row held is kept as a retained item keyed over the member's handle and reported `Overruled`, never left as the item's body.
+
+For mail, a hint the collection holds names the row holding it, whatever that row is, only when the member's summary agrees with the row's as STORAGE §9 says: on `subject`, `date` and `sender` (STORAGE Annex A.1), which a connector reads raw wherever its source serves them (§4), compared byte for byte, `NULL` matching `NULL`, and with a retained row on `size` too where both state one, its body becoming the member's unread as a link's does (below). A member disagreeing is another message reusing the `Message-ID` and MUST be minted the same way, never joined, landed nor revived. A step whose load cannot see that row leaves it to the write, which enforces it (STORAGE §14).
+
+A member minted apart from a pending or a delivered create of this source MUST be reported `Disagreed` (§5): that create is no longer landed by it.
+
+A hint another collection of the account holds assigns no key here, yet the same agreement guards what the two rows would share (STORAGE §9): a member disagreeing with that row draws a `seq` of its own (STORAGE §9.1) and links none of its body (below).
+
+Minting MUST be decided against the whole collection and from the handles in byte order, not reply order, a page or an upgrade loading the hints it carries by key (§10) before it assigns any.
+
+**A pending create is landed by its arrival.** A hint a page or a fetch carries that the collection holds as a pending create of this source (§2) or as a delivered one, keyed by the hint or by the hint minted over the provisional handle it derives (§7), the bare key first, is that create delivered: by a relocation (§5), by an accepted add whose record was lost, or by another client. The engine MUST land it rather than mint; only a hint held by a based binding of this source other than a delivered create, or by an item whose summary names another message (above), is minted. A create a relocation landed on the handle it stated (§4) is such a binding: a member stating its hint under another handle, another message reusing its `Message-ID` in the target among them, is minted, never landed in its place. A create keyed by a key minted over a member's handle (`dup:<hint>#<handle>`, carried by a `Copy` or a `Move` of that member) is landed by no listing: no source states such a key (STORAGE §9).
+
+Landing is a `Superseded` drop of the provisional handle in the same batch, the binding moved to the listed one, and the base set to the flags the listing or the fetch reported and, for an immutable kind, to the staged body. A delivered create tombstoned since (§7) lands as a tombstone, and the run pushes its `Remove` against the listed handle (§5), relocating into the destination the store derives for it then (§3), if any: one whose destination landed first derives none, and its `Remove` is a delete (§4).
+
+For a mutable kind the base takes the listed revision, and the body when the listing or the fetch carried one. A carried body equal to the staged one settles the create; one differing is the content axis's both-changed case (§5).
+
+An arrival carrying no body is that case as well, its incoming body unknown, and the engine MUST NOT push the staged body over it. A delivered create tombstoned since is no exception: the listed revision is one its base does not name, so by §5's rule for a tombstone it is a remote edit over the tombstone, which revives it. It lands live, recorded as below, and its staged `Remove` is not pushed: the delete is the person's to stage again once the upgrade has read what the server holds.
+
+Whatever the source's policy, the binding is then recorded as `Manual` records a divergence: conflicted at the listed revision with no `conflict_object`, the base at that revision naming no body, and reported `Conflicted` beside the `Created` of the landing.
+
+The upgrade then fetches the body (below). It clears the conflict when it equals the staged one (the add whose record was lost), and is otherwise settled by the source's policy as a carried body would have been (table A, §5), `PreferRemote`'s dropped body and the server body `PreferLocal` pushes over kept and reported (§9). No policy chooses between a body and one nobody has read (§9). The flags and body staged on the create stay, so an edit made on it still pushes.
+
+**A fetch moves the base.** A fetch carrying a body over a placement holding no local edit sets `base_object` to that body and `base_revision` to its revision, whatever the placement's level was.
+
+Over a placement holding a local edit (a body its base does not hold), the fetched body lands as the base and the local body stays when the revision is the base's; the both-changed case applies when it is not.
+
+**Linking instead of fetching.** A `Full` upgrade of an immutable kind asks the store's body lookup (STORAGE §14) for the placement's key, which answers each row of the account holding a body under it with that body's size, the row's `subject`, `date` and `sender`, and the server object id the run's source states on its binding of that row (§4). It MUST adopt a body, recording it as the base too, only from a row that agrees with the placement's summary, the one the source served, as STORAGE §9 says: on `subject`, `date` and `sender`, compared byte for byte, `NULL` matching `NULL`, and on `size` where the placement states one, against the body's octets. Else it fetches.
+
+**A server object id decides where both state one.** Where the placement's binding states a server object id and the row's binding of the same source states one too, the upgrade MUST adopt the row's body only when the two are equal, byte for byte, whatever the summaries agree on. Where either states none, the agreement above alone decides.
+
+A row of another collection holding the key under another subject, date or sender is another message reusing the `Message-ID`, and its body is never linked, whatever its size: a placement stating none is linked on the three alone. A row holding no summary agrees with nothing.
+
+A source stating a size that is not the octets (Annex A.1) links only where the two happen to agree.
+
+A mutable placement, a conflicted one, and one under a writer-derived key MUST be fetched, never linked. A linked placement holds the body as read: its summary takes the body's size, attachment mark and invitation (STORAGE.md Annex A.1), not its listing's.
+
+**Claims are revisited.** A level claiming a tier the row does not hold is fetched again: `Full` with no object, or with an object whose blob is missing or fails its name (STORAGE §7); `Full` holding a local body over a base naming a revision and no body, whose push waits for that base (§5); `Meta` with no summary. A provisional handle names no member, so no upgrade fetches it: a pending or a delivered create waits for the page that lands it.
+
+A `Meta` row holding its summary claims nothing, whether its body was never fetched or was released (STORAGE §11.4): a listing names it as it names any member, fetching nothing, pushing nothing and inferring no delete.
+
+A fetch carrying no body writes the level the payload supports, never lower than the row holds. The sort key is adopted from every fetch and every listing; the link id is not. A summary column the body was read for (the attachment mark and the size) is never replaced by one read without it while the row holds the body (STORAGE Annex A.1).
+
+**A conflict's body.** A conflicted placement holding no `conflict_object` is revisited. The body fetched MUST land in `conflict_object`, never in its own object, unless it equals the placement's own body: that is no divergence, and the binding adopts the revision and the body as its base and the conflict clears (table A, §5).
+
+Otherwise the source's policy then settles it as a carried body (table A, §5): under `Manual` it stays recorded; under `PreferLocal` or `KeepLocal`, content pushes allowed, the fetched body is kept as a retained item, reported `Overruled`, and the base adopts it with its revision, the conflict cleared, so the next sync pushes the local body gated on that revision; under `PreferRemote` the item adopts it as its body and the base, the local edit kept as §9 keeps it.
+
+An item conflict holding no `conflict_object`, recorded before its incoming body was read, is revisited by the upgrade and settled by the collection's policy as §9 says (table B).
+
+**Rows.** Every fetch and every page writes the summary row, its list rows and the address rows Annex A derives, in the batch recording it.
+## 7. Mutate
+
+A mutation stages a local edit to one collection with no network, through the same write as a sync (§10), never by direct row edits. The queue's actions map onto them: `set-flags` to `SetFlags` (its `base` carried), `remove` to `Remove` and `update` to `Edit` (the `if_match` and `resolves` of either carried), `move` and `copy` to `Move` and `Copy`, `add` to `Add`.
+
+- `SetFlags` sets the flags and marks the placement `Dirty`; a `Created`, `Conflict` or `Tombstone` placement keeps its status.
+  - Carrying no `base` it replaces the placement's set by its `flags`.
+  - Carrying `base` (a queued `set-flags` stating the set its producer read, STORAGE §15.3) it applies a change to the set the placement holds when the mutation is staged: that set, plus each flag `flags` holds and `base` lacks, less each flag `base` holds and `flags` lacks.
+  - Carrying `base` it MUST be refused, staging nothing, when the placement's flags are unknown.
+- `Remove` tombstones the placement, binding and base kept.
+  - On a pending create it withdraws the create: the binding goes and the item is retained (STORAGE §11), `retained_by` the create's source.
+  - On a delivered create (§2) it withdraws nothing: it tombstones it and the `Remove` is held until the page naming the member lands it, then pushed against the listed handle (§5, §6).
+- An `Edit` or a `Remove` carrying `if_match` (a queued `update` stating the body it replaced, a queued `remove` the body it deletes, STORAGE §15.3) MUST be refused, staging nothing, when the item holds another body or none.
+- An `Edit` without `overrule`, or a `Remove`, settles a conflict only as a person's resolution, stating `resolves`: the diverging bodies it was decided over (STORAGE §15.3). Meeting the item's conflict (`items.conflicted` 1) or its binding's (`bindings.conflicted` 1), it MUST be refused, staging nothing, unless `resolves` names the `conflict_object` of each conflict it meets; stating `resolves` and meeting none, it MUST be refused the same way. A conflict whose diverging body nobody has read (`conflict_object` `NULL`) is named by no resolution, so no `Remove` settles that conflict before the upgrade has read it (§6), and a base never pairs the observed revision with the old body.
+- An `Edit` or a `Remove` settling its binding's conflict is the decision: the base adopts `conflict_revision` and `conflict_object` together and the conflict clears.
+- An `Edit` or a `Remove` settling the item's conflict (§9) clears it, `items.conflicted` cleared and its `conflict_object` released; a `Remove` leaves the item its body under the tombstone, its settle stated to the write with a `Settle` as for an `Edit` (STORAGE §14).
+- `Edit` stores a new body and repoints the placement, keeping the base. An edit whose object the base holds stages nothing for its source, though on a conflicted item it still settles the item's conflict (above). It MAY restate the sort key.
+  - On a tombstone it revives, `Dirty`, and the destination its tombstone offered no longer derives.
+  - An `Edit` settling a conflict by a rule of the engine's or a connector's MUST state `overrule`; a person's resolution, which states `resolves`, does not.
+  - An overruling `Edit` keeps each diverging body it does not adopt, the binding's `conflict_object` then the item's, as a policy's loser is kept (§9), reported `Overruled`, before any body the collection's policy keeps in the same write.
+  - An overruling `Edit` MUST be refused, staging nothing, when the conflict it settles holds no diverging body, one nobody has read (§9): the upgrade fetches it first (§6). On a placement and an item in no conflict it keeps nothing.
+  - With `resolves` the settle is a person's choice, and what it discards it loses. On a conflicted item, through any binding of it (the source agreeing with the item or one the item moved away from), the item takes the edit's body whatever it is: its own, the diverging one, or another, a merge of the two among them. No divergence is measured (§9) and nothing is retained or reported. The editing binding's `shared_object` moves to that body, every other binding's stays, and each source whose base holds another body owes it. The write tells this settle from a sync's upsert, which leaves an item's conflict standing (§9), by the engine stating it with a `Settle`, as it states an overrule with an `Overrule` (STORAGE §14).
+- `Copy` stages a `Created` placement in a target under a provisional handle with the source's origin; `Move` also tombstones the source, whose destination the target's pending create then derives (§3). A `Move` of a delivered create tombstones it as a `Remove` does, its relocation held the same way.
+  - A `Move` into the collection its placement is in MUST be refused, staging nothing. A queued `move` so parks (STORAGE §15.3).
+  - A `Move` meeting a conflict, the item's (`items.conflicted` 1) or its binding's (`bindings.conflicted` 1), MUST be refused, staging nothing in either collection. A `Copy` meets none: the conflict stands on the placement it copies from.
+  - When a live placement in the target already holds the identity, both key the create by the identity minted over the provisional handle it derives, minted again over a held key; a tombstoned or retained holder blocks nothing, the create taking the key and reviving it, or, a message that does not agree with it, minted beside it (STORAGE §9's table).
+  - Both MUST be refused, staging nothing, for a placement holding no body unless its binding is based and its source syncs the target, holding a binding or a checkpoint there.
+- `Add` stages a new item under a provisional handle at `Full`, no base, no origin. Its key is the one STORAGE §9 assigns: one stating a `hash:` key its body's bytes do not give MUST be refused, staging nothing (STORAGE §15.3).
+  - It MUST fail, staging nothing, when its body cannot be read (STORAGE §15.2).
+  - It MUST fail when a live placement holds the `link_id`. A retained one revives (STORAGE §11); a tombstone still propagating is revived the same way, the row adopting the new body and its delete withdrawn on every source; a message agreeing with neither is minted instead (STORAGE §9's table).
+
+- `Abandon` gives up a delivered create (§2) whose member never arrived (§5), on a person's request and never by a rule of the engine's or a connector's.
+  - It MUST be refused, staging nothing, on any placement but a delivered create of the run's source.
+  - It drops the create's binding with reason `Deleted` (STORAGE §14), as a removal the source states is applied: the item is marked deleted and, no other source binding it, retained (STORAGE §11), holding its body, its summary and the flags staged on it. A `Remove` or a relocation held on it (§5) is given up with the binding.
+  - Another source binding the item keeps its binding as it was and projects a `Tombstone` for it (§9): it owes the delete, which its next sync pushes. Giving up a create is deleting the item it created, on every source that took it.
+  - It pushes nothing, and the run reports it `Abandoned` (§5).
+  - A member arriving later under that identity revives the retained row, or joins a tombstone still propagating, on STORAGE §9's rules, agreeing with it.
+
+A delete meant to land in a trash collection is a relocation: stage it as `Move` into that collection, so the trash shows it at once and the push relocates it (§4). `Remove` fits a delete meant to be final, as from the trash itself.
+## 8. Rekey
+
+A source may renumber every member. A rekey re-enumerates the spine, which MUST be a round over the whole collection whatever the scope, every page read before its one batch is written.
+
+It carries each placement's body, summary, level, flags, base and pending state onto its new handle **by link id**.
+
+**A rekey runs the flag axis on the flags its listing states.** A carried member's listed flags are the remote side of §5's flag axis, the item's flags the local side and the old base's flags the base: the item takes the merge and the binding's base takes the listed flags. A flag change still owed is pushed by the next sync; the rekey pushes nothing.
+
+The batch drops each old handle it re-writes with reason `Rekeyed`, which licenses the binding to move (STORAGE §10, §12), per handle: a genuine duplicate in the same batch is still refused. It is one batch, every drop preceding every upsert.
+
+An old binding no member resolves to by link id is dropped `Deleted`, whether or not the new space reuses its handle.
+
+A member resolving to no old binding is named as a page names one (§6) in the same batch and reported `Added` (§5).
+
+A binding with no base is outside the rekey and is carried as it is. So is a delivered create (§2) no member resolves to by link id, which no rekey finds absent nor counts; one a member resolves to is carried onto it as a page lands it (§6).
+
+**A rekey missing most members parks.** A rekey MUST NOT be written where §5's mass-absence guard would park a round (table C), unless the run carries the `accept_absences` option. Its absences are counted as §5 counts a round's, the whole collection being its scope and a based binding of this source absent when no member resolves to its link id. A rekey whose listing names no member parks the same way while any based binding of this source is absent, whatever their number (§5, an empty listing).
+
+**A rekey from a capped listing parks on any absence.** A based binding resolving to no member in a listing the source caps (§4, `capped` on its pages) is no absence the listing proves (§5): it can be neither dropped as gone nor carried as it is. A rekey whose listing is capped MUST NOT be written while any based binding of this source in the collection resolves to no member, whatever their number, unless the run carries the `accept_absences` option, which drops each such binding `Deleted` as an unresolved one is. A capped rekey every based binding resolves in is written as any other.
+
+A parked rekey writes no drop and no upsert, and leaves the checkpoint and the generation unmoved; the run reports the rekey parked with the absent and the bound counts. The next run, the checkpoint still naming the old handle space, meets the moved space again and names the rekey again; a run carrying `accept_absences` carries it out.
+
+A member resolving to an identity already handed out takes the minted key an old copy carried, else a mint over its own handle; pending creates' keys count as taken.
+
+Where one hint had several old copies, a member is matched to the old copy whose base names its fetched revision first, then to the one holding its body when the fetch carried one, and in handle order only among what neither can tell apart. The sort key is carried, preferring the fetch's.
+
+A mutable member whose fetched revision differs from the one its old base held MUST be carried as a pull (§5), or as a `Conflict` at the fetched revision when it also holds a local edit.
+
+A `Conflict` the old handle held is carried as it is, revision and diverging body kept while the fetched revision is the one recorded. One the item's conflict projects (§3) records no revision and gains none unless the remote moved.
+
+A base claiming a revision it never reconciled is the one thing a rekey MUST NOT write.
+
+The batch lands the rekey's checkpoint and leaves the coverage as it was. The batch carries no op for the epoch bump: a batch holding a `Rekeyed` drop is a rebuild, and the storage bumps the collection's generation in the transaction that applies it (STORAGE §12).
+## 9. Several sources
+
+N sources hold one item per identity and one binding each. A change one source folded into the item reads as `Dirty` against every other source's base, and each source's next sync pushes it. There is no cross-merge.
+
+**Absorbing a write** folds a source's batch into the shared item: flags adopted, a body adopted or refused by the rule below, the level merged as a maximum under §3's body rule, a pull without a body writing `Meta`. A known flag set, sort key or summary replaces a known one; an unknown one leaves the shared value alone. A tombstone adopts no content and its flags ride along.
+
+**Two bases.** `base_object` is what the source last agreed with its remote, and only a sync moves it. `shared_object` is what it last agreed with the shared item: a live upsert carrying a body moves it to the body the item settles on.
+
+An upsert carrying no body (a pull at `Meta` having agreed to no body), and one leaving the item conflicted, a divergence included, MUST NOT move it.
+
+The cross-source comparison MUST be made from `shared_object`, falling back to the sync base until the source has folded once. It is the common ancestor an engine reads to merge two bodies, and stays pinned until the binding agrees with another (STORAGE §5).
+
+**Cross-source content**, mutable kinds only. Three facts are read before the upsert is applied:
+
+- the source changed when the incoming body differs from the base its binding held before this upsert, not the base the upsert carries, and always when it bound none of the item before it, a member joining it (§6);
+- the item changed when the shared body differs from `shared_object`;
+- the two disagree when the incoming body differs from the shared one.
+
+An upsert leaving a conflicted binding counts as the source having changed its body. Flags never conflict.
+
+**A body not held.** An item holding no body (a pull at `Meta` having taken it away) has changed for every binding whose `shared_object`, or the sync base it falls back to, names one: its body is one nobody has read, not the agreed one. An upsert carrying no body over an item holding one disagrees with it. The three facts are read with these, and two rules of table B keep every body: a fill, and a divergence where either body is unread. No policy chooses between a body and one nobody has read.
+
+All three is a divergence, resolved by the collection's `conflict` policy. Table B, that policy by case:
+
+| Case | `manual` | `prefer-incoming` | `prefer-existing` |
+| --- | --- | --- | --- |
+| only the source changed | a fast-forward | same | same |
+| only the item changed | the incoming body left behind and the binding `Dirty`, which is propagation | same | same |
+| all three (a divergence) | keeps the shared body, flags the item and records the incoming body in `items.conflict_object`, every live binding then projecting `Conflict` (§3) until an `Edit` or a `Remove` settles it (§7) | adopts | keeps |
+| an immutable kind | never diverges: a body differing from the shared one is the same message served differently; the shared body stands and the binding's base adopts it | same | same |
+| the incoming body not carried, or the item holding none, in a divergence | MUST be recorded as `manual` records one, whatever the policy: the shared body stays, none when the item holds none, the item is flagged, and its `conflict_object` holds the incoming body when the upsert carries it, else waits for the upgrade to fetch it (§6), which revisits the conflict on every binding of the item whose base names a revision and no body | same | same |
+| the item holding no body (a fill) | an upsert carrying a body over it, from a binding whose base names no body, **fills** the item: the item adopts the body without measuring a divergence; an item conflict standing stays, its `conflict_object` kept, until the policy settles it (below) | same | same |
+| the missing body read, equal to the other | no divergence, whatever the policy: the item's conflict clears, and the binding whose upgrade fetched it takes that body as its base and its `shared_object`, as a binding's own conflict clears on its own body (§5) | same | same |
+| the missing body read, differing (the incoming one when the upgrade fetches it, the item's own when a fill lands it), when the item holds a body; one holding none waits, recorded as `manual` records it, for the fill that reads its own | the policy applies as to a carried body: `manual` keeps the conflict, and a fetched incoming body MUST land in `items.conflict_object`, never in the item's own object | adopts the incoming body, the conflict cleared | keeps the item's, the conflict cleared |
+| the body not adopted | | kept as below; once a missing body is read, keyed over the handle of the binding whose upgrade fetched it or whose upsert filled the item | same |
+
+Another message under the same `Message-ID` never reaches the immutable kind's row: its summary disagrees and §6 mints it an item of its own.
+
+**A policy's loser is kept.** A body a policy does not adopt MUST be kept:
+
+- the shared body `prefer-incoming` replaced;
+- the incoming body `prefer-existing` refused;
+- the local edit a source's `PreferRemote` dropped (§5), which reaches the write as an upsert whose source changed, over an item that had not changed for it, replacing a body the binding's base did not hold.
+- the server's body a source's `PreferLocal` or `KeepLocal` pushes over (§5), which reaches the write as an upsert moving the binding's base to it, before the push.
+
+So MUST the diverging body an overruling `Edit` does not adopt (§7): an automatic settle never discards a body silently, and only a person's resolution may.
+
+The write keeps it as a retained item beside the one it lost to (STORAGE §11), its summary and sort key read from its own body (STORAGE Annex A), keyed by the identity minted over the handle of the binding whose upsert, upgrade (§6) or overruling `Edit` (§7) settled it, minted again over a held key: a key any row of the collection has, the retained body a policy kept before included (STORAGE §9). A second body one binding loses is so kept beside the first, and an overruling `Edit` keeping two bodies keys the item's over the binding's. The run reports each `Overruled` (§5), in the order kept.
+
+**Deletes propagate.** A `Deleted` drop or a `Tombstone` upsert marks the item deleted; the dropping source loses its binding, a tombstoning one keeps it. Every other source projects a `Tombstone`; a source lacking the item projects nothing.
+
+This is how an absence a closed round found (§5) reaches every other source, and the only way. A live upsert clears `deleted`. With no binding left the item is retained (STORAGE §11). A `Superseded` or `Rekeyed` drop marks nothing.
+
+**Propagation is hydration-safe.** A source lacking an item MUST be offered it only when the store holds the body, and a projection never raises a level. Mirroring is a sync plus an upgrade.
+
+**A per-source conflict is its own fact.** `bindings.conflicted` and `items.conflicted` never set each other. An upsert carrying no divergence clears the binding's and becomes the shared body, so resolving is an ordinary edit. A tombstone projected for a conflicted binding still carries the divergence, which beats the delete (§3, §5). An item conflict holds no delete back: a source binding the deleted item projects a `Tombstone` and pushes the delete, and the item, once retained, keeps its body, its `conflict_object` and its conflict (STORAGE §11).
+
+A binding with no base is a pending create, and a minted key is an ordinary key: it reconciles, propagates and conflicts like any other, a target's refusal reported as a refused or a rejected push. A `hash:` key is not offered to another source: it asserts no identity.
+## 10. The load and the write
+
+An engine reads and writes the store through STORAGE §14's interface: `load` of a selection, and `write` of a batch of operations the store applies in order and atomically, whose drop reasons, refusals and chunks STORAGE §14 states. This section says which an engine asks for, and when.
+
+Every verb begins with a load naming a collection and a selection, `All`, `Handles` or `Links` (STORAGE §14):
+
+- A mutation asks for the one placement it edits, or for every holder of the link id an `Add` must not collide with. A `Copy` or a `Move` also loads its target for the identity it carries into it, and the sources syncing the target, those holding a binding or a checkpoint there, for a placement holding no body (§7).
+- An upgrade asks for the handles it raises.
+- A delta, reasoning about what it does not list only through what owes a push, asks for `Handles` of the members it lists or drops and of this source's bindings whose owing mark is set, and for `Links` of the hints it carries and of the items whose lacking mark is set and this source binds not: every placement a push or a propagation can concern, both read by seeking the store's owing marks (STORAGE §4.6, §14), so its load grows with what moved, not with the collection.
+- The last page of a round and a rekey ask for the whole collection: what each finds absent, and whether a mass absence parks it (§5, §8), is counted over every based binding of the source in its scope.
+- A page before the last and a head ask for `Handles` of their members and `Links` of the hints they carry, which naming them needs (§6).
+
+A sync also reads the refusals standing in the collection, which the load names (STORAGE §14), its source's holding the changes their keys name (§5): a refused binding owes a push, so every load deriving one loads it.
+
+Every verb ends in a batch. Table D, load and write by step:
+
+| Verb and step | Load | Ops | Order constraint | Stated in |
+| --- | --- | --- | --- | --- |
+| mutation | its placement, or the link id's holders; a `Copy` or a `Move` its target too (above) | the upsert; `Overrule` when an `Edit` carries `overrule`; `Settle` when an `Edit`'s or a `Remove`'s `resolves` names the item's conflict | an `Edit` carrying `overrule` states `Overrule` before its upsert | §7 |
+| `Abandon` | its placement | a `Deleted` drop of the provisional handle it gives up | | §7 |
+| upgrade | its handles | the upsert; `Overrule` as the next column says | one settling a conflict under `PreferLocal` states `Overrule` before the upsert adopting the fetched body | §6 |
+| delta | `Handles`, `Links` | upserts; drops, `Deleted` for a member gone from the source, `Superseded` for a provisional handle a landed arrival replaced; `SetCoverage` | `SetCoverage` beside its checkpoint | §5, §6 |
+| a page | `Handles`, `Links`, the last page excepted | `OpenRound` on the first; a delta's upserts and drops; `Stamp`; `SetRoundCursor` | `OpenRound` first in the first page's batch; `Stamp` after the page's upserts | §5 |
+| a head | `Handles`, `Links` | a delta's upserts and drops; a delta head's `Stamp`; `SetRoundCursor` | `Stamp` after its upserts; its `SetRoundCursor` carries no cursor, so the one a page landed stays | §5 |
+| a round's last page | the whole collection | a page's; `CloseRound` unless parked | `CloseRound` last in the write after the last chunk | §5 |
+| a push chunk | the step's | `Superseded` for a provisional handle an accepted add replaced; `DeliverPlacement` of a create an add accepted with no handle, or a relocation accepted stating no handle, the relocation's naming its destination's collection; `LandPlacement` of a relocation's destination create on the handle the relocation stated, naming that collection too; `RefusePlacement` of a refusal on the binding a refused change was pushed for; `ClearRefusal` of one in the write recording that binding's next accepted push | `RefusePlacement` after the upsert binding a create the store offered | §4, §5 |
+| rekey | the whole collection | `Rekeyed` drops of the old handles, `Deleted` drops of the unresolved; the upserts | every drop preceding every upsert | §8 |
+
+A batch is cut between candidates, never inside one, and a rekey is never cut. The checkpoint is per source and lands last (§5). A `Full` fetch MAY stream its body to its blob path itself and hand a `StoreObject` naming it.
+
+**The write keys another message apart.** A `Links` load answers this source's holders alone, so a page before the last, a head and an upgrade name a member without seeing an item another source binds under the same hint, and cannot apply §6's rule for another message reusing a `Message-ID`. The write applies it whichever step named the member (STORAGE §14), and an engine whose load showed the row mints the member the same way first, so both name it alike.
+
+**The version of the sync state.** An engine records its version, this part's (`sync-draft-15` now), in `store_meta.sync_version` (STORAGE §14), in the transaction of its first write to a store naming none. A store naming none holds no sync state yet.
+
+While this part is a draft, an engine MUST refuse a store whose `sync_version` names another version than its own draft's, naming both, and run no verb on it: a draft's sync state is read under that draft alone, as a draft's store is (STORAGE §4.2). Once this part is released, an engine MUST refuse sync state a draft wrote, or a major above its own; sync state of a major below its own it reads as that major defines it, and records its own version only in the write converting what the majors between them changed.
+## 11. Test vectors
+
+vectors/sync/ holds cases every conforming engine MUST reproduce, one JSON file each, stating `v` 11 (the version of this section's format) and conforming to vectors/schema/sync.schema.json. A case states:
+
+- `store`: the rows before the run, bodies named by label, summaries by their row. An object stated with `blob` false has its row and no blob file: a body that cannot be read. One stated `corrupt` has its row and a blob file whose bytes do not hash to its name: a body that fails verification (STORAGE §7). One stated with `row` false has a blob file under its name and no row, and no row names it; `row` false beside `corrupt` is that file holding other bytes.
+- `run`: the verb, collection, source and options (`push`, `rights`, `conflict`, `scope` as `since` and `until`, and `accept_absences`); an `upgrade` run its `tier` and the `handles` it upgrades; a `mutate` run its `mutation` (§7) by `kind`: an `Add` its `object`, `flags` and optional `link_id`; an `Edit` its `seq`, `object` and optional `if_match`, `overrule` and `resolves` (a list of object labels); a `Remove` its `seq` and optional `if_match` and `resolves`; a `SetFlags` its `seq`, `flags` and optional `base`; a `Copy` or a `Move` its `seq` and the collection it goes `to`; an `Abandon` its `seq`; objects named by label.
+- `remote`: what the connector answers:
+  - one page as `snapshot` or a round's pages as `pages`, each member with its `meta` read from a fixture (and the source's own `attachment` flag, `size` and `server_object_id` where it states them) or, for a file, the `link_id` and `summary` it states, and `carries` where the member carries its body, the meta's fixture, as a DAV listing may (§4); a member stating none carries no body;
+  - `narrowed` on every page of a round a date filter narrowed, and `enumerated` on its last page, the handles an unfiltered enumeration lists (§4, §5); `capped` on every page of a round the source caps (§4, §5);
+  - `cursor_rejected` when it refuses the stored cursor, `interrupted_after` when it fails after that many pages (a head not counted), `scope_bound` false for a checkpoint bound to no scope;
+  - `heads`, the heads it lists (`delta`, `band`), and `head`, its answer to the run's head: its `kind`, the `from` checkpoint or the `since` instant the engine MUST ask it from, then `rejected` when it refuses that position, or the page's `items`, `vanished` and `checkpoint`;
+  - the fetch answers by handle and tier, a file's carrying its stated `meta`.
+- `expect`: the pushes in order, the outcomes fed back, the events (an `Overruled` one naming the retained item's `link_id`, a `Disagreed` one the `link_id` of the create its member was minted apart from, an `Abandoned` one the provisional handle given up, a `Refused` one the `reason`), `parked` with the `absent` and `bound` counts of a round or a rekey the run parked, `unlisted`, the count a run reports of the based bindings a capped round, or a narrowed one handing no enumeration, left unlisted (§5), none stated being none, `failed` when the run MUST fail, and the rows after, which a failed run leaves as its last write did. An object it states after the run is the row and the file the run leaves under its name, `blob`, `corrupt` and `row` read as in `store`: one stating none of them holds bytes hashing to its name.
+
+A provisional handle is written with its leading `U+0001`. A source row states its round as `round`, `round_open` and the round's columns (`round_band` among them and, where a band head reads it, `round_started_at`), and its coverage as `covered` and the coverage's bounds; a binding states its `round`, its `server_object_id` where it holds one, and the refusal standing on it as `refusal` and `refused_key`.
+
+A `store` may state `supersessions`, rows of the table (STORAGE §4.3), for a held tombstone. `expect` may state the `collections` a run declares, with their `name` and `role`, and the `references` it records. Vectors 70 and 158 bind an engine whose owner records attachments (STORAGE §14.3); every other case leaves them out of its store.
+
+A push is compared on its change, handle and `key` (§4) and on what the change carries: `flags` for an `Add`, `add` and `remove` for a `SetFlags`, `to` and `link_id`, `if_match`, `origin` as collection and handle, `supersedes` as collection, handle and `if_match` when the add carries it, and `object` by label. An outcome names its handle, `Accepted`, `Rejected` or `Refused` with its `reason`, and for an add the `assigned` handle and the `revision` reported, and for a remove carrying `to` whether it `relocated` and the `assigned` handle its member has in `to` where the connector states one. An add accepted with no handle (§4) states `assigned` as `null`.
+
+Rows are compared as parsed structures on the columns a case names, a flag set and a summary's lists as arrays (STORAGE §16), excluding `changed` stamps and the instants SQLite stamps (`retained_at`, `covered_at`, `round_started_at`, `refused_at`), which a case states as present or absent, a refusal's instant by its `refusal`. Chunked pushes or writes are compared concatenated.
+
+Every case pins two rules: no `Remove` is pushed but for a tombstone the store held or the run staged; and no based binding of the run's source is dropped but for a removal its remote stated, an absence from a round the run closed (in that round's scope and not parked), a tombstone, a delivered create an `Abandon` gave up, or a rekey not parked. checks/vectors.py validates in each case:
+
+- its structure and references;
+- every push's key;
+- every `Overruled` event's key (§9, STORAGE §9);
+- those two rules;
+- the mass-absence and empty-listing guards of §5 and §8;
+- that a capped rekey parks on any absence (§8);
+- a narrowed round's absences, and the count a capped or a narrowed round reports unlisted (§5);
+- that a held message and a member it does not agree with are named apart (§6);
+- that no body is pushed over, nor left facing, a server edit nobody has read (§5, §6, §9);
+- that an `Edit` or a `Remove` settling a conflict its `resolves` does not name, or stating an `if_match` the item does not hold, fails with the rows unchanged, as a `Move` meeting any conflict does (§7);
+- that an `Abandon` gives up a delivered create alone, retained and reported or, another source binding the item, tombstoned with that binding as it was, and fails on any other placement (§7);
+- the set a `SetFlags` carrying `base` leaves (§7);
+- every `Disagreed` event, and that none is missing (§5, §6);
+- across collections, that a message draws the `seq` of a row it agrees with and of no other (§6, STORAGE §9);
+- across collections, that an upgrade leaves no placement holding a body its summary disagreed with (§6, STORAGE §9);
+- that no change is pushed under the key a refusal standing on its binding names (§5);
+- that a `Refused` outcome stands recorded on its binding under its key and is reported, a held refusal reported too (§5);
+- that an accepted push leaves no refusal on the binding it was pushed for (§5).
+
+Only an implementation runs a case.
+
+## 12. Conformance
+
+A sync implementation conforms by one profile or both, stated as STORAGE §17 says (`sync-draft-15 connector (IMAP)`), and MUST meet the sections and pass the vectors its row names.
+
+| Profile | What it does | Owes | Vectors |
+| --- | --- | --- | --- |
+| engine | runs the verbs over a store as its owner (STORAGE §17) | §1 to §10, STORAGE §10 to §12 and §14 | every case under vectors/sync/ |
+| connector | answers an engine's enumerate, fetch and push for one source over one protocol its statement names | §4, and what §5 and §8 ask of a listing | none alone: a case's `remote` is what it answers, run by an engine |
+
+Both meet STORAGE §18 where it names them: a connector writes no credential into a checkpoint, a resume cursor, an error or a refusal's reason, and a name from a server is untrusted.

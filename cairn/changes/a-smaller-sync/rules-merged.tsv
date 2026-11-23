@@ -1,0 +1,732 @@
+old_id	old_section	incipit	class	keyword	family	state	new_section	new_anchor	new_sentence	new_incipit	stub	nuance	review
+o00-L1-s1	0	Pimdir sync specification	heading	none	none	kept	0			Pimdir sync specification			ok
+o00-L3-s1	0	Status: sync-draft-15, requiring storage-draft-17, released together with it	rule	binds	none	kept	0			Status: sync-draft-15, requiring storage-draft-17			ok
+o00-L5-s1	0	The sync part of the pimdir standard: how	rule	binds	none	kept	0			The pimdir standard's sync part: how			ok
+o00-L5-s2	0	It fixes what an engine derives from the	rule	binds	none	kept	0			It fixes what an engine derives			ok
+o00-L7-s1	0	§12 states what an engine and a connector	pointer	none	none	kept	0			§12 states what an engine and a connector owe			ok
+o00-L7-s2	0	What every writer owes the store, whichever engine	pointer	none	none	merged	0			STORAGE §10 to §12 and §14 what every writer owes the store		"whichever engine reconciles it" folded into "every writer", which already holds every engine	ok
+o00-L9-s1	0	*Note:* This part is the costliest to implement:	note	none	none	cut-informative							ok
+o00-L11-s1	0	It fixes no protocol: what a connector hands	rule	binds	none	kept	0			It fixes no protocol		"over IMAP, JMAP or DAV" written as the parenthesised instance "(IMAP, JMAP, DAV)"	ok
+o00-L13-s1	0	[OVERVIEW.md](./OVERVIEW.md) §5 and §6 explain the model.	pointer	none	none	kept	0			§5 and §6, informative, explain the model			ok
+o00-L13-s2	0	It is informative and this part wins on	rule	binds	none	merged	0			this part wins on any disagreement		"It is informative" written as the apposition "informative" of the sentence it follows	ok
+o00-L15-s1	0	The key words "MUST", "MUST NOT", "REQUIRED", "SHALL",	rule	binds	none	kept	0			The key words "MUST", "MUST NOT", "REQUIRED"			ok
+o00-L15-s2	0	Every statement of behaviour in this part is	rule	binds	none	kept	0			Every statement of behaviour in this part is normative			ok
+o00-L15-s3	0	Notes, examples and rationale are informative and marked	rule	binds	none	kept	0			Notes, examples and rationale are informative			ok
+o00-L15-s4	0	§n of STORAGE.md is written STORAGE §n.	definition	binds	none	kept	0			§n of STORAGE.md is written STORAGE §n.			ok
+o00-L17-s1	0	Contents	heading	none	none	kept	0			Contents			ok
+o00-L19-s1	0	[Scope](#1-scope)	heading	none	none	kept	0			[Scope](#1-scope)			ok
+o00-L20-s1	0	[Terminology](#2-terminology)	heading	none	none	kept	0			[Terminology](#2-terminology)			ok
+o00-L21-s1	0	[The projection](#3-the-projection)	heading	none	none	kept	0			[The projection](#3-the-projection)			ok
+o00-L22-s1	0	[The remote seam](#4-the-remote-seam)	heading	none	none	kept	0			[The remote seam](#4-the-remote-seam)			ok
+o00-L23-s1	0	[Sync](#5-sync)	heading	none	none	kept	0			[Sync](#5-sync)			ok
+o00-L24-s1	0	[Upgrade](#6-upgrade)	heading	none	none	kept	0			[Upgrade](#6-upgrade)			ok
+o00-L25-s1	0	[Mutate](#7-mutate)	heading	none	none	kept	0			[Mutate](#7-mutate)			ok
+o00-L26-s1	0	[Rekey](#8-rekey)	heading	none	none	kept	0			[Rekey](#8-rekey)			ok
+o00-L27-s1	0	[Several sources](#9-several-sources)	heading	none	none	kept	0			[Several sources](#9-several-sources)			ok
+o00-L28-s1	0	[The load and the write](#10-the-load-and-the-write)	heading	none	none	kept	0			[The load and the write](#10-the-load-and-the-write)			ok
+o00-L29-s1	0	[Test vectors](#11-test-vectors)	heading	none	none	kept	0			[Test vectors](#11-test-vectors)			ok
+o00-L30-s1	0	[Conformance](#12-conformance)	heading	none	none	kept	0			[Conformance](#12-conformance)			ok
+o01-L32-s1	1	1. Scope	heading	none	none	kept	1			1. Scope			ok
+o01-L34-s1	1	An engine reads a store as one source,	rule	binds	none	kept	1			An engine reads a store as one source			ok
+o01-L34-s2	1	Five verbs:	definition	binds	none	kept	1			Five verbs:			ok
+o01-L36-s1	1	**open**: read the projection, no network;	definition	binds	none	kept	1			open: read the projection, no network			ok
+o01-L37-s1	1	**sync**: reconcile against a listing, a delta or	definition	binds	none	kept	1			sync: reconcile against a listing			ok
+o01-L38-s1	1	**upgrade**: raise items to their body, or revisit	definition	binds	none	kept	1			upgrade: raise items to their body			ok
+o01-L39-s1	1	**mutate**: stage a local edit offline;	definition	binds	none	kept	1			mutate: stage a local edit offline			ok
+o01-L40-s1	1	**rekey**: rebuild a collection onto a new handle	definition	binds	none	kept	1			rekey: rebuild a collection onto a new handle space			ok
+o01-L42-s1	1	Every verb MUST be a pure function of	rule	MUST	none	kept	1			Every verb MUST be a pure function			ok
+o01-L44-s1	1	The store is the base of every merge:	rule	binds	none	kept	1			The store is the base of every merge		the clause "the bindings hold what each source last agreed to" is §2's **Base** and STORAGE §4.3's, kept as the pointer "(its bindings, STORAGE §4.3)"	ok
+o01-L44-s2	1	This part defines no reconciliation of two sources	rule	binds	none	merged	1			this part defines no reconciliation of two sources			ok
+o01-L46-s1	1	Nothing here requires a language or a coroutine	rule	binds	none	kept	1			No language or coroutine form is required.			ok
+o01-L46-s2	1	A collection of a media type outside STORAGE	rule	binds	none	kept	1			A collection of a media type outside			ok
+o02-L48-s1	2	2. Terminology	heading	none	none	kept	2			2. Terminology			ok
+o02-L50-s1	2	**Source**: one remote a collection syncs with, named	definition	binds	none	kept	2			one remote a collection syncs with			ok
+o02-L51-s1	2	**Engine**: the program that runs this part's verbs	definition	binds	none	kept	2			the program that runs this part's verbs			ok
+o02-L52-s1	2	**Connector**: what answers an engine's requests for one	definition	binds	none	kept	2			what answers an engine's requests			ok
+o02-L53-s1	2	**Run**: one verb executed for one collection and	definition	binds	none	kept	2			one verb executed for one collection			ok
+o02-L54-s1	2	**Projected placement**: one source's view of one placement	definition	binds	none	kept	2			one source's view of one placement			ok
+o02-L55-s1	2	**Status**: what a placement owes: `Clean`, `Dirty` (a	definition	binds	none	kept	2			what a placement owes			ok
+o02-L56-s1	2	**Base**: what the source last agreed with its	definition	binds	none	kept	2			what the source last agreed with its remote		now also the only statement of `base_present`'s meaning: §3 rule 3's "(a base is present iff the column is 1, STORAGE §13)" dropped as its restatement	ok
+o02-L57-s1	2	**Pending create**: a `Created` placement the source binds	definition	binds	none	kept	2			the source binds under a provisional handle, a binding with no base			ok
+o02-L58-s1	2	**Delivered create**: a create the source binds under	definition	binds	F1	kept	2			a pending create recorded delivered (§4)		definition kept (the binding's shape, said nowhere else, and "before any listing named the member"); how one comes to be recorded delivered is §4's (An add accepted without a handle; the `Remove` carrying `to` item): "a pending create a listing can land (§6)" is there as "A create no listing can land (§6) is left pending instead" and "when a listing can land it (§6)"; "It derives no change until the page naming the member lands it" is §5's MUST (A delivered create waits for its arrival), now pointed at as "It waits for its arrival (§5, §6)"; "accepted with no handle" now "accepted stating no handle" for both	ok
+o02-L59-s1	2	**Provisional handle**: `U+0001` followed by the link id.	definition	binds	none	kept	2			`U+0001` followed by the link id		cut (reason): "and two engines derive one create's key alike (§4)", §4's idempotency key stating "so two engines over one store key one change alike"	ok
+o02-L60-s1	2	**Origin**: where the same source already holds a	definition	binds	F12	kept	2			where the same source already holds			ok
+o02-L61-s1	2	**Destination**: where the same source holds a pending	definition	binds	F12	kept	2			where the same source holds a pending create		kept as it stood: "a pending create", where §3's Destination adds "or a delivered one" (owners.md F12), left for the owner	ok
+o02-L62-s1	2	**Tier**: what a fetch returns, `Meta`, identity and	definition	binds	none	kept	2			what a fetch returns			ok
+o02-L63-s1	2	**Meta**: what names a member without its body:	definition	binds	none	kept	2			what names a member without its body		"Every member a listing carries carries its meta (§4)" dropped as a restatement of §4's Members arrive named ("A member's meta MUST come with it"); the item keeps its (§4)	ok
+o02-L64-s1	2	**Server object id**: the id a source's server	definition	binds	F10	kept	2			the id a source's server gives a member's content			ok
+o02-L65-s1	2	**Page**: what one enumeration request returned: members (handle,	definition	binds	F9	kept	2			what one enumeration request returned		the page's fields (members with handle, flags, revision and meta; vanished handles; complete; last; resume cursor; checkpoint) are §4's page fields table (`items`, `vanished`, `complete`, `last`, `cursor`, `checkpoint`), now pointed at; "of a round, a head or a delta" kept	ok
+o02-L66-s1	2	**Round**: one complete listing of a scope, in	definition	binds	F9	kept	2			one complete listing of a scope			ok
+o02-L67-s1	2	**Delta**: a listing of what changed since the	definition	binds	F9	kept	2			a listing of what changed since the checkpoint			ok
+o02-L68-s1	2	**Head**: one page listed while a round is	definition	binds	F5	kept	2			one page listed while a round is open			ok
+o02-L69-s1	2	**Scope**: `[since, until)` on a message's summary `date`,	definition	binds	F4	kept	2			on a message's summary `date`			ok
+o02-L70-s1	2	**Coverage**: the scope of the last round that	definition	binds	F9	kept	2			the scope of the last round that closed			ok
+o02-L71-s1	2	**Resume cursor**: the connector's opaque position in an	definition	binds	F9	kept	2			the connector's opaque position			ok
+o02-L72-s1	2	**Change**: what the engine asks a source to	definition	binds	none	kept	2			what the engine asks a source to do			ok
+o02-L73-s1	2	**Outcome**: `Accepted`, with the handle assigned to an	definition	binds	none	kept	2			a source's answer to a change		what each outcome carries is §4's (Push: "accepted with the assigned handle", "MUST report the revision", the `Remove` carrying `to` stating whether it relocated, A relocation names the member it made: the MAY of the handle in `to`; Outcomes: `Refused { reason }`), now pointed at; the three outcomes, "a precondition the base failed" and "for good" kept	ok
+o02-L74-s1	2	**Refusal**: a `Refused` outcome recorded on the binding	definition	binds	F3	kept	2			a `Refused` outcome recorded on the binding		"its reason, the change's key and when" is §5's A refused change is held ("the reason, the change's key (§4) and when", which absorbed "and when" from here); "which holds that change" kept, pointing at the same §5	ok
+o02-L76-s1	2	An edit has three names, one per place	definition	binds	none	kept	2			An edit has three names			ok
+o02-L78-s1	2	| Queue action | Mutation | Change |	heading	none	none	kept	2			| Queue action | Mutation | Change |			ok
+o02-L80-s1	2	| `add` | `Add` | `Add` |	definition	binds	none	kept	2			| `add` | `Add` | `Add` |			ok
+o02-L81-s1	2	| `set-flags` | `SetFlags` | `SetFlags` |	definition	binds	none	kept	2			| `set-flags` |			ok
+o02-L82-s1	2	| `update` | `Edit` | `Update` |	definition	binds	none	kept	2			| `update` |			ok
+o02-L83-s1	2	| `remove` | `Remove` | `Remove` |	definition	binds	none	kept	2			| `remove` |			ok
+o02-L84-s1	2	| `copy` | `Copy` | `Add`, carrying its	definition	binds	F12	kept	2			| `copy` |			ok
+o02-L85-s1	2	| `move` | `Move` | `Remove`, carrying its	definition	binds	F12	kept	2			| `move` |			ok
+o02-L87-s1	2	An intent, `set-performer` and `set-property` stage no mutation	rule	binds	none	kept	2			An intent, `set-performer` and `set-property`			ok
+o02-L87-s2	2	One mutation has no queue action: `Abandon` (§7),	rule	binds	F1	kept	2			One mutation has no queue action		"which the owner stages on a person's request, as it evicts (STORAGE §11.3)" absorbed into §5's A delivered create is given up only on request ("an `Abandon` (§7) the owner stages on their request as it evicts (STORAGE §11.3)", owners-05.md F1); the pointer now names §5 and §7	ok
+o03-L89-s1	3	3. The projection	heading	none	none	kept	3			3. The projection			ok
+o03-L91-s1	3	Placements are read from the store, never stored.	rule	binds	none	kept	3			Placements are read from the store, never stored.			ok
+o03-L91-s2	3	For a collection and a source, the projection	rule	MUST	none	kept	3			For a collection and a source, the projection MUST yield			ok
+o03-L91-s3	3	A retained item (STORAGE §11) MUST be projected	rule	MUST	none	kept	3			A retained item (STORAGE §11) MUST be projected			ok
+o03-L93-s1	3	**Properties are no part of a placement.**	rule	binds	none	kept	3			Properties are no part of a placement.			ok
+o03-L93-s2	3	An item's properties (STORAGE §4.3) are local state	rule	binds	none	kept	3			An item's properties (STORAGE §4.3)			ok
+o03-L93-s3	3	A property added or removed stamps the item	rule	binds	none	kept	3			A property added or removed stamps the item			ok
+o03-L96-s1	3	**Status**, the first that applies:	rule	binds	none	kept	3			the first that applies			ok
+o03-L98-s1	3	`Tombstone` when `items.deleted` is 1 and the source	rule	binds	none	kept	3			when `items.deleted` is 1 and the source binds the item		§3 stays the owner of this projection rule; §5, §7 and §9 restate parts of it and point here (kept whole, no clause moved out)	ok
+o03-L99-s1	3	`Conflict` when `bindings.conflicted` is 1, carrying `conflict_revision` and	rule	binds	none	kept	3			when `bindings.conflicted` is 1		§3 stays the owner of this projection rule; §5, §7 and §9 restate parts of it and point here	ok
+o03-L100-s1	3	`Created` when the binding has no base, `base_present`	rule	binds	none	kept	3			when the binding has no base, `base_present` 0, or		"(a base is present iff the column is 1, STORAGE §13)" dropped: §2's Base defines `base_present` as what "alone says whether there is one (STORAGE §13)"	ok
+o03-L101-s1	3	`Dirty` when the flags differ from the base	rule	binds	F2	kept	3			when the flags differ from the base flags as sets			ok
+o03-L102-s1	3	`Clean` otherwise.	rule	binds	none	kept	3			otherwise.			ok
+o03-L104-s1	3	An unknown flag set (`flags_known` or `base_flags_known` 0)	rule	binds	F13	kept	3			An unknown flag set (`flags_known`			ok
+o03-L104-s2	3	An unknown base is no base on the	rule	binds	F13	kept	3			An unknown base is no base on the flag axis.			ok
+o03-L106-s1	3	An immutable kind never owes a body: one	rule	binds	F17	kept	3			An immutable kind never owes a body		cut (reason): "one identity is one message" (STORAGE §2's immutable); "the write adopts the shared body as its base (§9)" is §9's table B row "an immutable kind" ("the shared body stands and the binding's base adopts it"), kept here short as "its base adopting the shared one (§9)"	ok
+o03-L108-s1	3	**Level** MUST be `Full` only when `items.object` is	rule	MUST	none	kept	3			MUST be `Full` only when `items.object` is present			ok
+o03-L110-s1	3	**Origin.**	heading	none	F12	kept	3			Origin.			ok
+o03-L110-s2	3	A `Created` placement carries an origin when the	rule	binds	F12	kept	3			A `Created` placement carries an origin		cut (reason): "(a delivered create names no member to copy from)", which "under a handle that is not provisional" already decides (a delivered create keeps its provisional handle, §2) and §5 states ("its handle naming no member to push one to")	ok
+o03-L110-s3	3	Its add is then a server-side copy from	rule	binds	F12	kept	3			Its add is then a server-side copy			ok
+o03-L112-s1	3	**Superseded.**	heading	none	F11	kept	3			Superseded.			ok
+o03-L112-s2	3	A `Created` placement whose item superseded an item	rule	binds	F11	kept	3			A `Created` placement whose item superseded			ok
+o03-L112-s3	3	Unlike an origin it holds whatever body: the	rule	binds	F11	kept	3			Unlike an origin it holds whatever body		"the connector moves the member, then writes the placement's body over it" is §4's Push, `Add` with `supersedes` ("moving that member into the collection, gated on its revision, then writing `object` over it"), now "written over the moved member (§4)"	ok
+o03-L114-s1	3	**Destination.**	heading	none	F12	kept	3			Destination.			ok
+o03-L114-s2	3	A `Tombstone` placement carries a destination when the	rule	binds	F12	kept	3			A `Tombstone` placement carries a destination			ok
+o03-L116-s1	3	**The same identity**, for both, is the same	rule	binds	F12	kept	3			for both, is the same `link_id`		the minted key's spelling "(`dup:`, the key, `#`, `U+0001` and the key again)" is STORAGE §9's Minting ("`dup:`, the key, `#` and the handle") over §2's provisional handle ("`U+0001` followed by the link id"), now "(STORAGE §9)"	ok
+o03-L116-s2	3	The bare key MUST be preferred.	rule	MUST	F12	kept	3			The bare key MUST be preferred.			ok
+o03-L118-s1	3	Origins and destinations are derived from bindings, never	rule	binds	F12	kept	3			Origins and destinations are derived from bindings			ok
+o04-L120-s1	4	4. The remote seam	heading	none	none	kept	4			4. The remote seam			ok
+o04-L122-s1	4	A connector answers three requests: enumerate, fetch and	rule	binds	none	kept	4			A connector answers three requests			ok
+o04-L124-s1	4	**Enumerate** takes the checkpoint, the scope (§5) and,	rule	binds	none	kept	4			Enumerate takes the checkpoint, the scope			ok
+o04-L124-s2	4	It returns a page:	rule	binds	none	kept	4			It returns a page:			ok
+o04-L126-s1	4	`items`: every member with its handle, its known	rule	binds	none	tabled	4	Field	/	`items`			ok
+o04-L127-s1	4	`vanished`: the handles the source states removed;	rule	binds	F15	tabled	4	Field	/	`vanished`		"every page but a band head (below)": o04-L181-s1, a band head carries no vanished handle (review B)	ok; fixed after review B
+o04-L128-s1	4	`complete`: whether the page belongs to a round	rule	binds	F4	tabled	4	Field	/	`complete`			ok
+o04-L129-s1	4	`last`: whether it closes its listing, which a	rule	binds	F9	tabled	4	Field	/	`last`			ok
+o04-L130-s1	4	`cursor`: an opaque resume cursor, on every page	rule	binds	F9	tabled	4	Field	/	`cursor`			ok
+o04-L131-s1	4	`checkpoint`: on the page where the source gives	rule	binds	F9	tabled	4	Field	/	`checkpoint`			ok
+o04-L132-s1	4	`narrowed`: on every page of a round, whether	rule	binds	F4	tabled	4	Field	/	`narrowed`			ok
+o04-L133-s1	4	`enumerated`: on the last page of a narrowed	rule	binds	F4	tabled	4	Field	/	`enumerated`			ok
+o04-L134-s1	4	`capped`: on every page of a round, whether	rule	binds	F4	tabled	4	Field	/	`capped`			ok
+o04-L136-s1	4	A connector MUST set `complete` only on a	rule	MUST	F4	tabled	4	Field	/4	`complete`			ok
+o04-L136-s2	4	It MUST mark a page `last` only once	rule	MUST	F9	tabled	4	Field	/4	`last`		its last clause, "and MUST hand a `cursor` with every other page of a round", is the duty cell of row `cursor` ("MUST be handed with every such page", every page of a round but the last)	ok
+o04-L138-s1	4	**A removal is stated, never guessed.**	rule	binds	F15	kept	4			A removal is stated, never guessed.			ok
+o04-L138-s2	4	A connector MUST put in `vanished` only a	rule	MUST	F15	kept	4			A connector MUST put in `vanished` only			ok
+o04-L138-s3	4	It MUST NOT state as vanished a handle	rule	MUST NOT	F4	kept	4			It MUST NOT state as vanished a handle			ok
+o04-L138-s4	4	A stated removal is applied on any page,	rule	binds	F15	kept	4			A stated removal is applied on any page			ok
+o04-L140-s1	4	An engine MUST refuse a page that is	rule	MUST	F9	kept	4			An engine MUST refuse a page that is			ok
+o04-L142-s1	4	Within a page, `items` MUST be sorted by	rule	MUST	none	tabled	4	Field	/4	`items`		"Within a page" is the row's "every page"	ok
+o04-L142-s2	4	An engine MUST sort an unsorted page and	rule	MUST	none	kept	4			An engine MUST sort an unsorted page			ok
+o04-L144-s1	4	A connector whose checkpoint the source rejects because	rule	MUST	none	kept	4			A connector whose checkpoint the source rejects because		cut (example): (an IMAP `UIDVALIDITY` bump)	ok
+o04-L146-s1	4	**Members arrive named.**	rule	binds	none	kept	4			Members arrive named.			ok
+o04-L146-s2	4	A member's meta MUST come with it, as	rule	MUST	none	kept	4			A member's meta MUST come with it			ok
+o04-L146-s3	4	Nothing reaches the store unnamed.	rule	binds	none	kept	4			Nothing reaches the store unnamed.			ok
+o04-L148-s1	4	Mail reads it in the listing itself, from	rule	binds	none	kept	4			Mail reads it in the listing itself		cut (example): "an IMAP `FETCH` of `UID FLAGS INTERNALDATE ENVELOPE` and" and "; a JMAP `Email/get` with summary properties"; "the header fields Annex A needs, `Content-Type` among them" kept (review B)	ok; fixed after review B
+o04-L149-s1	4	A kind whose meta is the body (DAV)	rule	MAY	none	kept	4			A kind whose meta is the body (DAV)			ok
+o04-L151-s1	4	**A server object id names content.**	rule	binds	F10	kept	4			A server object id names content.			ok
+o04-L151-s2	4	A connector MAY state, with a member's meta	rule	MAY	F10	kept	4			A connector MAY state, with a member's meta		cut (example): ": RFC 8474's `EMAILID` where the IMAP server announces `OBJECTID`, Gmail's `X-GM-MSGID`, JMAP's `Email/id`,"	ok
+o04-L151-s3	4	It MUST state only an id its server	rule	MUST	F10	kept	4			It MUST state only an id its server			ok
+o04-L151-s4	4	The write records it on the member's binding	rule	binds	F10	kept	4			The write records it on the member's binding			ok
+o04-L151-s5	4	Two ids are compared byte for byte and	rule	binds	F10	kept	4			Two ids are compared byte for byte and only between		cut (reason): ": an id says nothing of another source's"	ok
+o04-L151-s6	4	§6 reads it before linking a body.	pointer	none	F10	kept	4			§6 reads it before linking a body.			ok
+o04-L153-s1	4	**The compared fields are read raw.**	rule	binds	F10	kept	4			The compared fields are read raw.			ok
+o04-L153-s2	4	A message's `subject`, `date` and `sender` decide, compared	rule	binds	F10	kept	4			A message's `subject`, `date` and `sender` decide			ok
+o04-L153-s3	4	A connector MUST read the three raw, as	rule	MUST	F10	kept	4			A connector MUST read the three raw			ok
+o04-L153-s4	4	It MAY name its members from the values	rule	MUST	F10	kept	4			It MAY name its members from the values			ok
+o04-L153-s5	4	How it learns of that row is its	rule	binds	F10	kept	4			How it learns of that row is its own			ok
+o04-L155-s1	4	Where a source serves a member nothing raw	rule	binds	F10	kept	4			Where a source serves a member nothing raw			ok
+o04-L155-s2	4	Such a member may disagree with a row	rule	binds	F10	kept	4			Such a member may disagree with a row			ok
+o04-L157-s1	4	**Files.**	heading	none	none	kept	4			Files.			ok
+o04-L157-s2	4	A source syncing a folder (STORAGE §14.3) MUST	rule	MUST	none	kept	4			A source syncing a folder (STORAGE §14.3) MUST			ok
+o04-L157-s3	4	That id is the member's handle and its	rule	binds	none	kept	4			That id is the member's handle and its hint			ok
+o04-L159-s1	4	The remote path is the folder and the	rule	binds	none	kept	4			The remote path is the folder			ok
+o04-L159-s2	4	A rename on the server is the same	rule	binds	none	kept	4			A rename on the server is the same handle			ok
+o04-L159-s3	4	A move between two folders the source syncs	rule	binds	none	kept	4			A move between two folders the source syncs			ok
+o04-L161-s1	4	A server stating no such id (a plain	rule	binds	none	kept	4			A server stating no such id is not		cut (example): (a plain WebDAV collection keyed by href alone); joined to the **Files.** paragraph	ok
+o04-L163-s1	4	A file's meta is what its listing states,	rule	binds	none	kept	4			A file's meta is what its listing states			ok
+o04-L163-s2	4	A file stays at `Meta` until a `Full`	rule	binds	none	kept	4			A file stays at `Meta` until			ok
+o04-L163-s3	4	Its revision is its ETag (`getetag`), and a	rule	MUST NOT	none	kept	4			Its revision is its ETag			ok
+o04-L165-s1	4	A file is a mutable kind.	rule	binds	none	kept	4			A file is a mutable kind.			ok
+o04-L165-s2	4	An edit is a new body under the	rule	binds	F6	kept	4			An edit is a new body under the same key		"both is a conflict under the source's policy" now cites §5, its owner (o05-L350-s1, table A); the `Update` gated on the base ETag is §4's own	ok
+o04-L165-s3	4	Under `Manual` a person keeps both (the local	rule	binds	F6	kept	4			Under `Manual` a person keeps both			ok
+o04-L165-s4	4	A local rename or move pushes nothing in	rule	binds	none	kept	4			A local rename or move pushes nothing			ok
+o04-L167-s1	4	**Pages.**	heading	none	none	kept	4			Pages.			ok
+o04-L167-s2	4	A round MAY be answered in pages, newest	rule	MAY	none	kept	4			A round MAY be answered in pages		cut (example): (IMAP by UID descending, JMAP by `receivedAt` descending)	ok
+o04-L167-s3	4	Each page is one request (or one batch	rule	binds	none	kept	4			Each page is one request			ok
+o04-L167-s4	4	A connector that does not page answers a	rule	binds	none	kept	4			A connector that does not page answers			ok
+o04-L169-s1	4	A connector chooses its page size within what	rule	SHOULD	none	kept	4			A connector chooses its page size			ok
+o04-L171-s1	4	**The resume cursor** is the connector's and opaque	rule	binds	F9	kept	4			The resume cursor is the connector's			ok
+o04-L171-s2	4	A connector whose cursor the source rejects (an	rule	MUST	F9	kept	4			A connector whose cursor the source rejects		cut (example): (an expired skip or page token)	ok
+o04-L173-s1	4	**The checkpoint** a round carries is the one	rule	binds	F9	kept	4			The checkpoint a round carries is the one		cut (example): (IMAP `HIGHESTMODSEQ` at the select, JMAP's state)	ok
+o04-L173-s2	4	What moves during the round is caught by	rule	binds	F9	kept	4			What moves during the round is caught			ok
+o04-L173-s3	4	A source giving its checkpoint only on the	rule	binds	F9	kept	4			A source giving its checkpoint only on			ok
+o04-L175-s1	4	A connector states whether its checkpoint is **bound	rule	binds	F9	kept	4			A connector states whether its checkpoint is bound			ok
+o04-L177-s1	4	**Heads.**	heading	none	F5	kept	4			Heads.			ok
+o04-L177-s2	4	A connector states which heads it lists: delta	rule	binds	F5	kept	4			A connector states which heads it lists			ok
+o04-L177-s3	4	A head is one page, checked against the	rule	binds	F5	kept	4			A head is one page, checked against		", whose members carry their meta as every page's do" restated **Members arrive named.** (every member's meta comes with it), which stands	ok
+o04-L177-s4	4	It carries no resume cursor and never moves	rule	binds	F5	kept	4			It carries no resume cursor and never moves			ok
+o04-L179-s1	4	A **delta head** takes a checkpoint and answers	rule	MUST	F5	kept	4			A delta head takes a checkpoint		cut (example): "IMAP lists it from a QRESYNC `SELECT` with `CHANGEDSINCE`, JMAP from `Email/changes` since the state, DAV from `sync-collection` since its token."	ok
+o04-L180-s1	4	A **band head** takes an instant and lists	rule	binds	F5	kept	4			A band head takes an instant		cut (example): (IMAP's `INTERNALDATE` through `SEARCH SINCE`)	ok
+o04-L181-s1	4	A band head carries no checkpoint and no	rule	binds	F4	kept	4			A band head carries no checkpoint			ok
+o04-L183-s1	4	*Note:* A band head by arrival misses a	note	none	F5	cut-informative						cut (note): A band head by arrival misses a move into the collection and a flag change on older mail until the round's last page lists them	ok
+o04-L185-s1	4	A connector whose head position the source rejects	rule	MUST	F5	kept	4			A connector whose head position the source rejects		cut (example): (an expired history id, a JMAP state the server can no longer calculate changes from, a DAV sync token refused as invalid)	ok
+o04-L185-s2	4	One meeting a moved handle space fails it	rule	binds	F5	kept	4			One meeting a moved handle space			ok
+o04-L185-s3	4	One that cannot list the head it is	rule	binds	F5	kept	4			One that cannot list the head it is		cut (example): (a server without QRESYNC)	ok
+o04-L187-s1	4	A connector listing band heads MUST list again,	rule	MUST	F5	kept	4			A connector listing band heads MUST list again		cut (reason): ": a band head stamps nothing (§5), and that last page is what keeps its members" (§5's **Heads.** block says a band head stamps nothing)	ok
+o04-L189-s1	4	A connector listing delta heads MUST read every	rule	MUST	F5	kept	4			A connector listing delta heads MUST read			ok
+o04-L189-s2	4	One reading a page's handles from an earlier	rule	binds	F5	kept	4			One reading a page's handles from an earlier		cut (example): (an IMAP `UID SEARCH` cached since the round began, an id list)	ok
+o04-L189-s3	4	A page thus never lists a member as	rule	binds	F5	kept	4			A page thus never lists a member			ok
+o04-L191-s1	4	**Fetch** takes a tier and a batch of	rule	binds	none	kept	4			Fetch takes a tier and a batch			ok
+o04-L191-s2	4	A batch has no order: a connector MAY	rule	MUST	none	kept	4			A batch has no order			ok
+o04-L193-s1	4	**Push** takes a batch of changes and returns	rule	binds	none	kept	4			Push takes a batch of changes			ok
+o04-L195-s1	4	`Add { handle, link_id, flags, origin, supersedes, object	rule	MUST	none	kept	4			`Add { handle, link_id		cut (reason): ", else the next enumeration reads its own push as a remote edit and refetches it"	ok
+o04-L196-s1	4	With `supersedes` (§3), a connector whose source moves	rule	MAY	F11	kept	4			With `supersedes` (§3), a connector whose		cut (example): (WebDAV `MOVE`, RFC 4918 §9.9)	ok
+o04-L197-s1	4	A source answering the move as one it	rule	MUST	F11	kept	4			A source answering the move as one		cut (reason): ", which some providers answer"	ok
+o04-L198-s1	4	`Remove { handle, to, link_id, if_match }`: delete	rule	binds	F12	kept	4			`Remove { handle, to, link_id, if_match }`			ok
+o04-L199-s1	4	A delete takes the member out of the	rule	MUST	none	kept	4			A delete takes the member out of the collection		cut (example): (Gmail labels, JMAP `mailboxIds`)	ok
+o04-L200-s1	4	`link_id` is the tombstone's key, and MUST be	rule	MUST	F12	kept	4			`link_id` is the tombstone's key		cut (reason): ": `to` held the identity before the move, so holding it proves no delivery"	ok
+o04-L201-s1	4	A connector that cannot relocate MUST reject the	rule	MUST	F12	kept	4			A connector that cannot relocate MUST reject			ok
+o04-L202-s1	4	A delete of a member already gone is	rule	binds	F11	kept	4			A delete of a member already gone			ok
+o04-L203-s1	4	A connector MUST state, with an accepted `Remove`	rule	MUST	F1	kept	4			A connector MUST state, with an accepted `Remove`			ok
+o04-L204-s1	4	**A relocation names the member it made.** A	rule	MUST	F1	kept	4			A relocation names the member it made.			ok
+o04-L205-s1	4	`SetFlags { handle, add, remove }`: add the	rule	binds	F13	kept	4			`SetFlags { handle, add, remove }`		cut (reason): ", so a flag the server changed after the listing survives the push" ("leaving every other flag the member holds" states it)	ok
+o04-L206-s1	4	The engine derives both from the placement's flags	rule	binds	F13	kept	4			The engine derives both from the placement's flags			ok
+o04-L207-s1	4	A placement whose flags are unknown pushes none,	rule	binds	F13	kept	4			A placement whose flags are unknown pushes none			ok
+o04-L208-s1	4	`Update { handle, object, if_match }`: replace a	rule	binds	none	kept	4			`Update { handle, object, if_match }`			ok
+o04-L210-s1	4	**Outcomes.**	heading	none	F3	kept	4			Outcomes.			ok
+o04-L210-s2	4	A connector answers each change `Accepted`, on the	rule	binds	F3	kept	4			A connector answers each change `Accepted`			ok
+o04-L212-s1	4	`Rejected`: a precondition the base failed (a stale	rule	binds	F3	kept	4			`Rejected`: a precondition the base failed			ok
+o04-L213-s1	4	`Refused`: the remote refusing the change itself, as	rule	binds	F3	kept	4			`Refused`: the remote refusing			ok
+o04-L214-s1	4	A connector that cannot tell a refusal from	rule	MUST	F3	kept	4			A connector that cannot tell a refusal		cut (reason): "Each can pass with the change as it stands (the network back, the credential renewed, the lock released, space freed), where a change held by its key (§5) would never be pushed again."	ok
+o04-L216-s1	4	**An add accepted without a handle.**	heading	none	F1	kept	4			An add accepted without a handle.			ok
+o04-L216-s2	4	A source that creates a member without saying	rule	binds	F1	kept	4			A source that creates a member without saying			ok
+o04-L216-s3	4	The engine then MUST record the create delivered	rule	MUST	F1	kept	4			The engine then MUST record the create delivered			ok
+o04-L216-s4	4	A create no listing can land (§6) is	rule	MUST NOT	F1	kept	4			A create no listing can land (§6) is left pending			ok
+o04-L218-s1	4	The next listing names the member, and the	rule	binds	F1	kept	4			The next listing names the member			ok
+o04-L220-s1	4	*Note:* **The unguarded window.**	note	none	none	kept	4			The unguarded window.			ok
+o04-L220-s2	4	A precondition guards a push only where the	note	none	none	kept	4			A precondition guards a push only where			ok
+o04-L220-s3	4	An `Update` or a `Remove` sent with `If-Match`	note	none	none	cut-informative						cut (note, example): An `Update` or a `Remove` sent with `If-Match` (RFC 9110 §13.1.1), or a flag `STORE` with `UNCHANGEDSINCE` (RFC 7162 §3.1.3), fails rather than overwrite a member changed since the revision it names	ok
+o04-L222-s1	4	*Note:* A source enforcing none (a server ignoring	note	none	none	kept	4			A source enforcing none leaves a window		cut (example): (a server ignoring `If-Match`, an IMAP server without CONDSTORE, an API with no precondition); the note joins the paragraph of **The unguarded window.**	ok
+o04-L222-s2	4	A change made on the server in that	note	none	none	kept	4			A change made on the server in that window			ok
+o04-L222-s3	4	Every other change the server made survives, and	note	none	none	cut-informative						cut (note): Every other change the server made survives, and the next listing reports it	ok
+o04-L224-s1	4	*Note:* In this draft no row of the	note	none	none	cut-informative						cut (note): In this draft no row of the store says which sources leave the window open, so a producer cannot tell an unguarded write from a guarded one	ok
+o04-L226-s1	4	**The idempotency key.**	heading	none	none	kept	4			The idempotency key.			ok
+o04-L226-s2	4	Every change carries a key naming it, so	rule	binds	none	kept	4			Every change carries a key naming it			ok
+o04-L226-s3	4	The key MUST be derived as follows, so	rule	MUST	none	kept	4			The key MUST be derived as follows			ok
+o04-L228-s1	4	FNV-1a, 64 bits (offset basis `cbf29ce484222325`, prime `100000001b3`),	rule	binds	none	kept	4			FNV-1a, 64 bits			ok
+o04-L229-s1	4	The fields, in order: the collection id, the	rule	binds	none	kept	4			The fields, in order: the collection id			ok
+o04-L230-s1	4	`add`: the link id (optional), the flags, the	rule	binds	none	kept	4			`add`: the link id (optional)			ok
+o04-L232-s1	4	A precondition (`if_match`) is not part of the	rule	binds	none	kept	4			A precondition (`if_match`) is not part			ok
+o04-L232-s2	4	The key names a push within one run,	rule	binds	none	kept	4			The key names a push within one run			ok
+o04-L234-s1	4	A connector logging keys MUST forget them once	rule	MUST NOT	none	kept	4			A connector logging keys MUST forget			ok
+o04-L234-s2	4	§11's vectors carry the key of every push.	pointer	none	none	kept	4			§11's vectors carry the key			ok
+o05-L236-s1	5	5. Sync	heading	none	none	kept	5			5. Sync			
+o05-L238-s1	5	A sync reconciles one collection against one listing:	rule	binds	none	kept	5			A sync reconciles one collection against one listing:			
+o05-L238-s2	5	Its **candidates** are:	definition	binds	none	kept	5			Its **candidates** are:			
+o05-L240-s1	5	for a round's last page: every projected placement	definition	binds	none	kept	5			for a round's last page: every projected placement			
+o05-L241-s1	5	for a delta: the changed and vanished handles,	definition	binds	none	kept	5			for a delta: the changed and vanished handles		cut (reason): whose pending push the delta would never revisit	
+o05-L242-s1	5	for a page before the last and for	definition	binds	none	kept	5			for a page before the last and for			
+o05-L244-s1	5	A `Created` placement is a candidate with no	rule	binds	none	kept	5			A `Created` placement is a candidate with no			
+o05-L244-s2	5	The engine MUST walk both sides in handle	rule	MUST	none	kept	5			The engine MUST walk both sides in handle			
+o05-L244-s3	5	Every member a page carries is named in	rule	binds	none	kept	5			Every member a page carries is named in			
+o05-L246-s1	5	**A candidate's change is derived before its write.**	rule	binds	none	kept	5			**A candidate's change is derived before its write.**			
+o05-L246-s2	5	The axes below derive each candidate's change from	rule	binds	none	kept	5			The axes below derive each candidate's change from			
+o05-L246-s3	5	What that fold leaves the binding owing, the	rule	binds	none	kept	5			What that fold leaves the binding owing, the			
+o05-L248-s1	5	**The scope.**	heading	none	none	kept	5			**The scope.**			
+o05-L248-s2	5	A source MAY sync a mail collection under	rule	MAY	none	kept	5			A source MAY sync a mail collection under			
+o05-L248-s3	5	A member is in scope when its summary	rule	binds	F4	kept	5			A member is in scope when its summary		cut (example and reason): (rare, small and never lost: a draft before sending, a server's own notice)	
+o05-L250-s1	5	The `Date` header always decides.	rule	binds	none	kept	5			The `Date` header always decides.			
+o05-L250-s2	5	A received date is never stored and never	rule	binds	none	kept	5			A received date is never stored and never			
+o05-L252-s1	5	A connector MAY narrow its listing by the	rule	MUST	F4	kept	5			A connector MAY narrow its listing by the		cut (reason): so it misses as little of the scope as it can	
+o05-L252-s2	5	IMAP narrows with `SENTSINCE` and `SENTBEFORE` with a	rule	binds	F4	kept	5			IMAP narrows with `SENTSINCE` and `SENTBEFORE` with a		cut (reason): their whole days being the server's	
+o05-L254-s1	5	**A narrowed listing says so.**	rule	binds	F4	kept	5			**A narrowed listing says so.**			
+o05-L254-s2	5	A filter lists a member only when it	reason	none	F4	cut-informative							
+o05-L254-s3	5	A connector narrowing a round's listing by any	rule	MUST NOT	F4	kept	5			A connector narrowing a round's listing by any			
+o05-L254-s4	5	On the last page of a narrowed round	rule	MAY	F4	kept	5			On the last page of a narrowed round			
+o05-L254-s5	5	A connector offering such an enumeration SHOULD hand	rule	SHOULD	F4	kept	5			A connector offering such an enumeration SHOULD hand		cut (reason): a narrowed round handing none finds no member absent (below), which table C states	
+o05-L256-s1	5	**A capped listing says so.**	rule	binds	F4	kept	5			**A capped listing says so.**			
+o05-L256-s2	5	A source may list at most a number	definition	binds	F4	kept	5			A source may list at most a number		cut (example): "(an IMAP server under a folder size limit listing the newest 1,000 of 1,900 messages)"; the definition of a cap restored (review B, weakened)	ok; fixed after review B
+o05-L256-s3	5	A connector knowing that the source caps a	rule	MUST NOT	F4	kept	5			A connector knowing that the source caps a			
+o05-L258-s1	5	The connector drops what its own check on	rule	binds	F4	kept	5			The connector drops what its own check on			
+o05-L258-s2	5	A scope on a collection of another kind	rule	MUST	none	kept	5			A scope on a collection of another kind			
+o05-L260-s1	5	**Absence means deleted only in scope.**	rule	binds	F4	kept	5			**Absence means deleted only in scope.**			
+o05-L260-s2	5	A round MUST reconcile the placements in its	rule	MUST NOT	F4	kept	5			A round MUST reconcile the placements in its			
+o05-L260-s3	5	A removal the source states, a vanished handle	rule	binds	F15	kept	5			A removal the source states, a vanished handle, applies		cut (example): IMAP `VANISHED`, JMAP's `destroyed`, which §4's owner sentence o04-L138-s2 holds	
+o05-L262-s1	5	**Local changes push whatever the scope.**	rule	binds	none	kept	5			**Local changes push whatever the scope.**			
+o05-L262-s2	5	Tombstones, moves, flag changes, creates and intents are	rule	binds	none	kept	5			Tombstones, moves, flag changes, creates and intents are			
+o05-L264-s1	5	**Which absences delete.**	heading	none	F4	kept	5			**Which absences delete.**			
+o05-L264-s2	5	An absence is a delete only when a	rule	binds	F4	kept	5			An absence is a delete only when a			
+o05-L264-s3	5	That member is dropped `Deleted`, which marks the	rule	binds	F4	kept	5			That member is dropped `Deleted`, which marks the			
+o05-L266-s1	5	Nothing else is an absence: not a page	rule	binds	F4	tabled	5	Listing	1/	delta		its list is the no cells of table C: a page before the last, an interrupted round (row interrupted), a restarted one (row interrupted), a head (rows delta head, band head), a delta, out of scope (column), a band round's undated member, a narrowed round, a capped one, a parked one	
+o05-L268-s1	5	**A sync never deletes on the server on	rule	binds	none	kept	5			**A sync never deletes on the server on			
+o05-L268-s2	5	A `Remove` MUST be derived from a tombstone	rule	MUST	none	kept	5			A `Remove` MUST be derived from a tombstone			
+o05-L270-s1	5	A scope, a narrowing, a widening, an eviction	rule	binds	F4	kept	5			A scope, a narrowing, a widening, an eviction		"whatever the paragraph above says is no absence" reads "whatever table C finds no absence", the list having moved there	
+o05-L270-s2	5	What a sync infers from its own remote	rule	binds	F4	kept	5			What a sync infers from its own remote			
+o05-L272-s1	5	**A collection is deleted on a server only	rule	binds	none	kept	5			**A collection is deleted on a server only			
+o05-L272-s2	5	An engine mirroring collections between sources MUST NOT	rule	MUST NOT	none	kept	5			An engine mirroring collections between sources MUST NOT			
+o05-L274-s1	5	**Choosing the listing.**	heading	none	F9	kept	5			**Choosing the listing.**			
+o05-L274-s2	5	The checkpoint serves the scope it was made	rule	binds	F9	kept	5			The checkpoint serves the scope it was made			
+o05-L274-s3	5	A run under a scope:	rule	binds	F9	kept	5			A run under a scope:			
+o05-L276-s1	5	resumes the open round when the round's scope	rule	binds	F9	kept	5			resumes the open round when the round's scope			
+o05-L277-s1	5	else opens a round over the scope asked	rule	binds	F9	kept	5			else opens a round over the scope asked			
+o05-L278-s1	5	else runs a delta from the checkpoint, its	rule	binds	F9	kept	5			else runs a delta from the checkpoint, its			
+o05-L280-s1	5	In case 2, a connector whose checkpoint is	rule	MAY	F9	kept	5			In case 2, a connector whose checkpoint is			
+o05-L280-s2	5	The round's scope is then the band, recorded	rule	binds	F9	kept	5			The round's scope is then the band, recorded			
+o05-L280-s3	5	Its listing need carry no undated member, and	rule	binds	F9	kept	5			Its listing need carry no undated member, and			
+o05-L282-s1	5	**Rounds.**	heading	none	F9	kept	5			**Rounds.**			
+o05-L282-s2	5	A round MUST open in the write of	rule	MUST	F9	kept	5			A round MUST open in the write of			
+o05-L282-s3	5	Each page MUST be merged as a delta	rule	MUST	F9	kept	5			Each page MUST be merged as a delta			
+o05-L284-s1	5	A round interrupted between pages keeps what landed	rule	binds	F9	tabled	5	Listing		interrupted			
+o05-L284-s2	5	A round whose cursor the source rejects MUST	rule	MUST	F9	kept	5			A round whose cursor the source rejects MUST			
+o05-L286-s1	5	A round belongs to its source: it stamps	rule	binds	F9	kept	5			A round belongs to its source: it stamps			
+o05-L288-s1	5	**Deletes are inferred once**, when the last page	rule	binds	F4	kept	5			Deletes are inferred once			
+o05-L288-s2	5	A member the round found absent is every	rule	binds	F4	tabled	5	Listing		the last page of a whole-scope round			
+o05-L288-s3	5	It is handled as the deletes below say.	pointer	none	F4	kept	5			A member found absent is handled as the			
+o05-L290-s1	5	A band round MUST NOT infer the delete	rule	MUST NOT	F4	tabled	5	Listing		a band round			
+o05-L290-s2	5	Undated members are reconciled by rounds over a	rule	binds	F4	tabled	5	Listing		a band round			
+o05-L292-s1	5	**A narrowed listing proves only what its enumeration	rule	binds	F4	kept	5			**A narrowed listing proves only what its enumeration			
+o05-L292-s2	5	A round whose last page is `narrowed` (§4)	rule	MUST	F4	tabled	5	Listing		with `enumerated`		"in its scope as above": the undated cell "same, but in a band round (above)" (review B)	ok; fixed after review B
+o05-L292-s3	5	A member whose handle that list holds is	rule	binds	F4	tabled	5	Listing		with `enumerated`		cut (reason): the source holds it, and the filter's silence says only that the instant it filters on fell outside its window	
+o05-L292-s4	5	A narrowed round whose last page hands no	rule	MUST	F4	kept	5			A narrowed round whose last page hands no			
+o05-L292-s5	5	Such a round closes as any round does,	rule	MUST	F4	tabled	5	Listing		without `enumerated`		cut (reason): a person is told what no round of that connector will decide	
+o05-L294-s1	5	**A capped listing proves no absence.**	rule	binds	F4	kept	5			**A capped listing proves no absence.**			
+o05-L294-s2	5	A round whose last page is `capped` (§4)	rule	MUST	F4	kept	5			A round whose last page is `capped` (§4)			
+o05-L294-s3	5	It closes as any round does, and the	rule	MUST	F4	tabled	5	Listing		`capped`		"counted as the deletes above count them" kept as "counted as the deletes are" (review B)	ok; fixed after review B
+o05-L296-s1	5	A round resumed from the store and one	rule	MUST	F4	kept	5			A round resumed from the store and one			
+o05-L296-s2	5	A create under a provisional handle, pending or	rule	binds	F1	kept	5			A create under a provisional handle, pending or			
+o05-L298-s1	5	The round closes in the write after its	rule	binds	F9	kept	5			The round closes in the write after its			
+o05-L300-s1	5	the checkpoint it carries becomes the source's: the	rule	binds	F9	kept	5			the checkpoint it carries becomes the source's: the			
+o05-L301-s1	5	the coverage becomes the round's scope, or for	rule	binds	F9	kept	5			the coverage becomes the round's scope, or for			
+o05-L303-s1	5	**A mass absence parks.**	rule	binds	F7	kept	5			**A mass absence parks.**			
+o05-L303-s2	5	A round whose last page finds absent more	rule	MUST NOT	F7	kept	5			A round whose last page finds absent more			
+o05-L305-s1	5	**An empty listing parks.**	rule	binds	F7	kept	5			**An empty listing parks.**			
+o05-L305-s2	5	A round that named no member, none of	rule	MUST NOT	F7	kept	5			A round that named no member, none of		cut (reason): a listing naming nothing is a mailbox emptied or a connector failing alike, and only the caller can tell them apart	
+o05-L307-s1	5	A parked round drops nothing and writes no	rule	binds	F7	tabled	5	Listing		parked		"drops nothing" in the absence column; stated removals "applied", as on every page (§4 o04-L138-s4) (review B)	ok; fixed after review B
+o05-L307-s2	5	Its last page lands as a page before	rule	binds	F7	kept	5			A parked round's last page lands as a page			
+o05-L309-s1	5	Nothing records the park but the open round.	rule	binds	F7	kept	5			Nothing records the park but the open round.			
+o05-L309-s2	5	A later run resumes it from its first	rule	binds	F7	kept	5			A later run resumes it from its first		cut (reason): (the caller having confirmed the absences)	
+o05-L311-s1	5	**Heads.**	heading	none	F5	kept	5			**Heads.**			
+o05-L311-s2	5	A run resuming an open round SHOULD list	rule	SHOULD	F5	kept	5			A run resuming an open round SHOULD list			
+o05-L311-s3	5	The head is:	rule	binds	F5	kept	5			The head is:			
+o05-L313-s1	5	a delta head from the round's checkpoint, or,	rule	binds	F5	kept	5			a delta head from the round's checkpoint, or,			
+o05-L314-s1	5	else a band head from the instant the	rule	binds	F5	kept	5			else a band head from the instant the			
+o05-L315-s1	5	else none, and the round resumes as it	rule	binds	F5	kept	5			else none, and the round resumes as it			
+o05-L317-s1	5	A head is checked against the scope the	rule	binds	F5	kept	5			A head is checked against the scope the		cut (reason): what it names outside the band lies in the coverage the band adjoins, which the checkpoint it moves serves too	
+o05-L319-s1	5	A head is merged as a page before	rule	binds	F5	kept	5			A head is merged as a page before the last (above)		its candidates (members and vanished handles alone) and its naming on §6's identity rules are the candidates paragraph's, a head being one page	
+o05-L319-s2	5	It lands in the write after the chunks	rule	binds	F5	kept	5			It lands in the write after the chunks			
+o05-L321-s1	5	**A delta head** stamps the bindings of the	rule	binds	F5	kept	5			A delta head stamps the bindings		cut (reason): so the round's last page never finds them absent	
+o05-L322-s1	5	**A band head** stamps nothing and records no	rule	binds	F5	kept	5			**A band head** stamps nothing and records no			
+o05-L324-s1	5	A head never moves the round's cursor, scope	rule	binds	F5	kept	5			A head never moves the round's cursor, scope			
+o05-L324-s2	5	A member a head named and a later	rule	binds	F5	kept	5			A member a head named and a later			
+o05-L324-s3	5	A page listing a member a delta head	rule	binds	F5	kept	5			A page listing a member a delta head		cut (reason): (no page lists a member as it stood before a head, §4), which §4 states	
+o05-L326-s1	5	A head whose position the source rejects restarts	rule	binds	F5	kept	5			A head whose position the source rejects restarts			
+o05-L328-s1	5	**Creates wait for the page that lands them.**	rule	binds	F1	kept	5			**Creates wait for the page that lands them.**			
+o05-L328-s2	5	An `Add` MUST NOT be derived before the	rule	MUST NOT	F1	kept	5			An `Add` MUST NOT be derived before the		cut (example): the arrival's ways (relocated by a move's other half, added by another client or by an add whose record was lost), which §6's o06-L437-s2 lists	
+o05-L328-s3	5	The page naming it lands the create (§6),	rule	binds	F1	kept	5			The page naming it lands the create (§6),			
+o05-L330-s1	5	A pending create carrying no origin whose `date`	reason	none	none	merged	5			The `Add` of a pending create carrying no			
+o05-L330-s2	5	Its `Add` MUST NOT be derived by a	rule	MUST NOT	none	merged	5			The `Add` of a pending create carrying no			
+o05-L330-s3	5	It waits for a round over a scope	rule	SHOULD	none	kept	5			It waits for a round over a scope			
+o05-L332-s1	5	**The flag axis** merges element-wise over `(local, base,	rule	binds	F13	kept	5			**The flag axis** merges element-wise over `(local, base,			
+o05-L332-s2	5	A flag is in the result when both	rule	binds	F13	kept	5			A flag is in the result when both			
+o05-L332-s3	5	With no base, the result is the union	rule	binds	F13	kept	5			With no base, the result is the union		cut (reason): no side being known to have removed anything	
+o05-L334-s1	5	It MUST run for every placement present on	rule	MUST	F13	kept	5			It MUST run for every placement present on			
+o05-L334-s2	5	One handle yields at most one change, so	rule	binds	F13	kept	5			One handle yields at most one change, so			
+o05-L334-s3	5	A content push accepted in the same run	rule	MUST	F13	kept	5			A content push accepted in the same run			
+o05-L336-s1	5	The flag axis leaves the status alone while	rule	binds	F13	kept	5			The flag axis leaves the status alone while			
+o05-L338-s1	5	**The content axis** applies to a mutable kind,	rule	binds	none	kept	5			**The content axis** applies to a mutable kind,			
+o05-L338-s2	5	A local body the base does not hold	rule	binds	none	kept	5			A local body the base does not hold			
+o05-L338-s3	5	A remote revision the base does not hold	rule	binds	F6	tabled	5	Case		remote changed (a revision		the `KeepLocal` exception is the `KeepLocal` column	
+o05-L338-s4	5	A member carrying none drops the local body	rule	binds	F2	tabled	5	Case		remote changed, no body carried			
+o05-L340-s1	5	A placement holding no body (a pull having	rule	binds	F2	kept	5			A placement holding no body (a pull having		adds o03-L101-s1's "whatever its base names"	
+o05-L340-s2	5	One holding a local body over a base	rule	MUST	F2	kept	5			One holding a local body over a base			
+o05-L340-s3	5	It waits for the upgrade, which fetches that	rule	binds	F2	kept	5			It waits for the upgrade, which fetches that			
+o05-L340-s4	5	A placement whose local body the run keeps,	rule	binds	none	kept	5			A placement whose local body the run keeps,			
+o05-L342-s1	5	Both is a conflict, resolved by the source's	rule	binds	F6	kept	5			Both is a conflict, resolved by the source's			
+o05-L342-s2	5	A local body another source folded into the	rule	binds	F6	kept	5			A local body another source folded into the			
+o05-L342-s3	5	`KeepLocal` settles it as any remote change, the	rule	binds	F6	tabled	5	Case		a fold		the `KeepLocal` column	
+o05-L342-s4	5	Mail reports no revision and never reaches this	rule	binds	F17	kept	5			Mail reports no revision and never reaches this			
+o05-L342-s5	5	A file (STORAGE §14.3) is mutable: a connector	rule	MUST	none	kept	5			A file (STORAGE §14.3) is mutable: a connector			
+o05-L344-s1	5	A `Conflict` placement meeting a revision newer than	rule	binds	F6	tabled	5	Case		a conflict meeting a newer revision			
+o05-L346-s1	5	One carrying no `conflict_revision` (the item's conflict, §9)	rule	MUST	F6	tabled	5	Case		carrying no `conflict_revision`		"whatever the source's policy" is the four cells alike	
+o05-L348-s1	5	A conflict whose fetched body equals the placement's	rule	binds	F6	tabled	5	Case		a body read later by the upgrade			
+o05-L348-s2	5	So is a member carrying, at a revision	rule	binds	F6	tabled	5	Case		an equal body		"So is" restored as the row's "no divergence, whatever the policy" (review C); cut (reason): the read being what the lost record would have said	ok; fixed after review C
+o05-L350-s1	5	**Conflict policy** is the source's, settling it against	rule	binds	F6	kept	5			Conflict policy is the source's			
+o05-L352-s1	5	`Manual` (default) marks the binding conflicted with the	rule	binds	F6	kept	5			`Manual` (default) marks the binding conflicted with the			
+o05-L353-s1	5	`PreferRemote` pulls, the local edit it drops kept	rule	binds	F6	kept	5			`PreferRemote` pulls, the local edit it drops kept			
+o05-L354-s1	5	`PreferLocal` keeps the member's body and pushes the	rule	binds	F6	kept	5			`PreferLocal` keeps the member's body and pushes		"(above)" reads "(table A)", the equal-body rows having moved there	
+o05-L355-s1	5	`KeepLocal` is `PreferLocal` for a source the store	rule	binds	F6	kept	5			`KeepLocal` is `PreferLocal` for a source the store			
+o05-L357-s1	5	No policy pushes over a body nobody has	rule	binds	F2	kept	5			No policy pushes over a body nobody has read			ok; o07-L492-s1's clause returned to §7 (reviews A, C, added)
+o05-L357-s2	5	A both-changed case whose member carries no body	rule	MUST	F2	tabled	5	Case		both changed, no body carried		the `PreferLocal` and `KeepLocal` columns	
+o05-L359-s1	5	The collection's `conflict` (STORAGE §4.3) is the other	pointer	none	F6	merged	5			Conflict policy is the source's		cut (note): the two are named apart on purpose	
+o05-L361-s1	5	**Deletes.**	heading	none	F12	kept	5			**Deletes.**			
+o05-L361-s2	5	A `Tombstone` derives a `Remove`, carrying its destination	rule	binds	F12	kept	5			A `Tombstone` derives a `Remove`, carrying its destination			
+o05-L363-s1	5	A tombstone an add superseded, whose created item	rule	binds	F11	kept	5			A tombstone an add superseded, whose created item			
+o05-L363-s2	5	A remote edit over it still revives it.	rule	binds	F11	kept	5			A remote edit over it still revives it.			
+o05-L365-s1	5	Once that create is accepted, withdrawn or gone,	rule	binds	F11	kept	5			Once that create is accepted, withdrawn or gone,			
+o05-L365-s2	5	A create delivered by a move took the	rule	binds	F11	kept	5			A create delivered by a move took the			
+o05-L367-s1	5	A member a round found absent, or a	rule	binds	none	kept	5			A member a round found absent, or a			
+o05-L367-s2	5	That placement is re-staged instead as a pending	rule	binds	none	kept	5			That placement is re-staged instead as a pending			
+o05-L369-s1	5	A remote edit over a local tombstone MUST	rule	MUST	none	kept	5			A remote edit over a local tombstone MUST			
+o05-L369-s2	5	A tombstone whose binding is conflicted holds such	rule	MUST	none	kept	5			A tombstone whose binding is conflicted holds such			
+o05-L371-s1	5	A revision the tombstone's base does not name	rule	binds	F12	kept	5			A revision the tombstone's base does not name			
+o05-L371-s2	5	A move whose staged edit was pushed ahead	rule	binds	F12	kept	5			A move whose staged edit was pushed ahead			
+o05-L373-s1	5	**Push direction and rights.**	heading	none	none	kept	5			**Push direction and rights.**			
+o05-L373-s2	5	A source has a master `push` switch and	rule	binds	none	kept	5			A source has a master `push` switch and			
+o05-L373-s3	5	With `push` false nothing is pushed and remote	rule	binds	none	kept	5			With `push` false nothing is pushed and remote			
+o05-L373-s4	5	A change a right forbids stays pending while	rule	binds	none	kept	5			A change a right forbids stays pending while			
+o05-L373-s5	5	A rejected or a refused push is pending	rule	binds	none	kept	5			A rejected or a refused push is pending			
+o05-L375-s1	5	**A refused delete**, one the source's rights forbid,	rule	binds	none	kept	5			**A refused delete**, one the source's rights forbid,			
+o05-L377-s1	5	Beside another source the tombstone is held, and	rule	binds	none	kept	5			Beside another source the tombstone is held, and			
+o05-L378-s1	5	A source alone in the collection reverts the	rule	binds	none	kept	5			A source alone in the collection reverts the			
+o05-L380-s1	5	**A move** is a `Created` placement in the	rule	binds	F12	kept	5			**A move** is a `Created` placement in the			
+o05-L380-s2	5	An engine MUST NOT drop either half for	rule	MUST NOT	F12	kept	5			An engine MUST NOT drop either half for			
+o05-L382-s1	5	The create delivers by copy from its origin,	rule	binds	F12	kept	5			The create delivers by copy from its origin,			
+o05-L382-s2	5	The remove delivers by relocating into its destination,	rule	MUST	F12	kept	5			The remove delivers by relocating into its destination,			
+o05-L382-s3	5	It is a plain delete once the destination	rule	binds	F12	kept	5			It is a plain delete once the destination			
+o05-L382-s4	5	A create landed first, by its copy from	rule	binds	F12	kept	5			A create landed first, by its copy from			
+o05-L384-s1	5	A relocated member is landed on the handle	rule	binds	F12	kept	5			A relocated member is landed on the handle			
+o05-L384-s2	5	One whose relocation stated none is listed by	rule	binds	F12	kept	5			One whose relocation stated none is listed by		base words restored (review A)	ok; fixed after review A
+o05-L386-s1	5	A relocation accepted stating no handle makes that	rule	binds	F1	kept	5			A relocation accepted stating no handle makes that		"as an `Add` accepted with no handle does its own" is §2's definition (o02-L58-s1) and §4's (o04-L216-s3)	
+o05-L386-s2	5	**A delivered create waits for its arrival**: until	rule	MUST	F1	kept	5			A delivered create waits for its arrival: until		adds o06-L463-s3's "so no upgrade fetches it"	
+o05-L386-s3	5	It derives no `Add`, its add being made,	rule	binds	F1	kept	5			It derives no `Add`, its add being made,			
+o05-L386-s4	5	No absence finds it (above), and no run	rule	binds	F1	kept	5			No absence finds it (above), and no run			
+o05-L388-s1	5	A delivered create waits whatever the listings say:	rule	binds	F1	kept	5			A delivered create waits whatever the listings say:			
+o05-L388-s2	5	An engine SHOULD report every delivered create its	rule	SHOULD	F1	kept	5			An engine SHOULD report every delivered create its			
+o05-L390-s1	5	**A delivered create is given up only on	rule	binds	F1	kept	5			**A delivered create is given up only on			
+o05-L390-s2	5	One whose member never arrives waits for ever,	rule	binds	F1	kept	5			One whose member never arrives waits for ever,			
+o05-L390-s3	5	No run gives it up, no round's absence	rule	binds	F1	kept	5			No run gives it up, no round's absence		adds o02-L87-s2's "which the owner stages on a person's request, as it evicts (STORAGE §11.3)"	
+o05-L392-s1	5	Landed, a delivered create keeps what was staged	rule	binds	F1	kept	5			Landed, a delivered create keeps what was staged		cut (reason): so an action taken on it before its arrival reaches the server	
+o05-L394-s1	5	**Push discipline.**	heading	none	none	kept	5			**Push discipline.**			
+o05-L394-s2	5	A push MUST be confirmed before local state	rule	MUST	none	kept	5			A push MUST be confirmed before local state			
+o05-L394-s3	5	`Accepted` rebases the placement and, for an add	rule	binds	F1	kept	5			`Accepted` rebases the placement and, for an add			
+o05-L394-s4	5	`Rejected`, `Refused` or unreported leaves it pending.	rule	binds	none	kept	5			`Rejected`, `Refused` or unreported leaves it pending.			
+o05-L396-s1	5	**A refused change is held.**	rule	binds	F3	kept	5			**A refused change is held.**			
+o05-L396-s2	5	The write recording a `Refused` outcome MUST record	rule	MUST	F3	kept	5			The write recording a `Refused` outcome MUST record		adds o02-L74-s1's "and when"	
+o05-L396-s3	5	A placement whose derived change carries the key	rule	MUST NOT	F3	kept	5			A placement whose derived change carries the key			
+o05-L396-s4	5	A change derived since under another key (a	rule	binds	F3	kept	5			A change derived since under another key (a			
+o05-L398-s1	5	The write recording an accepted push of a	rule	MUST	F3	kept	5			The write recording an accepted push of a			
+o05-L398-s2	5	A refusal goes with its binding: a create	rule	binds	F3	kept	5			A refusal goes with its binding: a create			
+o05-L398-s3	5	A create the source binds not, one the	rule	MUST	F3	kept	5			A create the source binds not, one the			
+o05-L398-s4	5	It is from then the source's own pending	rule	binds	F3	kept	5			It is from then the source's own pending			
+o05-L400-s1	5	Pushes go in bounded chunks, each followed by	rule	MUST NOT	none	kept	5			Pushes go in bounded chunks, each followed by			
+o05-L400-s2	5	The checkpoint, a delta's or the one a	rule	MUST	F9	kept	5			The checkpoint, a delta's or the one a			
+o05-L400-s3	5	A page's cursor and the checkpoint an open	rule	binds	F9	kept	5			A page's cursor and the checkpoint an open			
+o05-L402-s1	5	**Events.**	heading	none	F16	kept	5			**Events.**			
+o05-L402-s2	5	An event MUST be reported only once the	rule	MUST	F16	kept	5			An event MUST be reported only once the			
+o05-L404-s1	5	A sync reports per item, in order, what	rule	binds	F16	kept	5			A sync reports per item, in order, what			
+o05-L406-s1	5	`Added` for a member named, one joining an	rule	binds	F16	tabled	5	Event		`Added`			
+o05-L407-s1	5	`Disagreed`, after its `Added`, for a member minted	rule	binds	F16	tabled	5	Event		`Disagreed`		cut (reason): and a caller is told why	
+o05-L408-s1	5	`FlagsChanged`, `ContentChanged` and `Vanished` on a pull, `ContentChanged`	rule	binds	F16	tabled	5	Event		`FlagsChanged`			
+o05-L409-s1	5	`Conflicted` on a divergence, the source's own or	rule	binds	F16	tabled	5	Event		`Conflicted`			
+o05-L410-s1	5	`Overruled` on a body a policy did not	rule	binds	F16	tabled	5	Event		`Overruled`			
+o05-L411-s1	5	`Abandoned` on a delivered create an `Abandon` gave	rule	binds	F16	tabled	5	Event		`Abandoned`			
+o05-L412-s1	5	`Created` on an accepted add under its assigned	rule	binds	F16	tabled	5	Event		`Created`			
+o05-L413-s1	5	`Refused` on a change the remote refused this	rule	binds	F16	tabled	5	Event		`Refused`		cut (reason): so a caller is told without counting runs	
+o05-L415-s1	5	A run also reports a round it parked	rule	binds	F16	kept	5			A run also reports a round it parked			
+o05-L415-s2	5	A pushed flag, body or delete reports nothing:	rule	binds	F16	kept	5			A pushed flag, body or delete reports nothing		cut (reason): the consumer made it	
+o05-L417-s1	5	Only a sync and a rekey report events:	rule	binds	F16	kept	5			Only a sync and a rekey report events		adds o08-L536-s1's "the rekey's checkpoint lists it no more"	
+o06-L419-s1	6	6. Upgrade	heading	none	none	kept	6			6. Upgrade			ok
+o06-L421-s1	6	An upgrade raises placements to `Full`, or revisits	rule	binds	none	kept	6			An upgrade raises placements to `Full`			ok
+o06-L421-s2	6	A listing names every member at `Meta` (§4);	rule	binds	none	kept	6			A listing names every member at `Meta` (§4);			ok
+o06-L421-s3	6	The identity rules below are those a page	rule	binds	none	kept	6			The identity rules below are those a page			ok
+o06-L423-s1	6	**Identity is resolved once**, at the first meta	rule	MUST NOT	F17	kept	6			Identity is resolved once, at the first meta			ok
+o06-L423-s2	6	A mutable resource whose later meta states another	rule	binds	none	kept	6			A mutable resource whose later meta states another			ok
+o06-L425-s1	6	Naming a member inserts its item and binding	rule	binds	none	kept	6			Naming a member inserts its item and binding			ok
+o06-L425-s2	6	Its key is the one STORAGE §9's table	rule	binds	F10	kept	6			Its key is the one STORAGE §9's table			ok
+o06-L427-s1	6	A member of a mutable kind reviving a	rule	binds	F14	kept	6			A member of a mutable kind reviving a			ok; reason cut: "where it would read as a local edit and be pushed over the member's revision" and "which its server may since have replaced"
+o06-L429-s1	6	For mail, a hint the collection holds names	rule	binds	F10	kept	6			For mail, a hint the collection holds names			ok; cut the parenthetical list of rows "(a pending create of this source, a live item other sources or none bind, a tombstone, a retained row)", an example of "whatever that row is", which STORAGE §9's table lists
+o06-L429-s2	6	A member disagreeing is another message reusing the	rule	MUST	F10	kept	6			A member disagreeing is another message reusing the			ok; reason cut: "the held row's body otherwise standing for both"
+o06-L429-s3	6	A step whose load cannot see that row	rule	binds	F10	kept	6			A step whose load cannot see that row			ok
+o06-L431-s1	6	The comparison reads the two summaries as they	reason	none	F10	cut-informative							ok; reason (a missed dedup), STORAGE §9 Agreeing states it
+o06-L431-s2	6	A member minted apart from a pending or	rule	MUST	F10	kept	6			A member minted apart from a pending or		"so a pending one is pushed beside the member and a delivered one goes on waiting" is carried by §5's events table, row `Disagreed` ("the create is then pushed beside it, or, delivered, goes on waiting")	ok
+o06-L433-s1	6	A hint another collection of the account holds	rule	binds	F10	kept	6			A hint another collection of the account holds			ok; reason cut: "the key being free in this one"
+o06-L435-s1	6	Minting MUST be decided against the whole collection	rule	MUST	none	kept	6			Minting MUST be decided against the whole collection			ok; reason cut: "so a rebuild mints the same key"; "therefore loads" now "loading"
+o06-L437-s1	6	**A pending create is landed by its arrival.**	rule	binds	F1	kept	6			A pending create is landed by its arrival.			ok
+o06-L437-s2	6	A hint a page or a fetch carries	rule	binds	F1	kept	6			A hint a page or a fetch carries that			ok, verbatim
+o06-L437-s3	6	The engine MUST land it rather than mint;	rule	MUST	F1	kept	6			The engine MUST land it rather than mint;			ok, verbatim (design.md §5.4 item 7)
+o06-L437-s4	6	A create a relocation landed on the handle	rule	binds	F12	kept	6			A create a relocation landed on the handle			ok, verbatim
+o06-L437-s5	6	A create keyed by a key minted over	rule	binds	F12	kept	6			A create keyed by a key minted over			ok, verbatim
+o06-L439-s1	6	Landing is a `Superseded` drop of the provisional	rule	binds	F1	kept	6			Landing is a `Superseded` drop of the provisional			ok; reason cut: "one identity being one message"
+o06-L439-s2	6	A delivered create tombstoned since (§7) lands as	rule	binds	F1	kept	6			A delivered create tombstoned since (§7) lands as		"which a connector to such a source carries out as the member leaving that collection alone" now the pointer "(§4)": o04-L199-s1 states a delete takes the member out of that collection alone; "(another client restored it)" cut as an example	ok
+o06-L441-s1	6	For a mutable kind the base takes the	rule	binds	F1	kept	6			For a mutable kind the base takes the			ok
+o06-L441-s2	6	A carried body equal to the staged one	rule	binds	F1	kept	6			A carried body equal to the staged one			ok
+o06-L443-s1	6	An arrival carrying no body is that case	rule	MUST NOT	F2	kept	6			An arrival carrying no body is that case			ok
+o06-L443-s2	6	A delivered create tombstoned since is no exception:	rule	binds	F1	kept	6			A delivered create tombstoned since is no exception:			ok
+o06-L443-s3	6	It lands live, recorded as below, and its	rule	binds	F1	kept	6			It lands live, recorded as below, and its			ok; reason cut: "the delete was decided before anybody read what the server holds"; its object moved into the rule: "once the upgrade has read what the server holds"
+o06-L445-s1	6	Whatever the source's policy, the binding is then	rule	binds	F2	kept	6			Whatever the source's policy, the binding is then			ok
+o06-L447-s1	6	The upgrade then fetches the body (below).	rule	binds	F2	kept	6			The upgrade then fetches the body (below).			ok
+o06-L447-s2	6	It clears the conflict when it equals the	rule	binds	F2	kept	6			It clears the conflict when it equals the			ok; verbatim but "(§5)" now "(table A, §5)"; carries unchanged its naming `PreferLocal` alone where o06-L471-s1 says `PreferLocal` or `KeepLocal` (design.md §5.4, for the owner)
+o06-L447-s3	6	No policy chooses between a body and one	rule	binds	F2	merged	9			No policy chooses between a body and one nobody has read.	new:No policy chooses between a body and one nobody has read (§9)		ok; the §6 sentence stays as the pointer (n06-L447-s3)
+o06-L447-s4	6	The flags and body staged on the create	rule	binds	F2	kept	6			The flags and body staged on the create			ok
+o06-L449-s1	6	**A fetch moves the base.**	rule	binds	none	kept	6			A fetch moves the base.			ok
+o06-L449-s2	6	A fetch carrying a body over a placement	rule	binds	none	kept	6			A fetch carrying a body over a placement			ok; reason cut: "so the next sync reads the fetched body as agreed and not as an edit to push"
+o06-L451-s1	6	Over a placement holding a local edit (a	rule	binds	none	kept	6			Over a placement holding a local edit			ok
+o06-L453-s1	6	**Linking instead of fetching.**	heading	none	F10	kept	6			Linking instead of fetching.			ok
+o06-L453-s2	6	A `Full` upgrade of an immutable kind asks	rule	binds	F10	kept	6			A `Full` upgrade of an immutable kind asks			ok
+o06-L453-s3	6	It MUST adopt a body, recording it as	rule	MUST	F10	kept	6			It MUST adopt a body, recording it as		base words kept: "as STORAGE §9 says: on `subject`, `date` and `sender`, compared byte for byte, `NULL` matching `NULL`" (review C: the pointer to the hint rule pulled in its retained-row size test)	ok; fixed after review C
+o06-L453-s4	6	Else it fetches.	rule	binds	F10	kept	6			Else it fetches.			ok
+o06-L455-s1	6	**A server object id decides where both state	rule	binds	F10	kept	6			A server object id decides where both state			ok
+o06-L455-s2	6	Where the placement's binding states a server object	rule	MUST	F10	kept	6			Where the placement's binding states a server object		reason cut, no clause lost: "two messages reusing a `Message-ID` and agreeing on every field a listing states are two contents to a source naming them apart"	ok
+o06-L455-s3	6	Where either states none, the agreement above alone	rule	binds	F10	kept	6			Where either states none, the agreement above alone			ok
+o06-L457-s1	6	A row of another collection holding the key	rule	binds	F10	kept	6			A row of another collection holding the key			ok; reason cut: "a size is a witness, not an identity"
+o06-L457-s2	6	A row holding no summary agrees with nothing.	rule	binds	F10	kept	6			A row holding no summary agrees with nothing.			ok
+o06-L459-s1	6	A source stating a size that is not	rule	binds	F10	kept	6			A source stating a size that is not			ok
+o06-L461-s1	6	A mutable placement, a conflicted one, and one	rule	MUST	F10	kept	6			A mutable placement, a conflicted one, and one			ok
+o06-L461-s2	6	A linked placement holds the body as read:	rule	binds	none	kept	6			A linked placement holds the body as read:			ok
+o06-L463-s1	6	**Claims are revisited.**	rule	binds	none	kept	6			Claims are revisited.			ok
+o06-L463-s2	6	A level claiming a tier the row does	rule	binds	none	kept	6			A level claiming a tier the row does			ok; note cut: "which is what the `Meta` tier remains for"
+o06-L463-s3	6	A provisional handle names no member, so no	rule	binds	F1	kept	6			A provisional handle names no member, so no			ok
+o06-L465-s1	6	A `Meta` row holding its summary claims nothing,	rule	binds	none	kept	6			A `Meta` row holding its summary claims nothing,			ok
+o06-L467-s1	6	A fetch carrying no body writes the level	rule	binds	none	kept	6			A fetch carrying no body writes the level			ok
+o06-L467-s2	6	The sort key is adopted from every fetch	rule	binds	none	kept	6			The sort key is adopted from every fetch			ok
+o06-L467-s3	6	A summary column the body was read for	rule	binds	none	kept	6			A summary column the body was read for			ok
+o06-L469-s1	6	**A conflict's body.**	heading	none	F6	kept	6			A conflict's body.			ok
+o06-L469-s2	6	A conflicted placement holding no `conflict_object` is revisited.	rule	binds	F6	kept	6			A conflicted placement holding no `conflict_object` is revisited.			ok
+o06-L469-s3	6	The body fetched MUST land in `conflict_object`, never	rule	MUST	F6	kept	6			The body fetched MUST land in `conflict_object`, never			ok; "(§5)" now "(table A, §5)", table A's row "a body read later by the upgrade" stating the equal case too
+o06-L471-s1	6	Otherwise the source's policy then settles it as	rule	binds	F6	kept	6			Otherwise the source's policy then settles it as			ok; "(§5)" now "(table A, §5)"; kept whole: table A's row "a body read later by the upgrade" settles any unequal body "as §6 says", so this sentence is the rule, no clause of it in table A
+o06-L473-s1	6	An item conflict holding no `conflict_object`, recorded before	rule	binds	F2	merged	9	Case	/	the incoming body not carried	new:An item conflict holding no `conflict_object`, recorded before	"is revisited by the upgrade of every binding of the item whose base names a revision and no body": the row's "which revisits the conflict on every binding of the item whose base names a revision and no body"; "(§9)" dropped, now in §9	ok
+o06-L473-s2	6	A body fetched equal to the item's own	rule	binds	F2	merged	9	Case	/	the missing body read, equal	new:An item conflict holding no `conflict_object`, recorded before	"whatever the policy: the item's conflict clears and the binding takes that body as its base and its `shared_object`, as a binding's own conflict clears on its own body (§5)": the row's "no divergence, whatever the policy: the item's conflict clears, and the binding whose upgrade fetched it takes that body as its base and its `shared_object`, as a binding's own conflict clears on its own body (§5)"; the circular (§6) dropped (review A)	ok; fixed after review A
+o06-L473-s3	6	A body fetched differing from it is settled	rule	binds	F2	merged	9	Case	/	the missing body read, differing	new:An item conflict holding no `conflict_object`, recorded before	"settled by the collection's `conflict` policy as a carried one would have been": the row's "the policy applies as to a carried body", the collection's `conflict` policy being table B's caption	ok
+o06-L475-s1	6	under `manual` it MUST land in `items.conflict_object`, never	rule	MUST	F2	merged	9	Case	/	the missing body read, differing	new:An item conflict holding no `conflict_object`, recorded before	the MUST "under `manual` it MUST land in `items.conflict_object`, never in the item's own object": the row's "`manual` keeps the conflict, and a fetched incoming body MUST land in `items.conflict_object`, never in the item's own object"	ok
+o06-L476-s1	6	under `prefer-incoming` the item adopts it, and under	rule	binds	F2	merged	9	Case	/	the missing body read, differing	new:An item conflict holding no `conflict_object`, recorded before	"when the item holds a body; one holding none waits, recorded as `manual` records it, for the fill that reads its own": in the row's Case cell, so it governs every policy column (reviews A, C); "the conflict cleared either way" in both `prefer-*` cells; "the body not adopted kept and reported (§9)" is row "the body not adopted" and A policy's loser is kept (reported `Overruled`)	ok; fixed after reviews A, C
+o06-L478-s1	6	**Rows.**	heading	none	none	kept	6			Rows.			ok
+o06-L478-s2	6	Every fetch and every page writes the summary	rule	binds	none	kept	6			Every fetch and every page writes the summary			ok
+o07-L480-s1	7	7. Mutate	heading	none	none	kept	7			7. Mutate			ok
+o07-L482-s1	7	A mutation stages a local edit to one	rule	binds	none	kept	7			A mutation stages a local edit to one			ok
+o07-L482-s2	7	The queue's actions map onto them: `set-flags` to	rule	binds	none	kept	7			The queue's actions map onto them			ok
+o07-L484-s1	7	`SetFlags` sets the flags and marks the placement	rule	binds	F13	kept	7			`SetFlags` sets the flags and marks the placement			ok
+o07-L485-s1	7	Carrying no `base` it replaces the placement's set	rule	binds	F13	kept	7			Carrying no `base` it replaces the placement's set			ok
+o07-L486-s1	7	Carrying `base` (a queued `set-flags` stating the set	rule	binds	F13	kept	7			Carrying `base` (a queued `set-flags` stating the set		`SetFlags` and (§4) stood only in the cut sentence "A flag a sync landed or removed since the producer read is so kept as the sync left it, and the `SetFlags` change the next sync derives (§4) names what the producer changed and nothing else", a consequence ("so") of the set the item states: §4 derives the change against the base the sync left	ok; consequence cut, the rule (the set it applies) kept word for word
+o07-L487-s1	7	Carrying `base` it MUST be refused, staging nothing,	rule	MUST	F13	kept	7			Carrying `base` it MUST be refused, staging nothing,			ok
+o07-L488-s1	7	`Remove` tombstones the placement, binding and base kept	rule	binds	none	kept	7			`Remove` tombstones the placement, binding and base kept.			ok; reason cut: "so the remove is pushed against the right handle"
+o07-L489-s1	7	A remove carrying `if_match` (a queued `remove` stating	rule	MUST	none	merged	7			An `Edit` or a `Remove` carrying `if_match`		the `Remove` half of one bullet stating `if_match` for both: "a queued `remove` the body it deletes, STORAGE §15.3"	ok; one rule for `Edit` and `Remove`, with o07-L497-s1
+o07-L490-s1	7	It settles a conflict only as a person's	rule	MUST	none	merged	7			An `Edit` without `overrule`, or a `Remove`, settles a conflict		"or a `Remove`" in the subject; "on an `Edit`'s terms" is now the shared sentence itself; `items.conflicted` 1 and `bindings.conflicted` 1, the refusal unless `resolves` names each `conflict_object`, and the refusal when stating `resolves` and meeting none, word for word as o07-L498-s1 states them	ok; reason cut: "A remove staged before a conflict arose, or without it in view, so never deletes a diverging body unseen"
+o07-L491-s1	7	Resolving its binding's conflict it is the decision:	rule	binds	none	merged	7			An `Edit` or a `Remove` settling its binding's conflict is the decision		"the conflict clears" and the adoption of `conflict_revision` and `conflict_object` together, stated for both (o07-L499-s1's "On a conflicted placement it resolves, the base adopting ...")	ok; consequence cut: "so the remove pushes gated on what the remote holds" (a base adopting the conflict's revision gates the push on it, §4)
+o07-L492-s1	7	A diverging body not fetched yet (`conflict_object` `NULL`)	rule	binds	F2	merged	7			An `Edit` without `overrule`, or a `Remove`, settles a conflict		kept whole in the shared sentence, "so no `Remove` settles that conflict before the upgrade has read it (§6), and a base never pairs the observed revision with the old body" still the consequence it was (reviews A, C)	ok; fixed after reviews A, C
+o07-L493-s1	7	Resolving the item's conflict (§9) it clears it,	rule	binds	none	merged	7			An `Edit` or a `Remove` settling the item's conflict (§9) clears it		"a `Remove` leaves the item its body under the tombstone, its settle stated to the write with a `Settle` as for an `Edit` (STORAGE §14)"	ok; one sentence with o07-L500-s1
+o07-L494-s1	7	On a pending create it withdraws the create:	rule	binds	none	kept	7			On a pending create it withdraws the create			ok; reason cut: "whose removal retired it"
+o07-L495-s1	7	On a delivered create (§2) it withdraws nothing,	rule	binds	F1	kept	7			On a delivered create (§2) it withdraws nothing			ok; reason cut: "the source holding the member already"; "binding and base kept" is the parent bullet's (o07-L488-s1), which this item sits under
+o07-L496-s1	7	`Edit` stores a new body and repoints the	rule	MAY	none	kept	7			`Edit` stores a new body and repoints the			ok; "(below)" now "(above)", the shared settle bullets preceding `Edit`
+o07-L497-s1	7	An edit carrying `if_match` (a queued `update` stating	rule	MUST	none	kept	7			An `Edit` or a `Remove` carrying `if_match`			ok
+o07-L498-s1	7	An `Edit` without `overrule` settles a conflict only	rule	MUST	none	kept	7			An `Edit` without `overrule`, or a `Remove`, settles a conflict		`update`: "(a queued `update`'s `resolves`, STORAGE §15.3)" now "(STORAGE §15.3)", the first paragraph mapping `update` to `Edit` with its `resolves` carried; "It meets the item's conflict when `items.conflicted` is 1 and its binding's when `bindings.conflicted` is 1. Meeting either" now "Meeting the item's conflict (`items.conflicted` 1) or its binding's (`bindings.conflicted` 1)"	ok; reasons cut: "the conflict it was decided over being settled already" and "An ordinary edit, made before the conflict arose or without it in view, so never discards a diverging body"
+o07-L499-s1	7	On a conflicted placement it resolves, the base	rule	binds	none	kept	7			An `Edit` or a `Remove` settling its binding's conflict is the decision			ok; a top-level bullet, not under the person's-resolution bullet, so it binds an overruling `Edit` as it did
+o07-L500-s1	7	On a conflicted item it resolves too: `items.conflicted`	rule	binds	none	kept	7			An `Edit` or a `Remove` settling the item's conflict (§9) clears it			ok; top-level for the same reason
+o07-L501-s1	7	On a tombstone it revives, `Dirty`, and the	rule	binds	none	kept	7			On a tombstone it revives, `Dirty`			ok
+o07-L502-s1	7	An `Edit` settling a conflict by a rule	rule	MUST	F14	kept	7			An `Edit` settling a conflict by a rule of the engine's			ok; example cut: "(a one-way mode restating the body its authority holds)"
+o07-L503-s1	7	An overruling `Edit` keeps each diverging body it	rule	binds	F14	kept	7			An overruling `Edit` keeps each diverging body it			ok; "a retained item keyed over the edited placement's handle" cut, §9 stating it ("keeps it as a retained item ... keyed by the identity minted over the handle of the binding whose ... overruling `Edit` (§7) settled it")
+o07-L504-s1	7	An overruling `Edit` MUST be refused, staging nothing,	rule	MUST	F2	kept	7			An overruling `Edit` MUST be refused, staging nothing,			ok
+o07-L505-s1	7	With `resolves` the settle is a person's choice,	rule	binds	F14	kept	7			With `resolves` the settle is a person's choice			ok; verbatim (design.md §5.4 item 7)
+o07-L506-s1	7	`Copy` stages a `Created` placement in a target	rule	binds	F12	kept	7			`Copy` stages a `Created` placement in a target			ok
+o07-L507-s1	7	A `Move` into the collection its placement is	rule	MUST	F12	kept	7			A `Move` into the collection its placement is			ok; reason cut: "its tombstone and its create would name one member twice, the create minted beside the item it leaves and, for a placement holding no body, never delivered while the tombstone pushes a delete"
+o07-L508-s1	7	A `Move` meeting a conflict, the item's (`items.conflicted`	rule	MUST	F12	kept	7			A `Move` meeting a conflict, the item's		`Edit`, `Remove`, `resolves`: in the cut reason and advice "It states no `resolves`, so it is never a person's resolution ... The conflict is settled first, by an `Edit` or a `Remove` stating `resolves`, and the item moved after", which the refusal implies (the shared bullet above settles a conflict)	ok; reasons cut, also "its tombstone would leave the conflict standing, the diverging body pinned ..." and "it tombstones nothing"
+o07-L509-s1	7	Both read the target. When a live placement	rule	binds	F12	kept	7			When a live placement in the target already holds the identity			ok; "Both read the target." cut, §10 stating the load ("A `Copy` or a `Move` also loads its target for the identity it carries into it")
+o07-L510-s1	7	Both MUST be refused, staging nothing, for a	rule	MUST	F12	kept	7			Both MUST be refused, staging nothing, for a			ok; reason cut: "a create carrying no body is delivered only by a server-side copy from its origin, which only that source holds (§3)"; "Another source of the target is offered the create only once the store holds the body (§9), so the upgrade fetches it first" cut as §9's own rule (**Propagation is hydration-safe.**: "A source lacking an item MUST be offered it only when the store holds the body")
+o07-L511-s1	7	`Add` stages a new item under a provisional	rule	MUST	none	kept	7			`Add` stages a new item under a provisional			ok
+o07-L512-s1	7	It MUST fail, staging nothing, when its body	rule	MUST	none	kept	7			It MUST fail, staging nothing, when its body			ok
+o07-L513-s1	7	It MUST fail when a live placement holds	rule	MUST	none	kept	7			It MUST fail when a live placement holds			ok
+o07-L515-s1	7	`Abandon` gives up a delivered create (§2) whose	rule	binds	F1	kept	7			`Abandon` gives up a delivered create (§2) whose			ok
+o07-L516-s1	7	It MUST be refused, staging nothing, on any	rule	MUST	F1	kept	7			It MUST be refused, staging nothing, on any placement but		`Remove`: in the cut pointer "a pending create is withdrawn by a `Remove`, and a member a listing named is removed by one", which o07-L494-s1 and the `Remove` bullet state	ok
+o07-L517-s1	7	It drops the create's binding with reason `Deleted`	rule	binds	F1	kept	7			It drops the create's binding with reason `Deleted`			ok; reason cut: "there being no member to push it to"
+o07-L518-s1	7	Another source binding the item keeps its binding	rule	binds	F1	kept	7			Another source binding the item keeps its binding			ok; analogy cut, its reference kept: "as for any member gone from one source of several (§9)" now "(§9)"
+o07-L519-s1	7	It pushes nothing, and the run reports it	rule	binds	F1	kept	7			It pushes nothing, and the run reports it			ok; "naming the provisional handle" cut, §5's events table row `Abandoned` naming it ("its provisional handle")
+o07-L520-s1	7	A member arriving later under that identity revives	rule	binds	F1	kept	7			A member arriving later under that identity revives			ok
+o07-L522-s1	7	A delete meant to land in a trash	rule	binds	F12	kept	7			A delete meant to land in a trash			ok; carried unchanged, unmarked, binds as written (design.md §5.4)
+o07-L522-s2	7	`Remove` fits a delete meant to be final,	rule	binds	F12	kept	7			`Remove` fits a delete meant to be final,			ok; carried unchanged (design.md §5.4)
+o08-L524-s1	8	8. Rekey	heading	none	none	kept	8			8. Rekey			ok
+o08-L526-s1	8	A source may renumber every member (an IMAP	reason	none	none	kept	8			A source may renumber every member.		cut (example): "(an IMAP `UIDVALIDITY` bump, a restore)" (review B)	ok; restored after review B
+o08-L526-s2	8	A rekey re-enumerates the spine, which MUST be	rule	MUST	none	kept	8			A rekey re-enumerates the spine, which MUST be			ok
+o08-L528-s1	8	It carries each placement's body, summary, level, flags,	rule	binds	none	kept	8			It carries each placement's body, summary, level, flags,			ok; reason cut: "the one identifier that survived"
+o08-L530-s1	8	**A rekey runs the flag axis on the	rule	binds	F13	kept	8			A rekey runs the flag axis on the			ok
+o08-L530-s2	8	A carried member's listed flags are the remote	rule	binds	F13	kept	8			A carried member's listed flags are the remote			ok; reason cut: "which the rekey's checkpoint never lists again"
+o08-L530-s3	8	A flag change still owed is pushed by	rule	binds	F13	kept	8			A flag change still owed is pushed by			ok; "as any merge's is" cut, a comparison
+o08-L532-s1	8	The batch drops each old handle it re-writes	rule	binds	none	kept	8			The batch drops each old handle it re-writes			ok
+o08-L532-s2	8	It is one batch, every drop preceding every	rule	binds	none	kept	8			It is one batch, every drop preceding every			ok; reason cut: "since a new handle may be an old one another member held"
+o08-L534-s1	8	An old binding no member resolves to by	rule	binds	none	kept	8			An old binding no member resolves to by		the number 1 and (§10) stood only in the cut reason "since a server restarting its numbering at 1 hands a carried member the handle a gone one held, and an upsert under it before that drop would fold the carried member into the gone one's item (§10)"; the order it explains is o08-L532-s2's "every drop preceding every upsert"	ok
+o08-L536-s1	8	A member resolving to no old binding, an	rule	binds	F16	kept	8			A member resolving to no old binding is named		"as a sync naming it would: the rekey's checkpoint lists it no more" absorbed by §5 o05-L417-s1 ("a rekey reports `Added` for a member no old binding resolves to (§8), its checkpoint listing it no more"), new/owners-05.md F16; now "reported `Added` (§5)"	ok; apposition cut: "an arrival the renumbering met"
+o08-L538-s1	8	A binding with no base is outside the	rule	binds	none	kept	8			A binding with no base is outside the			ok
+o08-L538-s2	8	So is a delivered create (§2) no member	rule	binds	F1	kept	8			So is a delivered create (§2) no member			ok
+o08-L540-s1	8	**A rekey missing most members parks.**	rule	binds	F7	kept	8			A rekey missing most members parks.			ok
+o08-L540-s2	8	A rekey whose listing leaves more than half	rule	MUST NOT	F7	kept	8			A rekey MUST NOT be written where §5's mass-absence		"more than half of the based bindings of this source ... when those bindings number at least 20" is §5's **A mass absence parks.**, table C's guard column; what differs for a rekey (the scope, what absent means) is the next sentence; the empty listing is o08-L540-s4's own sentence again (review B)	ok; the MUST NOT kept, the guard pointed at §5 (owners.md F7)
+o08-L540-s3	8	They are counted as §5 counts a round's	rule	binds	F7	kept	8			Its absences are counted as §5 counts a round's			ok; "the whole collection being its scope and a binding absent when no member resolves to its link id" kept (owners.md F7 nuance), "based binding of this source" naming what the counted bindings are
+o08-L540-s4	8	A rekey whose listing names no member parks	rule	binds	F7	kept	8			A rekey whose listing names no member parks			ok; restored after review B
+o08-L542-s1	8	**A rekey from a capped listing parks on	rule	binds	F7	kept	8			A rekey from a capped listing parks on			ok; lead-in verbatim
+o08-L542-s2	8	A listing the source caps (§4, `capped` on	rule	binds	F7	kept	8			A based binding resolving to no member in a listing the source caps			ok; reasons cut: "leaves out members the source still holds" (§4, table C's `capped` row) and "its old handle names nothing in the new space"; "it can be neither dropped as gone nor carried as it is" kept (owners.md F7)
+o08-L542-s3	8	A rekey whose listing is capped MUST NOT	rule	MUST NOT	F7	kept	8			A rekey whose listing is capped MUST NOT			ok
+o08-L542-s4	8	A capped rekey every based binding resolves in	rule	binds	F7	kept	8			A capped rekey every based binding resolves in			ok
+o08-L544-s1	8	A parked rekey writes no drop and no	rule	binds	F7	kept	8			A parked rekey writes no drop and no			ok
+o08-L544-s2	8	The checkpoint still names the old handle space,	rule	binds	F7	kept	8			the checkpoint still naming the old handle space, meets			ok; "The checkpoint still names the old handle space, so the next run meets" now "The next run, the checkpoint still naming the old handle space, meets"
+o08-L546-s1	8	A member resolving to an identity already handed	rule	binds	none	kept	8			A member resolving to an identity already handed			ok
+o08-L548-s1	8	Where one hint had several old copies, a	rule	binds	none	kept	8			Where one hint had several old copies, a			ok
+o08-L548-s2	8	A renumbering that swapped two resources under one	example	none	none	cut-informative							ok; example
+o08-L548-s3	8	The sort key is carried, preferring the fetch's.	rule	binds	none	kept	8			The sort key is carried, preferring the fetch's.			ok
+o08-L550-s1	8	A mutable member whose fetched revision differs from	reason	none	none	merged	8			A mutable member whose fetched revision differs from		its subject is o08-L550-s2's now	ok; reason cut: "changed on the remote while the handles did"
+o08-L550-s2	8	The engine MUST carry it as a pull	rule	MUST	none	kept	8			A mutable member whose fetched revision differs from			ok; "The engine MUST carry it" now "... MUST be carried", its subject o08-L550-s1's
+o08-L552-s1	8	A `Conflict` the old handle held is carried	rule	binds	none	kept	8			A `Conflict` the old handle held is carried			ok
+o08-L552-s2	8	One the item's conflict projects (§3) records no	rule	binds	none	kept	8			One the item's conflict projects (§3) records no			ok
+o08-L554-s1	8	A base claiming a revision it never reconciled	rule	MUST NOT	none	kept	8			A base claiming a revision it never reconciled			ok
+o08-L556-s1	8	The batch lands the rekey's checkpoint and leaves	rule	binds	F9	kept	8			The batch lands the rekey's checkpoint and leaves			ok
+o08-L556-s2	8	The batch and the epoch bump commit together,	rule	binds	none	kept	8			The batch carries no op for the epoch bump			ok; "The batch and the epoch bump commit together" cut as a restatement of "the storage bumps the collection's generation in the transaction that applies it"
+o09-L558-s1	9	9. Several sources	heading	none	none	kept	9			9. Several sources			ok
+o09-L560-s1	9	N sources hold one item per identity and	rule	binds	none	kept	9			N sources hold one item per identity and			ok
+o09-L560-s2	9	A change one source folded into the item	rule	binds	none	kept	9			A change one source folded into the item			ok
+o09-L560-s3	9	There is no cross-merge.	rule	binds	none	kept	9			There is no cross-merge.			ok
+o09-L562-s1	9	**Absorbing a write** folds a source's batch into	rule	binds	none	kept	9			Absorbing a write folds a source's batch into			ok; reason cut: "since it took the body away"
+o09-L562-s2	9	A known flag set, sort key or summary	rule	binds	none	kept	9			A known flag set, sort key or summary			ok
+o09-L562-s3	9	A tombstone adopts no content and its flags	rule	binds	none	kept	9			A tombstone adopts no content and its flags			ok
+o09-L564-s1	9	**Two bases.**	heading	none	none	kept	9			Two bases.			ok
+o09-L564-s2	9	`base_object` is what the source last agreed with	rule	binds	none	kept	9			`base_object` is what the source last agreed with			ok
+o09-L564-s3	9	`shared_object` is what it last agreed with the	rule	binds	none	kept	9			`shared_object` is what it last agreed with the			ok
+o09-L566-s1	9	An upsert carrying no body (a pull at	rule	MUST NOT	none	kept	9			An upsert carrying no body (a pull at			ok; reason cut: "(the conflict being settled against it)"
+o09-L568-s1	9	The cross-source comparison MUST be made from `shared_object`,	rule	MUST	none	kept	9			The cross-source comparison MUST be made from			ok
+o09-L568-s2	9	It is the common ancestor an engine reads	rule	binds	none	kept	9			It is the common ancestor an engine reads			ok
+o09-L570-s1	9	**Cross-source content**, mutable kinds only.	rule	binds	F6	kept	9			Cross-source content, mutable kinds only.			ok
+o09-L570-s2	9	Three facts are read before the upsert is	rule	binds	F6	kept	9			Three facts are read before the upsert is			ok
+o09-L572-s1	9	the source changed when the incoming body differs	rule	binds	F6	kept	9			the source changed when the incoming body differs			ok, verbatim (design.md §5.4 item 7)
+o09-L573-s1	9	the item changed when the shared body differs	rule	binds	F6	kept	9			the item changed when the shared body differs			ok
+o09-L574-s1	9	the two disagree when the incoming body differs	rule	binds	F6	kept	9			the two disagree when the incoming body differs			ok
+o09-L576-s1	9	All three is a divergence, resolved by the	rule	binds	F6	kept	9			All three is a divergence, resolved by the			ok; its colon now table B's caption
+o09-L578-s1	9	`manual` keeps the shared body, flags the item	rule	binds	F6	tabled	9	Case	/	all three (a divergence)		`manual` is table B's column header	ok
+o09-L579-s1	9	`prefer-incoming` adopts and `prefer-existing` keeps, the body the	rule	binds	F6	tabled	9	Case	/	the body not adopted		`prefer-incoming` and `prefer-existing` are table B's column headers; "`prefer-incoming` adopts and `prefer-existing` keeps" is row "all three (a divergence)", cells "adopts" and "keeps"; "the body the policy does not adopt kept as below" is this row's "kept as below"	ok
+o09-L581-s1	9	Only the source having changed is a fast-forward.	rule	binds	F6	tabled	9	Case	/	only the source changed			ok
+o09-L581-s2	9	Only the item having changed leaves the incoming	rule	binds	F6	tabled	9	Case	/	only the item changed			ok
+o09-L583-s1	9	An immutable kind never diverges: one identity is	rule	binds	F17	tabled	9	Case	/	an immutable kind			ok; reason cut: "one identity is one message, so"
+o09-L583-s2	9	Another message under the same `Message-ID` never reaches	rule	binds	F10	kept	9			Another message under the same `Message-ID` never reaches			ok; "this rule" now "the immutable kind's row", the rule having become a row
+o09-L585-s1	9	An upsert leaving a conflicted binding counts as	rule	binds	none	kept	9			An upsert leaving a conflicted binding counts as			ok
+o09-L585-s2	9	Flags never conflict.	rule	binds	none	kept	9			Flags never conflict.			ok
+o09-L587-s1	9	**A body not held.**	heading	none	F2	kept	9			A body not held.			ok
+o09-L587-s2	9	An item holding no body (a pull at	rule	binds	F2	kept	9			An item holding no body (a pull at			ok
+o09-L587-s3	9	An upsert carrying no body over an item	rule	binds	F2	kept	9			An upsert carrying no body over an item holding one			ok
+o09-L587-s4	9	The three facts are read with these, and	rule	binds	F2	kept	9			The three facts are read with these, and			ok; its two rules, once a list, are table B's rows "the item holding no body (a fill)" and "the incoming body not carried, or the item holding none, in a divergence"
+o09-L589-s1	9	An upsert carrying a body over an item	rule	binds	F2	tabled	9	Case	/	the item holding no body (a fill)			ok; reason cut: "the pull that emptied it being the one this body was read for"
+o09-L590-s1	9	A divergence where either body is unread, the	rule	MUST	F2	tabled	9	Case	/	the incoming body not carried		`manual` is table B's column header; its last sentence "No policy chooses between a body and one nobody has read." is a sentence of A body not held (prose), which o06-L447-s3 targets	ok
+o09-L591-s1	9	Once the missing body is read, one equal	rule	binds	F2	tabled	9	Case	/	the missing body read, differing		`manual`, `prefer-incoming`, `prefer-existing` are table B's column headers; "one equal to the other is no divergence and the conflict clears (§6)" is row "the missing body read, equal"; "the body not adopted kept as below, keyed over the handle of the binding whose upgrade fetched it or whose upsert filled the item" is row "the body not adopted"	ok
+o09-L593-s1	9	**A policy's loser is kept.**	rule	binds	F14	kept	9			A policy's loser is kept.			ok
+o09-L593-s2	9	A body a policy does not adopt MUST	rule	MUST	F14	kept	9			A body a policy does not adopt MUST			ok
+o09-L595-s1	9	the shared body `prefer-incoming` replaced;	rule	binds	F14	kept	9			the shared body `prefer-incoming` replaced;			ok
+o09-L596-s1	9	the incoming body `prefer-existing` refused;	rule	binds	F14	kept	9			the incoming body `prefer-existing` refused;			ok
+o09-L597-s1	9	the local edit a source's `PreferRemote` dropped (§5),	rule	binds	F14	kept	9			the local edit a source's `PreferRemote` dropped (§5),			ok
+o09-L598-s1	9	the server's body a source's `PreferLocal` or `KeepLocal`	rule	binds	F14	kept	9			the server's body a source's `PreferLocal` or `KeepLocal`			ok
+o09-L600-s1	9	So MUST the diverging body an overruling `Edit`	rule	MUST	F14	kept	9			So MUST the diverging body an overruling `Edit`			ok
+o09-L602-s1	9	The write keeps it as a retained item	rule	binds	F14	kept	9			The write keeps it as a retained item		"(`dup:`, the link id, `#`, that handle)" cut: the minted form, which STORAGE §9 (Minting) defines and this sentence's STORAGE §9 cites	ok
+o09-L602-s2	9	A second body one binding loses is so	rule	binds	F14	kept	9			A second body one binding loses is so			ok
+o09-L602-s3	9	The run reports each `Overruled` (§5), in the	rule	binds	F14	kept	9			The run reports each `Overruled` (§5), in the			ok
+o09-L604-s1	9	**Deletes propagate.**	rule	binds	none	kept	9			Deletes propagate.			ok
+o09-L604-s2	9	A `Deleted` drop or a `Tombstone` upsert marks	rule	binds	none	kept	9			A `Deleted` drop or a `Tombstone` upsert marks			ok
+o09-L604-s3	9	Every other source projects a `Tombstone`; a source	rule	binds	none	kept	9			Every other source projects a `Tombstone`; a source			ok
+o09-L606-s1	9	This is how an absence a closed round	rule	binds	none	kept	9			This is how an absence a closed round			ok
+o09-L606-s2	9	A live upsert clears `deleted`.	rule	binds	none	kept	9			A live upsert clears `deleted`.			ok
+o09-L606-s3	9	With no binding left the item is retained	rule	binds	none	kept	9			With no binding left the item is retained			ok
+o09-L606-s4	9	A `Superseded` or `Rekeyed` drop marks nothing.	rule	binds	none	kept	9			A `Superseded` or `Rekeyed` drop marks nothing.			ok
+o09-L608-s1	9	**Propagation is hydration-safe.**	rule	binds	none	kept	9			Propagation is hydration-safe.			ok
+o09-L608-s2	9	A source lacking an item MUST be offered	rule	MUST	none	kept	9			A source lacking an item MUST be offered			ok
+o09-L608-s3	9	Mirroring is a sync plus an upgrade.	rule	binds	none	kept	9			Mirroring is a sync plus an upgrade.			ok
+o09-L610-s1	9	**A per-source conflict is its own fact.**	rule	binds	none	kept	9			A per-source conflict is its own fact.			ok
+o09-L610-s2	9	`bindings.conflicted` and `items.conflicted` never set each other.	rule	binds	none	kept	9			`bindings.conflicted` and `items.conflicted` never set each other.			ok
+o09-L610-s3	9	An upsert carrying no divergence clears the binding's	rule	binds	none	kept	9			An upsert carrying no divergence clears the binding's			ok
+o09-L610-s4	9	A tombstone projected for a conflicted binding still	rule	binds	none	kept	9			A tombstone projected for a conflicted binding still			ok
+o09-L610-s5	9	An item conflict holds no delete back: a	rule	binds	none	kept	9			An item conflict holds no delete back: a			ok
+o09-L612-s1	9	A binding with no base is a pending	rule	binds	none	kept	9			A binding with no base is a pending			ok
+o09-L612-s2	9	A `hash:` key is not offered to another	rule	binds	none	kept	9			A `hash:` key is not offered to another			ok
+o10-L614-s1	10	10. The load and the write	heading	none	none	kept	10			10. The load and the write			ok
+o10-L616-s1	10	An engine reads and writes the store through	rule	binds	none	kept	10			An engine reads and writes the store through			ok
+o10-L616-s2	10	This section says which an engine asks for,	pointer	none	none	kept	10			This section says which an engine asks for			ok
+o10-L618-s1	10	Every verb begins with a load naming a	rule	binds	none	kept	10			Every verb begins with a load naming a			ok
+o10-L620-s1	10	A mutation asks for the one placement it	rule	binds	none	kept	10			A mutation asks for the one placement it		table D's mutation Load cell names the `Copy` and `Move` target too (review C); page Load cell excepts the last page (review B)	ok
+o10-L621-s1	10	An upgrade asks for the handles it raises.	rule	binds	none	kept	10			An upgrade asks for the handles it raises.			ok
+o10-L622-s1	10	A delta, reasoning about what it does not	rule	binds	none	kept	10			A delta, reasoning about what it does not			ok
+o10-L623-s1	10	The last page of a round and a	rule	binds	none	kept	10			The last page of a round and a rekey ask for the whole collection			ok; verbatim, the lead's ruling
+o10-L624-s1	10	A page before the last and a head	rule	binds	none	kept	10			A page before the last and a head			ok
+o10-L626-s1	10	A sync also reads the refusals standing in	rule	binds	F3	kept	10			A sync also reads the refusals standing in			ok
+o10-L628-s1	10	Every verb ends in a batch.	rule	binds	F8	kept	10			Every verb ends in a batch.			ok
+o10-L628-s2	10	A sync's carries the round's own operations: `OpenRound`	rule	binds	F8	merged	10	Table D	4/	a page		split over table D rows delta (`SetCoverage` beside its checkpoint), a page (`OpenRound` first in the first page's batch, `Stamp` after the page's upserts, `SetRoundCursor`), a head (its `SetRoundCursor` carries no cursor, so the one a page landed stays) and a round's last page (`CloseRound` last in the write after the last chunk), each order constraint word for word	ok
+o10-L628-s3	10	Its drops are `Deleted` for a member gone	rule	binds	F8	merged	10	Table D	8/	a push chunk		split over table D rows delta (`Deleted` for a member gone from the source, `Superseded` for a provisional handle a landed arrival replaced), a push chunk (`Superseded` for an accepted add, `DeliverPlacement`, `LandPlacement` with "the relocation's naming its destination's collection" and "naming that collection too", `RefusePlacement` "after the upsert binding a create the store offered", `ClearRefusal`) and rekey (`Rekeyed` drops of the old handles, §8's wording); the (§4)/(§5) references moved to the Stated in column	ok
+o10-L628-s4	10	An `Abandon` writes a `Deleted` drop of the	rule	binds	F8	tabled	10	Table D	2/	`Abandon`			ok
+o10-L628-s5	10	A mutation's `Edit` states `Overrule` before its upsert	rule	binds	F8	merged	10	Table D	1/	mutation		split over table D rows mutation ("an `Edit` carrying `overrule` states `Overrule` before its upsert", `Settle` when an `Edit`'s or a `Remove`'s `resolves` names the item's conflict, no order set for it, the Ops column ordering nothing, review C) and upgrade ("one settling a conflict under `PreferLocal` states `Overrule` before the upsert adopting the fetched body", `PreferLocal` alone unchanged where §6 says `PreferLocal` or `KeepLocal`)	ok; design.md §5.4 inconsistency carried for the owner; fixed after review C
+o10-L630-s1	10	A batch is cut between candidates, never inside	rule	binds	none	kept	10			A batch is cut between candidates, never inside			ok
+o10-L630-s2	10	The checkpoint is per source and lands last	rule	binds	F9	kept	10			The checkpoint is per source and lands last			ok; dup of o05-L400-s2, already a one-line pointer to §5
+o10-L630-s3	10	A `Full` fetch MAY stream its body to	rule	MAY	none	kept	10			A `Full` fetch MAY stream its body to			ok
+o10-L632-s1	10	**The write keys another message apart.**	rule	binds	F10	kept	10			The write keys another message apart.			ok
+o10-L632-s2	10	A `Links` load answers this source's holders alone,	rule	binds	F10	kept	10			A `Links` load answers this source's holders alone,			ok
+o10-L632-s3	10	The write applies it whichever step named the	rule	binds	F10	kept	10			The write applies it whichever step named the			ok
+o10-L634-s1	10	**The version of the sync state.**	heading	none	none	kept	10			The version of the sync state.			ok
+o10-L634-s2	10	An engine records its version, this part's (`sync-draft-15`	rule	binds	none	kept	10			An engine records its version, this part's			ok
+o10-L634-s3	10	A store naming none holds no sync state	rule	binds	none	kept	10			A store naming none holds no sync state			ok
+o10-L636-s1	10	While this part is a draft, an engine	rule	MUST	none	kept	10			While this part is a draft, an engine			ok
+o10-L636-s2	10	Once this part is released, an engine MUST	rule	MUST	none	kept	10			Once this part is released, an engine MUST			ok
+o11-L638-s1	11	11. Test vectors	heading	none	none	kept	11			11. Test vectors			ok
+o11-L640-s1	11	vectors/sync/ holds cases every conforming engine MUST reproduce,	rule	MUST	none	kept	11			vectors/sync/ holds cases every conforming engine MUST reproduce			ok
+o11-L640-s2	11	A case states:	rule	binds	none	kept	11			A case states:			ok
+o11-L642-s1	11	`store`: the rows before the run, bodies named	rule	binds	none	kept	11			`store`: the rows before the run			ok
+o11-L643-s1	11	`run`: the verb, collection, source and options (`push`,	rule	binds	none	kept	11			`run`: the verb, collection, source and options			ok
+o11-L644-s1	11	`remote`: what the connector answers:	rule	binds	none	kept	11			`remote`: what the connector answers:			ok
+o11-L645-s1	11	one page as `snapshot` or a round's pages	rule	binds	none	kept	11			one page as `snapshot` or a round's pages			ok
+o11-L646-s1	11	`narrowed` on every page of a round a	rule	binds	none	kept	11			`narrowed` on every page of a round			ok
+o11-L647-s1	11	`cursor_rejected` when it refuses the stored cursor, `interrupted_after`	rule	binds	none	kept	11			`cursor_rejected` when it refuses the stored cursor			ok
+o11-L648-s1	11	`heads`, the heads it lists (`delta`, `band`), and	rule	MUST	none	kept	11			`heads`, the heads it lists			ok
+o11-L649-s1	11	the fetch answers by handle and tier, a	rule	binds	none	kept	11			the fetch answers by handle and tier			ok
+o11-L650-s1	11	`expect`: the pushes in order, the outcomes fed	rule	MUST	none	kept	11			`expect`: the pushes in order			ok
+o11-L652-s1	11	A provisional handle is written with its leading	rule	binds	none	kept	11			A provisional handle is written with its leading			ok
+o11-L652-s2	11	A source row states its round as `round`,	rule	binds	none	kept	11			A source row states its round as `round`			ok
+o11-L654-s1	11	A `store` may state `supersessions`, rows of the	rule	binds	none	kept	11			A `store` may state `supersessions`			ok
+o11-L654-s2	11	`expect` may state the `collections` a run declares,	rule	binds	none	kept	11			`expect` may state the `collections` a run declares			ok
+o11-L654-s3	11	Vectors 70 and 158 bind an engine whose	rule	binds	none	kept	11			Vectors 70 and 158 bind an engine			ok
+o11-L656-s1	11	A push is compared on its change, handle	rule	binds	none	kept	11			A push is compared on its change, handle and `key`			ok
+o11-L656-s2	11	An outcome names its handle, `Accepted`, `Rejected` or	rule	binds	none	kept	11			An outcome names its handle			ok
+o11-L656-s3	11	An add accepted with no handle (§4) states	rule	binds	none	kept	11			An add accepted with no handle (§4) states `assigned` as `null`			ok
+o11-L658-s1	11	Rows are compared as parsed structures on the	rule	binds	none	kept	11			Rows are compared as parsed structures			ok
+o11-L658-s2	11	Chunked pushes or writes are compared concatenated.	rule	binds	none	kept	11			Chunked pushes or writes are compared concatenated.			ok
+o11-L660-s1	11	Every case pins two rules: no `Remove` is	rule	binds	none	kept	11			Every case pins two rules		the checks this sentence listed follow its target as the bullets n11-L25-s1 to n11-L42-s1, one a check, each in this sentence's words; the identifiers and the §§ it held are theirs	ok
+o11-L660-s2	11	Only an implementation runs one.	rule	binds	none	kept	11			Only an implementation runs a case.		"runs one" written "runs a case", its antecedent now the lead of a list	ok
+o12-L662-s1	12	12. Conformance	heading	none	none	kept	12			12. Conformance			ok
+o12-L664-s1	12	An implementation offering sync conforms by one profile	rule	MUST	none	kept	12			A sync implementation conforms by one profile or both		the instance `sync-draft-15 engine` cut, STORAGE §17 giving it; the connector's instance kept	ok
+o12-L666-s1	12	| Profile | What it does | Owes	heading	none	none	kept	12			| Profile | What it does | Owes | Vectors |			ok
+o12-L668-s1	12	| engine | runs the verbs over a	rule	binds	none	kept	12			| engine | runs the verbs over a store as its owner			ok
+o12-L669-s1	12	| connector | answers an engine's enumerate, fetch	rule	binds	none	kept	12			| connector | answers an engine's enumerate, fetch and push			ok
+o12-L671-s1	12	Both meet STORAGE §18 where it names them:	rule	binds	none	kept	12			Both meet STORAGE §18 where it names them			ok
+n05-C-caption	5		heading	none	F4	new-only	5			Table C, what a listing's absence proves			
+n05-C-deltahead	5		pointer	none	F4	new-only	5	Listing	2/	delta head			
+n05-C-bandhead	5		pointer	none	F4	new-only	5	Listing	3/	band head			
+n05-C-pagebefore	5		pointer	none	F4	new-only	5	Listing	4/	a page before the last			
+n05-C-rekey	5		pointer	none	F4	new-only	5	Listing	12/	rekey			
+n05-C-cappedrekey	5		pointer	none	F4	new-only	5	Listing	13/	capped rekey			
+n05-A-caption	5		heading	none	F6	new-only	5			Table A, the source's policy by case			
+n05-A-bothbody	5		pointer	none	F6	new-only	5	Case	/	both changed, body carried			
+n05-A-tombstone	5		pointer	none	F6	new-only	5	Case	/	a tombstone and a remote edit			
+n05-A-arrival	5		pointer	none	F6	new-only	5	Case	/	an arrival landing a create			
+n05-A-forbidden	5		pointer	none	F6	new-only	5	Case	/	content pushes forbidden			
+n05-A-nobody	5		pointer	none	F6	new-only	5	Case	/	no body held		o05-L340-s1's "owes nothing" and o05-L355-s1's "has nothing to keep and pulls as any", each cell stating both (reviews A, C)	ok; fixed after reviews A, C
+n06-L447-s3	6		pointer	none	F2	new-only	6			No policy chooses between a body and one nobody has read (§9)		the pointer o06-L447-s3 leaves, its rule now stated in §9	ok
+n06-L473-s1	6		pointer	none	F2	new-only	6			An item conflict holding no `conflict_object`, recorded before		the pointer o06-L473-s1 to o06-L476-s1 leave, the rule stated once in §9 (table B)	ok
+n09-B-caption	9		heading	none	F6	new-only	9			Table B, that policy by case:			ok
+n10-D-caption	10	Table D, load and write by step	heading	none	F8	new-only	10			Table D, load and write by step		the caption of table D, which replaces o10-L628-s2 to o10-L628-s5	ok
+n10-D-upgrade	10	upgrade	rule	binds	F8	new-only	10	Table D	3/	upgrade		part of o10-L628-s5: the upgrade's `Overrule` under `PreferLocal`, its words kept; the Ops cell states it only as the constraint column does (review C)	split:o10-L628-s5
+n10-D-delta	10	delta	rule	binds	F8	new-only	10	Table D	4/	delta		part of o10-L628-s2 (`SetCoverage` beside a delta's checkpoint) and o10-L628-s3 (the `Deleted` and the landed arrival's `Superseded` drops)	split:o10-L628-s2
+n10-D-head	10	a head	rule	binds	F8	new-only	10	Table D	6/	a head		part of o10-L628-s2: `SetRoundCursor` with every head, carrying no cursor; `Stamp` after its upserts, a delta head's as §5 states	split:o10-L628-s2
+n10-D-lastpage	10	a round's last page	rule	binds	F8	new-only	10	Table D	7/	a round's last page		part of o10-L628-s2: `CloseRound` last in the write after the last chunk; "unless parked" is §5's (table C, parked)	split:o10-L628-s2
+n10-D-rekey	10	rekey	rule	binds	F8	new-only	10	Table D	9/	rekey		part of o10-L628-s3 (`Rekeyed`); the `Deleted` drops and "every drop preceding every upsert" are §8's words	split:o10-L628-s3
+n11-L25-s1	11	its structure and references;	rule	binds	none	new-only	11			its structure and references;		part of o11-L660-s1, one of the checks it listed, its words kept	split:o11-L660-s1
+n11-L26-s1	11	every push's key;	rule	binds	none	new-only	11			every push's key;		part of o11-L660-s1, one of the checks it listed, its words kept	split:o11-L660-s1
+n11-L27-s1	11	every `Overruled` event's key	rule	binds	none	new-only	11			every `Overruled` event's key		part of o11-L660-s1, one of the checks it listed, its words kept	split:o11-L660-s1
+n11-L28-s1	11	those two rules;	rule	binds	none	new-only	11			those two rules;		part of o11-L660-s1, one of the checks it listed, its words kept	split:o11-L660-s1
+n11-L29-s1	11	the mass-absence and empty-listing guards	rule	binds	none	new-only	11			the mass-absence and empty-listing guards		part of o11-L660-s1, one of the checks it listed, its words kept	split:o11-L660-s1
+n11-L30-s1	11	that a capped rekey parks on any absence	rule	binds	none	new-only	11			that a capped rekey parks on any absence		part of o11-L660-s1, one of the checks it listed, its words kept	split:o11-L660-s1
+n11-L31-s1	11	a narrowed round's absences, and the count	rule	binds	none	new-only	11			a narrowed round's absences, and the count		part of o11-L660-s1, one of the checks it listed, its words kept	split:o11-L660-s1
+n11-L32-s1	11	that a held message and a member it	rule	binds	none	new-only	11			that a held message and a member it does not agree with		part of o11-L660-s1, one of the checks it listed, its words kept	split:o11-L660-s1
+n11-L33-s1	11	that no body is pushed over, nor left	rule	binds	none	new-only	11			that no body is pushed over, nor left facing		part of o11-L660-s1, one of the checks it listed, its words kept	split:o11-L660-s1
+n11-L34-s1	11	that an `Edit` or a `Remove` settling a	rule	binds	none	new-only	11			that an `Edit` or a `Remove` settling a conflict		part of o11-L660-s1, one of the checks it listed, its words kept	split:o11-L660-s1
+n11-L35-s1	11	that an `Abandon` gives up a delivered create	rule	binds	none	new-only	11			that an `Abandon` gives up a delivered create alone		part of o11-L660-s1, one of the checks it listed, its words kept	split:o11-L660-s1
+n11-L36-s1	11	the set a `SetFlags` carrying `base` leaves	rule	binds	none	new-only	11			the set a `SetFlags` carrying `base` leaves		part of o11-L660-s1, one of the checks it listed, its words kept	split:o11-L660-s1
+n11-L37-s1	11	every `Disagreed` event, and that none is missing	rule	binds	none	new-only	11			every `Disagreed` event, and that none is missing		part of o11-L660-s1, one of the checks it listed, its words kept	split:o11-L660-s1
+n11-L38-s1	11	across collections, that a message draws the `seq`	rule	binds	none	new-only	11			across collections, that a message draws the `seq`		part of o11-L660-s1, one of the checks it listed, its words kept	split:o11-L660-s1
+n11-L39-s1	11	across collections, that an upgrade leaves no placement	rule	binds	none	new-only	11			across collections, that an upgrade leaves no placement		part of o11-L660-s1, one of the checks it listed, its words kept	split:o11-L660-s1
+n11-L40-s1	11	that no change is pushed under the key	rule	binds	none	new-only	11			that no change is pushed under the key		part of o11-L660-s1, one of the checks it listed, its words kept	split:o11-L660-s1
+n11-L41-s1	11	that a `Refused` outcome stands recorded	rule	binds	none	new-only	11			that a `Refused` outcome stands recorded		part of o11-L660-s1, one of the checks it listed, its words kept	split:o11-L660-s1
+n11-L42-s1	11	that an accepted push leaves no refusal	rule	binds	none	new-only	11			that an accepted push leaves no refusal		part of o11-L660-s1, one of the checks it listed, its words kept	split:o11-L660-s1
