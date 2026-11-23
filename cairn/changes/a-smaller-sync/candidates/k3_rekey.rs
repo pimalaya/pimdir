@@ -1,6 +1,6 @@
 //! # K3: the rekey's own rules, R0 to R8
 //!
-//! Each test pins what io-pimdir 131f9bf does today in a case only a
+//! Each test pins what io-pimdir 176e0b7 does today in a case only a
 //! rekey has, run through the real store.
 
 #![cfg(feature = "client")]

@@ -33,7 +33,7 @@ Three lanes: the lead's (steps 1 to 6, the only one editing I), the document's (
 
 design.md §4.
 
-- [ ] D/old from `git archive 131f9bf`, the first `name =` of its Cargo.toml renamed; the manifest of §4.1; I's Cargo.lock copied; the target directory under D, `TMPDIR` on the tmpfs; one release build
+- [ ] D/old from `git archive 176e0b7`, the first `name =` of its Cargo.toml renamed; the manifest of §4.1; I's Cargo.lock copied; the target directory under D, `TMPDIR` on the tmpfs; one release build
 - [ ] side.rs, included twice: open, seed, the lockstep driver returning a trace, the masks of §4.2, the report, the row dump by natural key, the load battery
 - [ ] The vector runner copied from I/tests/vectors_sync.rs (its first ten lines, `pending` and the expectations out, the spec directory hardcoded); the 200 vectors, old against old
 - [ ] The server model on plain types and its two adapters; the seeded generator with weights by flag, the forced shapes, the cuts, the shrink (§4.3)

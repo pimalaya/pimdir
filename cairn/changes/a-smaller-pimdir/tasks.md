@@ -125,7 +125,7 @@ One sub-agent per document, from design.md and the schema as each checkpoint lea
 ## 10. The report (08:30 to 09:00)
 
 - [x] report.md here, one page: the table before and after; each move with its checkpoint, or why it was rolled back or skipped; every test deleted and why; the decisions of decisions.md in one line each; consumers.md and android.md in one line each; the bench table; what was not verified (live servers, a phone, the ignored suites); the doubts left for the owner
-- [x] P/checks/io-pimdir.rev names I's last commit (131f9bf); both trees' status clean but for what the report names
+- [x] P/checks/io-pimdir.rev names I's last commit (176e0b7); both trees' status clean but for what the report names
 - [x] The last checkpoint and commits; nothing pushed (no checkpoint copy after 04-guards-index: the perf pass is in git, one commit a patch)
 - [x] A memory note pointing at report.md
 

@@ -1,6 +1,6 @@
 # A smaller sync: the changes, one by one
 
-Written on 2026-11-23 after a second reading, line by line, of the code each move of design.md §3 touches (io-pimdir 131f9bf, pimdir e75e397, android c21fb53, neverest 99384ff). Nothing was built or run for it: every claim below is from reading, and each names its lines.
+Written on 2026-11-23 after a second reading, line by line, of the code each move of design.md §3 touches (io-pimdir 176e0b7, pimdir fb56c83, android c21fb53, neverest 99384ff). Nothing was built or run for it: every claim below is from reading, and each names its lines.
 
 The second reading does not confirm the first plan. Of the eight moves it listed, three hold as written, two hold in a smaller form, and four change an outcome or the wire and so cannot be made under "behaviour frozen". The duplicated code is real, but most duplicates do not decide alike: merging them is a change of rule, not a refactoring. This file says, for each change, what exists, what would change, what must stay, how it is guarded, and where it stops.
 

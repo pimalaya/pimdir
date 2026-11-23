@@ -6,7 +6,7 @@ landed: 2026-11-22
 
 # A smaller pimdir, storage-draft-17 and search-draft-17
 
-The night of 2026-11-22 to 2026-11-23 redrew the standard as cairn/changes/a-smaller-pimdir planned it, on the main line, unsigned and unpushed (owner's GO at 21:14). Its decisions are in that folder's decisions.md, its checkpoints in journal.md. Commits: 4250177 (the contract), 0f5e542 (flags), 0e5a9b8 (SEARCH.md), c7f424c (STORAGE.md), 7abd20f (SYNC.md and OVERVIEW.md), 61b39c4 (summaries), f33d5c4 (GUIDE.md), cb23af5 (the queue's foreign key).
+The night of 2026-11-22 to 2026-11-23 redrew the standard as cairn/changes/a-smaller-pimdir planned it, on the main line, committed unsigned and re-signed before the push of 2026-11-23 (owner's GO at 21:14). Its decisions are in that folder's decisions.md, its checkpoints in journal.md. Commits: 692af79 (the contract), 774022b (flags), d47a676 (SEARCH.md), 292aab1 (STORAGE.md), d1c9274 (SYNC.md and OVERVIEW.md), 6d8a90f (summaries), a11b865 (GUIDE.md), f295ed7 (the queue's foreign key).
 
 ## What moved
 
@@ -24,12 +24,12 @@ Storage moves to **storage-draft-17** (a store of draft-16 is refused as an earl
 - The flag columns' shape and the summary's per-component `CHECK`s on the floor: checks/floor.sh, its well-formed rows rewritten onto `summary` and `summary_value` and its refused writes extended (a keyword with a leading, trailing or doubled space, a tab or a non-ASCII byte, keywords on an unknown set, a column of another component, a file's uid, a named `in-reply-to` value). It no longer checks statement plans on SQLite 3.18 (decisions.md, 21:23: owed by io-pimdir for its own statements). checks/rehearsal/populate.sql follows both moves.
 - Every summary column a component holds, read off the schema's `CHECK`s, against the payload and vector formats: checks/vectors.py (`holds`, `SUMMARY_COLUMNS`).
 - The sync rules: the 200 files of vectors/sync/, untouched, 200 of 200 through io-pimdir's runner mapping their logical rows onto the new tables. What a query answers: vectors/search/queries.json unchanged, refresh.json at `v` 6.
-- The rest is io-pimdir's suite at its 3a1f3eb (the keyword sort, the summary rows, the RESTRICT by a raw delete, refresh equal to rebuild on object and split rows), with 76 tests ported from the retired checks/invariants.sh (tests/invariants_*.rs), each shown to fail by breaking its rule on a scratch copy. invariants.tsv maps its 564 rules: 368 already held, 196 not, of which 48 plan rules and 17 migration rehearsals skipped by design and about 35 owed. No check of checks/ refuses a collection delete under a queued row: the RESTRICT's guard is io-pimdir's tests/store_rules.rs alone.
-- checks/implementation.sh copies migrations/storage/, vectors/ and payloads/ alone into io-pimdir, the statements, index schema and generator staying the crate's. checks/io-pimdir.rev still names f2c4940, from before the night, so that CI gate fails until it names io-pimdir 3a1f3eb or later.
+- The rest is io-pimdir's suite at its 46d851f (the keyword sort, the summary rows, the RESTRICT by a raw delete, refresh equal to rebuild on object and split rows), with 76 tests ported from the retired checks/invariants.sh (tests/invariants_*.rs), each shown to fail by breaking its rule on a scratch copy. invariants.tsv maps its 564 rules: 368 already held, 196 not, of which 48 plan rules and 17 migration rehearsals skipped by design and about 35 owed. No check of checks/ refuses a collection delete under a queued row: the RESTRICT's guard is io-pimdir's tests/store_rules.rs alone.
+- checks/implementation.sh copies migrations/storage/, vectors/ and payloads/ alone into io-pimdir, the statements, index schema and generator staying the crate's. checks/io-pimdir.rev still names f2c4940, from before the night, so that CI gate fails until it names io-pimdir 46d851f or later.
 
 ## The figures
 
-| | Before (b5b9382) | After (cb23af5) |
+| | Before (b5b9382) | After (f295ed7) |
 | --- | --- | --- |
 | Store tables | 24 | 15 |
 | Store triggers | 43 | 30 |

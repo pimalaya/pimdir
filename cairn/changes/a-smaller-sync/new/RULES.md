@@ -1,6 +1,6 @@
 # Rules for the SYNC.md rewriters
 
-C is /home/soywod/code/pimalaya/pimdir/cairn/changes/a-smaller-sync. The base text is C/sync-base.md (SYNC.md at e75e397), split into C/new/NN.md, one file per section (00 is the preamble and Contents). `cat C/new/[0-9]*.md` is the new SYNC.md. The method is design.md §5; read it, then C/owners.md (who owns each rule family, and the nuance each restatement carries), C/leadins.txt, and the docstring of C/tools/ledger.py.
+C is /home/soywod/code/pimalaya/pimdir/cairn/changes/a-smaller-sync. The base text is C/sync-base.md (SYNC.md at fb56c83), split into C/new/NN.md, one file per section (00 is the preamble and Contents). `cat C/new/[0-9]*.md` is the new SYNC.md. The method is design.md §5; read it, then C/owners.md (who owns each rule family, and the nuance each restatement carries), C/leadins.txt, and the docstring of C/tools/ledger.py.
 
 ## What you may change
 

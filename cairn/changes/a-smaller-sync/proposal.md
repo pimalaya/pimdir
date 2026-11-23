@@ -19,7 +19,7 @@ So this change is smaller in the engine than first proposed, and says so. design
 
 Storage could redraw its tables, because every reader followed the schema. Sync cannot be redrawn that way: every rule in it is a data-loss lesson, and two consumers (neverest, and the Android app through a hand-written JSON wire and a second implementation of the write in Java) drive the engine through its public types. So what lands tonight holds the strongest sameness (L0 of moves.md): every yield of a run but its loads is the same text in the same order, and every row is the same after it.
 
-The proof is a new **differential oracle** (design.md §4). The engine of io-pimdir 131f9bf and the engine of the tree run side by side over the 200 vectors and over generated multi-source histories against one scripted server. It is shown able to fail on three planted bugs before it gates anything. It runs beside the 200 vectors (files unchanged, byte for byte), the engine tests (unchanged), and neverest's sync tests on a scratch port.
+The proof is a new **differential oracle** (design.md §4). The engine of io-pimdir 176e0b7 and the engine of the tree run side by side over the 200 vectors and over generated multi-source histories against one scripted server. It is shown able to fail on three planted bugs before it gates anything. It runs beside the 200 vectors (files unchanged, byte for byte), the engine tests (unchanged), and neverest's sync tests on a scratch port.
 
 The same oracle, in a relaxed mode, measures what does not land: each merge that would change a rule is built on a scratch copy and reported with what it moves.
 

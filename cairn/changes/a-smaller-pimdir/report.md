@@ -22,17 +22,17 @@ io-pimdir's src/ did not shrink (70.7k lines): its statements were already .sql 
 
 | step | pimdir | io-pimdir | note |
 | --- | --- | --- | --- |
-| 2. the contract leaves the standard | 4250177 | 286c50f | statements, index schema and generator are io-pimdir's; they stay under its spec/ (decision) |
-| 3. flags as columns | 0f5e542 | 4a0ece9 | `items.keywords`, `bindings.base_keywords`; 2 tables and 12 triggers gone |
-| 4. one summary, one list table | 61b39c4 | 3189d3a | 9 tables into `summary` and `summary_value`; 76 ported invariant tests |
-| 5 and 6. guards and the index | cb23af5 | 3a1f3eb | queue RESTRICT, 4 dead statements, `chunk` and `thread` out of the index |
-| 7. the documents | 0e5a9b8, c7f424c, 7abd20f, f33d5c4, 73e2bd6 | db31aab | SEARCH, STORAGE, SYNC/OVERVIEW rewritten, GUIDE retired, logs and changelog |
-| 9b. perf: pages and threads | | cde1896 | one read transaction a page, batched thread reads, lazy snippets |
-| 9b. perf: proven body hits | | 187f31f, 98c2eca | no probe for hits the hit columns proved |
-| 9b. perf: incremental | | 6908421 | index.hits patched, not re-read |
-| 9b. perf: the query floor | | f8eae7a, 277a31b | ~0.5 ms off every query |
-| 9b. perf: the index build | | efa2bc5 | merges held back, one segment a table |
-| logs and the CI matrix | 435e732 (+ this report) | 2c1acdc, 131f9bf | 131f9bf fixes the feature matrix's `search`-only builds (a path tonight broke, two dead-code warnings since round 4) |
+| 2. the contract leaves the standard | 692af79 | d8f4807 | statements, index schema and generator are io-pimdir's; they stay under its spec/ (decision) |
+| 3. flags as columns | 774022b | 6f8b198 | `items.keywords`, `bindings.base_keywords`; 2 tables and 12 triggers gone |
+| 4. one summary, one list table | 6d8a90f | 5539042 | 9 tables into `summary` and `summary_value`; 76 ported invariant tests |
+| 5 and 6. guards and the index | f295ed7 | 46d851f | queue RESTRICT, 4 dead statements, `chunk` and `thread` out of the index |
+| 7. the documents | d47a676, 292aab1, d1c9274, a11b865, 4909035 | fea2d0c | SEARCH, STORAGE, SYNC/OVERVIEW rewritten, GUIDE retired, logs and changelog |
+| 9b. perf: pages and threads | | fcb6012 | one read transaction a page, batched thread reads, lazy snippets |
+| 9b. perf: proven body hits | | f5ca598, 6457c25 | no probe for hits the hit columns proved |
+| 9b. perf: incremental | | 6f98392 | index.hits patched, not re-read |
+| 9b. perf: the query floor | | 39f2d2b, 17d213b | ~0.5 ms off every query |
+| 9b. perf: the index build | | e303029 | merges held back, one segment a table |
+| logs and the CI matrix | fccf7b8 (+ this report) | 950383f, 176e0b7 | 176e0b7 fixes the feature matrix's `search`-only builds (a path tonight broke, two dead-code warnings since round 4) |
 
 Nothing was rolled back. Skipped: the stretch items (supersessions as a column, performers into capabilities, statement twins), because 3 h 40 were lost idle (22:53 to 02:34: my waiter on the 1M import matched its own command line and never returned) and a store move during the perf pass would have forced a 1M re-import.
 
@@ -44,14 +44,14 @@ Import, GNU time, core 12, writeback body flush, the machine quiet:
 | --- | --- | --- | --- | --- |
 | 1M notmuch new (fresh, 05:36) | | | 1,137 s | 1,005 s |
 | 1M io-pimdir 509fd83 (2026-11-21, before writeback and round 4) | 1,422 s | 762 s | 2,184 s | 507 s |
-| 1M tonight (efa2bc5) | 520 s | 230 s | 750 s | 403 s |
+| 1M tonight (e303029) | 520 s | 230 s | 750 s | 403 s |
 | 517k notmuch new (fresh, 05:27) | | | 522 s | 483 s |
 | 517k round 4 (00727ba, fresh, 05:21) | 239 s | 124 s | 363 s | 208 s |
-| 517k tonight (efa2bc5) | 232 s | 99 s | 331 s | 185 s |
+| 517k tonight (e303029) | 232 s | 99 s | 331 s | 185 s |
 
 The index build is the gain the code made (the import agent: a 517k rebuild from 121.8 to 92.2 s and 22.9 to 16.5 GB written). The sync code barely moved (`ensure_collection` alone), and its wall time moves with the disk: 339 s at 517k and 827 s at 1M on the first run at 22:31, 232 s and 520 s on the quiet run at 05:00.
 
-Queries at 1M, hyperfine medians in ms, 20 runs, core 12, one run per row with notmuch / round 4 (00727ba on runs/x2d) / tonight (efa2bc5 on its own 1M store):
+Queries at 1M, hyperfine medians in ms, 20 runs, core 12, one run per row with notmuch / round 4 (00727ba on runs/x2d) / tonight (e303029 on its own 1M store):
 
 | query | count | page of 50 | threads of 50 |
 | --- | --- | --- | --- |
@@ -75,7 +75,7 @@ Queries at 1M, hyperfine medians in ms, 20 runs, core 12, one run per row with n
 
 - **Behind notmuch at the start of the pass:** rare word (page, threads), combined (all three), folder (threads). All are ahead now except the combined count. Three more pairs of 50 runs gave notmuch 6.1, 5.0 and 4.5 ms against pimdir's 5.6, 5.1 and 4.7, so the combined count is a tie within noise.
 - **Answers:**
-  - The 51 `--json` outputs of the final binary on its store are identical to the night's base binary (3a1f3eb) on its store, and the 17 counts to round 4's.
+  - The 51 `--json` outputs of the final binary on its store are identical to the night's base binary (46d851f) on its store, and the 17 counts to round 4's.
   - The 51 outputs were also identical after each patch.
 - **Incremental, 517k** (the incr agent, its own store copy):
   - A 300-message refresh takes 617 to 189 ms (notmuch new 725).
@@ -91,7 +91,7 @@ Queries at 1M, hyperfine medians in ms, 20 runs, core 12, one run per row with n
 - floor.sh no longer checks query plans on SQLite 3.18: those plans are io-pimdir's now, which owes them a check.
 - refresh.json at `v` 6 pins answers only; io-pimdir checks refreshed against rebuilt index rows instead.
 - README's SEARCH major now means a break of the query language or of what an answer states.
-- checks/references.pl kept (it checks links), its GUIDE entry removed (435e732).
+- checks/references.pl kept (it checks links), its GUIDE entry removed (fccf7b8).
 - Five unused search statements (`flagged`, `attached`, `holding`, `categorised`, `occurring_between`) and the index's `missing` table kept, for the Android app.
 - `store_meta_identity` kept: it is what tells a restored copy from the store a consumer followed.
 - STORAGE.md stops at 24,683 words, not 18,000: what is left is rules.
@@ -117,7 +117,7 @@ Queries at 1M, hyperfine medians in ms, 20 runs, core 12, one run per row with n
 
 ## Not verified
 
-- No live server, no phone, no consumer build. The io-pimdir CI matrix ran locally: `cargo test --all-features`, `--no-default-features --features cli` and `--lib` green at 2c1acdc (2,778 tests across the three runs, 0 failed); fmt and clippy `-D warnings`, on all features and on each search feature alone, green at 131f9bf, which changed a path and two attributes after the tests.
+- No live server, no phone, no consumer build. The io-pimdir CI matrix ran locally: `cargo test --all-features`, `--no-default-features --features cli` and `--lib` green at 950383f (2,778 tests across the three runs, 0 failed); fmt and clippy `-D warnings`, on all features and on each search feature alone, green at 176e0b7, which changed a path and two attributes after the tests.
 - The ignored suites (8 tests) did not run.
 - The sync phase's wall time is disk-bound and moved 1.6x between runs, so trust its CPU and bytes over its wall time.
 - No dbstat per table.
@@ -134,7 +134,7 @@ Queries at 1M, hyperfine medians in ms, 20 runs, core 12, one run per row with n
 5. **`PimdirReader::get_item`:** it answers `invitation: None`. This is old behaviour (the reader's statements never read it), not a regression.
 6. **Static linking:** it would save 0.15 to 0.21 ms a query (the dynamic loader is 7.8% of a count). That is a packaging choice.
 7. **A breach of the rules:** the floor agent ran `nix build nixpkgs#glibc.static` to measure static linking, which downloaded from cache.nixos.org despite the brief's no-network rule. Nothing else left the machine.
-8. **Push and tags:** pushing pimdir (with checks/io-pimdir.rev at 131f9bf) and io-pimdir, and tagging storage-draft-17 and search-draft-17, are yours. The consumers follow at their next bump.
+8. **Push and tags:** pushing pimdir (with checks/io-pimdir.rev at 176e0b7) and io-pimdir, and tagging storage-draft-17 and search-draft-17, are yours. The consumers follow at their next bump.
 9. **The no-op sync:** it is still 2x notmuch's. The rest of its cost is in the sync engine; touch it or not?
 
 ## Where things are

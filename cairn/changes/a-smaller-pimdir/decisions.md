@@ -12,7 +12,7 @@ One entry per decision a doubt asked for, in the order taken: what was decided, 
 
 ## 2026-11-22 21:23, step 2
 
-- **floor.sh no longer checks query plans on SQLite 3.18.** The plans were of named statements, now io-pimdir's; pinning their SQL in pimdir would bind statements again. The schema guarantee on 3.18 stays (it loads, every table's writes compile, the §13 shapes are refused). Owed: io-pimdir carries the keyset-plan checks for its own statements, since the Android app runs them on 3.18. Undo: restore the block from 4fe9698 with inlined SQL.
+- **floor.sh no longer checks query plans on SQLite 3.18.** The plans were of named statements, now io-pimdir's; pinning their SQL in pimdir would bind statements again. The schema guarantee on 3.18 stays (it loads, every table's writes compile, the §13 shapes are refused). Owed: io-pimdir carries the keyset-plan checks for its own statements, since the Android app runs them on 3.18. Undo: restore the block from 01927ff with inlined SQL.
 - **refresh.json bumped to v 6** (its `objects` and `split` expectations were index internals). io-pimdir now checks instead that a refreshed index and a rebuilt one hold the same object and split rows, which is stronger than the fixed counts. Undo: restore the fields and the fixed asserts.
 - **README's meaning of a SEARCH major** changed from "the index schema version" to "a breaking change to the query language or to what an answer states", since the index schema left the standard. The owner may want other wording.
 - **checks/references.pl kept** (tasks.md said delete; it checks links in every markdown file, not statements, and passes).

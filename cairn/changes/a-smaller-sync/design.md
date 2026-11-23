@@ -1,6 +1,6 @@
 # A smaller sync: the target
 
-Read on 2026-11-23 at pimdir e75e397 and io-pimdir 131f9bf, twice. The first reading took the engine whole, SYNC.md whole, the five consumers for what they name, and a profile of the no-op sync on the 517k Enron store. The second took, line by line, the code each proposed move touches, the document paragraph by paragraph, and what a differential oracle can and cannot be built from. The second corrected the first in several places; each correction is marked. moves.md holds the changes one by one.
+Read on 2026-11-23 at pimdir fb56c83 and io-pimdir 176e0b7, twice. The first reading took the engine whole, SYNC.md whole, the five consumers for what they name, and a profile of the no-op sync on the 517k Enron store. The second took, line by line, the code each proposed move touches, the document paragraph by paragraph, and what a differential oracle can and cannot be built from. The second corrected the first in several places; each correction is marked. moves.md holds the changes one by one.
 
 ## 1. What the readings say
 
@@ -18,7 +18,7 @@ Read on 2026-11-23 at pimdir e75e397 and io-pimdir 131f9bf, twice. The first rea
 
 About 12,500 lines of code, 9,450 of inline tests, and 9,144 more under tests/engine (108 tests, 15 property tests). tests/vectors_sync.rs runs the 200 vectors through the real store, none pending. No compatibility shim: another draft's store is refused.
 
-Where the first reading saw the weight, and what the second found there (file:line at 131f9bf):
+Where the first reading saw the weight, and what the second found there (file:line at 176e0b7):
 
 1. **A status the write mostly ignores.** The write reads `Tombstone` (hub.rs:736) and `status != Conflict` (hub.rs:186); `Clean`, `Dirty` and `Created` are derived again at projection (hub.rs:551-566). *Corrected:* the engine reads those three itself on placements it has rewritten in the same run (sync.rs:2250, 2060, 1247), so not maintaining them changes which upserts a batch holds. Same rows, other batches (moves.md K2).
 2. **Landing a pending create, twice.** sync.rs:1317-1460 and upgrade.rs:550-658. *Corrected:* under different rules on seven points (which key lands, delivered creates, the another-message test, offered copies, base flags, a diverging body, tombstones). One function for both is a rule change (moves.md K1).
@@ -113,7 +113,7 @@ A crate under .pimdir-night/sync-diff (D), not committed, kept after the night.
 
 ### 4.1 The build
 
-- `D/old`: io-pimdir 131f9bf from `git archive` (it carries spec/, which build.rs bakes), the first `name =` of its Cargo.toml changed to `io-pimdir-old`. Probed on 2026-11-23 with `cargo metadata --offline` and io-pimdir's Cargo.lock copied in: the two packages resolve, one rusqlite and one libsqlite3-sys in the graph, lib targets `io_pimdir` and `io_pimdir_old`. Compilation was not run.
+- `D/old`: io-pimdir 176e0b7 from `git archive` (it carries spec/, which build.rs bakes), the first `name =` of its Cargo.toml changed to `io-pimdir-old`. Probed on 2026-11-23 with `cargo metadata --offline` and io-pimdir's Cargo.lock copied in: the two packages resolve, one rusqlite and one libsqlite3-sys in the graph, lib targets `io_pimdir` and `io_pimdir_old`. Compilation was not run.
 - The manifest: `pimdir_old = { package = "io-pimdir-old", path = "old" }`, `pimdir_new = { package = "io-pimdir", path = "<the tree>" }`, an empty `[workspace]` excluding old, a release profile with `panic = "unwind"`, no LTO, `debug-assertions = true`.
 - Neither dependency is named `io_pimdir`, so one file, side.rs, is `include!`-ed in two modules, each opening with `use pimdir_old as pimdir;` or `use pimdir_new as pimdir;`. No engine type crosses between the two sides: the server model and the scenario are plain types of the oracle's own, with a thin adapter per side.
 - The build's target directory is on disk under D; the stores of the scenarios are on the tmpfs (`TMPDIR`), since a store opens WAL with `synchronous = FULL` and would fsync every commit on disk.
