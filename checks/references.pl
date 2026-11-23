@@ -6,8 +6,8 @@
 # or directory that exists, and an anchor a heading of the markdown file it
 # points into, slugged as GitHub slugs it; each section reference names a
 # numbered heading of its document. A section reference is `§n` or `Annex X`,
-# of the document named right before it (STORAGE, SYNC, SEARCH, GUIDE,
-# OVERVIEW, with `.md` or not, AGENTS.md or gtd.md, as a name or a link), else
+# of the document named right before it (STORAGE, SYNC, SEARCH, OVERVIEW,
+# with `.md` or not, AGENTS.md or gtd.md, as a name or a link), else
 # of the reference it continues in a list (`STORAGE §2, §5 and §12`), else of
 # the file itself, as each part's conventions say; an annex is STORAGE's
 # wherever it is cited, and one after another markdown file, an RFC, a BCP, an
@@ -24,7 +24,7 @@ binmode STDERR, ':encoding(UTF-8)';
 
 my $root = shift // '.';
 my %documents = (STORAGE => 'STORAGE.md', SYNC => 'SYNC.md', SEARCH => 'SEARCH.md',
-                 GUIDE => 'GUIDE.md', OVERVIEW => 'OVERVIEW.md');
+                 OVERVIEW => 'OVERVIEW.md');
 my %own = (reverse(%documents), 'AGENTS.md' => 'AGENTS', 'conventions/gtd.md' => 'GTD');
 my %file_of = (%documents, AGENTS => 'AGENTS.md', GTD => 'conventions/gtd.md');
 my %by_name = ((map { $_ => $_ } keys %documents), AGENTS => 'AGENTS', gtd => 'GTD');
@@ -105,7 +105,7 @@ for my $file (@files) {
         }
 
         my ($last_end, $last_document) = (-1, undef);
-        while ($text =~ /(?:\b(STORAGE|SYNC|SEARCH|GUIDE|OVERVIEW)(?:\.md)?\s+)?(§|Annex\s+)([0-9]+(?:\.[0-9]+)*|[A-Z](?:\.[0-9]+)*)\b/g) {
+        while ($text =~ /(?:\b(STORAGE|SYNC|SEARCH|OVERVIEW)(?:\.md)?\s+)?(§|Annex\s+)([0-9]+(?:\.[0-9]+)*|[A-Z](?:\.[0-9]+)*)\b/g) {
             my ($named, $sign, $section, $start, $end) = ($1, $2, $3, $-[0], $+[0]);
             my $before = substr($text, 0, $start);
             my $document;
