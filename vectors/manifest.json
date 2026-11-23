@@ -252,7 +252,20 @@
     "vectors/sync/199-an-upgrade-links-a-body-under-an-equal-server-object-id.json": "273145d0b1a1953cdc24342c1f4d3539ca562612f4b157078a61a4fff0e7fee8",
     "vectors/sync/20-move-source-first-relocates.json": "21729b1c61a5085e531c817866cf1471944a0d22bf4df5ce4a89289cb7edf40d",
     "vectors/sync/200-a-listing-records-the-server-object-id-it-states.json": "9fd189ac8fe84e03417f0f8fbbbd0f776ca0366a3fbc9e0f8d0274db2886364d",
+    "vectors/sync/201-a-rekey-listing-unknown-flags-keeps-the-base.json": "09d1020ac2fef97d046f1fe5437d32e8f060dbca98e42f1de75a7a528f859b08",
+    "vectors/sync/202-a-rekey-listing-no-revision-carries-the-conflict.json": "ff46b47272f6495df7351baa0e5afe423b7df4452c8bfac7c145857642c5757e",
+    "vectors/sync/203-a-rekey-lands-a-delivered-create-on-its-member.json": "2cb09cd6c7f3a2d1632d78d6fc3a5d111398527c5f054b49e1ce45c2a4bd54bd",
+    "vectors/sync/204-a-rekey-joins-an-offered-copy-to-its-member.json": "c8da5ef00c45bcdffba28f31342939a97413171e208894dbde1056ef1734a438",
+    "vectors/sync/205-a-rekey-lands-a-pending-create-on-its-member.json": "807c29153e608819c172951a7128f64f517e03bf5aee1291d29763e4b9888a15",
+    "vectors/sync/206-a-rekey-mints-a-member-disagreeing-with-a-pending-create-apart.json": "c2f848b8c31c4212c39a229b58906f56267c892ec406cf017025772bdf1b5c59",
+    "vectors/sync/207-a-rekey-carries-a-conflicted-tombstone-listed-at-its-base-revision.json": "b809755df5a8d5b30c77f729bc52371e1e9ac183db953fa994e5e213b7593f47",
+    "vectors/sync/208-a-rekey-carries-a-conflicted-tombstone-listed-at-its-conflict-revision.json": "85ec8f096a5eb67ba5a7c39d1d07d26cc4986d00c270df7c503b037e3140d7d4",
+    "vectors/sync/209-a-rekey-records-a-tombstone-holding-an-edit-as-a-conflict.json": "3d266aab5485dcf2c5fd660e2baea3bb7609bde8789a6bafd8201e96f10df845",
     "vectors/sync/21-a-page-lands-a-pending-create.json": "6e6d36fb5836347ca11426072acfd4cad17924e268516fd3ffeee1ca0009cc80",
+    "vectors/sync/210-a-rekey-listing-a-handle-twice-keeps-its-first-entry.json": "312604e252a0b4b5cb0dff1de86b4053cefae558578f0a9f36ba2ace3c0ab210",
+    "vectors/sync/211-a-rekey-stores-an-arrivals-listed-body.json": "094b8d358471d3182baea165e9c64ce6c4cc33f6a604ee75658e0aefc77bb719",
+    "vectors/sync/212-a-rekey-pull-stores-its-listed-body.json": "10b94036bef19b6c2b64967966b0d1b404928a1a106452469b991efb2fcd88c6",
+    "vectors/sync/213-a-rekey-carries-a-tombstone-taking-the-listed-flags.json": "a3d591bea52132956033b8ea4e9c43236da0e23da729cdbf18916328c0398f38",
     "vectors/sync/22-rekey-carries-a-minted-key.json": "86bdf0df6fea79ff71e196cb3ad427d5d84df35ff5a3c1b4472fe489f7c0b15b",
     "vectors/sync/23-rekey-remote-edit-conflicts-a-local-edit.json": "5bec1da6775beb586e1ccf04d00b517c9e3338da49fe567b673ef6d95c9a3b1a",
     "vectors/sync/24-rekey-remote-edit-pulls.json": "8dc7ea3fe1b40843931ede7613eda160673e72c5eec8cec1c774cd5257e3dc23",
@@ -364,5 +377,5 @@
       "/cases": 24
     }
   },
-  "sync": 200
+  "sync": 213
 }

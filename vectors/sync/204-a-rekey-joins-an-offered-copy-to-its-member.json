@@ -1,0 +1,31 @@
+{
+  "v": 11,
+  "label": "a rekey joins the item another source binds to the member stating its key, as a page joins it, one item",
+  "note": "source a holds basic-1@example.org, read; source b binds none of it, the store offering b the item, and b's renumbered listing names the same message under 77, flagged there. The rekey names the member as a page names one (SYNC.md §6, §8): it joins the offered item rather than minting a second, b's binding is inserted with the listed flags as its base, the item's flags fold the member's with no base, and the join is reported Added. Nothing is pushed by the rekey; b's base lacking \\Seen, the next sync pushes it",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual", "generation": 1 }],
+    "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },
+    "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "a", "handle": "10", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1, "shared_object": "m1" }
+    ],
+    "summaries": [{ "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } }],
+    "sources": [{ "collection": "INBOX", "source": "a", "checkpoint": "a1" }, { "collection": "INBOX", "source": "b", "checkpoint": "b0" }]
+  },
+  "run": { "verb": "rekey", "collection": "INBOX", "source": "b" },
+  "remote": { "snapshot": { "items": [{ "handle": "77", "flags": ["\\Flagged"], "revision": null, "meta": { "body": "fixtures/mail-basic.eml" } }], "vanished": [], "complete": true, "checkpoint": "b1" }, "fetch": {} },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [{ "kind": "Added", "handle": "77" }],
+    "store": {
+      "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual", "generation": 1 }],
+      "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Flagged", "\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "a", "handle": "10", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1, "shared_object": "m1" },
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "b", "handle": "77", "base_flags": ["\\Flagged"], "base_object": "m1", "base_revision": null, "base_present": 1, "shared_object": "m1" }
+      ],
+      "sources": [{ "collection": "INBOX", "source": "a", "checkpoint": "a1" }, { "collection": "INBOX", "source": "b", "checkpoint": "b1" }]
+    }
+  }
+}

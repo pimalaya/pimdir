@@ -1,0 +1,28 @@
+{
+  "v": 11,
+  "label": "a rekey whose listing repeats a handle keeps its first entry whole, as a page does",
+  "note": "the source renumbered 10 into 20, and its listing names 20 twice: first the stand-up notes, read there, then another message. A listing holding a handle twice is kept by its first entry (SYNC.md §4), so the rekey carries the stand-up notes onto 20 with the first entry's flags and never names the second, where it mixed the two: the first entry's flags under the second's identity and summary, the stand-up notes dropped Deleted (SYNC.md §8)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual", "generation": 1 }],
+    "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },
+    "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": "m1", "level": 2, "deleted": 0 }],
+    "bindings": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": [], "base_object": "m1", "base_revision": null, "base_present": 1 }],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c0" }]
+  },
+  "run": { "verb": "rekey", "collection": "INBOX", "source": "imap" },
+  "remote": { "snapshot": { "items": [
+    { "handle": "20", "flags": ["\\Seen"], "revision": null, "meta": { "body": "fixtures/mail-basic.eml" } },
+    { "handle": "20", "flags": ["\\Flagged"], "revision": null, "meta": { "body": "fixtures/mail-recent.eml" } }
+  ], "vanished": [], "complete": true, "checkpoint": "d0" }, "fetch": {} },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual", "generation": 2 }],
+      "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+      "bindings": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "20", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }],
+      "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "d0" }]
+    }
+  }
+}

@@ -17,6 +17,7 @@ The three format-bump failures already fail against 00727ba (storage-draft-16). 
 
 - **Java binds 130 canonical names:** 124 as string literals, plus 6 through the dynamic `"UPSERT_" + kind + "_SUMMARY"` (PimdirSummary.java:87). 52 of them touch the moves, across 54 call sites.
   - 4 are dropped (the flag statements).
+  - 2 more are dropped though the Java store binds them, which this list missed until the Android lane's AN2 (2026-11-23): `DELIVER_BINDING` (PimdirStorage.java:2070, :2635) and `LIST_GARBAGE_OBJECTS` (DeletedItems.java:379, PimdirItems.java:451), removed by io-pimdir 46d851f as "nothing ran". The app keeps them as statements of its own under rust/pimdir/queries/app/.
   - 26 are replaced: 6 upserts, 5 `LOAD_*_SUMMARIES_BY_LINK`, 4 `LIST_*_PAGE_ASC`, 4 `SEARCH_*`, `GET_MAIL`, and 6 list writes that become `summary_value`.
   - 15 canonical statements are rewritten in place, keeping their names, and 7 are the app's own forks under owner/.
   - `INSERT_ITEM` (4 call sites) gains a keywords parameter.

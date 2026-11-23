@@ -100,8 +100,8 @@ design.md §5. The lead does items 1 and 3 between its own steps.
 
 moves.md §3. Each on a copy of the tree under K, 40 minutes, a sub-agent; the oracle in report mode where it applies. Nothing reaches I.
 
-- [ ] K3, rekey: one test for each of R0 to R8, R3 first; each "reproduced" or "not reproduced" with the test's source kept
-- [ ] K4, the drain against `store.mutate`: a Copy and a Move beside another source's item, both paths, the key each takes
+- [x] K3, rekey: one test for each of R0 to R8, R3 first; each "reproduced" or "not reproduced" with the test's source kept. Fixed 2026-11-23 by io-pimdir cairn/changes/what-the-consumers-need, vectors 201 to 213, io-pimdir tests/engine/rekey_cases.rs
+- [x] K4, the drain against `store.mutate`: a Copy and a Move beside another source's item, both paths, the key each takes. Fixed 2026-11-23 by io-pimdir cairn/changes/what-the-consumers-need, io-pimdir tests/drain_copy.rs and tests/vectors_sync.rs (the drain held to the mutate vectors)
 - [ ] K1, one landing: upgrade's landing on sync's predicate; the classes of scenario that change, one shrunk example each, the lines saved
 - [ ] K2, the status derived: the batches that differ, whether any row does, the lines saved
 

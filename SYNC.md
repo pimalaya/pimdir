@@ -414,7 +414,7 @@ A sync reports per item, in order, what the remote changed locally and what the 
 
 A run also reports a round it parked (above), as a rekey reports itself parked (§8). A pushed flag, body or delete reports nothing: the consumer made it.
 
-Only a sync and a rekey report events: a rekey reports `Added` for a member no old binding resolves to (§8), and an upgrade and a mutation report none, save `Overruled`, which any verb whose write kept a body no one asked to lose reports, and `Abandoned`, which the mutation giving a create up reports.
+Only a sync and a rekey report events: a rekey reports `Added` for a member no old binding resolves to, `Created` for a create it lands, and `Disagreed` for a member it mints apart from a create, as a page does (§8), and an upgrade and a mutation report none, save `Overruled`, which any verb whose write kept a body no one asked to lose reports, and `Abandoned`, which the mutation giving a create up reports.
 
 ## 6. Upgrade
 
@@ -527,15 +527,15 @@ A source may renumber every member (an IMAP `UIDVALIDITY` bump, a restore). A re
 
 It carries each placement's body, summary, level, flags, base and pending state onto its new handle **by link id**, the one identifier that survived.
 
-**A rekey runs the flag axis on the flags its listing states.** A carried member's listed flags are the remote side of §5's flag axis, the item's flags the local side and the old base's flags the base: the item takes the merge and the binding's base takes the listed flags, which the rekey's checkpoint never lists again. A flag change still owed is pushed by the next sync, as any merge's is; the rekey pushes nothing.
+**A rekey runs the flag axis on the flags its listing states.** A carried member's listed flags are the remote side of §5's flag axis, the item's flags the local side and the old base's flags the base: the item takes the merge and the binding's base takes the listed flags, which the rekey's checkpoint never lists again; an unknown listed set leaves the base's, holding no opinion (§3). A flag change still owed is pushed by the next sync, as any merge's is; the rekey pushes nothing.
 
 The batch drops each old handle it re-writes with reason `Rekeyed`, which licenses the binding to move (STORAGE §10, §12), per handle: a genuine duplicate in the same batch is still refused. It is one batch, every drop preceding every upsert, since a new handle may be an old one another member held.
 
 An old binding no member resolves to by link id is dropped `Deleted`, whether or not the new space reuses its handle, since a server restarting its numbering at 1 hands a carried member the handle a gone one held, and an upsert under it before that drop would fold the carried member into the gone one's item (§10).
 
-A member resolving to no old binding, an arrival the renumbering met, is named as a page names one (§6) in the same batch and reported `Added`, as a sync naming it would: the rekey's checkpoint lists it no more.
+A member resolving to no old binding, an arrival the renumbering met, is named as a page names one (§6) in the same batch and reported `Added`, as a sync naming it would: the rekey's checkpoint lists it no more. So it lands a pending create of this source whose key it states and whose summary it agrees with, the provisional handle dropped `Superseded` and the create reported `Created`, and joins a create the store offers this source, reported `Added`; one whose summary disagrees with the pending create is minted apart and reported `Disagreed`.
 
-A binding with no base is outside the rekey and is carried as it is. So is a delivered create (§2) no member resolves to by link id, which no rekey finds absent nor counts; one a member resolves to is carried onto it as a page lands it (§6).
+A binding with no base is outside the rekey and is carried as it is: one a member resolves to takes a base of the listed flags alone, no revision and no body, which claims nothing reconciled, its conflict kept; one no member resolves to, its old handle void, is re-staged under its provisional handle as a sync re-stages an edit (§5). So is a delivered create (§2) no member resolves to by link id, which no rekey finds absent nor counts; one a member resolves to is landed on it as a page lands it (§6): its provisional handle dropped `Superseded`, its staged flags kept over a base of the listed flags and its staged body, and `Created` reported.
 
 **A rekey missing most members parks.** A rekey whose listing leaves more than half of the based bindings of this source in the collection resolving to no member, when those bindings number at least 20, MUST NOT be written unless the run carries the `accept_absences` option. They are counted as §5 counts a round's absences, the whole collection being its scope and a binding absent when no member resolves to its link id. A rekey whose listing names no member parks the same way while any based binding of this source is absent, whatever their number (§5, an empty listing).
 
@@ -543,13 +543,13 @@ A binding with no base is outside the rekey and is carried as it is. So is a del
 
 A parked rekey writes no drop and no upsert, and leaves the checkpoint and the generation unmoved; the run reports the rekey parked with the absent and the bound counts. The checkpoint still names the old handle space, so the next run meets the moved space again and names the rekey again; a run carrying `accept_absences` carries it out.
 
-A member resolving to an identity already handed out takes the minted key an old copy carried, else a mint over its own handle; pending creates' keys count as taken.
+A member resolving to an identity already handed out takes the minted key an old copy carried, else a mint over its own handle; a pending create's key counts as taken unless the member lands it (above).
 
-Where one hint had several old copies, a member is matched to the old copy whose base names its fetched revision first, then to the one holding its body when the fetch carried one, and in handle order only among what neither can tell apart. A renumbering that swapped two resources under one `UID` thus carries each one's flags and pending edit onto itself. The sort key is carried, preferring the fetch's.
+Where one hint had several old copies, a member is matched to the old copy whose base names its fetched revision first, then to the one holding its body when the fetch carried one, and in handle order only among what neither can tell apart. A renumbering that swapped two resources under one `UID` thus carries each one's flags and pending edit onto itself. The sort key is carried, preferring the fetch's. A listing holding a handle twice is read by its first entry, as a page reads it (§4). A body the listing carries is stored as a page stores it (§5, §6): an arrival's and a pull's become the item's body and the base's, at `Full`.
 
-A mutable member whose fetched revision differs from the one its old base held changed on the remote while the handles did. The engine MUST carry it as a pull (§5), or as a `Conflict` at the fetched revision when it also holds a local edit.
+A mutable member whose fetched revision differs from the one its old base held changed on the remote while the handles did. The engine MUST carry it as a pull (§5), or as a `Conflict` at the fetched revision when it also holds a local edit, a tombstone holding one included, the listed body its diverging body when the listing carries it. A conflicted tombstone is carried with its conflict, a delete settling none (§3): its revision and diverging body kept unless the remote moved past the revision recorded, and never revived.
 
-A `Conflict` the old handle held is carried as it is, revision and diverging body kept while the fetched revision is the one recorded. One the item's conflict projects (§3) records no revision and gains none unless the remote moved.
+A `Conflict` the old handle held is carried as it is, revision and diverging body kept while the fetched revision is the one recorded or the listing states none. One the item's conflict projects (§3) records no revision and gains none unless the remote moved.
 
 A base claiming a revision it never reconciled is the one thing a rekey MUST NOT write.
 
