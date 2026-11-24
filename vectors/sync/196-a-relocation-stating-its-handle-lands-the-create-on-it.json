@@ -1,7 +1,7 @@
 {
   "v": 11,
   "label": "a relocation stating the handle it gave its member lands the destination's create on that handle at once",
-  "note": "the source half of a move relocates basic-1@example.org from INBOX into Archive, where another message stating the same Message-ID already sits under 1, unlisted yet. The connector answers the move's COPYUID: the member is 2 in Archive. The write recording the outcome lands the create on 2 rather than leaving it delivered: the provisional handle is superseded, the binding moves to 2 and its base takes the flags and body staged on the create. Left delivered, the next Archive listing would land it on 1, the first member stating its hint, binding the moved body to the other message (SYNC.md §4, §5, §6; STORAGE §14)",
+  "note": "the source half of a move relocates basic-1@example.org from INBOX into Archive, where another message stating the same Message-ID already sits under 1, unlisted yet. The connector answers the move's COPYUID: the member is 2 in Archive. The write recording the outcome lands the create on 2 rather than leaving it delivered: the provisional handle is superseded, the binding moves to 2 and its base takes the flags the member carried, the INBOX base, and the body staged on the create. Left delivered, the next Archive listing would land it on 1, the first member stating its hint, binding the moved body to the other message (SYNC.md §4, §5, §6; STORAGE §14)",
   "store": {
     "collections": [
       { "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" },
