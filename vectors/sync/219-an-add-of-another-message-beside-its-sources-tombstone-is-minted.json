@@ -1,0 +1,43 @@
+{
+  "v": 11,
+  "label": "an add of another message reusing the identity its source holds as a tombstone in the collection is minted beside it, the tombstone left as it stands",
+  "note": "imap syncs Archive, which holds basic-1@example.org as a tombstone imap binds under handle 4 with a base, its delete not pushed yet. An add of another message reusing that Message-ID (subject, date and sender differ) does not agree with the row, so it neither revives it nor takes its key: it is keyed by the identity minted over the provisional handle it derives, draws a seq of its own and is staged as a pending create under the provisional handle that key derives. The tombstone keeps its delete. A create under the bare key would rebind it, which the write refuses (SYNC.md section 7; STORAGE.md sections 9 and 10)",
+  "store": {
+    "collections": [
+      { "id": "Archive", "account": null, "kind": "message/rfc822", "conflict": "manual" }
+    ],
+    "objects": { "m1": { "body": "fixtures/mail-basic.eml" }, "m2": { "body": "fixtures/mail-reused-message-id.eml" } },
+    "items": [
+      { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 1 }
+    ],
+    "bindings": [
+      { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "4", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "Archive", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [
+      { "collection": "Archive", "source": "imap", "checkpoint": "a0" }
+    ]
+  },
+  "run": { "verb": "mutate", "collection": "Archive", "source": "imap", "mutation": { "kind": "Add", "flags": ["\\Seen"], "object": "m2" } },
+  "remote": {
+    "snapshot": null,
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [
+        { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 1 },
+        { "collection": "Archive", "link_id": "dup:basic-1@example.org#\u0001basic-1@example.org", "seq": 2, "flags": ["\\Seen"], "object": "m2", "level": 2, "deleted": 0 }
+      ],
+      "bindings": [
+        { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "4", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 },
+        { "collection": "Archive", "link_id": "dup:basic-1@example.org#\u0001basic-1@example.org", "source": "imap", "handle": "\u0001dup:basic-1@example.org#\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }
+      ]
+    }
+  }
+}

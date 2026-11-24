@@ -1,0 +1,41 @@
+{
+  "v": 11,
+  "label": "an add of an identity its source holds as a tombstone in the collection revives that tombstone under the handle it is bound to",
+  "note": "imap syncs Archive, which holds basic-1@example.org as a tombstone imap binds under handle 4 with a base, its delete not pushed yet. An add of that message revives the row as STORAGE.md section 9 has a tombstone revived: its binding and base kept, since a binding pins one handle, its delete withdrawn, the item adopting the added flags and body, so the next sync pushes the flag change against handle 4 and no remove. No create is staged: one under the provisional handle the key derives would rebind the key, which the write refuses, and the add would park for good (SYNC.md section 7; STORAGE.md sections 9 and 10)",
+  "store": {
+    "collections": [
+      { "id": "Archive", "account": null, "kind": "message/rfc822", "conflict": "manual" }
+    ],
+    "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },
+    "items": [
+      { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 1 }
+    ],
+    "bindings": [
+      { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "4", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "Archive", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [
+      { "collection": "Archive", "source": "imap", "checkpoint": "a0" }
+    ]
+  },
+  "run": { "verb": "mutate", "collection": "Archive", "source": "imap", "mutation": { "kind": "Add", "flags": ["\\Flagged", "\\Seen"], "object": "m1" } },
+  "remote": {
+    "snapshot": null,
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [
+        { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Flagged", "\\Seen"], "object": "m1", "level": 2, "deleted": 0 }
+      ],
+      "bindings": [
+        { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "4", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }
+      ]
+    }
+  }
+}

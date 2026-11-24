@@ -1,0 +1,48 @@
+{
+  "v": 11,
+  "label": "a copy into a collection where its source's own tombstone holds the identity revives that tombstone under the handle it is bound to",
+  "note": "imap syncs INBOX and Archive. Archive holds basic-1@example.org as a tombstone imap binds under handle 4 with a base, its delete not pushed yet (a move out staged since the last sync). A copy from INBOX takes the bare key and revives that row: its binding and base kept, since a binding pins one handle, its delete withdrawn, the item adopting the copied flags and body, so the next sync pushes the flag change against handle 4 and no remove. No create is staged: one under the provisional handle the key derives would rebind the key, which the write refuses, and the copy would park for good (SYNC.md section 7; STORAGE.md sections 9 and 10; live night 2026-11-23)",
+  "store": {
+    "collections": [
+      { "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" },
+      { "id": "Archive", "account": null, "kind": "message/rfc822", "conflict": "manual" }
+    ],
+    "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },
+    "items": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Flagged", "\\Seen"], "object": "m1", "level": 2, "deleted": 0 },
+      { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 1 }
+    ],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Flagged", "\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 },
+      { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "4", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "Archive", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [
+      { "collection": "INBOX", "source": "imap", "checkpoint": "c0" },
+      { "collection": "Archive", "source": "imap", "checkpoint": "a0" }
+    ]
+  },
+  "run": { "verb": "mutate", "collection": "INBOX", "source": "imap", "mutation": { "kind": "Copy", "seq": 1, "to": "Archive" } },
+  "remote": {
+    "snapshot": null,
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Flagged", "\\Seen"], "object": "m1", "level": 2, "deleted": 0 },
+        { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Flagged", "\\Seen"], "object": "m1", "level": 2, "deleted": 0 }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Flagged", "\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 },
+        { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "4", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }
+      ]
+    }
+  }
+}
