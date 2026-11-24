@@ -267,6 +267,7 @@
     "vectors/sync/212-a-rekey-pull-stores-its-listed-body.json": "10b94036bef19b6c2b64967966b0d1b404928a1a106452469b991efb2fcd88c6",
     "vectors/sync/213-a-rekey-carries-a-tombstone-taking-the-listed-flags.json": "a3d591bea52132956033b8ea4e9c43236da0e23da729cdbf18916328c0398f38",
     "vectors/sync/214-a-relocation-stating-its-handle-lands-the-create-on-the-flags-its-member-carries.json": "a2ea4e65305aa9d975ea9849ab1b2e5cf2ace567dcafbb98ddf1948ff74050fa",
+    "vectors/sync/215-a-fourth-copy-of-one-message-takes-the-next-free-minted-key.json": "751107b5cca13e75aea361e9424e9e039d9cda0105b294305727b8249ce287af",
     "vectors/sync/22-rekey-carries-a-minted-key.json": "86bdf0df6fea79ff71e196cb3ad427d5d84df35ff5a3c1b4472fe489f7c0b15b",
     "vectors/sync/23-rekey-remote-edit-conflicts-a-local-edit.json": "5bec1da6775beb586e1ccf04d00b517c9e3338da49fe567b673ef6d95c9a3b1a",
     "vectors/sync/24-rekey-remote-edit-pulls.json": "8dc7ea3fe1b40843931ede7613eda160673e72c5eec8cec1c774cd5257e3dc23",
@@ -378,5 +379,5 @@
       "/cases": 24
     }
   },
-  "sync": 214
+  "sync": 215
 }

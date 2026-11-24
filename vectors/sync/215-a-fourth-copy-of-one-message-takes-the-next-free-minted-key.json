@@ -1,0 +1,60 @@
+{
+  "v": 11,
+  "label": "a fourth copy of one message into a collection takes the next free minted key, checked against every key the collection holds",
+  "note": "Archive holds three copies of basic-1@example.org, all landed: the bare key under 1, the key minted over the provisional handle the bare key derives under 2, and that key minted again under 3. A fourth copy from INBOX is keyed by the identity minted over that provisional handle, minted again over each held key: the three are held, so it takes the fourth key, its own seq, and a pending create under the provisional handle that key derives. A key read against the bare key and its first mint alone would take the third's, which the write refuses, a binding pinning one handle, so the copy could never be staged (SYNC.md §7; STORAGE §9; live night 2026-11-23)",
+  "store": {
+    "collections": [
+      { "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" },
+      { "id": "Archive", "account": null, "kind": "message/rfc822", "conflict": "manual" }
+    ],
+    "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },
+    "items": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 },
+      { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 },
+      { "collection": "Archive", "link_id": "dup:basic-1@example.org#\u0001basic-1@example.org", "seq": 2, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 },
+      { "collection": "Archive", "link_id": "dup:dup:basic-1@example.org#\u0001basic-1@example.org#\u0001basic-1@example.org", "seq": 3, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }
+    ],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 },
+      { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "1", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 },
+      { "collection": "Archive", "link_id": "dup:basic-1@example.org#\u0001basic-1@example.org", "source": "imap", "handle": "2", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 },
+      { "collection": "Archive", "link_id": "dup:dup:basic-1@example.org#\u0001basic-1@example.org#\u0001basic-1@example.org", "source": "imap", "handle": "3", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "Archive", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "Archive", "link_id": "dup:basic-1@example.org#\u0001basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "Archive", "link_id": "dup:dup:basic-1@example.org#\u0001basic-1@example.org#\u0001basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [
+      { "collection": "INBOX", "source": "imap", "checkpoint": "c0" },
+      { "collection": "Archive", "source": "imap", "checkpoint": "a0" }
+    ]
+  },
+  "run": { "verb": "mutate", "collection": "INBOX", "source": "imap", "mutation": { "kind": "Copy", "seq": 1, "to": "Archive" } },
+  "remote": {
+    "snapshot": null,
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 },
+        { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 },
+        { "collection": "Archive", "link_id": "dup:basic-1@example.org#\u0001basic-1@example.org", "seq": 2, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 },
+        { "collection": "Archive", "link_id": "dup:dup:basic-1@example.org#\u0001basic-1@example.org#\u0001basic-1@example.org", "seq": 3, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 },
+        { "collection": "Archive", "link_id": "dup:dup:dup:basic-1@example.org#\u0001basic-1@example.org#\u0001basic-1@example.org#\u0001basic-1@example.org", "seq": 4, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 },
+        { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "1", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 },
+        { "collection": "Archive", "link_id": "dup:basic-1@example.org#\u0001basic-1@example.org", "source": "imap", "handle": "2", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 },
+        { "collection": "Archive", "link_id": "dup:dup:basic-1@example.org#\u0001basic-1@example.org#\u0001basic-1@example.org", "source": "imap", "handle": "3", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 },
+        { "collection": "Archive", "link_id": "dup:dup:dup:basic-1@example.org#\u0001basic-1@example.org#\u0001basic-1@example.org#\u0001basic-1@example.org", "source": "imap", "handle": "\u0001dup:dup:dup:basic-1@example.org#\u0001basic-1@example.org#\u0001basic-1@example.org#\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }
+      ]
+    }
+  }
+}
