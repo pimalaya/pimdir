@@ -1,0 +1,48 @@
+{
+  "v": 11,
+  "label": "a copy into a collection where its source's tombstoned delivered create holds the identity revives that create, still delivered",
+  "note": "imap syncs INBOX and Archive. Archive holds basic-1@example.org as a delivered create of imap (a relocation accepted stating no handle: the provisional handle and a base naming nothing), tombstoned since by a remove held until its member is listed. A copy from INBOX takes the bare key and revives that row under the provisional handle, its base naming nothing kept: the create stays delivered, deriving nothing until the page naming its member lands it, and the held remove is withdrawn. Staged as a pending create instead, under the same provisional handle with no base, it would forget the delivery and push a second Add of a message its server already holds; given the copied body as its base, it would be no delivered create any more, as vector 221 has it for a flag change (SYNC.md sections 2, 5 and 7; STORAGE.md section 9's table, a tombstone holding a delivered create)",
+  "store": {
+    "collections": [
+      { "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" },
+      { "id": "Archive", "account": null, "kind": "message/rfc822", "conflict": "manual" }
+    ],
+    "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },
+    "items": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Flagged", "\\Seen"], "object": "m1", "level": 2, "deleted": 0 },
+      { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 1 }
+    ],
+    "bindings": [
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Flagged", "\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 },
+      { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 1 }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "Archive", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [
+      { "collection": "INBOX", "source": "imap", "checkpoint": "c0" },
+      { "collection": "Archive", "source": "imap", "checkpoint": "a0" }
+    ]
+  },
+  "run": { "verb": "mutate", "collection": "INBOX", "source": "imap", "mutation": { "kind": "Copy", "seq": 1, "to": "Archive" } },
+  "remote": {
+    "snapshot": null,
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Flagged", "\\Seen"], "object": "m1", "level": 2, "deleted": 0 },
+        { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Flagged", "\\Seen"], "object": "m1", "level": 2, "deleted": 0 }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Flagged", "\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 },
+        { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 1 }
+      ]
+    }
+  }
+}

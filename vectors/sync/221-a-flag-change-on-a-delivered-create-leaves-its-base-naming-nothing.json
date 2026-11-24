@@ -1,0 +1,38 @@
+{
+  "v": 11,
+  "label": "a flag change on a delivered create leaves its base naming nothing, so it stays one a page or a relocation stating its handle lands",
+  "note": "imap syncs Archive, which holds basic-1@example.org as a delivered create of imap (a relocation accepted stating no handle): the provisional handle and a base naming nothing, no flag set, revision nor body. A flag change staged on it sets the item's flags and leaves that base as it is: a base given the item's body is no delivered create's any more, and a relocation stating the handle its member has (an IMAP COPYUID) would no longer land it (SYNC.md sections 2, 4 and 7)",
+  "store": {
+    "collections": [
+      { "id": "Archive", "account": null, "kind": "message/rfc822", "conflict": "manual" }
+    ],
+    "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },
+    "items": [
+      { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }
+    ],
+    "bindings": [
+      { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 1 }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "Archive", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [
+      { "collection": "Archive", "source": "imap", "checkpoint": "a0" }
+    ]
+  },
+  "run": { "verb": "mutate", "collection": "Archive", "source": "imap", "mutation": { "kind": "SetFlags", "seq": 1, "flags": ["\\Flagged", "\\Seen"] } },
+  "remote": { "snapshot": null, "fetch": {} },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [
+        { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Flagged", "\\Seen"], "object": "m1", "level": 2, "deleted": 0 }
+      ],
+      "bindings": [
+        { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "\u0001basic-1@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 1 }
+      ]
+    }
+  }
+}
