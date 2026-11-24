@@ -1,0 +1,51 @@
+{
+  "v": 11,
+  "label": "an upgrade of a member under its bare Message-ID, beside another member of its collection stating the same one, fetches its body rather than linking one by agreement",
+  "note": "Archive holds basic-1@example.org with its body. One listing of INBOX brought two members stating the same Message-ID: 77 under the bare key, 78 minted over its handle, neither upgraded yet, and the source states no server object id. The Full upgrade names 77 alone. Archive's row agrees with it on subject, date, sender and size, which would link that body, but INBOX holds another member stating the hint, so the agreement decides nothing: no member of a collection holding two members stating one Message-ID takes a body by agreement, the minted one never linking and the bare one possibly another message than the one it would link. The store's Handles load reads 78 beside 77, and the upgrade fetches. Linked, 77 would hold Archive's body for ever, a message's body never fetched again (SYNC.md §6; STORAGE §9, §14)",
+  "store": {
+    "collections": [
+      { "id": "Archive", "account": null, "kind": "message/rfc822", "conflict": "manual" },
+      { "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }
+    ],
+    "objects": {
+      "b1": { "body": "fixtures/mail-basic.eml" },
+      "t1": { "body": "fixtures/mail-basic-twin.eml" }
+    },
+    "items": [
+      { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": "b1", "level": 2, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" },
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" },
+      { "collection": "INBOX", "link_id": "dup:basic-1@example.org#78", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "2026-08-01T10:00:00Z" }
+    ],
+    "bindings": [
+      { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "5", "base_flags": [], "base_object": "b1", "base_revision": null, "base_present": 1 },
+      { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "77", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1 },
+      { "collection": "INBOX", "link_id": "dup:basic-1@example.org#78", "source": "imap", "handle": "78", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1 }
+    ],
+    "summaries": [
+      { "table": "mail_summary", "collection": "Archive", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "basic-1@example.org", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } },
+      { "table": "mail_summary", "collection": "INBOX", "link_id": "dup:basic-1@example.org#78", "row": { "message_id": "basic-1@example.org", "in_reply_to": ["parent-1@example.org"], "subject": "Stand-up notes", "sender": "alice@example.org", "sender_name": "Alice Example", "date": "2026-08-01T10:00:00Z", "size": 299, "attachment": 0, "invitation": null } }
+    ],
+    "sources": [{ "collection": "Archive", "source": "imap", "checkpoint": "a1" }, { "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+  },
+  "run": { "verb": "upgrade", "collection": "INBOX", "source": "imap", "tier": "Full", "handles": ["77"] },
+  "remote": { "snapshot": null, "fetch": { "77": { "Full": { "body": "fixtures/mail-basic-twin.eml", "revision": null } } } },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [
+        { "collection": "Archive", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": "b1", "level": 2, "deleted": 0 },
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": [], "object": "t1", "level": 2, "deleted": 0 },
+        { "collection": "INBOX", "link_id": "dup:basic-1@example.org#78", "seq": 2, "flags": [], "object": null, "level": 1, "deleted": 0 }
+      ],
+      "bindings": [
+        { "collection": "Archive", "link_id": "basic-1@example.org", "source": "imap", "handle": "5", "base_flags": [], "base_object": "b1", "base_revision": null, "base_present": 1 },
+        { "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "77", "base_flags": [], "base_object": "t1", "base_revision": null, "base_present": 1 },
+        { "collection": "INBOX", "link_id": "dup:basic-1@example.org#78", "source": "imap", "handle": "78", "base_flags": [], "base_object": null, "base_revision": null, "base_present": 1 }
+      ],
+      "sources": [{ "collection": "Archive", "source": "imap", "checkpoint": "a1" }, { "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+    }
+  }
+}

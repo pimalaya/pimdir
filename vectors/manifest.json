@@ -275,6 +275,8 @@
     "vectors/sync/22-rekey-carries-a-minted-key.json": "86bdf0df6fea79ff71e196cb3ad427d5d84df35ff5a3c1b4472fe489f7c0b15b",
     "vectors/sync/220-a-copy-over-a-tombstoned-delivered-create-revives-it-delivered.json": "6728a91860ce606c0870e8d623a604b59c1c0133c4eb7d89d4523890a54d0c1e",
     "vectors/sync/221-a-flag-change-on-a-delivered-create-leaves-its-base-naming-nothing.json": "3c7e6d606e14026648dfe5a354955bf4b6a2b53a51db7ddaae69c1ab80fbdeb2",
+    "vectors/sync/222-an-upgrade-beside-another-member-of-its-id-fetches-rather-than-links.json": "2b8103c74c9e246309a1471bab93637eec458e41a26783f573e4ad60baffc390",
+    "vectors/sync/223-a-copy-taking-the-body-another-member-of-its-id-holds-releases-it-from-that-member.json": "34d5e13547361e5641f991bdd49528f81e9d5a3392b4ef55c69ede920156b3e1",
     "vectors/sync/23-rekey-remote-edit-conflicts-a-local-edit.json": "5bec1da6775beb586e1ccf04d00b517c9e3338da49fe567b673ef6d95c9a3b1a",
     "vectors/sync/24-rekey-remote-edit-pulls.json": "8dc7ea3fe1b40843931ede7613eda160673e72c5eec8cec1c774cd5257e3dc23",
     "vectors/sync/25-a-create-waits-for-its-round.json": "ecceb304017675ce8ebb36d9adba457a6548de303473da71754316c81340088d",
@@ -385,5 +387,5 @@
       "/cases": 24
     }
   },
-  "sync": 221
+  "sync": 223
 }
