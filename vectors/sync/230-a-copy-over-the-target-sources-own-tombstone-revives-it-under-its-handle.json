@@ -1,0 +1,44 @@
+{
+  "v": 11,
+  "label": "a copy staged under the source syncing its target revives that source's own tombstone of the identity under the handle it is bound to",
+  "note": "a syncs Contacts, b syncs Work, where it binds the card under w.vcf as a tombstone with a base, its delete not pushed yet. A copy from a's Contacts stages its create under b, so it reads Work as b sees it: the tombstone is b's own, revived under w.vcf, its binding and base kept and its delete withdrawn, the item adopting the copied flags and body. No create is staged, under a nor under b's provisional handle, which would rebind the key b binds (SYNC.md section 7; STORAGE.md sections 9 and 10)",
+  "store": {
+    "collections": [
+      { "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" },
+      { "id": "Work", "account": null, "kind": "text/vcard", "conflict": "manual" }
+    ],
+    "objects": { "c1": { "body": "fixtures/card-basic.vcf" } },
+    "items": [
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0 },
+      { "collection": "Work", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 1 }
+    ],
+    "bindings": [
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1 },
+      { "collection": "Work", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "b", "handle": "w.vcf", "base_flags": [], "base_object": "c1", "base_revision": "w1", "base_present": 1 }
+    ],
+    "sources": [
+      { "collection": "Contacts", "source": "a", "checkpoint": "a1" },
+      { "collection": "Work", "source": "b", "checkpoint": "b1" }
+    ]
+  },
+  "run": { "verb": "mutate", "collection": "Contacts", "source": "a", "mutation": { "kind": "Copy", "seq": 1, "to": "Work" } },
+  "remote": {
+    "snapshot": null,
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0 },
+        { "collection": "Work", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0 }
+      ],
+      "bindings": [
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1 },
+        { "collection": "Work", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "b", "handle": "w.vcf", "base_flags": [], "base_object": "c1", "base_revision": "w1", "base_present": 1 }
+      ]
+    }
+  }
+}

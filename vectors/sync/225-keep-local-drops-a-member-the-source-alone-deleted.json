@@ -1,0 +1,38 @@
+{
+  "v": 11,
+  "label": "under keep-local a member a complete round finds absent is dropped as deleted, nothing re-created",
+  "note": "the store is authoritative over this source for content alone. Its server deleted a.vcf, whose placement holds the body its base names, while the listing names b.vcf: the absence is a delete as under any policy, the binding dropped with reason Deleted and the item retained with its body, and no Add re-creates the member the server deleted (SYNC.md sections 5 and 10; STORAGE.md section 11). A placement holding a local edit would be re-staged instead (vector 16)",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
+    "objects": {
+      "c1": { "body": "fixtures/card-basic.vcf" },
+      "k1": { "body": "fixtures/card-held.vcf" }
+    },
+    "items": [
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0 },
+      { "collection": "Contacts", "link_id": "urn:uuid:5d2c9a7e-3b1f-4e6a-9c8d-7f0e1a2b3c4d", "seq": 2, "flags": [], "object": "k1", "level": 2, "deleted": 0 }
+    ],
+    "bindings": [
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1 },
+      { "collection": "Contacts", "link_id": "urn:uuid:5d2c9a7e-3b1f-4e6a-9c8d-7f0e1a2b3c4d", "source": "dav", "handle": "b.vcf", "base_flags": [], "base_object": "k1", "base_revision": "s1", "base_present": 1 }
+    ],
+    "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d0" }]
+  },
+  "run": { "verb": "sync", "collection": "Contacts", "source": "dav", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "keep-local" } },
+  "remote": { "snapshot": { "items": [{ "handle": "b.vcf", "flags": [], "revision": "s1", "meta": { "body": "fixtures/card-held.vcf" } }], "vanished": [], "complete": true, "checkpoint": "d1" }, "fetch": {} },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [{ "kind": "Vanished", "handle": "a.vcf" }],
+    "store": {
+      "items": [
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 1, "retained": true, "retained_by": "dav" },
+        { "collection": "Contacts", "link_id": "urn:uuid:5d2c9a7e-3b1f-4e6a-9c8d-7f0e1a2b3c4d", "seq": 2, "flags": [], "object": "k1", "level": 2, "deleted": 0 }
+      ],
+      "bindings": [
+        { "collection": "Contacts", "link_id": "urn:uuid:5d2c9a7e-3b1f-4e6a-9c8d-7f0e1a2b3c4d", "source": "dav", "handle": "b.vcf", "base_flags": [], "base_object": "k1", "base_revision": "s1", "base_present": 1 }
+      ],
+      "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d1" }]
+    }
+  }
+}

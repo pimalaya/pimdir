@@ -1,0 +1,40 @@
+{
+  "v": 11,
+  "label": "a copy into a collection its source does not sync stages the create under the source that syncs it",
+  "note": "a syncs Contacts, b alone syncs Work, by a checkpoint and no binding. The person copies a's card into Work. The create is staged as b's pending create, the source an add into Work runs as: under the provisional handle, no base, the item sharing seq 1 and the body. It carries no origin of a's, which b cannot copy from, so b's next sync uploads the body the store holds; a stages nothing in Work, where it would never push (SYNC.md section 7; STORAGE.md section 15.2). A drain applying a queued copy stages the same",
+  "store": {
+    "collections": [
+      { "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" },
+      { "id": "Work", "account": null, "kind": "text/vcard", "conflict": "manual" }
+    ],
+    "objects": { "c1": { "body": "fixtures/card-basic.vcf" } },
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0 }],
+    "bindings": [
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1 }
+    ],
+    "sources": [
+      { "collection": "Contacts", "source": "a", "checkpoint": "a1" },
+      { "collection": "Work", "source": "b", "checkpoint": "b1" }
+    ]
+  },
+  "run": { "verb": "mutate", "collection": "Contacts", "source": "a", "mutation": { "kind": "Copy", "seq": 1, "to": "Work" } },
+  "remote": {
+    "snapshot": null,
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0 },
+        { "collection": "Work", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 0 }
+      ],
+      "bindings": [
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "a", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1 },
+        { "collection": "Work", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "b", "handle": "\u0001urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0 }
+      ]
+    }
+  }
+}

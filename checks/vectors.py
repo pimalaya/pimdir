@@ -2557,6 +2557,26 @@ for path in sync_cases:
             require(f"{label}: a {mutation['kind']} no body nor origin could deliver fails", case["expect"].get("failed") is True)
             for table in ("items", "bindings"):
                 check(f"{label}: a refused {mutation['kind']} leaves the {table} as they were", after.get(table, store.get(table)), store.get(table))
+    # A Copy or a Move stages its create under a source syncing the target,
+    # the run's own where it syncs it, and is refused, staging nothing,
+    # where none does (SYNC.md section 7).
+    if mutation.get("kind") in ("Copy", "Move"):
+        syncers = {row["source"] for row in store.get("bindings", []) + store.get("sources", []) if row["collection"] == mutation["to"]}
+        if not syncers:
+            require(f"{label}: a {mutation['kind']} into a collection no source syncs fails", case["expect"].get("failed") is True)
+            for table in ("items", "bindings"):
+                check(f"{label}: a refused {mutation['kind']} leaves the {table} as they were", after.get(table, store.get(table)), store.get(table))
+        elif not case["expect"].get("failed"):
+            staged = [b for b in after.get("bindings", []) if b["collection"] == mutation["to"] and b not in store.get("bindings", [])]
+            want = {run["source"]} if run["source"] in syncers else syncers
+            for binding in staged:
+                require(f"{label}: the {mutation['kind']}'s create in {mutation['to']} is bound by {sorted(want)}", binding["source"] in want)
+    # Only a hash: key is checked against the body an Add carries: a stated
+    # alt: key is staged as stated (SYNC.md section 7, STORAGE.md section
+    # 15.3).
+    if mutation.get("kind") == "Add" and mutation.get("link_id", "").startswith("alt:"):
+        require(f"{label}: an Add stating {mutation['link_id']} is staged", not case["expect"].get("failed"))
+        require(f"{label}: an Add stating {mutation['link_id']} is staged under it", any(i["link_id"] == mutation["link_id"] for i in after.get("items", [])))
     for push in case["expect"].get("pushes", []):
         require(f"{label}: push {push.get('handle')} names a kind", push.get("kind") in {"Add", "Remove", "SetFlags", "Update"})
         require(f"{label}: push {push.get('handle')} carries a key", "key" in push)

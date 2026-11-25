@@ -277,7 +277,14 @@
     "vectors/sync/221-a-flag-change-on-a-delivered-create-leaves-its-base-naming-nothing.json": "3c7e6d606e14026648dfe5a354955bf4b6a2b53a51db7ddaae69c1ab80fbdeb2",
     "vectors/sync/222-an-upgrade-beside-another-member-of-its-id-fetches-rather-than-links.json": "2b8103c74c9e246309a1471bab93637eec458e41a26783f573e4ad60baffc390",
     "vectors/sync/223-a-copy-taking-the-body-another-member-of-its-id-holds-releases-it-from-that-member.json": "34d5e13547361e5641f991bdd49528f81e9d5a3392b4ef55c69ede920156b3e1",
+    "vectors/sync/224-keep-local-pulls-a-flag-change-the-source-alone-made.json": "7a68692b1357a96752cf3562939699284e7e4c1cfec974b80df62aac3e485ef1",
+    "vectors/sync/225-keep-local-drops-a-member-the-source-alone-deleted.json": "eceead97b93b46868c26b8cc27c984fd637dfbe40f7b2fff8f4f089152089a97",
+    "vectors/sync/226-an-add-stating-an-alt-key-its-body-does-not-derive-is-staged-under-it.json": "5eb58d13956950ab07432bf5bbf233c204d3b3a477e64d7b07d95983db4df20f",
+    "vectors/sync/227-a-copy-into-a-collection-another-source-syncs-stages-the-create-under-it.json": "4e52358af0fdfd1ae50cee8c2970d6ea4057c84ebdf547662451b824d387c6ba",
+    "vectors/sync/228-a-move-into-a-collection-another-source-syncs-stages-the-create-under-it.json": "538d3a3d7d881a0dfd77f6281043f35a85dfea0d692dcec4bd76c76f5ec00cd3",
+    "vectors/sync/229-a-move-into-a-collection-no-source-syncs-is-refused.json": "c4e11f39fea30572f072f6122efb3c7ea237bcb5c020d0047be931052bf883e4",
     "vectors/sync/23-rekey-remote-edit-conflicts-a-local-edit.json": "5bec1da6775beb586e1ccf04d00b517c9e3338da49fe567b673ef6d95c9a3b1a",
+    "vectors/sync/230-a-copy-over-the-target-sources-own-tombstone-revives-it-under-its-handle.json": "a772e0bf39c426f4dbdf214e57082e70623bdaceddfea0147b6cc079aea1e736",
     "vectors/sync/24-rekey-remote-edit-pulls.json": "8dc7ea3fe1b40843931ede7613eda160673e72c5eec8cec1c774cd5257e3dc23",
     "vectors/sync/25-a-create-waits-for-its-round.json": "ecceb304017675ce8ebb36d9adba457a6548de303473da71754316c81340088d",
     "vectors/sync/26-flags-removed-on-both-sides.json": "939523792b2876db084bd324a9760be11275585120e8ae782d180f9226dc902e",
@@ -387,5 +394,5 @@
       "/cases": 24
     }
   },
-  "sync": 223
+  "sync": 230
 }

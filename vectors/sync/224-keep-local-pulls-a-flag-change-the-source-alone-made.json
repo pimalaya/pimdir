@@ -1,0 +1,24 @@
+{
+  "v": 11,
+  "label": "under keep-local a flag change the source alone made is pulled, nothing pushed back",
+  "note": "the store is authoritative over this source for content alone. Its server added \\Flagged while the store changed nothing: the flag axis merges as under any policy and never conflicts, so the flag is pulled and the base follows it, and no SetFlags pushes the store's set back over it (SYNC.md sections 5 and 9)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },
+    "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+    "bindings": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c0" }]
+  },
+  "run": { "verb": "sync", "collection": "INBOX", "source": "imap", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "keep-local" } },
+  "remote": { "snapshot": { "items": [{ "handle": "10", "flags": ["\\Flagged", "\\Seen"], "revision": null, "meta": { "body": "fixtures/mail-basic.eml" } }], "vanished": [], "complete": true, "checkpoint": "c1" }, "fetch": {} },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [{ "kind": "FlagsChanged", "handle": "10" }],
+    "store": {
+      "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Flagged", "\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+      "bindings": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Flagged", "\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }],
+      "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c1" }]
+    }
+  }
+}

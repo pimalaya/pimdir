@@ -1,0 +1,30 @@
+{
+  "v": 11,
+  "label": "an add stating an alt: key its body does not derive is staged under it",
+  "note": "m1 states no Message-ID, so its own bytes derive alt:Cron alert|2026-08-01T10:00:00Z|cron@example.org; the add states the alt: key of another sender. Only a hash: key is checked against the body (vector 176): a stated alt: key, read from decoded header fields rather than the bytes, is staged as stated, a pending create under its provisional handle (SYNC.md section 7; STORAGE.md sections 9 and 15.3)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual" }],
+    "objects": { "m1": { "body": "fixtures/mail-no-message-id.eml" } },
+    "items": [],
+    "bindings": [],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c0" }]
+  },
+  "run": { "verb": "mutate", "collection": "INBOX", "source": "imap", "mutation": { "kind": "Add", "flags": [], "object": "m1", "link_id": "alt:Cron alert|2026-08-01T10:00:00Z|backup@example.org" } },
+  "remote": {
+    "snapshot": null,
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "items": [
+        { "collection": "INBOX", "link_id": "alt:Cron alert|2026-08-01T10:00:00Z|backup@example.org", "seq": 1, "flags": [], "object": "m1", "level": 2, "deleted": 0 }
+      ],
+      "bindings": [
+        { "collection": "INBOX", "link_id": "alt:Cron alert|2026-08-01T10:00:00Z|backup@example.org", "source": "imap", "handle": "\u0001alt:Cron alert|2026-08-01T10:00:00Z|backup@example.org", "base_flags": null, "base_object": null, "base_revision": null, "base_present": 0, "shared_object": "m1" }
+      ]
+    }
+  }
+}
