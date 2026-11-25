@@ -1,0 +1,1210 @@
+{
+  "v": 1,
+  "now": "2026-08-20T12:00:00Z",
+  "note": "what extraction reads of a body, kind by kind (SEARCH.md sections 5 to 7), each case a store of its own, built and indexed as store.json is at now, then asked its queries as queries.json's cases are asked; hits are (account, seq) pairs compared as a set",
+  "cases": [
+    {
+      "label": "mail",
+      "note": "what SEARCH.md section 6 reads of a message: encoded words in a name and a subject, Q and B, in UTF-8, ISO-8859-2, ISO-2022-JP and GBK (headers, which the hit-set guarantee holds whatever their charset); every text part, the second of a multipart/mixed among them; a quoted-printable soft line break joining a word; and the walk's bounds of STORAGE Annex A.1, a text part at depth 64 read and one at depth 65 not, a text part as the 10,000th entity read and one as the 10,001st not",
+      "store": {
+        "collections": [
+          {
+            "id": "home/INBOX",
+            "account": "home",
+            "kind": "message/rfc822"
+          }
+        ],
+        "items": [
+          {
+            "collection": "home/INBOX",
+            "seq": 1,
+            "link_id": "encoded-1@example.org",
+            "flags": [],
+            "fixture": "fixtures/mail-encoded.eml"
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 2,
+            "link_id": "charset-latin2@example.org",
+            "flags": [],
+            "fixture": "fixtures/mail-charset-iso-8859-2.eml"
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 3,
+            "link_id": "charset-jis@example.org",
+            "flags": [],
+            "fixture": "fixtures/mail-charset-iso-2022-jp.eml"
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 4,
+            "link_id": "charset-gbk@example.org",
+            "flags": [],
+            "fixture": "fixtures/mail-charset-gbk.eml"
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 5,
+            "link_id": "footer-1@example.org",
+            "flags": [],
+            "fixture": "fixtures/mail-mixed-footer.eml"
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 6,
+            "link_id": "qp-1@example.org",
+            "flags": [],
+            "fixture": "fixtures/mail-quoted-printable.eml"
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 7,
+            "link_id": "deep-text-1@example.org",
+            "flags": [],
+            "fixture": "fixtures/mail-deep-text.eml"
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 8,
+            "link_id": "parts-text-1@example.org",
+            "flags": [],
+            "fixture": "fixtures/mail-many-text.eml"
+          }
+        ],
+        "references": []
+      },
+      "queries": [
+        {
+          "query": "from:bruck",
+          "hits": [
+            [
+              "home",
+              1
+            ]
+          ],
+          "note": "a Q-encoded display name, Brück folded"
+        },
+        {
+          "query": "from:zoe",
+          "hits": [
+            [
+              "home",
+              1
+            ]
+          ]
+        },
+        {
+          "query": "subject:\"reunion de rentree\"",
+          "hits": [
+            [
+              "home",
+              1
+            ]
+          ],
+          "note": "a B-encoded UTF-8 subject"
+        },
+        {
+          "query": "subject:gesla",
+          "hits": [
+            [
+              "home",
+              2
+            ]
+          ],
+          "note": "an ISO-8859-2 Q-encoded subject, gęślą folded"
+        },
+        {
+          "query": "from:zak",
+          "hits": [
+            [
+              "home",
+              2
+            ]
+          ],
+          "note": "an ISO-8859-2 B-encoded name, Żak folded"
+        },
+        {
+          "query": "subject:こんにちは",
+          "hits": [
+            [
+              "home",
+              3
+            ]
+          ],
+          "note": "an ISO-2022-JP subject, one token of five kana"
+        },
+        {
+          "query": "subject:你好世界",
+          "hits": [
+            [
+              "home",
+              4
+            ]
+          ],
+          "note": "a GBK subject"
+        },
+        {
+          "query": "body:footer",
+          "hits": [
+            [
+              "home",
+              5
+            ]
+          ],
+          "matched": [
+            [
+              "home",
+              5,
+              "body"
+            ]
+          ],
+          "complete": true,
+          "note": "the second text part of a multipart/mixed is read as the first is"
+        },
+        {
+          "query": "body:version",
+          "hits": [
+            [
+              "home",
+              5
+            ]
+          ]
+        },
+        {
+          "query": "body:quarterly",
+          "hits": [
+            [
+              "home",
+              6
+            ]
+          ],
+          "note": "a quoted-printable soft line break joins quar and terly into one word"
+        },
+        {
+          "query": "body:quar",
+          "hits": [],
+          "note": "so neither half is a word of its own"
+        },
+        {
+          "query": "body:cafe",
+          "hits": [
+            [
+              "home",
+              6
+            ]
+          ],
+          "note": "a quoted-printable UTF-8 octet pair"
+        },
+        {
+          "query": "body:fathom",
+          "hits": [
+            [
+              "home",
+              7
+            ]
+          ],
+          "note": "a text part at depth 64, the deepest the walk reads"
+        },
+        {
+          "query": "body:abyss",
+          "hits": [],
+          "note": "one at depth 65, which the walk never reads"
+        },
+        {
+          "query": "body:harbour",
+          "hits": [
+            [
+              "home",
+              8
+            ]
+          ],
+          "note": "a text part as the 10,000th entity, the last the walk reads"
+        },
+        {
+          "query": "body:lighthouse",
+          "hits": [],
+          "note": "one as the 10,001st, which the walk never reads"
+        }
+      ]
+    },
+    {
+      "label": "a multipart nothing closes",
+      "note": "the last child of a multipart no closing delimiter ends is read (SEARCH.md section 6, STORAGE.md Annex A.1): its file name is in the attachment field. A message carrying an attachment is a case's last item, so an owner recording attachments draws its stand-in's seq after every seq the case states (STORAGE.md section 14.3)",
+      "store": {
+        "collections": [
+          {
+            "id": "home/INBOX",
+            "account": "home",
+            "kind": "message/rfc822"
+          }
+        ],
+        "items": [
+          {
+            "collection": "home/INBOX",
+            "seq": 1,
+            "link_id": "unclosed-1@example.org",
+            "flags": [],
+            "fixture": "fixtures/mail-unclosed-multipart.eml"
+          }
+        ],
+        "references": []
+      },
+      "queries": [
+        {
+          "query": "attachment:notes",
+          "hits": [
+            [
+              "home",
+              1
+            ]
+          ]
+        },
+        {
+          "query": "mimetype:text/plain kind:mail",
+          "hits": [
+            [
+              "home",
+              1
+            ]
+          ],
+          "note": "its media type too"
+        }
+      ]
+    },
+    {
+      "label": "an RFC 2231 file name",
+      "note": "a file name continued over two parameters, its first stating its charset, decoded whole (SEARCH.md section 6, RFC 2231)",
+      "store": {
+        "collections": [
+          {
+            "id": "home/INBOX",
+            "account": "home",
+            "kind": "message/rfc822"
+          }
+        ],
+        "items": [
+          {
+            "collection": "home/INBOX",
+            "seq": 1,
+            "link_id": "attach-2@example.org",
+            "flags": [],
+            "fixture": "fixtures/mail-attachments.eml"
+          }
+        ],
+        "references": []
+      },
+      "queries": [
+        {
+          "query": "attachment:resume",
+          "hits": [
+            [
+              "home",
+              1
+            ]
+          ],
+          "note": "résumé.pdf, folded"
+        },
+        {
+          "query": "attachment:\"résumé.pdf\"",
+          "hits": [
+            [
+              "home",
+              1
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "label": "cards",
+      "note": "what SEARCH.md section 6 reads of a card: N's components and NICKNAME's values in the title, TITLE, ROLE and ORG in the org field, ADR in the place, NOTE unfolded; and the fold of section 5 over a dotted capital I, a final sigma, text written decomposed (NFD) and the marks of other scripts, kept, each checked against SQLite's unicode61 first, which folds a final sigma to a sigma and keeps a Hebrew point and a Devanagari vowel sign in their token",
+      "store": {
+        "collections": [
+          {
+            "id": "home/Contacts",
+            "account": "home",
+            "kind": "text/vcard"
+          }
+        ],
+        "items": [
+          {
+            "collection": "home/Contacts",
+            "seq": 1,
+            "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40",
+            "flags": [],
+            "fixture": "fixtures/card-basic.vcf"
+          },
+          {
+            "collection": "home/Contacts",
+            "seq": 2,
+            "link_id": "urn:uuid:9e8d7c6b-5a49-4837-9261-0f1e2d3c4b5a",
+            "flags": [],
+            "fixture": "fixtures/card-escaped.vcf"
+          },
+          {
+            "collection": "home/Contacts",
+            "seq": 3,
+            "link_id": "urn:uuid:5d2c9a7e-3b1f-4e6a-9c8d-7f0e1a2b3c4d",
+            "flags": [],
+            "fixture": "fixtures/card-held.vcf"
+          },
+          {
+            "collection": "home/Contacts",
+            "seq": 4,
+            "link_id": "urn:uuid:7b3e1f20-6c4d-4a8e-9f1b-2d5c8e0a4b61",
+            "flags": [],
+            "fixture": "fixtures/card-titles.vcf"
+          },
+          {
+            "collection": "home/Contacts",
+            "seq": 5,
+            "link_id": "urn:uuid:0c1d2e3f-4a5b-4c6d-8e7f-901234567890",
+            "flags": [],
+            "fixture": "fixtures/card-full-lowercase.vcf"
+          },
+          {
+            "collection": "home/Contacts",
+            "seq": 6,
+            "link_id": "urn:uuid:5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d",
+            "flags": [],
+            "fixture": "fixtures/card-final-sigma.vcf"
+          },
+          {
+            "collection": "home/Contacts",
+            "seq": 7,
+            "link_id": "urn:uuid:2e9a6c41-0d7b-4f35-8a12-6b4c9e7d3f08",
+            "flags": [],
+            "fixture": "fixtures/card-scripts.vcf"
+          }
+        ],
+        "references": []
+      },
+      "queries": [
+        {
+          "query": "location:brest",
+          "hits": [
+            [
+              "home",
+              3
+            ]
+          ],
+          "note": "ADR is the place"
+        },
+        {
+          "query": "location:harbour",
+          "hits": [
+            [
+              "home",
+              3
+            ]
+          ]
+        },
+        {
+          "query": "research",
+          "hits": [
+            [
+              "home",
+              2
+            ]
+          ],
+          "note": "an ORG component, free text reading the org field"
+        },
+        {
+          "query": "title:research",
+          "hits": [],
+          "note": "ORG is not in the title"
+        },
+        {
+          "query": "linecontinued",
+          "hits": [
+            [
+              "home",
+              2
+            ]
+          ],
+          "note": "NOTE unfolded: a line break and the one space after it removed, so the two lines join into one word"
+        },
+        {
+          "query": "continued",
+          "hits": []
+        },
+        {
+          "query": "title:adaeze",
+          "hits": [
+            [
+              "home",
+              4
+            ]
+          ],
+          "note": "an additional name of N"
+        },
+        {
+          "query": "title:phd",
+          "hits": [
+            [
+              "home",
+              4
+            ]
+          ],
+          "note": "an honorific suffix of N"
+        },
+        {
+          "query": "title:roo",
+          "hits": [
+            [
+              "home",
+              4
+            ]
+          ],
+          "note": "a NICKNAME value"
+        },
+        {
+          "query": "title:captain",
+          "hits": [
+            [
+              "home",
+              4
+            ]
+          ],
+          "note": "its second value"
+        },
+        {
+          "query": "harbourmaster",
+          "hits": [
+            [
+              "home",
+              4
+            ]
+          ],
+          "note": "TITLE is in the org field"
+        },
+        {
+          "query": "title:harbourmaster",
+          "hits": [],
+          "note": "and not in the title"
+        },
+        {
+          "query": "pilot",
+          "hits": [
+            [
+              "home",
+              4
+            ]
+          ],
+          "note": "ROLE likewise"
+        },
+        {
+          "query": "title:pilot",
+          "hits": []
+        },
+        {
+          "query": "ilkay",
+          "hits": [
+            [
+              "home",
+              5
+            ]
+          ],
+          "note": "a dotted capital I lowercases to i and a combining dot above, which the fold drops"
+        },
+        {
+          "query": "İlkay",
+          "hits": [
+            [
+              "home",
+              5
+            ]
+          ],
+          "note": "the query folded alike"
+        },
+        {
+          "query": "sahin",
+          "hits": [
+            [
+              "home",
+              5
+            ]
+          ],
+          "note": "a cedilla dropped"
+        },
+        {
+          "query": "οδυσσευς",
+          "hits": [
+            [
+              "home",
+              6
+            ]
+          ],
+          "note": "a capital sigma ending a word lowercases to a final sigma"
+        },
+        {
+          "query": "οδυσσευσ",
+          "hits": [
+            [
+              "home",
+              6
+            ]
+          ],
+          "note": "unicode61 folds a final sigma to a sigma in the index and the query alike"
+        },
+        {
+          "query": "ΟΔΥΣΣΕΥΣ",
+          "hits": [
+            [
+              "home",
+              6
+            ]
+          ]
+        },
+        {
+          "query": "zoe",
+          "hits": [
+            [
+              "home",
+              7
+            ]
+          ],
+          "note": "a name written decomposed, its diaeresis dropped by the fold"
+        },
+        {
+          "query": "zoë",
+          "hits": [
+            [
+              "home",
+              7
+            ]
+          ],
+          "note": "the composed query folds to the same word"
+        },
+        {
+          "query": "muller",
+          "hits": [
+            [
+              "home",
+              7
+            ]
+          ]
+        },
+        {
+          "query": "हिंदी",
+          "hits": [
+            [
+              "home",
+              7
+            ]
+          ],
+          "note": "a Devanagari word, its vowel signs and nasal mark kept by the fold"
+        },
+        {
+          "query": "हद",
+          "hits": [],
+          "note": "so the word without its vowel signs is another"
+        },
+        {
+          "query": "שָׁלוֹם",
+          "hits": [
+            [
+              "home",
+              7
+            ]
+          ],
+          "note": "a Hebrew word, its points kept"
+        },
+        {
+          "query": "שלום",
+          "hits": [],
+          "note": "so the word without its points is another"
+        },
+        {
+          "query": "kind:contact has:phone",
+          "hits": [
+            [
+              "home",
+              2
+            ]
+          ],
+          "complete": true
+        }
+      ]
+    },
+    {
+      "label": "calendar",
+      "note": "what SEARCH.md sections 6 and 7 read of a calendar item: an ATTENDEE's CN and an ORGANIZER's, escaped TEXT unescaped, a journal's DESCRIPTION, an ATTACH's FILENAME and FMTTYPE; a time zoned by an IANA name the resource defines no VTIMEZONE for, an unknown TZID read as floating, floating times in the index's zone, UTC here, a DATE spanning its day, an RDATE, an EXDATE, a RECURRENCE-ID override moving its instance, a COUNT counting the excluded instance, and an RRULE with no DTSTART, indexed and yielding no occurrence",
+      "store": {
+        "collections": [
+          {
+            "id": "home/Calendar",
+            "account": "home",
+            "kind": "text/calendar"
+          }
+        ],
+        "items": [
+          {
+            "collection": "home/Calendar",
+            "seq": 1,
+            "link_id": "event-people@example.org",
+            "flags": [],
+            "fixture": "fixtures/event-people.ics"
+          },
+          {
+            "collection": "home/Calendar",
+            "seq": 2,
+            "link_id": "journal-basic@example.org",
+            "flags": [],
+            "fixture": "fixtures/journal-basic.ics"
+          },
+          {
+            "collection": "home/Calendar",
+            "seq": 3,
+            "link_id": "event-unknown-tz@example.org",
+            "flags": [],
+            "fixture": "fixtures/event-unknown-tzid.ics"
+          },
+          {
+            "collection": "home/Calendar",
+            "seq": 4,
+            "link_id": "event-iana@example.org",
+            "flags": [],
+            "fixture": "fixtures/event-zoned-iana.ics"
+          },
+          {
+            "collection": "home/Calendar",
+            "seq": 5,
+            "link_id": "event-allday@example.org",
+            "flags": [],
+            "fixture": "fixtures/event-date-only.ics"
+          },
+          {
+            "collection": "home/Calendar",
+            "seq": 6,
+            "link_id": "event-floating@example.org",
+            "flags": [],
+            "fixture": "fixtures/event-floating.ics"
+          },
+          {
+            "collection": "home/Calendar",
+            "seq": 7,
+            "link_id": "event-exceptions@example.org",
+            "flags": [],
+            "fixture": "fixtures/event-exceptions.ics"
+          },
+          {
+            "collection": "home/Calendar",
+            "seq": 8,
+            "link_id": "event-no-dtstart@example.org",
+            "flags": [],
+            "fixture": "fixtures/event-no-dtstart.ics"
+          },
+          {
+            "collection": "home/Calendar",
+            "seq": 9,
+            "link_id": "event-attach@example.org",
+            "flags": [],
+            "fixture": "fixtures/event-attach.ics"
+          }
+        ],
+        "references": []
+      },
+      "queries": [
+        {
+          "query": "attendee:frank",
+          "hits": [
+            [
+              "home",
+              1
+            ]
+          ],
+          "note": "an ATTENDEE's CN"
+        },
+        {
+          "query": "attendee:gina@example.org",
+          "hits": [
+            [
+              "home",
+              1
+            ]
+          ],
+          "note": "an attendee's address, lowercased"
+        },
+        {
+          "query": "organizer:erin",
+          "hits": [
+            [
+              "home",
+              1
+            ]
+          ],
+          "note": "the ORGANIZER's CN"
+        },
+        {
+          "query": "subject:\"plan, review; q3\"",
+          "hits": [
+            [
+              "home",
+              1
+            ]
+          ],
+          "note": "SUMMARY's escaped comma and semicolon unescaped"
+        },
+        {
+          "query": "location:floor",
+          "hits": [
+            [
+              "home",
+              1
+            ]
+          ],
+          "note": "an escaped line break in LOCATION separates words"
+        },
+        {
+          "query": "kind:event date:2026-10-22",
+          "hits": [
+            [
+              "home",
+              1
+            ]
+          ],
+          "note": "an RDATE instance"
+        },
+        {
+          "query": "kind:event date:2026-10-29",
+          "hits": []
+        },
+        {
+          "query": "body:roofer",
+          "hits": [
+            [
+              "home",
+              2
+            ]
+          ],
+          "note": "a journal's DESCRIPTION is its body"
+        },
+        {
+          "query": "kind:journal date:2026-10-20",
+          "hits": [
+            [
+              "home",
+              2
+            ]
+          ],
+          "note": "a journal spans its DTSTART alone, a date here, starting the day"
+        },
+        {
+          "query": "kind:journal date:2026-10-21",
+          "hits": []
+        },
+        {
+          "query": "kind:event date:2026-08-11T09:00",
+          "hits": [
+            [
+              "home",
+              3
+            ],
+            [
+              "home",
+              5
+            ],
+            [
+              "home",
+              6
+            ]
+          ],
+          "note": "an unknown TZID read as floating, a floating time, both read in UTC, the index's zone, and the all-day event spanning 11 August"
+        },
+        {
+          "query": "kind:event date:2026-08-14T07:00",
+          "hits": [
+            [
+              "home",
+              4
+            ]
+          ],
+          "note": "09:00 in Europe/Paris through the IANA database, no VTIMEZONE given"
+        },
+        {
+          "query": "kind:event date:2026-08-14T09:00",
+          "hits": []
+        },
+        {
+          "query": "kind:event date:2026-08-12",
+          "hits": [],
+          "note": "a DATE's span ends where the next day starts"
+        },
+        {
+          "query": "kind:event date:2026-10-07",
+          "hits": [],
+          "note": "an EXDATE removes its instance"
+        },
+        {
+          "query": "kind:event date:2026-10-09",
+          "hits": [
+            [
+              "home",
+              7
+            ]
+          ],
+          "complete": true,
+          "note": "the fifth instance, COUNT counting the one removed"
+        },
+        {
+          "query": "kind:event date:2026-10-10",
+          "hits": [],
+          "note": "COUNT=5 ends the series"
+        },
+        {
+          "query": "kind:event date:2026-10-08T10:00",
+          "hits": [],
+          "note": "the instance a RECURRENCE-ID override moved"
+        },
+        {
+          "query": "kind:event date:2026-10-08T15:00",
+          "hits": [
+            [
+              "home",
+              7
+            ]
+          ],
+          "note": "to where the override puts it"
+        },
+        {
+          "query": "driftwood",
+          "hits": [
+            [
+              "home",
+              8
+            ]
+          ],
+          "note": "a series no expander accepts is indexed all the same"
+        },
+        {
+          "query": "kind:event date:2026",
+          "hits": [
+            [
+              "home",
+              1
+            ],
+            [
+              "home",
+              3
+            ],
+            [
+              "home",
+              4
+            ],
+            [
+              "home",
+              5
+            ],
+            [
+              "home",
+              6
+            ],
+            [
+              "home",
+              7
+            ],
+            [
+              "home",
+              9
+            ]
+          ],
+          "note": "and yields no occurrence"
+        },
+        {
+          "query": "attachment:agenda",
+          "hits": [
+            [
+              "home",
+              9
+            ]
+          ],
+          "note": "an ATTACH's FILENAME"
+        },
+        {
+          "query": "mimetype:opendocument",
+          "hits": [
+            [
+              "home",
+              9
+            ]
+          ],
+          "note": "its FMTTYPE"
+        }
+      ]
+    },
+    {
+      "label": "a local time a zone skips or repeats",
+      "note": "an instant the query states without an offset is read in its zone, a local time a transition skips with the offset in force before it and one it repeats as its first occurrence (SEARCH.md section 8.1): in Europe/Paris, 02:30 on 29 March 2026 is 01:30Z and 02:30 on 25 October 2026 is 00:30Z",
+      "store": {
+        "collections": [
+          {
+            "id": "home/INBOX",
+            "account": "home",
+            "kind": "message/rfc822"
+          }
+        ],
+        "items": [
+          {
+            "collection": "home/INBOX",
+            "seq": 1,
+            "link_id": "clock-1@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "clock-1@example.org",
+                "in_reply_to": [],
+                "subject": "Clock change",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-03-29T00:30:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-03-29T00:30:00Z"
+            }
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 2,
+            "link_id": "clock-2@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "clock-2@example.org",
+                "in_reply_to": [],
+                "subject": "Clock change",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-03-29T01:30:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-03-29T01:30:00Z"
+            }
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 3,
+            "link_id": "clock-3@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "clock-3@example.org",
+                "in_reply_to": [],
+                "subject": "Clock change",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-10-25T00:30:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-10-25T00:30:00Z"
+            }
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 4,
+            "link_id": "clock-4@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "clock-4@example.org",
+                "in_reply_to": [],
+                "subject": "Clock change",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-10-25T01:30:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-10-25T01:30:00Z"
+            }
+          }
+        ],
+        "references": []
+      },
+      "queries": [
+        {
+          "query": "kind:mail date:2026-03-29T02:30",
+          "hits": [
+            [
+              "home",
+              2
+            ]
+          ],
+          "zone": "Europe/Paris"
+        },
+        {
+          "query": "kind:mail date:2026-10-25T02:30",
+          "hits": [
+            [
+              "home",
+              3
+            ]
+          ],
+          "zone": "Europe/Paris"
+        },
+        {
+          "query": "kind:mail date:2026-03-29",
+          "hits": [
+            [
+              "home",
+              1
+            ],
+            [
+              "home",
+              2
+            ]
+          ],
+          "zone": "Europe/Paris",
+          "note": "a day of 23 hours"
+        },
+        {
+          "query": "kind:mail date:2026-10-25",
+          "hits": [
+            [
+              "home",
+              3
+            ],
+            [
+              "home",
+              4
+            ]
+          ],
+          "zone": "Europe/Paris",
+          "note": "a day of 25 hours"
+        }
+      ]
+    },
+    {
+      "label": "a body no parser accepts",
+      "note": "a card STORAGE.md Annex A summarises, a line holding no colon naming no property there, and no vCard parser accepts (RFC 6350 section 3.3): its extraction is unparseable, counted so per placement (SEARCH.md sections 6, 8.2), and a term reading a contact's body leaves an answer over it incomplete while one reading no body does not",
+      "store": {
+        "collections": [
+          {
+            "id": "home/Contacts",
+            "account": "home",
+            "kind": "text/vcard"
+          }
+        ],
+        "items": [
+          {
+            "collection": "home/Contacts",
+            "seq": 1,
+            "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40",
+            "flags": [],
+            "fixture": "fixtures/card-basic.vcf"
+          },
+          {
+            "collection": "home/Contacts",
+            "seq": 2,
+            "link_id": "urn:uuid:c4f8a2d6-1e3b-4790-b5a8-0f6d2c9e1a37",
+            "flags": [],
+            "fixture": "fixtures/card-no-colon.vcf"
+          }
+        ],
+        "references": []
+      },
+      "queries": [
+        {
+          "query": "olive",
+          "hits": [
+            [
+              "home",
+              2
+            ]
+          ],
+          "coverage": {
+            "text/vcard": {
+              "bodiless": 0,
+              "missing": 0,
+              "unparseable": 1,
+              "encrypted": 0
+            }
+          },
+          "complete": false,
+          "note": "what could be read of it matches"
+        },
+        {
+          "query": "jane",
+          "hits": [
+            [
+              "home",
+              1
+            ]
+          ],
+          "complete": false
+        },
+        {
+          "query": "kind:contact",
+          "hits": [
+            [
+              "home",
+              1
+            ],
+            [
+              "home",
+              2
+            ]
+          ],
+          "coverage": {
+            "text/vcard": {
+              "bodiless": 0,
+              "missing": 0,
+              "unparseable": 1,
+              "encrypted": 0
+            }
+          },
+          "complete": true
+        },
+        {
+          "query": "kind:contact has:phone",
+          "hits": [],
+          "complete": false
+        }
+      ]
+    }
+  ]
+}

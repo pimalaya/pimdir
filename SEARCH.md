@@ -111,7 +111,9 @@ A `multipart/encrypted` or `application/pkcs7-mime` body is recorded `encrypted`
 - **Packing.** Paragraphs are packed greedily, in order, into chunks of at most 1024 bytes, a chunk running from its first paragraph's start to its last one's end, the runs between them included. A paragraph that does not fit the chunk being filled starts the next one.
 - **Long paragraphs.** A paragraph longer than 1024 bytes is cut into pieces, each ending just after the last space, tab, CR or LF within its first 1024 bytes, else at the last character boundary within them. Every piece but the last is a chunk of its own, and the last is packed as a paragraph.
 
-No other field and no summary is chunked. A snippet is cut from a hit's chunks, over the text the client extracts from the blob, and an embedding index embeds the same ones.
+No other field and no summary is chunked.
+
+*Note:* no answer states a snippet (§8.2). A client showing one cuts it from a hit's chunks, over the text it extracts from the blob, and an embedding index embeds the same chunks.
 
 A placement with no body is matched on its summary and addresses (STORAGE Annex A) alone: `title` from the subject, `fn`, `summary` or a file's `name`, `people` and the role fields from the addresses, every value decoded on Annex A.0's terms. A file (STORAGE §14.3) is matched so, its body or not, its content being out of scope.
 
@@ -160,9 +162,10 @@ A query is whitespace-separated terms, implicitly conjoined, with `or`, `not`, p
 | `property:` | an item's property (STORAGE §4.3), written `<key>=<value>`, the key before the first `=`: the value whole under that key, byte for byte, read from the store, never from the index; every kind |
 | `account:` `collection:` `folder:` | the store's axes, `folder:` an alias |
 | `date:` `when:` | an instant or a range (§8.1) |
-| `thread:` `id:` | a thread id (§9); a link id or a `seq`: a value of ASCII digits alone names the item of that `seq` and every item whose link id it is, a hit set rather than a guess, any other value a link id |
+| `thread:` | the link id of any node of a thread (§9), a member or a parent no member is: the present members of that thread in every account holding one, an `account:` term narrowing them as it narrows any hit |
+| `id:` | a link id or a `seq`: a value of ASCII digits alone names the item of that `seq` and every item whose link id it is, a hit set rather than a guess, any other value a link id |
 | `mid:` | a message's `Message-ID` as its summary states it (STORAGE Annex A.1), matched whole and byte for byte, its angle brackets dropped when written within them; any other kind never |
-| `linked:` | the items at the other end of the named item's references, either direction, read from the store: `linked:<id>`, or `linked:<role>:<id>` for one role of STORAGE §14.2 (named or `x-` and a name), the item named as `id:` names it; a value whose text before its first colon is no such role is all id |
+| `linked:` | the items at the other end of the named item's references, either direction, read from the store: `linked:<id>`, or `linked:<role>:<id>` for one role of STORAGE §14.2 (named or `x-` and a name), the item named as `id:` names it; a value whose text before its first colon is no such role is all id, and one naming a role and no id after its colon (`linked:sender:`) is refused (`invalid-value`) |
 | `attachment:` `mimetype:` | the `attachment` field |
 | `location:` | the `place` field |
 | `changed:` | change stamps (STORAGE §4.5), a stamp or a range, both ends included |
@@ -174,7 +177,7 @@ A `date:` or `when:` value is a point or a range of points (`date-value`, §8.3)
 - A year, a month, a day, `today` and `yesterday` each cover their calendar span, in the time zone the client states, an IANA name, UTC when it states none: from the first instant of its first day there to the first instant of the day after its last. A client SHOULD state the user's zone, the one its indexer states as its floating zone (§7), so the days a query names and the floating times and dates the index placed agree.
 - An instant (`2026-08-01T10:00`, `2026-08-01T12:00:30+02:00`) covers its own minute, or its second when it states one, read at its offset (`Z` for UTC), else in the client's zone, a local time a transition skips read with the offset in force before it (`02:30` in a gap from 02:00 to 03:00 is 03:30 after it), one it repeats as its first occurrence.
 - A relative amount (`30min`, `5h`, `3d`, `2w`, `2mo`, `1y`: minutes, hours, days of 24 hours, weeks of seven days, calendar months, calendar years) names the instant that long before `now`. A month or a year is counted on UTC's calendar, to the same day and time, a day the month reached lacks landing on its last (31 March less `1mo` is the last day of February).
-- A single point is its span, a single relative amount the span from its instant to `now`; a range `a..b` runs from the start of `a`'s span to the end of `b`'s, either side open.
+- A single point is its span, a single relative amount the span from its instant to `now`; a range `a..b` runs from the start of `a`'s span to the end of `b`'s, either side open, a relative amount there spanning its instant alone, so `2w..2w` is the empty span and `..2w` ends two weeks before `now`.
 - A bound no instant of a four-digit year states is open: a span ending past 9999-12-31T23:59:59Z is open on that side, and so is one starting before 0000-01-01T00:00:00Z, which a relative amount reaches.
 
 Every span is half-open. Mail compares `sort_key`. An event, task or journal compares occurrences (§7), one overlapping a range when it starts before the range ends and ends after the range starts, a zero-length one when it starts inside it. A contact or a file has no date, a file's `sort_key` being its name, and is excluded from a date-bounded query unless `kind:contact` or `kind:file` names it.
@@ -215,7 +218,7 @@ A client's zone and the index's floating zone are compared as names, a client st
 - **The lag** is store-wide: the stamps the store drew above the last one the index folded (§4), zero exactly when the index has folded every change, else an upper bound on the rows a refresh has yet to fold.
 - **Flags are as fresh as the store.** A system flag term (`is:read`, `is:unread`, `is:flagged`, `is:answered`, `is:draft`, and a `tag:` or `flag:` naming a system flag) reads the store as it stands when the query runs, every term the index answers the store as the index last folded it.
 - **Coverage has a temporal axis**: whether the store holds every member of the queried collections over the query's date range, open on a side the query does not bound, read from their sources' coverage (STORAGE §10). It is `full`, or `bounded` with `since`, the instant below which a queried collection is not known complete (a `covered_since` above the range's start, else `null`), `until`, the instant from which one is not (a `covered_until` below the range's end, else `null`), and `filling`, true when a source of a queried collection never closed a round. A collection no source syncs is complete. The collections' answers roll up conservatively: the highest `since`, the lowest `until`, `filling` when any is.
-- **A page.** A client MAY answer the first hits in the query's order after a cursor, the last hit it answered, rather than every hit, and every page walked to the end answers the hits and the order one whole answer does.
+- **A page.** A client MAY answer the first hits in the query's order after a cursor rather than every hit. A cursor is a position in the order, never a hit: the key the last hit it answered holds in the order (its sort key, its title or sender folded, or its rank), then that hit's `seq`, then its account. A page answers the hits past that position as the index stands when the page is asked, a refresh between two pages included: a hit that moved before the position is not answered, one that moved past it may be answered again, and the hit the position was read from need not be held any more. This holds alike for `relevance` and for a threaded listing, whose position is read from the first hit of the last thread it answered. Every page walked to the end over an index no refresh moved answers the hits and the order one whole answer does. A cursor is the client's own: one it cannot read is its own to refuse, under no code of §8.4.
 
 ### 8.3 Grammar
 
@@ -298,9 +301,9 @@ A query the grammar does not accept, or whose field or value §8.3 does not know
 | `empty-query` | no term in the query, or in a group | the query, or the group with its parentheses |
 | `unterminated-phrase` | a `"` with no closing one | from that quote to the end |
 | `unbalanced-parenthesis` | a `)` with no `(`, or a `(` never closed | that parenthesis |
-| `dangling-operator` | an `and` or `or` missing a side, a `not` with nothing after it, a `-` followed by whitespace, a `)` or the end | the `-` so followed, else the `and` or `or` missing its side, else the first `not` or `-` of the run missing its term |
+| `dangling-operator` | an `and` or `or` missing a side, a `not` with nothing after it, a `-` followed by whitespace, a `)` or the end | the `-` so followed, else the first `not` or `-` of the run missing its term (`not or x` and `-or x` answer the `not` and the `-`), else the `and` or `or` missing its side |
 | `unknown-field` | a field that is not in §8's table | the field and its colon |
-| `invalid-value` | an empty value, a value out of `kind-value`, `is-value`, `has-value`, `status-value` or `priority-value`, a `changed:` value no `stamp-value` reads, a `label:` value or a `property:` value past STORAGE §4.3's bounds, or one without `=` | the value, or the term when the value is empty |
+| `invalid-value` | no value after the colon, a value out of `kind-value`, `is-value`, `has-value`, `status-value` or `priority-value`, a `changed:` value no `stamp-value` reads, a `label:` value or a `property:` value past STORAGE §4.3's bounds, or one without `=`, a `linked:` value naming a role and no id | the value, or the term when no value follows its colon |
 | `invalid-date` | a `date:` or `when:` value no `date-value` reads | the value |
 | `reserved-form` | a text or a value §8.3 reserves | the text, or the value |
 | `invalid-wildcard` | a `*` §8.3 does not accept | the first `*` of the text or value |
@@ -308,7 +311,7 @@ A query the grammar does not accept, or whose field or value §8.3 does not know
 
 A query with several faults answers one, found in four passes: the length, the phrases, the parentheses with their nesting, then the terms and operators in reading order, their count among them. The first pass to find a fault answers its leftmost: a query past the length is refused whatever else it holds, and an unbalanced parenthesis left of the one opening the 33rd group answers first.
 
-A term is checked for its count, then its field, then an empty value, then a reserved form, then the wildcard, then its value, so a later version giving a form its meaning still refuses an unknown field as before. A value's span includes a phrase's quotes.
+A term is checked for its count, then its field, then a missing value, then a reserved form, then the wildcard, then its value, so a later version giving a form its meaning still refuses an unknown field as before. A value's span includes a phrase's quotes. A phrase is a value, `""` included: `kind:""` is a value out of `kind-value`, and `subject:""` a text term yielding no token, which matches no item (§8.5).
 
 ### 8.5 Text terms
 
@@ -331,7 +334,7 @@ A thread is the connected set over those nodes, as its members stand. Its id is 
 
 **A message that leaves prunes its thread.** When the last mail placement holding a link id goes, the threads become those a rebuild gives: a node no member bears names no parent, and goes when none names it. A purged message thus stays only as the phantom parent a member names.
 
-`thread:` returns the present members in the query's account. A threaded listing collapses hits to threads with count, first and last date.
+`thread:` takes the link id of any node, a member or a parent no member is, and returns the present members of its thread in every account holding one, an `account:` term narrowing them. A threaded listing collapses hits to threads with count, first and last date.
 
 ## 10. Tags
 
@@ -343,13 +346,13 @@ A label is the private counterpart: a property of the item (STORAGE §4.3), neve
 
 ## 11. Test vectors
 
-vectors/search/ holds the fixture store and the queries every conforming implementation MUST answer alike, each file stating the version of its format, `v` 5 for queries.json, `v` 3 for store.json, `v` 1 for chunks.json and `v` 6 for refresh.json, and conforming to its JSON Schema under vectors/schema/; vectors/README.md says how each reads. store.json is the store, an item stating `unreadable` one whose body the indexer cannot read (§4); queries.json the cases and agenda windows (§7) over it; chunks.json field texts and their chunks (§6); refresh.json stores, each with steps of an owner's write, the feed it leaves and the queries answered after it (§4, STORAGE §4.5).
+vectors/search/ holds the fixture store and the queries every conforming implementation MUST answer alike, each file stating the version of its format, `v` 6 for queries.json, `v` 3 for store.json, `v` 1 for chunks.json, `v` 7 for refresh.json and `v` 1 for extraction.json, and conforming to its JSON Schema under vectors/schema/; vectors/README.md says how each reads. store.json is the store, an item stating `unreadable` one whose body the indexer cannot read (§4); queries.json the cases and agenda windows (§7) over it; chunks.json field texts and their chunks (§6); refresh.json stores, each with steps of an owner's write, the feed it leaves and the queries answered after it (§4, STORAGE §4.5), a query asked by pages continuing one an earlier step asked (§8.2); extraction.json stores of their own, each built as store.json is, and the cases answered over each, what extraction reads of a body kind by kind (§5 to §7).
 
-A case answers `hits` as `(account, seq)` pairs, a list when it says `ordered` and a set otherwise, the `threads` of a threaded listing (§9), or the `error` of a refusal, its `code`, `start` and `end` compared and the rest not. Where it states them, it also compares what §8.2 reports: `horizon_left`, `cut`, the `temporal` coverage, the `coverage`, whether it is `complete` and `zone_differs`. A case stating a `zone` is asked stating it (§8.1), on an index whose floating zone (§7) is that zone or the case's `index_zone`; one stating a `now` resolves its dates against it.
+A case answers `hits` as `(account, seq)` pairs, a list when it says `ordered` and a set otherwise, the `threads` of a threaded listing (§9), or the `error` of a refusal, its `code`, `start` and `end` compared and the rest not. Where it states them, it also compares what §8.2 reports: `horizon_left`, `cut`, the `temporal` coverage, the `coverage`, whether it is `complete`, `zone_differs`, and what each hit it names under `matched` matched on, `body` or `summary`. A case stating a `zone` is asked stating it (§8.1), on an index whose floating zone (§7) is that zone or the case's `index_zone`; one stating a `now` resolves its dates against it.
 
-An implementation builds the store, takes out of its blob directory the body of each item stating `unreadable`, indexes it at `now` stating no zone, so `UTC` (§7), and compares, indexing it again for the cases stating a zone. For refresh.json it then, per step, reads the cursor, applies the write through its owner, compares the feed above that cursor (STORAGE §4.5), refreshes the index and answers each query, a step stating `lagging` answering before the refresh, with terms the store answers as it stands alone (§8.2).
+An implementation builds the store, takes out of its blob directory the body of each item stating `unreadable`, indexes it at `now` stating no zone, so `UTC` (§7), and compares, indexing it again for the cases stating a zone. For refresh.json it then, per step, reads the cursor, applies the write through its owner, compares the feed above that cursor (STORAGE §4.5), refreshes the index and answers each query, a step stating `lagging` answering before the refresh, with terms the store answers as it stands alone (§8.2), and a query stating `page` answering its `limit` hits past the position the query it continues ended on. For extraction.json it builds and indexes each case's store at the file's `now` and answers its cases as queries.json's.
 
-The cases bind every index (§12), but a case sorted by `relevance` binds its order only where the index ranks by bm25: another compares its hits as a set, and one refusing `relevance` skips it. checks/vectors.py validates the vectors and re-derives what a case fixes without an index (vectors/README.md lists it), the limits read from §8.3's table among it; only an implementation runs a case against the store.
+The cases bind every index (§12), but a case sorted by `relevance` binds its order only where the index ranks by bm25: another compares its hits as a set, a query asked by pages in that order binding such an index alone, and one refusing `relevance` skips it. checks/vectors.py validates the vectors and re-derives what a case fixes without an index (vectors/README.md lists it), the limits read from §8.3's table among it; only an implementation runs a case against the store.
 
 ## 12. Conformance
 
@@ -359,7 +362,7 @@ An implementation offering search conforms by one profile or both, stated as STO
 
 | Profile | What it does | Owes | Vectors |
 | --- | --- | --- | --- |
-| indexer | a store reader (STORAGE §17) writing index.db under index.lock | §2 to §7, §9 | store.json indexed, every case of queries.json answered on its index by a conforming query client; chunks.json; every step of refresh.json, its writes made through a conforming owner |
-| query client | reads index.db, the store beside it | §2's refusal, §5, §8, §9, §10, a tag enqueued as a STORAGE producer | every case of queries.json (§11), on an index a conforming indexer built from store.json |
+| indexer | a store reader (STORAGE §17) writing index.db under index.lock | §2 to §7, §9 | store.json indexed, every case of queries.json answered on its index by a conforming query client; each store of extraction.json likewise, with its cases; chunks.json; every step of refresh.json, its writes made through a conforming owner |
+| query client | reads index.db, the store beside it | §2's refusal, §5, §8, §9, §10, a tag enqueued as a STORAGE producer | every case of queries.json and of extraction.json (§11), on an index a conforming indexer built from the store it is asked over |
 
 Both meet STORAGE §18, index.db holding the text of every body indexed, and an indexer erases as §4 says.

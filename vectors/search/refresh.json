@@ -1,5 +1,5 @@
 {
-  "v": 6,
+  "v": 7,
   "note": "a refresh driven by the change feed (STORAGE.md section 4.5, SEARCH.md section 4): each case builds its store as store.json's are built and indexes it, then applies its steps in order, each as an owner would write it. After each step the feed lists, above the cursor read before it, the items and the collections stated in changed, and the purge count moves when purged says so; a refresh then answers each query as stated, as an index rebuilt from the store as it then stands does, but in a step stating lagging, which answers its queries before the refresh. A missing stamp leaves the index answering the earlier store.",
   "cases": [
     {
@@ -305,6 +305,71 @@
             { "query": "stand-up is:read", "hits": [["home", 1]] },
             { "query": "stand-up is:unread", "hits": [] }
           ]
+        },
+        {
+          "note": "the reply marked answered and draft, its \\Seen dropped, answered before the refresh",
+          "lagging": true,
+          "write": {
+            "kind": "put",
+            "item": {
+              "collection": "home/INBOX",
+              "seq": 2,
+              "link_id": "reply-1@example.org",
+              "flags": [
+                "\\Answered",
+                "\\Draft"
+              ],
+              "fixture": "fixtures/mail-reply.eml"
+            }
+          },
+          "changed": {
+            "items": [
+              [
+                "home/INBOX",
+                "reply-1@example.org"
+              ]
+            ],
+            "collections": [],
+            "purged": false
+          },
+          "queries": [
+            {
+              "query": "is:answered",
+              "hits": [
+                [
+                  "home",
+                  2
+                ]
+              ]
+            },
+            {
+              "query": "is:draft",
+              "hits": [
+                [
+                  "home",
+                  2
+                ]
+              ]
+            },
+            {
+              "query": "flag:\\Draft",
+              "hits": [
+                [
+                  "home",
+                  2
+                ]
+              ]
+            },
+            {
+              "query": "is:unread kind:mail",
+              "hits": [
+                [
+                  "home",
+                  2
+                ]
+              ]
+            }
+          ]
         }
       ]
     },
@@ -353,6 +418,2659 @@
           "queries": [
             { "query": "quince rhubarb", "hits": [] },
             { "query": "quince not rhubarb", "hits": [["home", 1]] }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "a page continues from its position across a refresh",
+      "note": "a cursor is a position in the order, the last hit's sort key, then its seq, then its account (SEARCH.md section 8.2): the next page answers the hits past it as the index then stands, one filed past it between the pages included, one filed before it never, and the position stands when the hit it was read from is gone",
+      "store": {
+        "collections": [
+          {
+            "id": "home/INBOX",
+            "account": "home",
+            "kind": "message/rfc822"
+          }
+        ],
+        "items": [
+          {
+            "collection": "home/INBOX",
+            "seq": 1,
+            "link_id": "page-1@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "page-1@example.org",
+                "in_reply_to": [],
+                "subject": "Page 1",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-01T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-01T09:00:00Z"
+            }
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 2,
+            "link_id": "page-2@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "page-2@example.org",
+                "in_reply_to": [],
+                "subject": "Page 2",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-02T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-02T09:00:00Z"
+            }
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 3,
+            "link_id": "page-3@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "page-3@example.org",
+                "in_reply_to": [],
+                "subject": "Page 3",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-03T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-03T09:00:00Z"
+            }
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 4,
+            "link_id": "page-4@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "page-4@example.org",
+                "in_reply_to": [],
+                "subject": "Page 4",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-04T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-04T09:00:00Z"
+            }
+          }
+        ],
+        "references": []
+      },
+      "steps": [
+        {
+          "note": "the first page, newest first",
+          "write": {
+            "kind": "put",
+            "item": {
+              "collection": "home/INBOX",
+              "seq": 5,
+              "link_id": "page-5@example.org",
+              "flags": [],
+              "summary": {
+                "table": "mail_summary",
+                "row": {
+                  "message_id": "page-5@example.org",
+                  "in_reply_to": [],
+                  "subject": "Page 5",
+                  "sender": "bob@example.org",
+                  "sender_name": "Bob",
+                  "date": "2026-08-05T09:00:00Z",
+                  "size": 512,
+                  "attachment": null,
+                  "invitation": null
+                },
+                "addresses": [
+                  {
+                    "role": "from",
+                    "position": 0,
+                    "address": "bob@example.org",
+                    "name": "Bob"
+                  }
+                ],
+                "sort_key": "2026-08-05T09:00:00Z"
+              }
+            }
+          },
+          "changed": {
+            "items": [
+              [
+                "home/INBOX",
+                "page-5@example.org"
+              ]
+            ],
+            "collections": [],
+            "purged": false
+          },
+          "queries": [
+            {
+              "query": "kind:mail",
+              "limit": 2,
+              "ordered": true,
+              "hits": [
+                [
+                  "home",
+                  5
+                ],
+                [
+                  "home",
+                  4
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "note": "a message dated between the second and the third, past the position",
+          "write": {
+            "kind": "put",
+            "item": {
+              "collection": "home/INBOX",
+              "seq": 6,
+              "link_id": "page-6@example.org",
+              "flags": [],
+              "summary": {
+                "table": "mail_summary",
+                "row": {
+                  "message_id": "page-6@example.org",
+                  "in_reply_to": [],
+                  "subject": "Page 6",
+                  "sender": "bob@example.org",
+                  "sender_name": "Bob",
+                  "date": "2026-08-02T12:00:00Z",
+                  "size": 512,
+                  "attachment": null,
+                  "invitation": null
+                },
+                "addresses": [
+                  {
+                    "role": "from",
+                    "position": 0,
+                    "address": "bob@example.org",
+                    "name": "Bob"
+                  }
+                ],
+                "sort_key": "2026-08-02T12:00:00Z"
+              }
+            }
+          },
+          "changed": {
+            "items": [
+              [
+                "home/INBOX",
+                "page-6@example.org"
+              ]
+            ],
+            "collections": [],
+            "purged": false
+          },
+          "queries": [
+            {
+              "query": "kind:mail",
+              "limit": 2,
+              "page": {
+                "step": 1,
+                "query": 1
+              },
+              "ordered": true,
+              "hits": [
+                [
+                  "home",
+                  3
+                ],
+                [
+                  "home",
+                  6
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "note": "a message before the position goes",
+          "write": {
+            "kind": "remove",
+            "collection": "home/INBOX",
+            "seq": 5
+          },
+          "changed": {
+            "items": [
+              [
+                "home/INBOX",
+                "page-5@example.org"
+              ]
+            ],
+            "collections": [],
+            "purged": false
+          },
+          "queries": [
+            {
+              "query": "kind:mail",
+              "limit": 2,
+              "page": {
+                "step": 2,
+                "query": 1
+              },
+              "ordered": true,
+              "hits": [
+                [
+                  "home",
+                  2
+                ],
+                [
+                  "home",
+                  1
+                ]
+              ]
+            },
+            {
+              "query": "kind:mail",
+              "limit": 2,
+              "page": {
+                "step": 1,
+                "query": 1
+              },
+              "ordered": true,
+              "hits": [
+                [
+                  "home",
+                  3
+                ],
+                [
+                  "home",
+                  6
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "note": "the message the position was read from goes: the position stands",
+          "write": {
+            "kind": "remove",
+            "collection": "home/INBOX",
+            "seq": 6
+          },
+          "changed": {
+            "items": [
+              [
+                "home/INBOX",
+                "page-6@example.org"
+              ]
+            ],
+            "collections": [],
+            "purged": false
+          },
+          "queries": [
+            {
+              "query": "kind:mail",
+              "limit": 3,
+              "page": {
+                "step": 2,
+                "query": 1
+              },
+              "ordered": true,
+              "hits": [
+                [
+                  "home",
+                  2
+                ],
+                [
+                  "home",
+                  1
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "a hit re-dated across the position",
+      "note": "a hit whose sort key moves before the position between two pages is not answered, one moving past it is answered again (SEARCH.md section 8.2)",
+      "store": {
+        "collections": [
+          {
+            "id": "home/INBOX",
+            "account": "home",
+            "kind": "message/rfc822"
+          }
+        ],
+        "items": [
+          {
+            "collection": "home/INBOX",
+            "seq": 1,
+            "link_id": "redated-1@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "redated-1@example.org",
+                "in_reply_to": [],
+                "subject": "Redated 1",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-01T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-01T09:00:00Z"
+            }
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 2,
+            "link_id": "redated-2@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "redated-2@example.org",
+                "in_reply_to": [],
+                "subject": "Redated 2",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-02T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-02T09:00:00Z"
+            }
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 3,
+            "link_id": "redated-3@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "redated-3@example.org",
+                "in_reply_to": [],
+                "subject": "Redated 3",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-03T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-03T09:00:00Z"
+            }
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 4,
+            "link_id": "redated-4@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "redated-4@example.org",
+                "in_reply_to": [],
+                "subject": "Redated 4",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-04T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-04T09:00:00Z"
+            }
+          }
+        ],
+        "references": []
+      },
+      "steps": [
+        {
+          "note": "the first page",
+          "write": {
+            "kind": "put",
+            "item": {
+              "collection": "home/INBOX",
+              "seq": 5,
+              "link_id": "redated-5@example.org",
+              "flags": [],
+              "summary": {
+                "table": "mail_summary",
+                "row": {
+                  "message_id": "redated-5@example.org",
+                  "in_reply_to": [],
+                  "subject": "Redated 5",
+                  "sender": "bob@example.org",
+                  "sender_name": "Bob",
+                  "date": "2026-08-05T09:00:00Z",
+                  "size": 512,
+                  "attachment": null,
+                  "invitation": null
+                },
+                "addresses": [
+                  {
+                    "role": "from",
+                    "position": 0,
+                    "address": "bob@example.org",
+                    "name": "Bob"
+                  }
+                ],
+                "sort_key": "2026-08-05T09:00:00Z"
+              }
+            }
+          },
+          "changed": {
+            "items": [
+              [
+                "home/INBOX",
+                "redated-5@example.org"
+              ]
+            ],
+            "collections": [],
+            "purged": false
+          },
+          "queries": [
+            {
+              "query": "kind:mail",
+              "limit": 2,
+              "ordered": true,
+              "hits": [
+                [
+                  "home",
+                  5
+                ],
+                [
+                  "home",
+                  4
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "note": "the second message re-dated past the newest, before the position",
+          "write": {
+            "kind": "put",
+            "item": {
+              "collection": "home/INBOX",
+              "seq": 2,
+              "link_id": "redated-2@example.org",
+              "flags": [],
+              "summary": {
+                "table": "mail_summary",
+                "row": {
+                  "message_id": "redated-2@example.org",
+                  "in_reply_to": [],
+                  "subject": "Redated 2",
+                  "sender": "bob@example.org",
+                  "sender_name": "Bob",
+                  "date": "2026-08-06T09:00:00Z",
+                  "size": 512,
+                  "attachment": null,
+                  "invitation": null
+                },
+                "addresses": [
+                  {
+                    "role": "from",
+                    "position": 0,
+                    "address": "bob@example.org",
+                    "name": "Bob"
+                  }
+                ],
+                "sort_key": "2026-08-06T09:00:00Z"
+              }
+            }
+          },
+          "changed": {
+            "items": [
+              [
+                "home/INBOX",
+                "redated-2@example.org"
+              ]
+            ],
+            "collections": [],
+            "purged": false
+          },
+          "queries": [
+            {
+              "query": "kind:mail",
+              "limit": 2,
+              "page": {
+                "step": 1,
+                "query": 1
+              },
+              "ordered": true,
+              "hits": [
+                [
+                  "home",
+                  3
+                ],
+                [
+                  "home",
+                  1
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "note": "the newest, answered on the first page, re-dated before the oldest, past the position",
+          "write": {
+            "kind": "put",
+            "item": {
+              "collection": "home/INBOX",
+              "seq": 5,
+              "link_id": "redated-5@example.org",
+              "flags": [],
+              "summary": {
+                "table": "mail_summary",
+                "row": {
+                  "message_id": "redated-5@example.org",
+                  "in_reply_to": [],
+                  "subject": "Redated 5",
+                  "sender": "bob@example.org",
+                  "sender_name": "Bob",
+                  "date": "2026-07-31T09:00:00Z",
+                  "size": 512,
+                  "attachment": null,
+                  "invitation": null
+                },
+                "addresses": [
+                  {
+                    "role": "from",
+                    "position": 0,
+                    "address": "bob@example.org",
+                    "name": "Bob"
+                  }
+                ],
+                "sort_key": "2026-07-31T09:00:00Z"
+              }
+            }
+          },
+          "changed": {
+            "items": [
+              [
+                "home/INBOX",
+                "redated-5@example.org"
+              ]
+            ],
+            "collections": [],
+            "purged": false
+          },
+          "queries": [
+            {
+              "query": "kind:mail",
+              "limit": 3,
+              "page": {
+                "step": 1,
+                "query": 1
+              },
+              "ordered": true,
+              "hits": [
+                [
+                  "home",
+                  3
+                ],
+                [
+                  "home",
+                  1
+                ],
+                [
+                  "home",
+                  5
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "a page in title order continues from its title",
+      "note": "the position is the last hit's title folded, then its seq (SEARCH.md section 8.2): a title filed before it is not answered, one filed past it is",
+      "store": {
+        "collections": [
+          {
+            "id": "home/INBOX",
+            "account": "home",
+            "kind": "message/rfc822"
+          }
+        ],
+        "items": [
+          {
+            "collection": "home/INBOX",
+            "seq": 1,
+            "link_id": "title-1@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "title-1@example.org",
+                "in_reply_to": [],
+                "subject": "Apple",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-01T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-01T09:00:00Z"
+            }
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 2,
+            "link_id": "title-2@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "title-2@example.org",
+                "in_reply_to": [],
+                "subject": "Cherry",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-02T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-02T09:00:00Z"
+            }
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 3,
+            "link_id": "title-3@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "title-3@example.org",
+                "in_reply_to": [],
+                "subject": "Elder",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-03T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-03T09:00:00Z"
+            }
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 4,
+            "link_id": "title-4@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "title-4@example.org",
+                "in_reply_to": [],
+                "subject": "Grape",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-04T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-04T09:00:00Z"
+            }
+          }
+        ],
+        "references": []
+      },
+      "steps": [
+        {
+          "note": "the first page by title",
+          "write": {
+            "kind": "put",
+            "item": {
+              "collection": "home/INBOX",
+              "seq": 5,
+              "link_id": "title-5@example.org",
+              "flags": [],
+              "summary": {
+                "table": "mail_summary",
+                "row": {
+                  "message_id": "title-5@example.org",
+                  "in_reply_to": [],
+                  "subject": "Iris",
+                  "sender": "bob@example.org",
+                  "sender_name": "Bob",
+                  "date": "2026-08-05T09:00:00Z",
+                  "size": 512,
+                  "attachment": null,
+                  "invitation": null
+                },
+                "addresses": [
+                  {
+                    "role": "from",
+                    "position": 0,
+                    "address": "bob@example.org",
+                    "name": "Bob"
+                  }
+                ],
+                "sort_key": "2026-08-05T09:00:00Z"
+              }
+            }
+          },
+          "changed": {
+            "items": [
+              [
+                "home/INBOX",
+                "title-5@example.org"
+              ]
+            ],
+            "collections": [],
+            "purged": false
+          },
+          "queries": [
+            {
+              "query": "kind:mail",
+              "sort": "title",
+              "limit": 2,
+              "ordered": true,
+              "hits": [
+                [
+                  "home",
+                  1
+                ],
+                [
+                  "home",
+                  2
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "note": "a title before the position",
+          "write": {
+            "kind": "put",
+            "item": {
+              "collection": "home/INBOX",
+              "seq": 6,
+              "link_id": "title-6@example.org",
+              "flags": [],
+              "summary": {
+                "table": "mail_summary",
+                "row": {
+                  "message_id": "title-6@example.org",
+                  "in_reply_to": [],
+                  "subject": "Banana",
+                  "sender": "bob@example.org",
+                  "sender_name": "Bob",
+                  "date": "2026-08-06T09:00:00Z",
+                  "size": 512,
+                  "attachment": null,
+                  "invitation": null
+                },
+                "addresses": [
+                  {
+                    "role": "from",
+                    "position": 0,
+                    "address": "bob@example.org",
+                    "name": "Bob"
+                  }
+                ],
+                "sort_key": "2026-08-06T09:00:00Z"
+              }
+            }
+          },
+          "changed": {
+            "items": [
+              [
+                "home/INBOX",
+                "title-6@example.org"
+              ]
+            ],
+            "collections": [],
+            "purged": false
+          },
+          "queries": [
+            {
+              "query": "kind:mail",
+              "sort": "title",
+              "limit": 2,
+              "page": {
+                "step": 1,
+                "query": 1
+              },
+              "ordered": true,
+              "hits": [
+                [
+                  "home",
+                  3
+                ],
+                [
+                  "home",
+                  4
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "note": "a title past the position",
+          "write": {
+            "kind": "put",
+            "item": {
+              "collection": "home/INBOX",
+              "seq": 7,
+              "link_id": "title-7@example.org",
+              "flags": [],
+              "summary": {
+                "table": "mail_summary",
+                "row": {
+                  "message_id": "title-7@example.org",
+                  "in_reply_to": [],
+                  "subject": "Date",
+                  "sender": "bob@example.org",
+                  "sender_name": "Bob",
+                  "date": "2026-08-07T09:00:00Z",
+                  "size": 512,
+                  "attachment": null,
+                  "invitation": null
+                },
+                "addresses": [
+                  {
+                    "role": "from",
+                    "position": 0,
+                    "address": "bob@example.org",
+                    "name": "Bob"
+                  }
+                ],
+                "sort_key": "2026-08-07T09:00:00Z"
+              }
+            }
+          },
+          "changed": {
+            "items": [
+              [
+                "home/INBOX",
+                "title-7@example.org"
+              ]
+            ],
+            "collections": [],
+            "purged": false
+          },
+          "queries": [
+            {
+              "query": "kind:mail",
+              "sort": "title",
+              "limit": 3,
+              "page": {
+                "step": 1,
+                "query": 1
+              },
+              "ordered": true,
+              "hits": [
+                [
+                  "home",
+                  7
+                ],
+                [
+                  "home",
+                  3
+                ],
+                [
+                  "home",
+                  4
+                ]
+              ]
+            },
+            {
+              "query": "kind:mail",
+              "sort": "title",
+              "ordered": true,
+              "hits": [
+                [
+                  "home",
+                  1
+                ],
+                [
+                  "home",
+                  6
+                ],
+                [
+                  "home",
+                  2
+                ],
+                [
+                  "home",
+                  7
+                ],
+                [
+                  "home",
+                  3
+                ],
+                [
+                  "home",
+                  4
+                ],
+                [
+                  "home",
+                  5
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "a threaded page continues from its last thread's first hit",
+      "note": "a threaded listing orders its threads by their first hit and its position is read from the first hit of the last thread it answered (SEARCH.md sections 8.2, 9): the first thread of the first page losing its newest member, its first hit moves past the position, and the next page answers it again",
+      "store": {
+        "collections": [
+          {
+            "id": "home/INBOX",
+            "account": "home",
+            "kind": "message/rfc822"
+          }
+        ],
+        "items": [
+          {
+            "collection": "home/INBOX",
+            "seq": 1,
+            "link_id": "lead-a@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "lead-a@example.org",
+                "in_reply_to": [],
+                "subject": "Lead",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-05T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-05T09:00:00Z"
+            }
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 2,
+            "link_id": "lead-b@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "lead-b@example.org",
+                "in_reply_to": [
+                  "lead-a@example.org"
+                ],
+                "subject": "Re: Lead",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-01T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-01T09:00:00Z"
+            }
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 3,
+            "link_id": "lone-c@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "lone-c@example.org",
+                "in_reply_to": [],
+                "subject": "Lone c",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-04T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-04T09:00:00Z"
+            }
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 4,
+            "link_id": "lone-d@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "lone-d@example.org",
+                "in_reply_to": [],
+                "subject": "Lone d",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-03T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-03T09:00:00Z"
+            }
+          }
+        ],
+        "references": []
+      },
+      "steps": [
+        {
+          "note": "the first page of threads",
+          "write": {
+            "kind": "put",
+            "item": {
+              "collection": "home/INBOX",
+              "seq": 5,
+              "link_id": "lone-e@example.org",
+              "flags": [],
+              "summary": {
+                "table": "mail_summary",
+                "row": {
+                  "message_id": "lone-e@example.org",
+                  "in_reply_to": [],
+                  "subject": "Lone e",
+                  "sender": "bob@example.org",
+                  "sender_name": "Bob",
+                  "date": "2026-08-02T09:00:00Z",
+                  "size": 512,
+                  "attachment": null,
+                  "invitation": null
+                },
+                "addresses": [
+                  {
+                    "role": "from",
+                    "position": 0,
+                    "address": "bob@example.org",
+                    "name": "Bob"
+                  }
+                ],
+                "sort_key": "2026-08-02T09:00:00Z"
+              }
+            }
+          },
+          "changed": {
+            "items": [
+              [
+                "home/INBOX",
+                "lone-e@example.org"
+              ]
+            ],
+            "collections": [],
+            "purged": false
+          },
+          "queries": [
+            {
+              "query": "kind:mail",
+              "limit": 2,
+              "ordered": true,
+              "threads": [
+                {
+                  "thread": "lead-b@example.org",
+                  "count": 2,
+                  "first": "2026-08-01T09:00:00Z",
+                  "last": "2026-08-05T09:00:00Z",
+                  "hits": [
+                    [
+                      "home",
+                      1
+                    ],
+                    [
+                      "home",
+                      2
+                    ]
+                  ]
+                },
+                {
+                  "thread": "lone-c@example.org",
+                  "count": 1,
+                  "first": "2026-08-04T09:00:00Z",
+                  "last": "2026-08-04T09:00:00Z",
+                  "hits": [
+                    [
+                      "home",
+                      3
+                    ]
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "note": "the first thread's newest member goes",
+          "write": {
+            "kind": "remove",
+            "collection": "home/INBOX",
+            "seq": 1
+          },
+          "changed": {
+            "items": [
+              [
+                "home/INBOX",
+                "lead-a@example.org"
+              ]
+            ],
+            "collections": [],
+            "purged": false
+          },
+          "queries": [
+            {
+              "query": "kind:mail",
+              "limit": 3,
+              "page": {
+                "step": 1,
+                "query": 1
+              },
+              "ordered": true,
+              "threads": [
+                {
+                  "thread": "lone-d@example.org",
+                  "count": 1,
+                  "first": "2026-08-03T09:00:00Z",
+                  "last": "2026-08-03T09:00:00Z",
+                  "hits": [
+                    [
+                      "home",
+                      4
+                    ]
+                  ]
+                },
+                {
+                  "thread": "lone-e@example.org",
+                  "count": 1,
+                  "first": "2026-08-02T09:00:00Z",
+                  "last": "2026-08-02T09:00:00Z",
+                  "hits": [
+                    [
+                      "home",
+                      5
+                    ]
+                  ]
+                },
+                {
+                  "thread": "lead-b@example.org",
+                  "count": 1,
+                  "first": "2026-08-01T09:00:00Z",
+                  "last": "2026-08-01T09:00:00Z",
+                  "hits": [
+                    [
+                      "home",
+                      2
+                    ]
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "a page by relevance continues from its rank",
+      "note": "four titles of one length holding the word four, three, two and one times, beside six holding it not, so every bm25 ranks them in that order; the position is the last hit's rank, then its seq (SEARCH.md section 8.2), and a refresh moving no text moves no rank. Binds an index ranking by bm25 alone (SEARCH.md section 11)",
+      "store": {
+        "collections": [
+          {
+            "id": "home/INBOX",
+            "account": "home",
+            "kind": "message/rfc822"
+          }
+        ],
+        "items": [
+          {
+            "collection": "home/INBOX",
+            "seq": 1,
+            "link_id": "kiwi-1@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "kiwi-1@example.org",
+                "in_reply_to": [],
+                "subject": "kiwi kiwi kiwi kiwi",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-01T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-01T09:00:00Z"
+            }
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 2,
+            "link_id": "kiwi-2@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "kiwi-2@example.org",
+                "in_reply_to": [],
+                "subject": "kiwi kiwi kiwi plum",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-02T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-02T09:00:00Z"
+            }
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 3,
+            "link_id": "kiwi-3@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "kiwi-3@example.org",
+                "in_reply_to": [],
+                "subject": "kiwi kiwi plum plum",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-03T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-03T09:00:00Z"
+            }
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 4,
+            "link_id": "pear-1@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "pear-1@example.org",
+                "in_reply_to": [],
+                "subject": "pear pear pear pear",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-11T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-11T09:00:00Z"
+            }
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 5,
+            "link_id": "pear-2@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "pear-2@example.org",
+                "in_reply_to": [],
+                "subject": "pear pear pear pear",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-12T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-12T09:00:00Z"
+            }
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 6,
+            "link_id": "pear-3@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "pear-3@example.org",
+                "in_reply_to": [],
+                "subject": "pear pear pear pear",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-13T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-13T09:00:00Z"
+            }
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 7,
+            "link_id": "pear-4@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "pear-4@example.org",
+                "in_reply_to": [],
+                "subject": "pear pear pear pear",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-14T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-14T09:00:00Z"
+            }
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 8,
+            "link_id": "pear-5@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "pear-5@example.org",
+                "in_reply_to": [],
+                "subject": "pear pear pear pear",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-15T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-15T09:00:00Z"
+            }
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 9,
+            "link_id": "pear-6@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "pear-6@example.org",
+                "in_reply_to": [],
+                "subject": "pear pear pear pear",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-16T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-16T09:00:00Z"
+            }
+          }
+        ],
+        "references": []
+      },
+      "steps": [
+        {
+          "note": "the first page by relevance",
+          "write": {
+            "kind": "put",
+            "item": {
+              "collection": "home/INBOX",
+              "seq": 10,
+              "link_id": "kiwi-4@example.org",
+              "flags": [],
+              "summary": {
+                "table": "mail_summary",
+                "row": {
+                  "message_id": "kiwi-4@example.org",
+                  "in_reply_to": [],
+                  "subject": "kiwi plum plum plum",
+                  "sender": "bob@example.org",
+                  "sender_name": "Bob",
+                  "date": "2026-08-04T09:00:00Z",
+                  "size": 512,
+                  "attachment": null,
+                  "invitation": null
+                },
+                "addresses": [
+                  {
+                    "role": "from",
+                    "position": 0,
+                    "address": "bob@example.org",
+                    "name": "Bob"
+                  }
+                ],
+                "sort_key": "2026-08-04T09:00:00Z"
+              }
+            }
+          },
+          "changed": {
+            "items": [
+              [
+                "home/INBOX",
+                "kiwi-4@example.org"
+              ]
+            ],
+            "collections": [],
+            "purged": false
+          },
+          "queries": [
+            {
+              "query": "kiwi",
+              "sort": "relevance",
+              "limit": 2,
+              "ordered": true,
+              "hits": [
+                [
+                  "home",
+                  1
+                ],
+                [
+                  "home",
+                  2
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "note": "the best hit marked read, its text unchanged",
+          "write": {
+            "kind": "put",
+            "item": {
+              "collection": "home/INBOX",
+              "seq": 1,
+              "link_id": "kiwi-1@example.org",
+              "flags": [
+                "\\Seen"
+              ],
+              "summary": {
+                "table": "mail_summary",
+                "row": {
+                  "message_id": "kiwi-1@example.org",
+                  "in_reply_to": [],
+                  "subject": "kiwi kiwi kiwi kiwi",
+                  "sender": "bob@example.org",
+                  "sender_name": "Bob",
+                  "date": "2026-08-01T09:00:00Z",
+                  "size": 512,
+                  "attachment": null,
+                  "invitation": null
+                },
+                "addresses": [
+                  {
+                    "role": "from",
+                    "position": 0,
+                    "address": "bob@example.org",
+                    "name": "Bob"
+                  }
+                ],
+                "sort_key": "2026-08-01T09:00:00Z"
+              }
+            }
+          },
+          "changed": {
+            "items": [
+              [
+                "home/INBOX",
+                "kiwi-1@example.org"
+              ]
+            ],
+            "collections": [],
+            "purged": false
+          },
+          "queries": [
+            {
+              "query": "kiwi",
+              "sort": "relevance",
+              "limit": 2,
+              "page": {
+                "step": 1,
+                "query": 1
+              },
+              "ordered": true,
+              "hits": [
+                [
+                  "home",
+                  3
+                ],
+                [
+                  "home",
+                  10
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "a parent arriving joins its replies and names their thread",
+      "note": "two replies to a parent nobody holds are one thread, named after its present member with the lowest sort key; the parent arriving joins it and names it (SEARCH.md section 9)",
+      "store": {
+        "collections": [
+          {
+            "id": "home/INBOX",
+            "account": "home",
+            "kind": "message/rfc822"
+          }
+        ],
+        "items": [
+          {
+            "collection": "home/INBOX",
+            "seq": 1,
+            "link_id": "reply-q@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "reply-q@example.org",
+                "in_reply_to": [
+                  "parent-p@example.org"
+                ],
+                "subject": "Re: Plan",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-03T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-03T09:00:00Z"
+            }
+          }
+        ],
+        "references": []
+      },
+      "steps": [
+        {
+          "note": "the second reply",
+          "write": {
+            "kind": "put",
+            "item": {
+              "collection": "home/INBOX",
+              "seq": 2,
+              "link_id": "reply-r@example.org",
+              "flags": [],
+              "summary": {
+                "table": "mail_summary",
+                "row": {
+                  "message_id": "reply-r@example.org",
+                  "in_reply_to": [
+                    "parent-p@example.org"
+                  ],
+                  "subject": "Re: Plan",
+                  "sender": "bob@example.org",
+                  "sender_name": "Bob",
+                  "date": "2026-08-04T09:00:00Z",
+                  "size": 512,
+                  "attachment": null,
+                  "invitation": null
+                },
+                "addresses": [
+                  {
+                    "role": "from",
+                    "position": 0,
+                    "address": "bob@example.org",
+                    "name": "Bob"
+                  }
+                ],
+                "sort_key": "2026-08-04T09:00:00Z"
+              }
+            }
+          },
+          "changed": {
+            "items": [
+              [
+                "home/INBOX",
+                "reply-r@example.org"
+              ]
+            ],
+            "collections": [],
+            "purged": false
+          },
+          "queries": [
+            {
+              "query": "thread:parent-p@example.org",
+              "threads": [
+                {
+                  "thread": "reply-q@example.org",
+                  "count": 2,
+                  "first": "2026-08-03T09:00:00Z",
+                  "last": "2026-08-04T09:00:00Z",
+                  "hits": [
+                    [
+                      "home",
+                      1
+                    ],
+                    [
+                      "home",
+                      2
+                    ]
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "note": "the parent arrives",
+          "write": {
+            "kind": "put",
+            "item": {
+              "collection": "home/INBOX",
+              "seq": 3,
+              "link_id": "parent-p@example.org",
+              "flags": [],
+              "summary": {
+                "table": "mail_summary",
+                "row": {
+                  "message_id": "parent-p@example.org",
+                  "in_reply_to": [],
+                  "subject": "Plan",
+                  "sender": "bob@example.org",
+                  "sender_name": "Bob",
+                  "date": "2026-08-01T09:00:00Z",
+                  "size": 512,
+                  "attachment": null,
+                  "invitation": null
+                },
+                "addresses": [
+                  {
+                    "role": "from",
+                    "position": 0,
+                    "address": "bob@example.org",
+                    "name": "Bob"
+                  }
+                ],
+                "sort_key": "2026-08-01T09:00:00Z"
+              }
+            }
+          },
+          "changed": {
+            "items": [
+              [
+                "home/INBOX",
+                "parent-p@example.org"
+              ]
+            ],
+            "collections": [],
+            "purged": false
+          },
+          "queries": [
+            {
+              "query": "thread:reply-r@example.org",
+              "threads": [
+                {
+                  "thread": "parent-p@example.org",
+                  "count": 3,
+                  "first": "2026-08-01T09:00:00Z",
+                  "last": "2026-08-04T09:00:00Z",
+                  "hits": [
+                    [
+                      "home",
+                      1
+                    ],
+                    [
+                      "home",
+                      2
+                    ],
+                    [
+                      "home",
+                      3
+                    ]
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "two messages naming each other are one thread",
+      "note": "a cycle is broken by ignoring the edge that would close it (SEARCH.md section 9), so a and b, each naming the other as its parent, are one thread",
+      "store": {
+        "collections": [
+          {
+            "id": "home/INBOX",
+            "account": "home",
+            "kind": "message/rfc822"
+          }
+        ],
+        "items": [
+          {
+            "collection": "home/INBOX",
+            "seq": 1,
+            "link_id": "cycle-a@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "cycle-a@example.org",
+                "in_reply_to": [
+                  "cycle-b@example.org"
+                ],
+                "subject": "Cycle",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-01T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-01T09:00:00Z"
+            }
+          }
+        ],
+        "references": []
+      },
+      "steps": [
+        {
+          "note": "b closes the cycle",
+          "write": {
+            "kind": "put",
+            "item": {
+              "collection": "home/INBOX",
+              "seq": 2,
+              "link_id": "cycle-b@example.org",
+              "flags": [],
+              "summary": {
+                "table": "mail_summary",
+                "row": {
+                  "message_id": "cycle-b@example.org",
+                  "in_reply_to": [
+                    "cycle-a@example.org"
+                  ],
+                  "subject": "Re: Cycle",
+                  "sender": "bob@example.org",
+                  "sender_name": "Bob",
+                  "date": "2026-08-02T09:00:00Z",
+                  "size": 512,
+                  "attachment": null,
+                  "invitation": null
+                },
+                "addresses": [
+                  {
+                    "role": "from",
+                    "position": 0,
+                    "address": "bob@example.org",
+                    "name": "Bob"
+                  }
+                ],
+                "sort_key": "2026-08-02T09:00:00Z"
+              }
+            }
+          },
+          "changed": {
+            "items": [
+              [
+                "home/INBOX",
+                "cycle-b@example.org"
+              ]
+            ],
+            "collections": [],
+            "purged": false
+          },
+          "queries": [
+            {
+              "query": "thread:cycle-a@example.org",
+              "threads": [
+                {
+                  "thread": "cycle-a@example.org",
+                  "count": 2,
+                  "first": "2026-08-01T09:00:00Z",
+                  "last": "2026-08-02T09:00:00Z",
+                  "hits": [
+                    [
+                      "home",
+                      1
+                    ],
+                    [
+                      "home",
+                      2
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              "query": "thread:cycle-b@example.org",
+              "hits": [
+                [
+                  "home",
+                  1
+                ],
+                [
+                  "home",
+                  2
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "References alone name their last id as the parent",
+      "note": "a message stating no In-Reply-To has the last References id as its parent (SEARCH.md section 9), so it joins that id's thread and not the first's, which no member bears nor names as a parent and so is no node",
+      "store": {
+        "collections": [
+          {
+            "id": "home/INBOX",
+            "account": "home",
+            "kind": "message/rfc822"
+          }
+        ],
+        "items": [
+          {
+            "collection": "home/INBOX",
+            "seq": 1,
+            "link_id": "refs-y@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "refs-y@example.org",
+                "in_reply_to": [],
+                "subject": "Outline",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-01T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-01T09:00:00Z"
+            }
+          }
+        ],
+        "references": []
+      },
+      "steps": [
+        {
+          "note": "a message whose References name x then y",
+          "write": {
+            "kind": "put",
+            "item": {
+              "collection": "home/INBOX",
+              "seq": 2,
+              "link_id": "refs-1@example.org",
+              "flags": [],
+              "fixture": "fixtures/mail-references-only.eml"
+            }
+          },
+          "changed": {
+            "items": [
+              [
+                "home/INBOX",
+                "refs-1@example.org"
+              ]
+            ],
+            "collections": [],
+            "purged": false
+          },
+          "queries": [
+            {
+              "query": "thread:refs-y@example.org",
+              "hits": [
+                [
+                  "home",
+                  1
+                ],
+                [
+                  "home",
+                  2
+                ]
+              ]
+            },
+            {
+              "query": "thread:refs-1@example.org",
+              "hits": [
+                [
+                  "home",
+                  1
+                ],
+                [
+                  "home",
+                  2
+                ]
+              ]
+            },
+            {
+              "query": "thread:refs-x@example.org",
+              "hits": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "the middle of a chain leaving splits it",
+      "note": "when the last placement holding b goes, b names no parent any more and stays a node only as the parent c names (SEARCH.md section 9), so a and c are two threads, b naming c's",
+      "store": {
+        "collections": [
+          {
+            "id": "home/INBOX",
+            "account": "home",
+            "kind": "message/rfc822"
+          }
+        ],
+        "items": [
+          {
+            "collection": "home/INBOX",
+            "seq": 1,
+            "link_id": "chain-a@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "chain-a@example.org",
+                "in_reply_to": [],
+                "subject": "Chain",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-01T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-01T09:00:00Z"
+            }
+          },
+          {
+            "collection": "home/INBOX",
+            "seq": 2,
+            "link_id": "chain-b@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "chain-b@example.org",
+                "in_reply_to": [
+                  "chain-a@example.org"
+                ],
+                "subject": "Re: Chain",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-02T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-02T09:00:00Z"
+            }
+          }
+        ],
+        "references": []
+      },
+      "steps": [
+        {
+          "note": "c replies to b",
+          "write": {
+            "kind": "put",
+            "item": {
+              "collection": "home/INBOX",
+              "seq": 3,
+              "link_id": "chain-c@example.org",
+              "flags": [],
+              "summary": {
+                "table": "mail_summary",
+                "row": {
+                  "message_id": "chain-c@example.org",
+                  "in_reply_to": [
+                    "chain-b@example.org"
+                  ],
+                  "subject": "Re: Re: Chain",
+                  "sender": "bob@example.org",
+                  "sender_name": "Bob",
+                  "date": "2026-08-03T09:00:00Z",
+                  "size": 512,
+                  "attachment": null,
+                  "invitation": null
+                },
+                "addresses": [
+                  {
+                    "role": "from",
+                    "position": 0,
+                    "address": "bob@example.org",
+                    "name": "Bob"
+                  }
+                ],
+                "sort_key": "2026-08-03T09:00:00Z"
+              }
+            }
+          },
+          "changed": {
+            "items": [
+              [
+                "home/INBOX",
+                "chain-c@example.org"
+              ]
+            ],
+            "collections": [],
+            "purged": false
+          },
+          "queries": [
+            {
+              "query": "thread:chain-a@example.org",
+              "hits": [
+                [
+                  "home",
+                  1
+                ],
+                [
+                  "home",
+                  2
+                ],
+                [
+                  "home",
+                  3
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "note": "b goes",
+          "write": {
+            "kind": "remove",
+            "collection": "home/INBOX",
+            "seq": 2
+          },
+          "changed": {
+            "items": [
+              [
+                "home/INBOX",
+                "chain-b@example.org"
+              ]
+            ],
+            "collections": [],
+            "purged": false
+          },
+          "queries": [
+            {
+              "query": "thread:chain-a@example.org",
+              "hits": [
+                [
+                  "home",
+                  1
+                ]
+              ]
+            },
+            {
+              "query": "thread:chain-b@example.org",
+              "threads": [
+                {
+                  "thread": "chain-c@example.org",
+                  "count": 1,
+                  "first": "2026-08-03T09:00:00Z",
+                  "last": "2026-08-03T09:00:00Z",
+                  "hits": [
+                    [
+                      "home",
+                      3
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              "query": "thread:chain-c@example.org",
+              "hits": [
+                [
+                  "home",
+                  3
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "a subject joins no thread",
+      "note": "two messages whose subjects read as a reply, naming no parent, are two threads: no joining by subject (SEARCH.md section 9)",
+      "store": {
+        "collections": [
+          {
+            "id": "home/INBOX",
+            "account": "home",
+            "kind": "message/rfc822"
+          }
+        ],
+        "items": [
+          {
+            "collection": "home/INBOX",
+            "seq": 1,
+            "link_id": "lunch-1@example.org",
+            "flags": [],
+            "summary": {
+              "table": "mail_summary",
+              "row": {
+                "message_id": "lunch-1@example.org",
+                "in_reply_to": [],
+                "subject": "Lunch",
+                "sender": "bob@example.org",
+                "sender_name": "Bob",
+                "date": "2026-08-01T09:00:00Z",
+                "size": 512,
+                "attachment": null,
+                "invitation": null
+              },
+              "addresses": [
+                {
+                  "role": "from",
+                  "position": 0,
+                  "address": "bob@example.org",
+                  "name": "Bob"
+                }
+              ],
+              "sort_key": "2026-08-01T09:00:00Z"
+            }
+          }
+        ],
+        "references": []
+      },
+      "steps": [
+        {
+          "note": "the second message",
+          "write": {
+            "kind": "put",
+            "item": {
+              "collection": "home/INBOX",
+              "seq": 2,
+              "link_id": "lunch-2@example.org",
+              "flags": [],
+              "summary": {
+                "table": "mail_summary",
+                "row": {
+                  "message_id": "lunch-2@example.org",
+                  "in_reply_to": [],
+                  "subject": "Re: Lunch",
+                  "sender": "bob@example.org",
+                  "sender_name": "Bob",
+                  "date": "2026-08-02T09:00:00Z",
+                  "size": 512,
+                  "attachment": null,
+                  "invitation": null
+                },
+                "addresses": [
+                  {
+                    "role": "from",
+                    "position": 0,
+                    "address": "bob@example.org",
+                    "name": "Bob"
+                  }
+                ],
+                "sort_key": "2026-08-02T09:00:00Z"
+              }
+            }
+          },
+          "changed": {
+            "items": [
+              [
+                "home/INBOX",
+                "lunch-2@example.org"
+              ]
+            ],
+            "collections": [],
+            "purged": false
+          },
+          "queries": [
+            {
+              "query": "thread:lunch-1@example.org",
+              "hits": [
+                [
+                  "home",
+                  1
+                ]
+              ]
+            },
+            {
+              "query": "thread:lunch-2@example.org",
+              "hits": [
+                [
+                  "home",
+                  2
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "a message filed in two collections is one member until its last placement goes",
+      "note": "basic-1, filed in two collections of one account, is one message of its thread, counted once; its thread stays while either placement does, and once both are gone it is the parent reply-1 names, which no longer names parent-1 (SEARCH.md section 9)",
+      "store": {
+        "collections": [
+          {
+            "id": "home/INBOX",
+            "account": "home",
+            "kind": "message/rfc822"
+          },
+          {
+            "id": "home/Archive",
+            "account": "home",
+            "kind": "message/rfc822"
+          }
+        ],
+        "items": [
+          {
+            "collection": "home/INBOX",
+            "seq": 1,
+            "link_id": "basic-1@example.org",
+            "flags": [],
+            "fixture": "fixtures/mail-basic.eml"
+          },
+          {
+            "collection": "home/Archive",
+            "seq": 1,
+            "link_id": "basic-1@example.org",
+            "flags": [],
+            "fixture": "fixtures/mail-basic.eml"
+          }
+        ],
+        "references": []
+      },
+      "steps": [
+        {
+          "note": "the reply arrives",
+          "write": {
+            "kind": "put",
+            "item": {
+              "collection": "home/INBOX",
+              "seq": 2,
+              "link_id": "reply-1@example.org",
+              "flags": [],
+              "fixture": "fixtures/mail-reply.eml"
+            }
+          },
+          "changed": {
+            "items": [
+              [
+                "home/INBOX",
+                "reply-1@example.org"
+              ]
+            ],
+            "collections": [],
+            "purged": false
+          },
+          "queries": [
+            {
+              "query": "thread:parent-1@example.org",
+              "threads": [
+                {
+                  "thread": "basic-1@example.org",
+                  "count": 2,
+                  "first": "2026-08-01T10:00:00Z",
+                  "last": "2026-08-02T09:00:00Z",
+                  "hits": [
+                    [
+                      "home",
+                      1
+                    ],
+                    [
+                      "home",
+                      2
+                    ]
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "note": "one placement of basic-1 goes, purged since home/Archive holds it live with its body (STORAGE.md section 11)",
+          "write": {
+            "kind": "remove",
+            "collection": "home/INBOX",
+            "seq": 1
+          },
+          "changed": {
+            "items": [],
+            "collections": [],
+            "purged": true
+          },
+          "queries": [
+            {
+              "query": "thread:reply-1@example.org",
+              "threads": [
+                {
+                  "thread": "basic-1@example.org",
+                  "count": 2,
+                  "first": "2026-08-01T10:00:00Z",
+                  "last": "2026-08-02T09:00:00Z",
+                  "hits": [
+                    [
+                      "home",
+                      1
+                    ],
+                    [
+                      "home",
+                      2
+                    ]
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "note": "its last placement goes",
+          "write": {
+            "kind": "remove",
+            "collection": "home/Archive",
+            "seq": 1
+          },
+          "changed": {
+            "items": [
+              [
+                "home/Archive",
+                "basic-1@example.org"
+              ]
+            ],
+            "collections": [],
+            "purged": false
+          },
+          "queries": [
+            {
+              "query": "thread:basic-1@example.org",
+              "threads": [
+                {
+                  "thread": "reply-1@example.org",
+                  "count": 1,
+                  "first": "2026-08-02T09:00:00Z",
+                  "last": "2026-08-02T09:00:00Z",
+                  "hits": [
+                    [
+                      "home",
+                      2
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              "query": "thread:parent-1@example.org",
+              "hits": []
+            }
           ]
         }
       ]

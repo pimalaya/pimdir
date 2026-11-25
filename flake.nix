@@ -113,6 +113,13 @@
           bash ${./checks/frozen.sh} ${format} ${./checks/frozen.sha256} | tee $out
         '';
 
+        # The cases a release froze, an intact prefix of each case file
+        # checks/frozen.sha256 names with its lists: nothing while every
+        # part is a draft.
+        appended = pkgs.runCommand "pimdir-appended" { } ''
+          ${pkgs.python3}/bin/python3 ${./checks/appended.py} ${format} ${./checks/frozen.sha256} | tee $out
+        '';
+
         # Every markdown file outside cairn/, and every file a link names, so
         # the whole source rather than a fileset.
         references = pkgs.runCommand "pimdir-references" { nativeBuildInputs = [ pkgs.perl ]; } ''

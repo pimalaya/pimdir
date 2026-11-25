@@ -1,0 +1,10 @@
+Message-ID: <refs-1@example.org>
+References: <refs-x@example.org> <refs-y@example.org>
+Subject: Re: Outline
+From: Bob <bob@example.org>
+To: alice@example.org
+Date: Sun, 02 Aug 2026 09:00:00 +0000
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+No In-Reply-To: the last References id is the parent.

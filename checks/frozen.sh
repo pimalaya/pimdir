@@ -5,6 +5,8 @@
 # checks/frozen.sha256 names a file and the SHA-256 it had when its part was
 # released; the check fails when one is gone or holds other bytes. The list
 # is empty while every part is a draft, and the check then passes on nothing.
+# A line naming lists after its path freezes a case file to a prefix, which
+# checks/appended.py holds, and is skipped here.
 #
 # Usage: frozen.sh <repository root> [list]
 #        frozen.sh <repository root> --digest <path>...
@@ -31,8 +33,9 @@ fi
 list="${1:-$root/checks/frozen.sha256}"
 failures=0
 frozen=0
-while read -r want path; do
+while read -r want path lists; do
     case "$want" in '' | '#'*) continue ;; esac
+    [ -z "$lists" ] || continue
     frozen=$((frozen + 1))
     if ! grep -qxE '[0-9a-f]{64}' <<< "$want" || [ -z "$path" ]; then
         echo "frozen: a line states a SHA-256 and a path: $want $path" >&2

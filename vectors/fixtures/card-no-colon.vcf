@@ -1,0 +1,6 @@
+BEGIN:VCARD
+VERSION:4.0
+UID:urn:uuid:c4f8a2d6-1e3b-4790-b5a8-0f6d2c9e1a37
+FN:Olive Hartigan
+NOTE no colon ends this property name
+END:VCARD

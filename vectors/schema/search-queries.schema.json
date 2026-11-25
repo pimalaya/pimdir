@@ -7,7 +7,7 @@
   "required": ["v", "now", "horizon", "coverage", "cases", "occurrences"],
   "additionalProperties": false,
   "properties": {
-    "v": { "const": 5 },
+    "v": { "const": 6 },
     "now": { "type": "string" },
     "horizon": { "type": "object", "required": ["start", "end"], "additionalProperties": false, "properties": { "start": { "type": "string" }, "end": { "type": "string" } } },
     "coverage": { "$ref": "#/$defs/coverage" },
@@ -45,6 +45,7 @@
         }
       }
     },
+    "matched": { "type": "array", "items": { "type": "array", "prefixItems": [{ "type": "string" }, { "type": "integer", "minimum": 1 }, { "enum": ["body", "summary"] }], "items": false, "minItems": 3 } },
     "hits": { "type": "array", "items": { "type": "array", "prefixItems": [{ "type": "string" }, { "type": "integer", "minimum": 1 }], "items": false, "minItems": 2 } },
     "case": {
       "type": "object",
@@ -99,10 +100,11 @@
             }
           ]
         },
-        "cut": { "type": "integer", "minimum": 0 }
+        "cut": { "type": "integer", "minimum": 0 },
+        "matched": { "$ref": "#/$defs/matched" }
       },
       "oneOf": [{ "required": ["hits"] }, { "required": ["threads"] }, { "required": ["error"] }],
-      "dependentRequired": { "index_zone": ["zone"] }
+      "dependentRequired": { "index_zone": ["zone"], "matched": ["hits"] }
     }
   }
 }

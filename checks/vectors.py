@@ -139,6 +139,8 @@ CODES = {
     "unbalanced-parenthesis", "dangling-operator", "reserved-form", "invalid-wildcard", "limit-exceeded",
 }
 WHITESPACE = " \t\r\n"
+# The roles a reference takes (STORAGE.md section 14.2), an `x-` one aside.
+REFERENCE_ROLES = {"attachment", "invitation", "sender", "parent", "source", "related"}
 
 
 class Refused(Exception):
@@ -202,8 +204,10 @@ def check_wildcard(word, offset, allowed):
 
 # The orders a search answers (SEARCH.md section 8.2).
 SORTS = {"newest-first", "oldest-first", "title", "sender", "relevance"}
-INSTANT = re.compile(r"(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?(Z|[+-](\d{2}):(\d{2}))?")
-RELATIVE = re.compile(r"(\d+)(min|mo|h|d|w|y)")
+# The grammar's DIGIT is ASCII alone: Python's \d would read every Unicode
+# digit (an Arabic-Indic year among them).
+INSTANT = re.compile(r"([0-9]{4}-[0-9]{2}-[0-9]{2})T([0-9]{2}):([0-9]{2})(?::([0-9]{2}))?(Z|[+-]([0-9]{2}):([0-9]{2}))?")
+RELATIVE = re.compile(r"([0-9]+)(min|mo|h|d|w|y)")
 
 
 def date_point(value):
@@ -217,11 +221,11 @@ def date_point(value):
         return (int(hour) <= 23 and int(minute) <= 59 and int(second or 0) <= 59
                 and (offset in (None, "Z") or (int(off_hour) <= 23 and int(off_minute) <= 59)))
     amount = RELATIVE.fullmatch(value)
-    if re.fullmatch(r"\d{4}", value) or value in {"today", "yesterday"} or (amount and len(amount.group(1)) <= DIGITS["relative"]):
+    if re.fullmatch(r"[0-9]{4}", value) or value in {"today", "yesterday"} or (amount and len(amount.group(1)) <= DIGITS["relative"]):
         return True
-    if re.fullmatch(r"\d{4}-\d{2}", value):
+    if re.fullmatch(r"[0-9]{4}-[0-9]{2}", value):
         return 1 <= int(value[5:]) <= 12
-    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+    if re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value):
         try:
             date.fromisoformat(value)
             return True
@@ -277,6 +281,10 @@ def check_term(query, token):
         key, equals, held = value.partition("=")
         if not equals or not property_key(key) or not property_value(held):
             raise Refused("invalid-value", colon + 1, end)
+    # A linked: value naming a role of STORAGE section 14.2 and no id.
+    role, named, linked_id = value.partition(":")
+    if name == "linked" and named and not linked_id and (role in REFERENCE_ROLES or (role.startswith("x-") and len(role) > 2)):
+        raise Refused("invalid-value", colon + 1, end)
 
 
 def parse(query):
@@ -493,6 +501,23 @@ def point_span(point, now, zone=timezone.utc):
     return None, None
 
 
+def value_span(value, now, zone=timezone.utc):
+    """A date value's span (SEARCH.md section 8.1), either side None when
+    open: a single point its own span, a range from the start of its first
+    point's to the end of its last's, a relative amount in a range spanning
+    its instant alone."""
+    if ".." not in value:
+        return point_span(value, now, zone)
+    low, _, high = value.partition("..")
+
+    def side(point, end):
+        if RELATIVE.fullmatch(point):
+            return point_span(point, now, zone)[0]
+        return point_span(point, now, zone)[end]
+
+    return (side(low, 0) if low else None), (side(high, 1) if high else None)
+
+
 def horizon_left_of(query, collections, now, horizon, zone=timezone.utc):
     terms = query.split()
     if any(not re.fullmatch(r"[a-z]+:\S+", term) for term in terms) or "(" in query:
@@ -511,9 +536,7 @@ def horizon_left_of(query, collections, now, horizon, zone=timezone.utc):
     if dated is None:
         return None
     calendar = any(c["kind"] == "text/calendar" for c in scope) and (not kinds or kinds & {"event", "task", "journal"})
-    low, _, high = dated.partition("..") if ".." in dated else (dated, "", dated)
-    start = point_span(low, now, zone)[0] if low else None
-    end = point_span(high, now, zone)[1] if high else None
+    start, end = value_span(dated, now, zone)
     leaves = start is None or end is None or start < instant(horizon["start"]) or end > instant(horizon["end"])
     return bool(calendar and leaves)
 
@@ -1346,7 +1369,7 @@ check("vectors/sync/: numbered from 1, no gap, no number twice", numbers, list(r
 FORMATS = {
     "objects.json": "objects", "summaries.json": "summaries", "search/store.json": "search-store",
     "search/queries.json": "search-queries", "search/chunks.json": "search-chunks",
-    "search/refresh.json": "search-refresh",
+    "search/refresh.json": "search-refresh", "search/extraction.json": "search-extraction",
     "payloads.json": "payloads", "manifest.json": "manifest", "versions.json": "versions",
 }
 for path in sorted(root.rglob("*.json")):
@@ -2795,7 +2818,7 @@ def clock_of(case):
 # A case answers hits, a threaded listing or a refusal (SEARCH.md section 11),
 # and the grammar above accepts its query or refuses it as the case says.
 KEYS = {"query", "hits", "threads", "error", "sort", "ordered", "horizon_left", "temporal", "cut", "zone", "now", "note",
-        "index_zone", "zone_differs", "coverage", "complete"}
+        "index_zone", "zone_differs", "coverage", "complete", "matched"}
 for case in queries["cases"]:
     label = f"search {case['query']!r}"
     require(f"{label}: known keys only", set(case) <= KEYS)
@@ -2811,6 +2834,14 @@ for case in queries["cases"]:
     for thread in case.get("threads", []):
         require(f"{label}: thread {thread.get('thread')} states its id, count, first and last",
                 set(thread) == {"thread", "count", "first", "last", "hits"} and thread["first"] <= thread["last"])
+    # What a hit matched (SEARCH.md section 8.2): its summary when no
+    # placement of it in its account holds a body the index read, else its
+    # body.
+    for account, seq, matched in case.get("matched", []):
+        require(f"{label}: matched {account} {seq} is a hit of the case", [account, seq] in case.get("hits", []))
+        read = any(accounts[item["collection"]] == account and item["seq"] == seq
+                   and "fixture" in item and not item.get("unreadable") for item in store["items"])
+        check(f"{label}: {account} {seq} matched on", matched, "body" if read else "summary")
     temporal = case.get("temporal")
     if temporal is not None:
         require(f"{label}: temporal is full or bounded",
@@ -2829,7 +2860,7 @@ for case in queries["cases"]:
         got = {"code": refused.code, "start": refused.start, "end": refused.end}
     if "error" in case:
         require(f"{label}: refusals carry no sort, order, coverage or clock",
-                not set(case) & {"sort", "ordered", "horizon_left", "temporal", "cut", "zone", "now", "index_zone", "zone_differs", "coverage", "complete"})
+                not set(case) & {"sort", "ordered", "horizon_left", "temporal", "cut", "zone", "now", "index_zone", "zone_differs", "coverage", "complete", "matched"})
         require(f"{label}: a known code", case["error"].get("code") in CODES)
         check(f"{label}: refusal", got, case["error"])
     else:
@@ -3290,12 +3321,6 @@ def dated_of(query):
     return found[0][0] if len(found) == 1 and found[0][1] else False
 
 
-def range_span(value, now, zone):
-    """A date value's span, either side None when open."""
-    low, _, high = value.partition("..") if ".." in value else (value, "", value)
-    return (point_span(low, now, zone)[0] if low else None), (point_span(high, now, zone)[1] if high else None)
-
-
 def sealed(bytes_):
     """Whether a message's body is one the extraction records encrypted
     (SEARCH.md section 6), by its own Content-Type."""
@@ -3376,7 +3401,7 @@ def complete_of(query, now, zone):
     since = until = None
     calendar = any(c["kind"] == "text/calendar" for c in scope)
     if dated_of(query) is not None:
-        since, until = range_span(dated_of(query), now, zone)
+        since, until = value_span(dated_of(query), now, zone)
         if calendar:
             if since is None or until is None or since < horizon[0] or until > horizon[1]:
                 return False
@@ -3449,7 +3474,7 @@ for case in queries["cases"]:
     terms = case["query"].split()
     if "hits" not in case or len(terms) != 2 or terms[0] != "kind:mail" or not terms[1].startswith("date:"):
         continue
-    since, until = range_span(terms[1][5:], *clock_of(case))
+    since, until = value_span(terms[1][5:], *clock_of(case))
     derived = set()
     for item in store["items"]:
         if kinds[item["collection"]] != "message/rfc822":
@@ -3690,9 +3715,11 @@ require("search: system flag cases re-derived from the store", derived_flags >= 
 # each step leaves is re-derived from the stamping rules, over a model of
 # the store holding each item's collection, link id and state, and every hit
 # names an item the step leaves searchable. A put stamps its item; a remove
-# stamps the item it retains; a purge and an erase stamp nothing and count
-# as purges; a rename restamps every item under the new id, stamps the
-# collection and counts as a purge; a coverage moving stamps its collection.
+# stamps the item it retains, and purges, stamping nothing, one whose
+# identity another collection of the account holds with its body; a purge
+# and an erase stamp nothing and count as purges; a rename restamps every
+# item under the new id, stamps the collection and counts as a purge; a
+# coverage moving stamps its collection.
 # A query of system flag terms is re-derived from the flags the model holds
 # after the write, a lagging step's too, whose index is one write behind: at
 # least one such step answers otherwise than the flags it folded would.
@@ -3716,6 +3743,7 @@ for case in refresh["cases"]:
                                                     "flags": set(item.get("flags") or [])}
     properties = [dict(row) for row in case["store"].get("properties", [])]
     check_properties(label, properties, {seq for (_, seq) in model})
+    asked = {}
     for number, step in enumerate(case["steps"], 1):
         where = f"{label} step {number}"
         write = step["write"]
@@ -3741,7 +3769,21 @@ for case in refresh["cases"]:
             if write["kind"] == "remove":
                 require(f"{where}: a remove names a live item", held["live"])
                 held["live"] = False
-                items.add((write["collection"], held["link_id"]))
+                # A held identity is not kept twice (STORAGE section 11):
+                # another collection of the account holding the link id live
+                # with the retiring body purges the retiring row, which
+                # stamps nothing. A bodiless row's holder is left unmodelled.
+                holders = [other for (collection, _), other in model.items()
+                           if collection != write["collection"] and other["live"]
+                           and collections[collection] == collections[write["collection"]]
+                           and other["link_id"] == held["link_id"]]
+                require(f"{where}: a bodiless row removed beside a holder, which this does not model",
+                        held["fixture"] is not None or not holders)
+                if held["fixture"] is not None and any(other["fixture"] == held["fixture"] for other in holders):
+                    del model[key]
+                    purged = True
+                else:
+                    items.add((write["collection"], held["link_id"]))
             else:
                 require(f"{where}: a {write['kind']} names a retained item", not held["live"])
                 del model[key]
@@ -3793,7 +3835,19 @@ for case in refresh["cases"]:
         check(f"{where}: the collections the feed lists", sorted(step["changed"]["collections"]), sorted(touched))
         check(f"{where}: whether the purge count moves", step["changed"]["purged"], purged)
         live = {(collections[collection], seq) for (collection, seq), held in model.items() if held["live"]}
-        for query in step["queries"]:
+        for at, query in enumerate(step["queries"], 1):
+            # A page continues a query an earlier step asked by pages, the
+            # same text in the same order (SEARCH.md section 8.2).
+            asked[(number, at)] = query
+            if "page" in query:
+                first = asked.get((query["page"]["step"], query["page"]["query"]))
+                require(f"{where}: {query['query']!r} continues a query an earlier step asked by pages",
+                        first is not None and query["page"]["step"] < number and "limit" in first
+                        and first["query"] == query["query"] and first.get("sort") == query.get("sort"))
+            if "limit" in query:
+                answered = query.get("hits", query.get("threads", []))
+                require(f"{where}: {query['query']!r} answers at most its limit, in order",
+                        len(answered) <= query["limit"] and query.get("ordered") is True)
             try:
                 parse(query["query"])
             except Refused as refused:
@@ -3822,10 +3876,66 @@ for case in refresh["cases"]:
 require("refresh: a lagging step answers a system flag term otherwise than the index's flags, one write behind, would",
         lagging_apart >= 2)
 
+# The extraction cases (SEARCH.md section 11): each a store of its own,
+# every item in a collection of a known kind, a seq one item's, every fixture
+# held; every query one the grammar accepts, of known keys, its hits items the
+# store holds and a hit's matched one of them; a query of kind:mail and one
+# date term over bodiless messages has its hits re-derived from their sort
+# keys in the zone it states, a local time a transition skips or repeats read
+# as section 8.1 says.
+extraction = json.loads((search / "extraction.json").read_text())
+EXTRACTION_KEYS = {"query", "note", "zone", "index_zone", "now", "sort", "ordered", "hits", "coverage", "complete", "matched"}
+derived_zoned = 0
+for case in extraction["cases"]:
+    label = f"extraction {case['label']!r}"
+    held = {c["id"]: c for c in case["store"]["collections"]}
+    for collection in held.values():
+        require(f"{label}: {collection['id']} has a kind of the set", collection["kind"] in KINDS)
+    seqs = {}
+    for item in case["store"]["items"]:
+        require(f"{label}: {item['link_id']} in a known collection", item["collection"] in held)
+        if "fixture" in item:
+            require(f"{label}: {item['fixture']} exists", (root / item["fixture"]).is_file())
+        seqs.setdefault(item["seq"], set()).add((item["link_id"], item.get("fixture")))
+    for seq, items in seqs.items():
+        require(f"{label}: seq {seq} names one item", len(items) == 1)
+    stored = {(held[item["collection"]]["account"], item["seq"]) for item in case["store"]["items"] if item["collection"] in held}
+    for query in case["queries"]:
+        where = f"{label} {query['query']!r}"
+        require(f"{where}: known keys only", set(query) <= EXTRACTION_KEYS)
+        try:
+            parse(query["query"])
+        except Refused as refused:
+            failures.append(f"{where}: refused ({refused.code})")
+        for hit in query["hits"]:
+            require(f"{where}: hit {hit} is an item of the case's store", tuple(hit) in stored)
+        for account, seq, _ in query.get("matched", []):
+            require(f"{where}: matched {account} {seq} is a hit", [account, seq] in query["hits"])
+        if "zone" in query:
+            try:
+                zone = ZoneInfo(query["zone"])
+            except (ZoneInfoNotFoundError, ValueError):
+                failures.append(f"{where}: zone {query['zone']!r} names no IANA zone")
+                continue
+        else:
+            zone = timezone.utc
+        terms = query["query"].split()
+        bodiless = all("summary" in item for item in case["store"]["items"])
+        if len(terms) == 2 and terms[0] == "kind:mail" and terms[1].startswith("date:") and bodiless:
+            since, until = value_span(terms[1][5:], instant(query.get("now", extraction["now"])), zone)
+            derived = sorted((held[item["collection"]]["account"], item["seq"]) for item in case["store"]["items"]
+                             if (since is None or since <= instant(item["summary"]["sort_key"]))
+                             and (until is None or instant(item["summary"]["sort_key"]) < until))
+            check(f"{where}: the messages dated in the range, read in {query.get('zone', 'UTC')}",
+                  sorted(map(tuple, query["hits"])), derived)
+            derived_zoned += 1
+require("extraction: zoned instants over messages re-derived", derived_zoned >= 4)
+
 # Every fixture is a body some case names (summaries.json, a sync case, the
 # search store, a refresh case), so none lies under vectors/fixtures/ that no
 # rule reads.
-named = {match for path in [root / "summaries.json", *sync_cases, search / "store.json", search / "refresh.json"]
+named = {match for path in [root / "summaries.json", *sync_cases, search / "store.json", search / "refresh.json",
+                            search / "extraction.json"]
          for match in re.findall(r'"(fixtures/[^"]+)"', path.read_text())}
 for path in sorted((root / "fixtures").iterdir()):
     require(f"vectors/fixtures/{path.name}: a fixture no case names", f"fixtures/{path.name}" in named)
@@ -3840,7 +3950,7 @@ print(
     f"{len(objects['objects'])} object names, "
     f"{len(summaries['cases'])} summaries over {len(fixtures)} fixtures, "
     f"{sum('hint' in case for case in summaries['cases'])} minted link ids, "
-    f"{len(sync_cases)} sync cases, {len(queries['cases'])} search cases, {sum(len(case['steps']) for case in refresh['cases'])} refresh steps, {len(chunk_cases)} chunk cases, "
+    f"{len(sync_cases)} sync cases, {len(queries['cases'])} search cases, {sum(len(case['steps']) for case in refresh['cases'])} refresh steps, {sum(len(case['queries']) for case in extraction['cases'])} extraction queries, {len(chunk_cases)} chunk cases, "
     f"{len(writers['cases'])} task writer cases, {len(payload_cases)} payloads check, "
     f"every file the manifest's"
 )

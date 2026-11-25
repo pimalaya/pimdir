@@ -232,7 +232,7 @@ Labels and an application's properties are not indexed: a query reads them from 
 
 Text is folded (case and accents) before any full-text engine sees it, so engines that tokenise alike find the same words.
 
-Long texts are cut into chunks along their paragraphs by one rule; a snippet is drawn from a hit's chunks, and an embedding index can reuse them. Occurrences are expanded again when the time zone database they were resolved through changes version, since a zoned time moves with it, and when the zone floating times are read in changes, which the index remembers. A time a clock change repeats or skips is read at the offset before the change, as the store's sort key reads it.
+Long texts are cut into chunks along their paragraphs by one rule; a client showing a snippet draws it from a hit's chunks, no answer stating one, and an embedding index can reuse them. Occurrences are expanded again when the time zone database they were resolved through changes version, since a zoned time moves with it, and when the zone floating times are read in changes, which the index remembers. A time a clock change repeats or skips is read at the offset before the change, as the store's sort key reads it.
 
 Hostile content costs a bounded amount, the same for every implementation: a message's parts are walked to a fixed depth and count, as the store walks them (§2), a calendar item writes a fixed number of occurrences, and a recurrence rule is followed for a fixed number of steps. An item cut short says from when its occurrences are missing, and an answer reaching past that says so.
 

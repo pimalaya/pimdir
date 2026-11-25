@@ -80,7 +80,7 @@ SEARCH.md       the search layer (normative, optional)
 migrations/     canonical store schema migrations, under storage/
 payloads/       the JSON Schemas of the queue's payloads
 vectors/        the normative test data
-checks/         schema, floor, vector, reference and frozen checks (nix flake check), rehearsal migrations, tags and implementation (CI)
+checks/         schema, floor, vector, reference, frozen and appended checks (nix flake check), rehearsal migrations, tags and implementation (CI)
 conventions/    Pimalaya's own conventions, outside the standard (gtd.md)
 cairn/          the dated history (log/) and audit ledgers (changes/)
 ```
@@ -97,7 +97,7 @@ While STORAGE is a draft, a store opens only under the exact draft that wrote it
 
 The three parts are released together, as `storage-v1.0.0`, `sync-v1.0.0` and `search-v1.0.0` tagged at one commit, once the reference implementation passes every check and vector at the drafts to be released: the sync state a store holds follows the sync part, and the query language people type and the answers the search vectors pin bind every program offering search, so no part freezes without the others. Until then, schema version 1 is edited in place; after it, every schema change is a migration, stating which older readers and producers may still open the store.
 
-At a release, checks/tags.sh runs with `--released`, which fails on a part whose version has no tag, and checks/frozen.sha256 gains the digests of the bytes that version froze, which checks/frozen.sh holds from then on.
+At a release, checks/tags.sh runs with `--released`, which fails on a part whose version has no tag, and checks/frozen.sha256 gains the digests of the bytes that version froze, which checks/frozen.sh holds from then on, and of the case lists it froze, which checks/appended.py holds to an intact prefix, so a minor version appends cases and edits none.
 
 ## License
 

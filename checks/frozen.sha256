@@ -14,5 +14,18 @@
 #   vectors/sync/*.json (every case the release holds, one file each, so a
 #   minor version adds a case and moves none)
 #   vectors/schema/sync.schema.json
+# search-v1.0.0
+#   vectors/search/store.json
+#   every fixture a file of vectors/search/ names
+#   vectors/schema/search-*.schema.json
+#   and, with `python3 checks/appended.py . --digest <path> <pointer...>`, a
+#   line `<sha256>  <path> <pointer>=<count>...` for each case file:
+#   vectors/search/queries.json /cases /occurrences, and refresh.json,
+#   chunks.json and extraction.json /cases. checks/appended.py holds each to
+#   the cases its release held as an intact prefix, the file's other fields
+#   unchanged, so a minor version appends cases and edits none. The schemas
+#   keep their names: a case file's format, its `v` and its schema, is frozen
+#   with it, so a minor appends only cases its schema accepts, and a case
+#   needing a field it lacks goes in a new file under a schema of its own.
 #
 # A line leaves this file only with the major version that drops its file.

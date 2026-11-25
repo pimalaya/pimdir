@@ -53,13 +53,13 @@ change: the-freeze-plan
 ## 5b. Search in v1
 
 - [x] README.md, every Status line and AGENTS.md: the three parts release together
-- [ ] The query language reviewed once: grammar, every form and every refusal listed, each refusal coded
+- [x] The query language reviewed once: grammar, every form and every refusal listed, each refusal coded (2026-11-25, cairn/log/2026-11-25-the-search-lines-close-for-the-freeze.md: the inventory's forms and refusals as 51 cases of vectors/search/queries.json, `thread:`, `dangling-operator`, `linked:<role>:` and the empty value reworded)
 - [ ] Query vectors: every form of the grammar, run over generator stores, not one fixed store
-- [ ] Extraction vectors per kind: MIME parts, charsets, attachments; vCard fields; iCalendar fields, time zones, all-day items, recurrence expansion up to its bound; Unicode normalisation and case
-- [ ] Threads, snippets and coverage (`complete`, `filling`, `missing`) pinned by vectors
-- [ ] A page token stays valid, or is refused coded, across a refresh between two pages
+- [x] Extraction vectors per kind: MIME parts, charsets, attachments; vCard fields; iCalendar fields, time zones, all-day items, recurrence expansion up to its bound; Unicode normalisation and case (2026-11-25, vectors/search/extraction.json, the bounds staying in store.json's series)
+- [x] Threads, snippets and coverage (`complete`, `filling`, `missing`) pinned by vectors (2026-11-25: threads in refresh.json and queries.json, snippets informative in SEARCH §6, `complete` on six more cases, `matched`, `unparseable` in extraction.json)
+- [x] A page token stays valid, or is refused coded, across a refresh between two pages (2026-11-25: a cursor is a position, SEARCH §8.2, five page cases of refresh.json; a token a client cannot read is its own to refuse, under no SEARCH code)
 - [ ] The generator's oracle answers every search the vectors ask
-- [ ] The freeze checklist gains `search-v1.0.0`; checks/frozen.sha256 the search statements and signatures
+- [x] The freeze checklist gains `search-v1.0.0`; checks/frozen.sha256 the search statements and signatures (2026-11-25: checks/frozen.sha256's header names the search-v1.0.0 block, checks/appended.py holds the case lists to a prefix; the statements and signatures are obsolete since 2026-11-22, the standard binding none, cairn/log/2026-11-22-a-smaller-pimdir.md)
 
 ## 6. io-pimdir's public API
 

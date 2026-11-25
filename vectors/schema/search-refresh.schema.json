@@ -10,7 +10,7 @@
   ],
   "additionalProperties": false,
   "properties": {
-    "v": { "const": 6 },
+    "v": { "const": 7 },
     "note": {
       "type": "string"
     },
@@ -147,6 +147,25 @@
               "note": {
                 "type": "string"
               },
+              "sort": {
+                "enum": ["newest-first", "oldest-first", "title", "sender", "relevance"]
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "page": {
+                "type": "object",
+                "required": ["step", "query"],
+                "additionalProperties": false,
+                "properties": {
+                  "step": { "type": "integer", "minimum": 1 },
+                  "query": { "type": "integer", "minimum": 1 }
+                }
+              },
+              "ordered": {
+                "const": true
+              },
               "hits": {
                 "type": "array",
                 "uniqueItems": true,
@@ -224,7 +243,10 @@
                   "threads"
                 ]
               }
-            ]
+            ],
+            "dependentRequired": {
+              "page": ["limit"]
+            }
           }
         },
         "lagging": {
