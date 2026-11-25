@@ -76,11 +76,14 @@ change: the-freeze-plan
 
 ## 7. Campaigns
 
-- [x] The campaign's seeds and profiles fixed and recorded (io-pimdir tests/generated/campaigns.json, campaign-1 to campaign-3 at generator revision 1, run by tests/generated/campaign.rs; campaign-2 took 2.7 hours on 32 workers)
+- [x] The campaign's seeds and profiles fixed and recorded (io-pimdir tests/generated/campaigns.json, campaign-1 to campaign-5 at generator revision 1, run by tests/generated/campaign.rs; campaign-2 took 2.7 hours on 32 workers)
 - [x] Campaign 1 run, each finding sorted by door, the failures shrunk into vectors: 4,180 jobs on io-pimdir e2aad6e, every difference traced to the quirks findings (vectors 234 to 236, cairn/log/2026-11-25-the-quirks-findings-close.md) and to Q1, a spec break (vectors 237 to 242); rerun on the fixed tree, three harness findings left and closed (io-pimdir cairn/log/2026-11-25-campaign-one-rechecked.md). One spec break, so campaign 2 starts the stop rule's count
 - [x] Owner ruling Q1 (the quirks profile's first run): a DAV listing carrying another body at the revision the base holds, an ETag a server edit did not move; SYNC §5 decided a pull by the revision alone. Ruled 2026-11-25, reading B: a carried body differing from the one the base holds at its own revision is a remote edit, stated in SYNC §5, §6 and §8 with vectors 237 to 242, `ETAG_KEPT_OVER_A_SERVER_EDIT` removed from io-pimdir tests/generated/campaign.rs (cairn/log/2026-11-25-a-carried-body-under-an-unmoved-etag.md)
 - [x] Campaign 2 run: 4,180 jobs on io-pimdir 52ea926, one seed failing (structure 2047), a harness finding, no engine or spec finding: a `sender` reference kept once a later row takes the address off the card, as STORAGE §14.2 states, which the harness judged against the final model alone (io-pimdir d5f2b89, cairn/log/2026-11-25-campaign-two.md, its structure profile rerun clean). No spec break: the stop rule's first campaign
-- [ ] Campaign 3 run (recorded in io-pimdir d5f2b89); with no spec break, the stop rule is met
+- [x] Campaign 3 run: 4,180 jobs on io-pimdir d5f2b89 in 10,244 s on 32 workers, no seed failing, 23 differences all of the accepted `sender` class (campaign-2's harness finding), no engine or spec finding. No spec break: the stop rule's second campaign
+- [x] Live night 3 (2026-11-25): a spec reading taken for the owner to confirm, SEARCH §8.1, an empty span matches nothing whatever the kind (cairn/log/2026-11-25-the-empty-span-matches-nothing.md); it moves the engine, so the stop rule's count starts again on the commit carrying it, campaign-4 and campaign-5 recorded (io-pimdir tests/generated/campaigns.json, seeds 4001 and 5001 on)
+- [ ] Campaign 4 run on the commit carrying the empty-span reading
+- [ ] Campaign 5 run on the same commit; with no spec break in either, the stop rule is met
 
 ## 8. Release mechanics
 

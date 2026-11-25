@@ -141,7 +141,7 @@
     "vectors/schema/versions.schema.json": "189ca52345b56a64626844d8805ebaea10356ae5ecae651a8c9675610a500705",
     "vectors/search/chunks.json": "6fc4e98bdf1306f7d5a2635fa2db4c3d96dc8856fbd61df49bc2f67d4d44de3a",
     "vectors/search/extraction.json": "bdb871c84378823071dacb70965cf0cb0ac3848441fc65930a4e46cef3802fdc",
-    "vectors/search/queries.json": "07cf89c26051cda2eea3b445ee51161cff489504d2edac6f009bd046321999a7",
+    "vectors/search/queries.json": "d1295cccbd73bab3f09c062108714afb8e533d46f25977f11e6c0c4027c2d547",
     "vectors/search/refresh.json": "0aa4fa348dc5614d27864a52dc93c7c215521ea7c78dcf05f1f937f9fb4d2d46",
     "vectors/search/store.json": "e782d0e8a53bab0891b4db528a95c8b67ab0b9916451d07f73bcae3bc3b2a9d1",
     "vectors/summaries.json": "6a4eaead0970b91f76d2db33b53215ba35975e171f8c373b45e313d09298aad8",
@@ -404,7 +404,7 @@
       "/cases": 9
     },
     "vectors/search/queries.json": {
-      "/cases": 353,
+      "/cases": 355,
       "/occurrences": 8
     },
     "vectors/search/refresh.json": {

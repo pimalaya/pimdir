@@ -182,7 +182,7 @@ A `date:` or `when:` value is a point or a range of points (`date-value`, §8.3)
 - A single point is its span, a single relative amount the span from its instant to `now`; a range `a..b` runs from the start of `a`'s span to the end of `b`'s, either side open, a relative amount there spanning its instant alone, so `2w..2w` is the empty span and `..2w` ends two weeks before `now`.
 - A bound no instant of a four-digit year states is open: a span ending past 9999-12-31T23:59:59Z is open on that side, and so is one starting before 0000-01-01T00:00:00Z, which a relative amount reaches.
 
-Every span is half-open. Mail compares `sort_key`. An event, task or journal compares occurrences (§7), one overlapping a range when it starts before the range ends and ends after the range starts, a zero-length one when it starts inside it. A contact or a file has no date, a file's `sort_key` being its name, and is excluded from a date-bounded query unless `kind:contact` or `kind:file` names it.
+Every span is half-open, and one whose end is not after its start is empty: it holds no instant and matches nothing, whatever the kind. Mail compares `sort_key`. An event, task or journal compares occurrences (§7), one overlapping a range when it starts before the range ends and ends after the range starts, a zero-length one when it starts inside it. A contact or a file has no date, a file's `sort_key` being its name, and is excluded from a date-bounded query unless `kind:contact` or `kind:file` names it.
 
 A range leaves the horizon when it starts before the horizon's start or ends after its end, an open side always, and only in a query whose kinds and collections can hold a calendar item.
 
