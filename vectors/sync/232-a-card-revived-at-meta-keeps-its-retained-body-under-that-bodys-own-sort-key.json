@@ -1,0 +1,49 @@
+{
+  "v": 11,
+  "label": "a card revived at Meta keeps its retained body apart, under the sort key that body's own bytes give",
+  "note": "the card was retained with its body c1 (Jane Doe) after its server deleted it. The server restores it at a new revision r2, now Jane A. Doe, and the listing names it without carrying its body. The row revives under its key and seq holding no body, at Meta, its summary and sort key the member's (jane a. doe); c1, which r2 may have replaced, is kept as a retained item of its own under the key minted over the handle, reported Overruled after the member's Added, holding the summary and the sort key its own bytes give, jane doe, never the revived member's: a kept body is read as the body it is (SYNC.md sections 6 and 9; STORAGE.md sections 11 and 11.1, Annex A.2; finding G12 of io-pimdir's replay)",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
+    "objects": { "c1": { "body": "fixtures/card-basic.vcf" } },
+    "items": [
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 1, "sort_key": "jane doe", "retained": true, "retained_by": "dav" }
+    ],
+    "bindings": [],
+    "summaries": [
+      { "table": "contact_summary", "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "row": { "uid": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "fn": "Jane Doe", "kind": null, "org": null } }
+    ],
+    "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d1" }]
+  },
+  "run": { "verb": "sync", "collection": "Contacts", "source": "dav", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual" } },
+  "remote": {
+    "snapshot": {
+      "items": [{ "handle": "a.vcf", "flags": [], "revision": "r2", "meta": { "body": "fixtures/card-basic-edited.vcf" } }],
+      "vanished": [],
+      "complete": true,
+      "checkpoint": "d2"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [
+      { "kind": "Added", "handle": "a.vcf" },
+      { "kind": "Overruled", "handle": "a.vcf", "link_id": "dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#a.vcf" }
+    ],
+    "store": {
+      "items": [
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": null, "level": 1, "deleted": 0, "sort_key": "jane a. doe", "retained": false, "retained_by": null },
+        { "collection": "Contacts", "link_id": "dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#a.vcf", "seq": 2, "flags": [], "object": "c1", "level": 2, "deleted": 1, "sort_key": "jane doe", "retained": true, "retained_by": "dav" }
+      ],
+      "bindings": [
+        { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": null, "base_revision": "r2", "base_present": 1, "shared_object": null }
+      ],
+      "summaries": [
+        { "table": "contact_summary", "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "row": { "uid": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "fn": "Jane A. Doe", "kind": null, "org": null } },
+        { "table": "contact_summary", "collection": "Contacts", "link_id": "dup:urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40#a.vcf", "row": { "uid": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "fn": "Jane Doe", "kind": null, "org": null } }
+      ],
+      "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d2" }]
+    }
+  }
+}

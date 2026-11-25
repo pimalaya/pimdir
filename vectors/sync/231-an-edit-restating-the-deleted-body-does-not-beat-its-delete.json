@@ -1,0 +1,46 @@
+{
+  "v": 11,
+  "label": "an edit staging the very body another source's server deleted does not beat that delete",
+  "note": "a and b bound the card at c1. a edited it to c2 and pushed it, the item taking c2; a's server then deleted the member, and b, which had not synced a's edit, staged c2 itself, a fast-forward moving its shared_object to c2 and leaving its base at c1. a's closed round found the member absent with a placement holding the body its base names, so it dropped its binding Deleted and the item is deleted (vector 225). b projects a Tombstone whatever body it staged: the body its placement holds over its base is the one a's server deleted, an edit nobody made after the delete, and its server lists the member at the revision b's base names, no remote edit to revive it. So b pushes the Remove gated on r1 and, accepted, the item is retained holding c2. An edit beats a delete only by a body the deleting server never held (SYNC.md sections 3, 5 and 9; found by io-pimdir's hub property, 2026-11-25)",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
+    "objects": {
+      "c1": { "body": "fixtures/card-basic.vcf" },
+      "c2": { "body": "fixtures/card-basic-edited.vcf" }
+    },
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c2", "level": 2, "deleted": 1 }],
+    "bindings": [
+      { "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "b", "handle": "b.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1, "shared_object": "c2" }
+    ],
+    "sources": [{ "collection": "Contacts", "source": "a", "checkpoint": "a2" }, { "collection": "Contacts", "source": "b", "checkpoint": "b1" }]
+  },
+  "run": {
+    "verb": "sync",
+    "collection": "Contacts",
+    "source": "b",
+    "options": {
+      "push": true,
+      "rights": { "flags": true, "content": true, "add": true, "remove": true },
+      "conflict": "manual"
+    }
+  },
+  "remote": {
+    "snapshot": {
+      "items": [{ "handle": "b.vcf", "flags": [], "revision": "r1", "meta": { "body": "fixtures/card-basic.vcf" } }],
+      "vanished": [],
+      "complete": true,
+      "checkpoint": "b2"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [{ "kind": "Remove", "handle": "b.vcf", "to": null, "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "if_match": "r1", "key": "74cc82089d60576f" }],
+    "outcomes": [{ "handle": "b.vcf", "outcome": "Accepted" }],
+    "events": [],
+    "store": {
+      "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c2", "level": 2, "deleted": 1, "retained": true, "retained_by": "b" }],
+      "bindings": [],
+      "sources": [{ "collection": "Contacts", "source": "a", "checkpoint": "a2" }, { "collection": "Contacts", "source": "b", "checkpoint": "b2" }]
+    }
+  }
+}

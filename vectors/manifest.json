@@ -129,7 +129,7 @@
     "vectors/schema/objects.schema.json": "27d5271230b92359ea242565def4f1fab4bfde465bca7ce263c961c8cf94398b",
     "vectors/schema/payloads.schema.json": "cfeeaef33d63945aa2cd4ee9bce53b9b298595dccbea94b0a1f256e4c1959e8d",
     "vectors/schema/search-chunks.schema.json": "0d98341ffd6455327e176688d4affe359b04dc0317d2a3bb920d4fcc6a0d653c",
-    "vectors/schema/search-extraction.schema.json": "23acefd0a4216b5a9935104e173cbcafac2d062efd9f9a338779d7501ee65cfd",
+    "vectors/schema/search-extraction.schema.json": "d8f405d7959b3c5dd19cf8cf304beb14ab9bd37c254641e2463fe3b441212211",
     "vectors/schema/search-queries.schema.json": "47b35f9a7586b8517110a1194f6441e1118efea4f0463799e1a94147eff89c31",
     "vectors/schema/search-refresh.schema.json": "f6fa901bb4722a888dbfef0b8e0e4371076dee4546c7f8a1777dfdd6dcc7266b",
     "vectors/schema/search-store.schema.json": "056ccdee9ee7ac8dacd7ef8508e92f71d0ca8e7e905ed7c05776b747c9596e49",
@@ -137,7 +137,7 @@
     "vectors/schema/sync.schema.json": "5847aac0b86a2361311fac14b67ad0db74afe7bb838c0098643738d4c76ab367",
     "vectors/schema/versions.schema.json": "189ca52345b56a64626844d8805ebaea10356ae5ecae651a8c9675610a500705",
     "vectors/search/chunks.json": "6fc4e98bdf1306f7d5a2635fa2db4c3d96dc8856fbd61df49bc2f67d4d44de3a",
-    "vectors/search/extraction.json": "1136c808e1b87cab13f8d21f8b4dbd6e27effb60c54cdedcd6ce30a27a9bb019",
+    "vectors/search/extraction.json": "2883acc2cf4aeaa6764427f585480aee6a4f1591d33d6ad5045373ed2183df3f",
     "vectors/search/queries.json": "07cf89c26051cda2eea3b445ee51161cff489504d2edac6f009bd046321999a7",
     "vectors/search/refresh.json": "0aa4fa348dc5614d27864a52dc93c7c215521ea7c78dcf05f1f937f9fb4d2d46",
     "vectors/search/store.json": "e782d0e8a53bab0891b4db528a95c8b67ab0b9916451d07f73bcae3bc3b2a9d1",
@@ -167,8 +167,8 @@
     "vectors/sync/111-a-pending-create-lands-only-on-agreement.json": "26b09065fac89618b2b1d652d9b3e82f8874474ffac0a11d3516968dbf98b60f",
     "vectors/sync/112-prefer-incoming-meeting-an-unread-item-body-records-the-divergence.json": "20bfebaaef74a042c6e52562587f31c015750f625ce07bfb249e6a3fee90db8f",
     "vectors/sync/113-prefer-existing-meeting-an-unread-item-body-records-the-divergence.json": "a999fc9ae3599de390bce5a3749dc0b7a17c9230c1ee422db9ba27ae1aa9b027",
-    "vectors/sync/114-a-fill-settles-a-prefer-incoming-divergence.json": "76766c72e787c3bcf35aacc7968b7c15e490c541cd347da2e796cee255a0570b",
-    "vectors/sync/115-a-fill-settles-a-prefer-existing-divergence.json": "75df44860172c7d571a0dd3d14d6e729810a44934f58c7af1158c5e9d9f1c465",
+    "vectors/sync/114-a-fill-settles-a-prefer-incoming-divergence.json": "d52af5a2bc2d2fb0cbb0395cc852146379d158216039e10ec26618356978e0ef",
+    "vectors/sync/115-a-fill-settles-a-prefer-existing-divergence.json": "e8d8702d4211c5c4a422d0116fabea7d12d7674afff275344a66b49501d854b0",
     "vectors/sync/116-an-upgrade-settles-a-prefer-local-conflict-keeping-the-server-body.json": "05255f7da434993679007500178ab086df53c4e72be4abb54c95a857c705e406",
     "vectors/sync/117-prefer-local-keeps-the-body-it-pushes-over.json": "204474ade8b0157bb79232e513ec3f0b1cf6689063aab44f44ef9c7759cf4eff",
     "vectors/sync/118-a-person-settles-an-item-conflict-keeping-its-body-through-the-other-source.json": "39564550719bcb800a5e79a9c1a4db22b2738ebe4f7865e961926618ad2e85db",
@@ -296,6 +296,8 @@
     "vectors/sync/229-a-move-into-a-collection-no-source-syncs-is-refused.json": "c4e11f39fea30572f072f6122efb3c7ea237bcb5c020d0047be931052bf883e4",
     "vectors/sync/23-rekey-remote-edit-conflicts-a-local-edit.json": "5bec1da6775beb586e1ccf04d00b517c9e3338da49fe567b673ef6d95c9a3b1a",
     "vectors/sync/230-a-copy-over-the-target-sources-own-tombstone-revives-it-under-its-handle.json": "a772e0bf39c426f4dbdf214e57082e70623bdaceddfea0147b6cc079aea1e736",
+    "vectors/sync/231-an-edit-restating-the-deleted-body-does-not-beat-its-delete.json": "613a8bf9d5514e0da15923bf4f5e919fdbea31fc6aadd5a57c09e266272f5804",
+    "vectors/sync/232-a-card-revived-at-meta-keeps-its-retained-body-under-that-bodys-own-sort-key.json": "bfd56bbefe49fc0f9c59e4e304bf9b1903086ff86e754cb2b24086a5b8da4ce9",
     "vectors/sync/24-rekey-remote-edit-pulls.json": "8dc7ea3fe1b40843931ede7613eda160673e72c5eec8cec1c774cd5257e3dc23",
     "vectors/sync/25-a-create-waits-for-its-round.json": "ecceb304017675ce8ebb36d9adba457a6548de303473da71754316c81340088d",
     "vectors/sync/26-flags-removed-on-both-sides.json": "939523792b2876db084bd324a9760be11275585120e8ae782d180f9226dc902e",
@@ -386,7 +388,7 @@
       "/cases": 10
     },
     "vectors/search/extraction.json": {
-      "/cases": 7
+      "/cases": 8
     },
     "vectors/search/queries.json": {
       "/cases": 353,
@@ -408,5 +410,5 @@
       "/cases": 24
     }
   },
-  "sync": 230
+  "sync": 232
 }

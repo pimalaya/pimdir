@@ -12,7 +12,7 @@
   "additionalProperties": false,
   "properties": {
     "v": {
-      "const": 1
+      "const": 2
     },
     "now": {
       "type": "string"
@@ -149,6 +149,58 @@
               }
             }
           }
+        }
+      }
+    },
+    "event_summary": {
+      "type": "object",
+      "required": [
+        "uid",
+        "summary",
+        "location",
+        "dtstart",
+        "dtstart_tzid",
+        "dtstart_value",
+        "dtend",
+        "recurring",
+        "until"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "uid": {
+          "$ref": "#/$defs/maybe"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "location": {
+          "$ref": "#/$defs/maybe"
+        },
+        "dtstart": {
+          "$ref": "#/$defs/maybe"
+        },
+        "dtstart_tzid": {
+          "$ref": "#/$defs/maybe"
+        },
+        "dtstart_value": {
+          "enum": [
+            "date-time",
+            "date",
+            null
+          ]
+        },
+        "dtend": {
+          "$ref": "#/$defs/maybe"
+        },
+        "recurring": {
+          "enum": [
+            0,
+            1,
+            null
+          ]
+        },
+        "until": {
+          "$ref": "#/$defs/maybe"
         }
       }
     },
@@ -508,7 +560,8 @@
         "table": {
           "enum": [
             "mail_summary",
-            "file_summary"
+            "file_summary",
+            "event_summary"
           ]
         },
         "row": {
@@ -584,6 +637,22 @@
             "properties": {
               "row": {
                 "$ref": "#/$defs/file_summary"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "table": {
+                "const": "event_summary"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "row": {
+                "$ref": "#/$defs/event_summary"
               }
             }
           }

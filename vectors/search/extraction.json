@@ -1,5 +1,5 @@
 {
-  "v": 1,
+  "v": 2,
   "now": "2026-08-20T12:00:00Z",
   "note": "what extraction reads of a body, kind by kind (SEARCH.md sections 5 to 7), each case a store of its own, built and indexed as store.json is at now, then asked its queries as queries.json's cases are asked; hits are (account, seq) pairs compared as a set",
   "cases": [
@@ -1202,6 +1202,92 @@
         {
           "query": "kind:contact has:phone",
           "hits": [],
+          "complete": false
+        }
+      ]
+    },
+    {
+      "label": "a calendar item holding no body",
+      "note": "a calendar item is dated by the occurrences SEARCH.md section 7 expands from its body alone (section 8.1), so one holding none answers no date term, its sort key dating it no more than its summary; a term reading a calendar body then counts it, the answer incomplete",
+      "store": {
+        "collections": [
+          {
+            "id": "home/Calendar",
+            "account": "home",
+            "kind": "text/calendar"
+          }
+        ],
+        "items": [
+          {
+            "collection": "home/Calendar",
+            "seq": 1,
+            "link_id": "bodiless-event@example.org",
+            "flags": [],
+            "summary": {
+              "table": "event_summary",
+              "row": {
+                "uid": "bodiless-event@example.org",
+                "summary": "Planning",
+                "location": null,
+                "dtstart": "20260601T120000Z",
+                "dtstart_tzid": null,
+                "dtstart_value": "date-time",
+                "dtend": "20260601T130000Z",
+                "recurring": 0,
+                "until": null
+              },
+              "addresses": [],
+              "sort_key": "2026-06-01T12:00:00Z"
+            }
+          }
+        ],
+        "references": []
+      },
+      "queries": [
+        {
+          "query": "kind:event",
+          "hits": [
+            [
+              "home",
+              1
+            ]
+          ],
+          "complete": true
+        },
+        {
+          "query": "kind:event date:2026-06-01",
+          "note": "its sort key falls on the day, its body holds no occurrence",
+          "hits": [],
+          "coverage": {
+            "text/calendar": {
+              "bodiless": 1,
+              "missing": 0,
+              "unparseable": 0,
+              "encrypted": 0
+            }
+          },
+          "complete": false
+        },
+        {
+          "query": "date:2026-06",
+          "hits": [],
+          "complete": false
+        },
+        {
+          "query": "summary:planning",
+          "hits": [
+            [
+              "home",
+              1
+            ]
+          ],
+          "matched": [
+            [
+              "home",
+              1,
+              "summary"
+            ]
+          ],
           "complete": false
         }
       ]

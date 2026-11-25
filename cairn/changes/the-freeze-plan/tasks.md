@@ -20,7 +20,7 @@ change: the-freeze-plan
 - [x] The writer: a store from the canonical statements of queries/ alone, checked by checks/schema.sh's rules
 - [x] The scripted remote states, for scripted connectors
 - [x] The oracle: reads, counts, overlay, change feed, engine runs
-- [ ] The oracle: search answers
+- [x] The oracle: search answers (io-pimdir spec/generator/src/query.rs, cairn/log/2026-11-25-the-oracle-answers-search.md; following search-draft-19, cairn/log/2026-11-25-the-oracle-follows-search-draft-19.md)
 - [ ] Shrinking: a failing seed reduced and written as a vector
 - [x] Profiles: structure, count (100k items), bytes (large bodies)
 - [ ] Profile: quirks
@@ -54,23 +54,25 @@ change: the-freeze-plan
 
 - [x] README.md, every Status line and AGENTS.md: the three parts release together
 - [x] The query language reviewed once: grammar, every form and every refusal listed, each refusal coded (2026-11-25, cairn/log/2026-11-25-the-search-lines-close-for-the-freeze.md: the inventory's forms and refusals as 51 cases of vectors/search/queries.json, `thread:`, `dangling-operator`, `linked:<role>:` and the empty value reworded)
-- [ ] Query vectors: every form of the grammar, run over generator stores, not one fixed store
+- [x] Query vectors: every form of the grammar, run over generator stores, not one fixed store (io-pimdir tests/generated/search.rs, cairn/log/2026-11-25-the-oracle-answers-search.md; what a hit `matched` compared there since cairn/log/2026-11-25-the-oracle-follows-search-draft-19.md)
 - [x] Extraction vectors per kind: MIME parts, charsets, attachments; vCard fields; iCalendar fields, time zones, all-day items, recurrence expansion up to its bound; Unicode normalisation and case (2026-11-25, vectors/search/extraction.json, the bounds staying in store.json's series)
 - [x] Threads, snippets and coverage (`complete`, `filling`, `missing`) pinned by vectors (2026-11-25: threads in refresh.json and queries.json, snippets informative in SEARCH §6, `complete` on six more cases, `matched`, `unparseable` in extraction.json)
 - [x] A page token stays valid, or is refused coded, across a refresh between two pages (2026-11-25: a cursor is a position, SEARCH §8.2, five page cases of refresh.json; a token a client cannot read is its own to refuse, under no SEARCH code)
-- [ ] The generator's oracle answers every search the vectors ask
+- [x] The generator's oracle answers every search the vectors ask (2026-11-25: the 353 cases of queries.json, refusal spans and `matched` included, and the 83 queries of extraction.json, none disagreeing; refresh.json is not asked, the model following no owner write of it; cairn/log/2026-11-25-the-oracle-follows-search-draft-19.md)
+- [x] io-pimdir G27, a calendar item holding no body dated by its sort key: SEARCH §7 now says it yields no occurrence, io-pimdir follows (search-draft-19, extraction.json "a calendar item holding no body")
+- [ ] Owner ruling on io-pimdir G28: a series every rule of which ends on a day before its `DTSTART` occurs at its `DTSTART` (RFC 5545 §3.8.5.3) or never (ical-rs, io-pimdir: the shape of a series deleted from its first instance on); SEARCH §7 says neither (cairn/log/2026-11-25-the-oracle-follows-search-draft-19.md)
 - [x] The freeze checklist gains `search-v1.0.0`; checks/frozen.sha256 the search statements and signatures (2026-11-25: checks/frozen.sha256's header names the search-v1.0.0 block, checks/appended.py holds the case lists to a prefix; the statements and signatures are obsolete since 2026-11-22, the standard binding none, cairn/log/2026-11-22-a-smaller-pimdir.md)
 
 ## 6. io-pimdir's public API
 
-- [ ] The list of public items, each kept, made private or removed
-- [ ] `non_exhaustive` on every enum and struct expected to grow (`PimdirConflictPolicy` among them)
-- [ ] `PimdirReader::pending_actions` lists a row whose payload it cannot decode instead of failing the listing (STORAGE §15.4; finding G1 of io-pimdir tests/generated)
-- [ ] An owner write registering a source with no checkpoint (neverest opens its own connection for it, src/sync/storage.rs:143-182)
-- [ ] Private fields behind a constructor where a value must be guarded
-- [ ] Every public item documented and named by the family's rules
-- [ ] The MSRV stated; the features checked against the guidelines
-- [ ] `cargo semver-checks` in CI, baseline at 1.0.0
+- [x] The list of public items, each kept, made private or removed (io-pimdir 55d2702, its CHANGELOG Unreleased and cairn/log/2026-11-25-the-public-api-for-one-zero.md)
+- [x] `#[non_exhaustive]` on the enums consumers match and on nothing else, the family rule of 2026-11-21 barring it to keep an API growable: `PimdirError`, `PimdirSyncEvent`, `PimdirEnumerated`, `PimdirWaitReason`, `PimdirQueryErrorCode`; removed from `PimdirPushOutcome`; structs stay pub-fielded (io-pimdir cairn/spec/store.md, "The enums consumers match grow without a major")
+- [x] `PimdirReader::pending_actions` lists a row whose payload it cannot decode (done before, io-pimdir cairn/spec/store.md); `pending_arrivals` now does the same (io-pimdir tests/queue.rs `a_malformed_arrival_is_listed_opaque`, failing on 769dfba)
+- [x] An owner write registering a source with no checkpoint: `PimdirSourceStore::register` (io-pimdir 55d2702); neverest replaces src/sync/storage.rs:143-182 with it at its next move
+- [x] Private fields behind a constructor where a value must be guarded: `for_source` refuses an empty source id as `source-empty`; structs stay pub-fielded, built as literals
+- [x] Every public item documented and named by the family's rules (`deny(missing_docs)`, no provider names in docs, `Chunks` and `load::PimdirRefusal` renamed, no re-exports)
+- [x] The MSRV stated (1.89: base64-codec and quoted-printable-codec need it, `client` alone builds on 1.88) and the features checked (CI msrv job and the consumers' feature sets)
+- [x] `cargo semver-checks` in CI, baseline 1.0.0, running once 1.0.0 is on crates.io
 
 ## 7. Campaigns
 
@@ -90,10 +92,11 @@ change: the-freeze-plan
 Where the work stopped, for the next session. Every lane's findings are in cairn/log/ (entries of 2026-11-20) and in io-pimdir's tests/generated (`known()` lists and `#[ignore]` reasons).
 
 - [ ] Plan 5b, all but the release wording: the query language review and grammar-form coverage check, extraction vectors per kind, threads/snippets/coverage vectors, page tokens across a refresh (rule decided: a cursor names a position, sort key and seq)
-- [ ] Two readings to pin: a mutable revival whose member carries another body keeps the old one (vector 108 covers the bodiless case alone); a fill settling an item conflict takes the adopted body's summary (vectors 114, 115 to state it)
-- [ ] The generator follows G15 (seq order, STORAGE §9.1) and SYNC §5's next-run debt; then the replay's known findings G14 to G17 are lifted in io-pimdir tests/generated
-- [ ] Generator readings G18 (a move or copy out of an unsynced collection parks) and G19 (a move of a bodiless based item passes)
-- [ ] io-pimdir G20: `retained_by` of a removed item no source binds; G21: the oracle and automatic `sender` references (a MAY)
+- [ ] Two readings to pin: a mutable revival whose member carries another body keeps the old one (vector 108 covers the bodiless case alone); a fill settling an item conflict takes the adopted body's summary (vectors 114, 115 to state it). 2026-11-25: the fill's summary pinned by 114 and 115; the revival left for the owner, STORAGE §11.1 reading the other way and io-pimdir releasing the old body (cairn/log/2026-11-25-the-engine-findings-close-for-the-freeze.md)
+- [x] The generator follows G15 (seq order, STORAGE §9.1) and SYNC §5's next-run debt; then the replay's known findings G14 to G17 are lifted in io-pimdir tests/generated (2026-11-25: the generator draws a kept body's seq after the write's upserts, the debt already withheld; io-pimdir fixed G12 with vector 232; the replay's known findings and its ignored twin are gone, cairn/log/2026-11-25-the-engine-findings-close-for-the-freeze.md)
+- [x] Generator readings G18 (a move or copy out of an unsynced collection parks) and G19 (a move of a bodiless based item passes) (2026-11-25: io-pimdir spec/generator/src/queue.rs `apply_copy` follows STORAGE §15.3 and SYNC §7 on both, the scale test's own park and bodiless exclusion gone)
+- [x] io-pimdir G20: `retained_by` of a removed item no source binds; G21: the oracle and automatic `sender` references (a MAY) (2026-11-25: io-pimdir leaves `retained_by` NULL, tests/unbound_items.rs failing before; the scale test accepts the `sender` rule's references, every one the rule states from a mail, or none)
+- [ ] G29, for the owner: STORAGE §11.4 releases `base_object` alone, §5 pins `shared_object` past the item's body, §14 releases both "as §11.4 releases one"; io-pimdir clears both, the generator the base alone (cairn/log/2026-11-25-the-engine-findings-close-for-the-freeze.md proposes §11.4 naming both, storage-draft-19)
 - [ ] The full-size count profile rerun in release with the collection hierarchy (bytes passes)
 - [ ] The flaky crash failure seen once in five runs: not reproduced in 13 runs, likely a half-edited tree; watch for it
 - [x] ical-rs release with the bounded zone walk (ical a125d24), io-pimdir on it with `EXTRACTOR` moved, the hostile-zone search case out of tests/pending_vectors.txt (checks/implementation.sh is red until then)
