@@ -1,0 +1,25 @@
+{
+  "v": 11,
+  "label": "a rekey giving every member its old handle still bumps the generation",
+  "note": "the source moved its handle space (a UIDVALIDITY bump) and numbered the one member 10 again; the rekey re-writes it under that handle, dropping the old handle with reason Rekeyed as it drops every handle it re-writes, so the batch is a rebuild and the generation moves in its transaction, whatever handle each member landed on (SYNC.md §8, STORAGE §12)",
+  "store": {
+    "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual", "generation": 1 }],
+    "objects": { "m1": { "body": "fixtures/mail-basic.eml" } },
+    "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+    "bindings": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }],
+    "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "c0" }]
+  },
+  "run": { "verb": "rekey", "collection": "INBOX", "source": "imap" },
+  "remote": { "snapshot": { "items": [{ "handle": "10", "flags": ["\\Seen"], "revision": null, "meta": { "body": "fixtures/mail-basic.eml" } }], "vanished": [], "complete": true, "checkpoint": "d0" }, "fetch": {} },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "collections": [{ "id": "INBOX", "account": null, "kind": "message/rfc822", "conflict": "manual", "generation": 2 }],
+      "items": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "seq": 1, "flags": ["\\Seen"], "object": "m1", "level": 2, "deleted": 0 }],
+      "bindings": [{ "collection": "INBOX", "link_id": "basic-1@example.org", "source": "imap", "handle": "10", "base_flags": ["\\Seen"], "base_object": "m1", "base_revision": null, "base_present": 1 }],
+      "sources": [{ "collection": "INBOX", "source": "imap", "checkpoint": "d0" }]
+    }
+  }
+}

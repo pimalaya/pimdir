@@ -64,6 +64,7 @@
     "vectors/fixtures/mail-attachments.eml": "d0842b73267213b4c0b9f36ba5351e895ddb55267c17ed6fed41aba231b8cdd2",
     "vectors/fixtures/mail-bare-file.eml": "62b91709d66c9a64497a17af9fc3dbe6962decca9d660c109802edacb22bbd52",
     "vectors/fixtures/mail-bare-parts.eml": "92e9c0ca6376f3050e56e201147e15ae1a6a91e5cf80eaef30dfc5780d7d32f1",
+    "vectors/fixtures/mail-basic-rewritten.eml": "e3a1e1b40a8fed58fe71fb4ae71a054dd3d105a5b618fdc56e6289cd6b4623e8",
     "vectors/fixtures/mail-basic-twin.eml": "9803915cef88eda28dd9c86a4949b772505835ac38d466a3accfdde758484f77",
     "vectors/fixtures/mail-basic.eml": "19f9499d0a7cbd18b833c168a0d1de9639b2b7edc1f62e5b718548c2e79ceefc",
     "vectors/fixtures/mail-bracketless-id.eml": "50a19945dc3549c0581ab7f00f26d60b01d85d08d0dcdc7b8364914349b404ad",
@@ -301,6 +302,9 @@
     "vectors/sync/231-an-edit-restating-the-deleted-body-does-not-beat-its-delete.json": "613a8bf9d5514e0da15923bf4f5e919fdbea31fc6aadd5a57c09e266272f5804",
     "vectors/sync/232-a-card-revived-at-meta-keeps-its-retained-body-under-that-bodys-own-sort-key.json": "bfd56bbefe49fc0f9c59e4e304bf9b1903086ff86e754cb2b24086a5b8da4ce9",
     "vectors/sync/233-a-card-revived-by-a-member-carrying-another-body-adopts-it-and-releases-the-retained-one.json": "8c3b838a9144de4b230cfaeed801c2dedea5600836e2724b96d9f3abcf80b0fc",
+    "vectors/sync/234-a-parked-round-of-two-pages-keeps-its-first-pages-checkpoint.json": "ae2cb3b101bd6d6ceba7c1e8747e49028b7b0f6d7abe527cb7bce53a34431e08",
+    "vectors/sync/235-a-rekey-giving-every-member-its-old-handle-bumps-the-generation.json": "1953953294d0a5d4bf6b30e9407ee2ed052cedc776a6e07336a2c20697462874",
+    "vectors/sync/236-a-listing-restates-a-bodiless-summary-and-leaves-a-held-bodys-alone.json": "b19e0fd8324ed7cc59a5c530437a3daacedeb7f24c2908e89109009f038b6dd2",
     "vectors/sync/24-rekey-remote-edit-pulls.json": "8dc7ea3fe1b40843931ede7613eda160673e72c5eec8cec1c774cd5257e3dc23",
     "vectors/sync/25-a-create-waits-for-its-round.json": "ecceb304017675ce8ebb36d9adba457a6548de303473da71754316c81340088d",
     "vectors/sync/26-flags-removed-on-both-sides.json": "939523792b2876db084bd324a9760be11275585120e8ae782d180f9226dc902e",
@@ -413,5 +417,5 @@
       "/cases": 24
     }
   },
-  "sync": 233
+  "sync": 236
 }
