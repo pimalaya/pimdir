@@ -21,9 +21,9 @@ change: the-freeze-plan
 - [x] The scripted remote states, for scripted connectors
 - [x] The oracle: reads, counts, overlay, change feed, engine runs
 - [x] The oracle: search answers (io-pimdir spec/generator/src/query.rs, cairn/log/2026-11-25-the-oracle-answers-search.md; following search-draft-19, cairn/log/2026-11-25-the-oracle-follows-search-draft-19.md)
-- [ ] Shrinking: a failing seed reduced and written as a vector
+- [x] Shrinking: a failing seed reduced and written as a vector (io-pimdir spec/generator/src/shrink.rs and vector.rs, tests/generated/shrink.rs; proved on a planted flag-merge bug, cairn/log/2026-11-25-the-campaign-tools.md)
 - [x] Profiles: structure, count (100k items), bytes (large bodies)
-- [ ] Profile: quirks
+- [x] Profile: quirks (io-pimdir spec/generator/src/quirks.rs, eight histories replayed by tests/generated; what its first run found in cairn/log/2026-11-25-the-campaign-tools.md)
 - [x] Its own checks in `nix flake check`
 
 ## 3. io-pimdir's differential tests
@@ -76,7 +76,7 @@ change: the-freeze-plan
 
 ## 7. Campaigns
 
-- [ ] The campaign's seeds and profiles fixed and recorded
+- [x] The campaign's seeds and profiles fixed and recorded (io-pimdir tests/generated/campaigns.json, campaign-1 and campaign-2 at generator revision 1, run by tests/generated/campaign.rs, about an hour each on 32 cores)
 - [ ] Campaign 1 run, each finding sorted by door, the failures shrunk into vectors
 - [ ] Campaign 2 run; the stop rule met, or another campaign
 
