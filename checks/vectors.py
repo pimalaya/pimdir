@@ -2150,7 +2150,9 @@ for path in sync_cases:
     # policy's push over the server's body or a revived row's, is gated on one
     # whose body the run read, a member carrying it or a fetch answering it,
     # never on one nobody read; a body read and pushed over is kept, a retained
-    # item holding it (SYNC.md sections 5 and 6, STORAGE.md section 11.1).
+    # item holding it, a member carrying at the base's own revision a body the
+    # base does not hold being a server edit too (SYNC.md sections 5 and 6,
+    # STORAGE.md section 11.1).
     based = {b["handle"]: b for b in store.get("bindings", [])
              if b["collection"] == run["collection"] and b["source"] == run["source"]}
     fixtures_of = {object_label: spec["body"] for object_label, spec in store.get("objects", {}).items()}
@@ -2171,7 +2173,8 @@ for path in sync_cases:
                       for answer in remote.get("fetch", {}).get(push["handle"], {}).values())
         require(f"{label}: Update {push['handle']} is gated on a revision whose body was agreed or read, never pushed over an edit nobody read",
                 agreed or carried or fetched)
-        if carried and not agreed and "items" in after:
+        rewritten = carried and fixtures_of.get(base.get("base_object")) != carried[0]["meta"]["body"]
+        if carried and (not agreed or rewritten) and "items" in after:
             body = carried[0]["meta"]["body"]
             require(f"{label}: Update {push['handle']} pushed over a body it read keeps that body",
                     any(fixtures_of.get(item.get("object")) == body and item.get("retained") is True for item in after["items"]))

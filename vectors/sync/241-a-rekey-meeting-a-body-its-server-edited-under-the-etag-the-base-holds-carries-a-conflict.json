@@ -1,0 +1,37 @@
+{
+  "v": 11,
+  "label": "a rekey whose listing carries another body at the revision the old base holds, over a local edit, carries a conflict at that revision",
+  "note": "the local body c2 left the base c1 at r1. The source renumbered a.vcf into b.vcf, and its listing names r1, the old base's own revision, carrying c3: the server edited the card without moving its ETag. A carried body differing from the one the old base holds is a remote edit, so the placement lands on its new handle conflicted at r1 holding c3, its base untouched and the item keeping c2, and the next sync pushes nothing over c3. Reading the revision alone would carry the edit Dirty, pushed gated on r1 over c3 unread (SYNC.md sections 5 and 8; vector 23 the same case at a moved revision)",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual", "generation": 1 }],
+    "objects": {
+      "c1": { "body": "fixtures/card-basic.vcf" },
+      "c2": { "body": "fixtures/card-basic-edited.vcf" },
+      "c3": { "body": "fixtures/card-basic-renamed.vcf" }
+    },
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c2", "level": 2, "deleted": 0 }],
+    "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1 }],
+    "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d0" }]
+  },
+  "run": { "verb": "rekey", "collection": "Contacts", "source": "dav" },
+  "remote": {
+    "snapshot": {
+      "items": [{ "handle": "b.vcf", "flags": [], "revision": "r1", "carries": true, "meta": { "body": "fixtures/card-basic-renamed.vcf" } }],
+      "vanished": [],
+      "complete": true,
+      "checkpoint": "e0"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [],
+    "store": {
+      "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual", "generation": 2 }],
+      "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c2", "level": 2, "deleted": 0 }],
+      "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "b.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1, "conflicted": 1, "conflict_revision": "r1", "conflict_object": "c3" }],
+      "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "e0" }]
+    }
+  }
+}

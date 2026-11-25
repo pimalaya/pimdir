@@ -305,7 +305,13 @@
     "vectors/sync/234-a-parked-round-of-two-pages-keeps-its-first-pages-checkpoint.json": "ae2cb3b101bd6d6ceba7c1e8747e49028b7b0f6d7abe527cb7bce53a34431e08",
     "vectors/sync/235-a-rekey-giving-every-member-its-old-handle-bumps-the-generation.json": "1953953294d0a5d4bf6b30e9407ee2ed052cedc776a6e07336a2c20697462874",
     "vectors/sync/236-a-listing-restates-a-bodiless-summary-and-leaves-a-held-bodys-alone.json": "b19e0fd8324ed7cc59a5c530437a3daacedeb7f24c2908e89109009f038b6dd2",
+    "vectors/sync/237-a-card-its-server-edited-under-the-etag-the-base-holds-is-pulled.json": "e269fcf2c1257c342ed2f9500294b786ffb02669ffd379fdd5b99d53480f2516",
+    "vectors/sync/238-a-card-its-server-edited-under-the-etag-the-base-holds-conflicts-with-a-local-edit.json": "2bf4af01325044a30a0246c85efe09d82de1fba6b1786f9ffcd287d830c268d4",
+    "vectors/sync/239-prefer-local-keeps-a-body-its-server-edited-under-the-etag-the-base-holds.json": "1e7959b910c14ee3440b89abc8e3c2d9d700b152c38adea34c70a9b5f1006cb6",
     "vectors/sync/24-rekey-remote-edit-pulls.json": "8dc7ea3fe1b40843931ede7613eda160673e72c5eec8cec1c774cd5257e3dc23",
+    "vectors/sync/240-a-tombstone-meeting-a-body-its-server-edited-under-the-etag-the-base-holds-revives.json": "3fbce11dccad6791244a8b104420457da1f09a40a791b60ac085310ae56892b1",
+    "vectors/sync/241-a-rekey-meeting-a-body-its-server-edited-under-the-etag-the-base-holds-carries-a-conflict.json": "b932c557be7085a7866e60d37e1699669d2ef60ef5de5e0149ce75c23ac2e213",
+    "vectors/sync/242-prefer-remote-keeps-the-edit-it-drops-for-a-body-its-server-edited-under-the-etag-the-base-holds.json": "96231ce7b6751288c6aa5ab3b57c16b7016cb509cbd6a42eb8772741e4f3e1ba",
     "vectors/sync/25-a-create-waits-for-its-round.json": "ecceb304017675ce8ebb36d9adba457a6548de303473da71754316c81340088d",
     "vectors/sync/26-flags-removed-on-both-sides.json": "939523792b2876db084bd324a9760be11275585120e8ae782d180f9226dc902e",
     "vectors/sync/27-flags-merge-with-no-base-is-the-union.json": "366cc2c579ebd02ba7311dc6132ab4befe3d73b56415d6a47db549f321ca9d0c",
@@ -417,5 +423,5 @@
       "/cases": 24
     }
   },
-  "sync": 236
+  "sync": 242
 }

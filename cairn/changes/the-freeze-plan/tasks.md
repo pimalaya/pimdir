@@ -78,7 +78,7 @@ change: the-freeze-plan
 
 - [x] The campaign's seeds and profiles fixed and recorded (io-pimdir tests/generated/campaigns.json, campaign-1 and campaign-2 at generator revision 1, run by tests/generated/campaign.rs, about an hour each on 32 cores)
 - [ ] Campaign 1 run, each finding sorted by door, the failures shrunk into vectors
-- [ ] Owner ruling Q1 (the quirks profile's first run): a DAV listing carrying another body at the revision the base holds, an ETag a server edit did not move; SYNC §5 decides a pull by the revision alone. Recommended: a carried body the base does not hold is a remote edit whatever the revision, so a local edit pending over it conflicts rather than overwriting it unseen (cairn/log/2026-11-25-the-quirks-findings-close.md; io-pimdir tests/generated/campaign.rs `ETAG_KEPT_OVER_A_SERVER_EDIT` until then)
+- [x] Owner ruling Q1 (the quirks profile's first run): a DAV listing carrying another body at the revision the base holds, an ETag a server edit did not move; SYNC §5 decided a pull by the revision alone. Ruled 2026-11-25, reading B: a carried body differing from the one the base holds at its own revision is a remote edit, stated in SYNC §5, §6 and §8 with vectors 237 to 242, `ETAG_KEPT_OVER_A_SERVER_EDIT` removed from io-pimdir tests/generated/campaign.rs (cairn/log/2026-11-25-a-carried-body-under-an-unmoved-etag.md)
 - [ ] Campaign 2 run; the stop rule met, or another campaign
 
 ## 8. Release mechanics

@@ -1,0 +1,38 @@
+{
+  "v": 11,
+  "label": "a tombstone meeting a listing carrying another body at the revision its base holds is revived and pulled, its remove not pushed",
+  "note": "the card was deleted here over the base c1 at r1. The server edited it without moving its ETag: the listing names r1 again and carries c2. Read as a revision the base does not hold, it is a remote edit over a tombstone, which revives it: the item lives again holding c2 at Full, its summary and sort key c2's, the base c2 at r1, reported Added, and no Remove is pushed. Reading the revision alone would push the delete gated on r1, which the server accepts, over c2 unread (SYNC.md section 5, A carried body is a remote edit under an unmoved revision, and Deletes)",
+  "store": {
+    "collections": [{ "id": "Contacts", "account": null, "kind": "text/vcard", "conflict": "manual" }],
+    "objects": { "c1": { "body": "fixtures/card-basic.vcf" }, "c2": { "body": "fixtures/card-basic-edited.vcf" } },
+    "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c1", "level": 2, "deleted": 1, "sort_key": "jane doe" }],
+    "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": "c1", "base_revision": "r1", "base_present": 1 }],
+    "summaries": [
+      { "table": "contact_summary", "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "row": { "uid": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "fn": "Jane Doe", "kind": null, "org": null } }
+    ],
+    "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d0" }]
+  },
+  "run": { "verb": "sync", "collection": "Contacts", "source": "dav", "options": { "push": true, "rights": { "flags": true, "content": true, "add": true, "remove": true }, "conflict": "manual" } },
+  "remote": {
+    "snapshot": {
+      "items": [{ "handle": "a.vcf", "flags": [], "revision": "r1", "carries": true, "meta": { "body": "fixtures/card-basic-edited.vcf" } }],
+      "vanished": [],
+      "complete": true,
+      "checkpoint": "d1"
+    },
+    "fetch": {}
+  },
+  "expect": {
+    "pushes": [],
+    "outcomes": [],
+    "events": [{ "kind": "Added", "handle": "a.vcf" }],
+    "store": {
+      "items": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "seq": 1, "flags": [], "object": "c2", "level": 2, "deleted": 0, "sort_key": "jane a. doe", "retained": false, "retained_by": null }],
+      "bindings": [{ "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "source": "dav", "handle": "a.vcf", "base_flags": [], "base_object": "c2", "base_revision": "r1", "base_present": 1, "conflicted": 0, "conflict_revision": null, "conflict_object": null }],
+      "summaries": [
+        { "table": "contact_summary", "collection": "Contacts", "link_id": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "row": { "uid": "urn:uuid:4fbe8971-0bc3-4e1f-8a2d-1c9b7f6e5d40", "fn": "Jane A. Doe", "kind": null, "org": null } }
+      ],
+      "sources": [{ "collection": "Contacts", "source": "dav", "checkpoint": "d1" }]
+    }
+  }
+}
