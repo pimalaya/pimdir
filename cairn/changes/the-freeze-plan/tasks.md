@@ -76,10 +76,11 @@ change: the-freeze-plan
 
 ## 7. Campaigns
 
-- [x] The campaign's seeds and profiles fixed and recorded (io-pimdir tests/generated/campaigns.json, campaign-1 and campaign-2 at generator revision 1, run by tests/generated/campaign.rs, about an hour each on 32 cores)
+- [x] The campaign's seeds and profiles fixed and recorded (io-pimdir tests/generated/campaigns.json, campaign-1 to campaign-3 at generator revision 1, run by tests/generated/campaign.rs; campaign-2 took 2.7 hours on 32 workers)
 - [x] Campaign 1 run, each finding sorted by door, the failures shrunk into vectors: 4,180 jobs on io-pimdir e2aad6e, every difference traced to the quirks findings (vectors 234 to 236, cairn/log/2026-11-25-the-quirks-findings-close.md) and to Q1, a spec break (vectors 237 to 242); rerun on the fixed tree, three harness findings left and closed (io-pimdir cairn/log/2026-11-25-campaign-one-rechecked.md). One spec break, so campaign 2 starts the stop rule's count
 - [x] Owner ruling Q1 (the quirks profile's first run): a DAV listing carrying another body at the revision the base holds, an ETag a server edit did not move; SYNC §5 decided a pull by the revision alone. Ruled 2026-11-25, reading B: a carried body differing from the one the base holds at its own revision is a remote edit, stated in SYNC §5, §6 and §8 with vectors 237 to 242, `ETAG_KEPT_OVER_A_SERVER_EDIT` removed from io-pimdir tests/generated/campaign.rs (cairn/log/2026-11-25-a-carried-body-under-an-unmoved-etag.md)
-- [ ] Campaign 2 run; the stop rule met, or another campaign
+- [x] Campaign 2 run: 4,180 jobs on io-pimdir 52ea926, one seed failing (structure 2047), a harness finding, no engine or spec finding: a `sender` reference kept once a later row takes the address off the card, as STORAGE §14.2 states, which the harness judged against the final model alone (io-pimdir d5f2b89, cairn/log/2026-11-25-campaign-two.md, its structure profile rerun clean). No spec break: the stop rule's first campaign
+- [ ] Campaign 3 run (recorded in io-pimdir d5f2b89); with no spec break, the stop rule is met
 
 ## 8. Release mechanics
 
