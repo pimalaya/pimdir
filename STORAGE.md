@@ -1,6 +1,6 @@
 # Pimdir storage specification
 
-Status: storage-draft-18, the base, requiring no other part, released together with the sync and search parts
+Status: storage-draft-19, the base, requiring no other part, released together with the sync and search parts
 
 The storage part of the pimdir standard, and its base: a **SQLite database** (the index and the mutable state) plus a **content-addressed blob directory** (the bodies). The two layers over it are [SYNC.md](./SYNC.md), how sources reconcile through the store, and [SEARCH.md](./SEARCH.md), the index and query language over it.
 
@@ -94,11 +94,11 @@ No other file belongs in the directory: what an implementation keeps of its own 
 
 ### 4.2 Schema version
 
-`store_meta.format_version` names the version of this part whose schema the store holds: this draft's name, `storage-draft-18`, while this part is a draft, and `storage-vN` once released, N its major alone, written at creation and by every migration (§6).
+`store_meta.format_version` names the version of this part whose schema the store holds: this draft's name, `storage-draft-19`, while this part is a draft, and `storage-vN` once released, N its major alone, written at creation and by every migration (§6).
 
 **A draft's store opens under that draft alone.** While this part is a draft, a program of any profile MUST refuse a store whose `format_version` is not its own draft's name, naming both, and a store lacking the column, which a draft before storage-draft-08 wrote. A released program refuses every draft store the same way. A refused store is never reconciled, migrated, rebuilt, written nor deleted.
 
-**Which store is the earlier.** Format versions are ordered: none first, then the drafts by the number after `storage-draft-`, read as a decimal integer (`storage-draft-08` before `storage-draft-18`), then the releases by their major (`storage-v1` before `storage-v2`). A program refusing a store for its `format_version` MUST say, by this order, which of the two is the earlier, and what that asks: a store below its own was written by an earlier engine, whose queued writes it alone holds, so the user syncs it with that engine until nothing is queued, then moves its directory aside and syncs a new store; a store above its own asks for a later program. A marker this order does not read (another prefix, no number, a major with a leading zero) is named as it stands and ordered neither way. No refusal advises deleting the store. vectors/versions.json pins the order.
+**Which store is the earlier.** Format versions are ordered: none first, then the drafts by the number after `storage-draft-`, read as a decimal integer (`storage-draft-08` before `storage-draft-19`), then the releases by their major (`storage-v1` before `storage-v2`). A program refusing a store for its `format_version` MUST say, by this order, which of the two is the earlier, and what that asks: a store below its own was written by an earlier engine, whose queued writes it alone holds, so the user syncs it with that engine until nothing is queued, then moves its directory aside and syncs a new store; a store above its own asks for a later program. A marker this order does not read (another prefix, no number, a major with a leading zero) is named as it stands and ordered neither way. No refusal advises deleting the store. vectors/versions.json pins the order.
 
 The schema version is `PRAGMA user_version`, mirrored in `store_meta.version`. The two MUST agree; a store where they disagree is corrupt. Both move together, only in the transaction applying a migration (§6). This part's major version is the schema version; a minor version adds a rule or a vector and breaks no store; a patch is editorial. While this part is a draft, 0001_init.sql is edited in place and `user_version` stays `1`; once version 1 is released it never changes (§6).
 
@@ -169,7 +169,7 @@ Bytes live under objects/, one file per hash, at `objects/<hash[0:2]>/<hash>`: o
 
 **A name held is verified.** When the final name exists, the writer MUST verify the file already there against its name (§7) before it keeps it, and so MUST a writer that skips its write because it finds the name or its row there; it flushes the shard directory all the same before the row naming the body commits. A file that passes is kept and the temporary unlinked. A file that fails is never kept: an owner moves it into quarantine/ as §7 does, holding the staging lock exclusively, after verifying it again under the lock, then makes its move again; a producer fails its write and enqueues nothing, reporting the name. Any other failure of the move fails the write.
 
-**Reference counting**: `objects.refcount` MUST equal the number of pointers at the object across `items.object`, `items.conflict_object`, `bindings.base_object`, `bindings.conflict_object`, `bindings.shared_object` and `queue.object`, maintained in the same transaction as the writes, a producer's enqueue included (§15.1). `bindings.shared_object` names the common ancestor an engine merges from (SYNC.md §9), so it MUST outlive the item's own body until every binding has reconciled against what replaced it: one body per binding, released when the binding agrees with another.
+**Reference counting**: `objects.refcount` MUST equal the number of pointers at the object across `items.object`, `items.conflict_object`, `bindings.base_object`, `bindings.conflict_object`, `bindings.shared_object` and `queue.object`, maintained in the same transaction as the writes, a producer's enqueue included (§15.1). `bindings.shared_object` names the common ancestor an engine merges from (SYNC.md §9), so it MUST outlive the item's own body until every binding has reconciled against what replaced it: one body per binding, released when the binding agrees with another. The one exception is a message body a release frees (§11.4): a message never diverges (SYNC.md §9), so no merge reads an ancestor of it, and a `shared_object` naming that body is released with it.
 
 **An unreferenced object is not a deleted one.** A write MUST NOT delete a row at refcount zero nor unlink its blob: a consumer MAY index a body in one batch and attach it in a later one.
 
@@ -353,7 +353,7 @@ A body a merge does not adopt (SYNC.md §5, §9), one an overruling `Edit` settl
 - **Hidden from the reads**: a deleted row MUST be read as a tombstone under §14.1's live-only rule; the trash view lists every deleted row, `retained_at` saying whether a source still binds it.
 - **Purge is the only true delete** of a retained row: it deletes retained rows alone, releasing their pins in the same transaction; the bodies fall to the collector. A tombstone a source still binds is not purgeable.
 - **A reappearing link id revives**, as §9's table says: `retained_at` and `retained_by` cleared, `deleted` back to 0, `seq` kept, for a source-side resurrection and a queued `add` alike.
-- **A revive adopts the incoming body when there is one.** When the incoming placement carries none, for an immutable kind the retained body stays and becomes the binding's base; for a mutable kind the revived item holds no body, at `Meta`, and the retained body is kept as a retained item of its own (§11), keyed over the reviving binding's handle and reported (SYNC.md §5). The pins the retained row held are released only for what the revive replaced.
+- **A revive adopts the incoming body when there is one**, and the retained body it replaces is released, kept apart for no kind. When the incoming placement carries none, for an immutable kind the retained body stays and becomes the binding's base; for a mutable kind the revived item holds no body, at `Meta`, and the retained body is kept as a retained item of its own (§11), keyed over the reviving binding's handle and reported (SYNC.md §5). The pins the retained row held are released only for what the revive replaced.
 - `retained_by` is diagnostic; a retained item has no binding and pushes nothing.
 
 ### 11.2 Purging
@@ -368,7 +368,7 @@ An eviction stamps no tombstone, queues nothing and derives no push: the remote 
 
 ### 11.4 Releasing bodies below a date
 
-An owner keeping only some mail bodies frees the others by a **release**: every live mail item of a set of collections whose `sort_key` lies below an RFC 3339 instant (or with no ceiling, the undated below any) and that holds a body it does not need goes back to `Meta`, `object` cleared and `level` set to `1`, its summary, flags, bindings and `seq` kept. A binding whose `base_object` is that body releases it too and stays based, `base_present` saying so alone (§13).
+An owner keeping only some mail bodies frees the others by a **release**: every live mail item of a set of collections whose `sort_key` lies below an RFC 3339 instant (or with no ceiling, the undated below any) and that holds a body it does not need goes back to `Meta`, `object` cleared and `level` set to `1`, its summary, flags, bindings and `seq` kept. A binding whose `base_object` or `shared_object` is that body releases it too (§5) and stays based, `base_present` saying so alone (§13), so the body falls to the collector.
 
 An item needs its body while it or a binding of it is conflicted, a binding has no base or holds another body as its base, it has no binding, or a source with a `sources` row on the collection binds it not (SYNC.md §9). An unpushed flag holds no body back.
 
@@ -608,7 +608,7 @@ Every file under vectors/ states the version of its format as a top-level `v` an
 
 ## 17. Conformance
 
-An implementation conforms to this part by one profile, each holding the one before. It MUST meet every section its row names and pass the vectors its row names, and MUST state its conformance as each part's version and the profile it meets there, the layers' by SYNC.md §12 and SEARCH.md §12: `storage-draft-18 owner, sync-draft-16 engine`.
+An implementation conforms to this part by one profile, each holding the one before. It MUST meet every section its row names and pass the vectors its row names, and MUST state its conformance as each part's version and the profile it meets there, the layers' by SYNC.md §12 and SEARCH.md §12: `storage-draft-19 owner, sync-draft-16 engine`.
 
 | Profile | What it does | Owes | Vectors |
 | --- | --- | --- | --- |

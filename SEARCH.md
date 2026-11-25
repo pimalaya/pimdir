@@ -1,6 +1,6 @@
 # Pimdir search specification
 
-Status: search-draft-19, requiring storage-draft-18, released together with the storage and sync parts
+Status: search-draft-20, requiring storage-draft-19, released together with the storage and sync parts
 
 The search part of the pimdir standard: a full-text index over a store ([STORAGE.md](./STORAGE.md)) and the query language over it, cross-domain.
 
@@ -42,7 +42,7 @@ The index is derived. Every row is recomputed from the store and the bodies, and
 Two implementations sharing one store directory share these rules of its index:
 
 - **A SQLite file.** The index MUST be a SQLite database named index.db, at the path STORAGE §3 reserves.
-- **An index names its version and its shape.** Whatever its layout, an index holds a one-row table `index_meta` whose `format` is `pimdir-index`, whose `format_version` names the version of this part it follows, this draft's name, `search-draft-19`, while this part is a draft and `search-vN` once released (N its major), and whose `shape` names the layout of its tables, a name no other layout bears (io-pimdir's is `canonical`). Versions are ordered: drafts by their number, every draft below every release, releases by their major.
+- **An index names its version and its shape.** Whatever its layout, an index holds a one-row table `index_meta` whose `format` is `pimdir-index`, whose `format_version` names the version of this part it follows, this draft's name, `search-draft-20`, while this part is a draft and `search-vN` once released (N its major), and whose `shape` names the layout of its tables, a name no other layout bears (io-pimdir's is `canonical`). Versions are ordered: drafts by their number, every draft below every release, releases by their major.
 - **An indexer leaves an index that is not its own untouched.** An indexer MUST refuse an index.db holding no `index_meta`, one whose `shape` is not its own, and one whose `format_version` lies above its own, naming the index's version and shape and its own, and MUST NOT rebuild, write nor delete it: a person deleting index.db hands the store to another indexer, losing nothing (§1).
 - **A query client reads only an index it implements.** It MUST refuse an index whose `shape` or `format_version` it does not implement, naming both, rather than answer from it; while this part is a draft it implements its own draft alone, as STORAGE §4.2 has a program open only its own draft's store.
 - **One writer.** The indexer is the sole writer of index.db and MUST hold an exclusive advisory lock on index.lock for a refresh, on the owner lock's terms: taken whole-file with `flock(2)` on Unix or `LockFileEx` on Windows, never an `fcntl` record lock (STORAGE §8). Query clients open index.db read-only, any number at once, and take no lock.
@@ -128,6 +128,7 @@ The index materialises every occurrence within a **horizon**, default one year b
 - A journal spans its `DTSTART` alone.
 - A resource holding overrides and no master (an attendee's single instance) yields each override as an occurrence, spanning its own `DTSTART` to its end by the rules above.
 - A series no expander accepts (an `RRULE` with no `DTSTART`) yields no occurrence and MUST NOT fail the pass.
+- A series every `RRULE` of which states an `UNTIL` whose date falls before the date its `DTSTART` states has no instance at its `DTSTART`, so it yields no occurrence but those its `RDATE`s and overrides name; an `UNTIL` earlier on the date of `DTSTART` cuts nothing. This departs from RFC 5545 §3.8.5.3, where `DTSTART` defines the first instance of the set, because such a series is the shape a client leaves when it deletes a series from its first instance on, and search then shows what Pimalaya's calendars, which expand with ical-rs, show.
 - An item holding no body yields no occurrence, its sort key standing for none, and one whose body the index never read (§4) none until it is read: a date term matches neither, the coverage counting it (§8.2).
 
 **Bounds.** An item writes at most 10,000 occurrences: the first, in the order `start` then `end`, of those overlapping the horizon. An expander examines at most 1,000,000 periods of a recurrence rule, a period being each span of `INTERVAL` times the rule's `FREQ` in turn from the one holding its `DTSTART` (RFC 5545 §3.3.10), whether or not it yields an instance, a period before the horizon counting. It walks at most 10,000,000 instances of a recurrence rule, an instance being each start the rule yields in turn from its `DTSTART`, in its periods' order, whether or not it falls in the horizon or an `EXDATE` removes it, whatever `COUNT` the rule states beyond them. An item a bound stops records its **cut** with its occurrences: the instant from which its occurrences are not all written, the earliest of the start of its 10,001st occurrence, the start of the first period not examined and the start of the first instance not walked, none when no bound stops it. Every occurrence starting before the cut is written. A `VTIMEZONE` observance's rule is examined on the period bound, the offset of the last onset found standing beyond it, and cuts nothing.
@@ -357,7 +358,7 @@ The cases bind every index (§12), but a case sorted by `relevance` binds its or
 
 ## 12. Conformance
 
-An implementation offering search conforms by one profile or both, stated as STORAGE §17 says (`search-draft-19 indexer`, `search-draft-19 query client`) with the shape of the index it builds or reads (§2), and MUST meet every section its row names and answer the vectors it names.
+An implementation offering search conforms by one profile or both, stated as STORAGE §17 says (`search-draft-20 indexer`, `search-draft-20 query client`) with the shape of the index it builds or reads (§2), and MUST meet every section its row names and answer the vectors it names.
 
 **The hit-set guarantee.** Whatever its layout and full-text module (FTS5, FTS4, FTS3 or none), an index answers the hit sets vectors/search/ gives, folding as §5 says and matching as §8.5 says, but for the text §6 leaves out; its order by relevance is its own (§8.2).
 

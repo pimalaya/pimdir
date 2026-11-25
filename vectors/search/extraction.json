@@ -1291,6 +1291,100 @@
           "complete": false
         }
       ]
+    },
+    {
+      "label": "a series ending before it starts",
+      "note": "what SEARCH.md section 7 reads of a series every RRULE of which states an UNTIL on a date before the date its DTSTART states: no instance at its DTSTART, departing from RFC 5545 section 3.8.5.3, where DTSTART defines the first instance of the set, since such a series is the shape a client leaves when it deletes a series from its first instance on; an RDATE still names an instance, and an UNTIL earlier on the date of DTSTART cuts nothing, DTSTART its one instance",
+      "store": {
+        "collections": [
+          {
+            "id": "home/Calendar",
+            "account": "home",
+            "kind": "text/calendar"
+          }
+        ],
+        "items": [
+          {
+            "collection": "home/Calendar",
+            "seq": 1,
+            "link_id": "event-cut-before-start@example.org",
+            "flags": [],
+            "fixture": "fixtures/event-cut-before-start.ics"
+          },
+          {
+            "collection": "home/Calendar",
+            "seq": 2,
+            "link_id": "event-until-same-day@example.org",
+            "flags": [],
+            "fixture": "fixtures/event-until-same-day.ics"
+          }
+        ],
+        "references": []
+      },
+      "queries": [
+        {
+          "query": "kind:event",
+          "hits": [
+            [
+              "home",
+              1
+            ],
+            [
+              "home",
+              2
+            ]
+          ],
+          "complete": true
+        },
+        {
+          "query": "kind:event date:2026-09-14",
+          "note": "the DTSTART of a series whose one rule ended on 7 September",
+          "hits": [],
+          "complete": true
+        },
+        {
+          "query": "kind:event date:2026-09-07",
+          "note": "the date its UNTIL states",
+          "hits": []
+        },
+        {
+          "query": "kind:event date:2026-09-23",
+          "note": "its RDATE still names an instance",
+          "hits": [
+            [
+              "home",
+              1
+            ]
+          ],
+          "complete": true
+        },
+        {
+          "query": "standup",
+          "note": "a series with no instance at its DTSTART is indexed all the same",
+          "hits": [
+            [
+              "home",
+              1
+            ]
+          ]
+        },
+        {
+          "query": "kind:event date:2026-09-16",
+          "note": "an UNTIL at 08:00 on the date of a DTSTART at 15:00 cuts nothing",
+          "hits": [
+            [
+              "home",
+              2
+            ]
+          ],
+          "complete": true
+        },
+        {
+          "query": "kind:event date:2026-09-17",
+          "note": "and the rule yields no instance after DTSTART",
+          "hits": []
+        }
+      ]
     }
   ]
 }

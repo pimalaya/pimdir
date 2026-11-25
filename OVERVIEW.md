@@ -223,7 +223,7 @@ Normative: STORAGE §4.5.
 A summary holds what a list row shows and sorts by; the index answers what the store cannot: text, calendar time across a recurring series, mail threads, and what a card holds. An indexer folds the change feed and:
 
 - extracts each new body once, by hash, into a handful of fields (title, people, body, attachment, place, organisation, note), and indexes a bodiless item from its summary instead;
-- expands every calendar item's occurrences within a rolling horizon, from its body alone, so an event whose body the store does not hold has no date to search until it does;
+- expands every calendar item's occurrences within a rolling horizon, from its body alone, so an event whose body the store does not hold has no date to search until it does, and a series whose every rule ends on a day before it starts, which a calendar client leaves when a series is deleted from its first instance on, occurs at its start no more than a calendar shows it there;
 - records whether a card holds a phone, a postal address, a birthday or a photo, and its categories;
 - links messages into threads by their reply headers.
 

@@ -34,6 +34,7 @@
     "vectors/fixtures/card-titles.vcf": "5f520d92b10cfd58fbc7acf823e2a20852d299b18a49efc60015dd05cb3421e7",
     "vectors/fixtures/event-attach.ics": "60dd8fa85e494488929486005fbd62150bf0c6334854cad491fc13ec95ab6419",
     "vectors/fixtures/event-blank-uid.ics": "74e73c59979abd73ffe83f9b79139de3660bb730dc9372138cec61452e760b82",
+    "vectors/fixtures/event-cut-before-start.ics": "82b3fdd0c4256f46e5e5bb0479b0947d9964ec53059c269cdc94337d9b8f2bf2",
     "vectors/fixtures/event-date-new-year.ics": "6e0fa060b00f2b96f9f5a7aab7cc99c2738bb0971cd478b0892b916f7fa6d7f8",
     "vectors/fixtures/event-date-only.ics": "397052fb43d67750a07ee2cffab27c6a15a6a1acf03657435d9e536197227a63",
     "vectors/fixtures/event-dense.ics": "8d8120a617415867fb5380339602f0031f2133b7aa34ca1e6dc5a83a0e1847b7",
@@ -48,6 +49,7 @@
     "vectors/fixtures/event-recurring.ics": "d00ad5f9dfb109e46726fc9ecaf6364be43143120bd29f3e767738e553565496",
     "vectors/fixtures/event-sparse.ics": "3f44a404dec6e473bdb62cf84fe81b2918f1cfaa36e892ad564b8c7012e7f456",
     "vectors/fixtures/event-unknown-tzid.ics": "23c764669a0ae5b2116cb93f7087d269b6dd5df1bbc7df291e83fb120c1859e5",
+    "vectors/fixtures/event-until-same-day.ics": "7cdbe2e20ef2dac0100fb00c67ead99368d2bd7d0704a26e00216c1024311c1f",
     "vectors/fixtures/event-utc.ics": "bf516e3a930d54e2517f8bb12f008260962fd91569173e601d463a202c6caaf4",
     "vectors/fixtures/event-zoned-fall-back.ics": "b23d49d44a7340b2c07548d1fdff80a09e1a48822f2a006b19dcd05de88892eb",
     "vectors/fixtures/event-zoned-fold.ics": "652edb3204c3fc811fec3e1b7e3974b6c85ac1f9f5c029ebe79ad6d5a317eeac",
@@ -137,7 +139,7 @@
     "vectors/schema/sync.schema.json": "5847aac0b86a2361311fac14b67ad0db74afe7bb838c0098643738d4c76ab367",
     "vectors/schema/versions.schema.json": "189ca52345b56a64626844d8805ebaea10356ae5ecae651a8c9675610a500705",
     "vectors/search/chunks.json": "6fc4e98bdf1306f7d5a2635fa2db4c3d96dc8856fbd61df49bc2f67d4d44de3a",
-    "vectors/search/extraction.json": "2883acc2cf4aeaa6764427f585480aee6a4f1591d33d6ad5045373ed2183df3f",
+    "vectors/search/extraction.json": "bdb871c84378823071dacb70965cf0cb0ac3848441fc65930a4e46cef3802fdc",
     "vectors/search/queries.json": "07cf89c26051cda2eea3b445ee51161cff489504d2edac6f009bd046321999a7",
     "vectors/search/refresh.json": "0aa4fa348dc5614d27864a52dc93c7c215521ea7c78dcf05f1f937f9fb4d2d46",
     "vectors/search/store.json": "e782d0e8a53bab0891b4db528a95c8b67ab0b9916451d07f73bcae3bc3b2a9d1",
@@ -298,6 +300,7 @@
     "vectors/sync/230-a-copy-over-the-target-sources-own-tombstone-revives-it-under-its-handle.json": "a772e0bf39c426f4dbdf214e57082e70623bdaceddfea0147b6cc079aea1e736",
     "vectors/sync/231-an-edit-restating-the-deleted-body-does-not-beat-its-delete.json": "613a8bf9d5514e0da15923bf4f5e919fdbea31fc6aadd5a57c09e266272f5804",
     "vectors/sync/232-a-card-revived-at-meta-keeps-its-retained-body-under-that-bodys-own-sort-key.json": "bfd56bbefe49fc0f9c59e4e304bf9b1903086ff86e754cb2b24086a5b8da4ce9",
+    "vectors/sync/233-a-card-revived-by-a-member-carrying-another-body-adopts-it-and-releases-the-retained-one.json": "8c3b838a9144de4b230cfaeed801c2dedea5600836e2724b96d9f3abcf80b0fc",
     "vectors/sync/24-rekey-remote-edit-pulls.json": "8dc7ea3fe1b40843931ede7613eda160673e72c5eec8cec1c774cd5257e3dc23",
     "vectors/sync/25-a-create-waits-for-its-round.json": "ecceb304017675ce8ebb36d9adba457a6548de303473da71754316c81340088d",
     "vectors/sync/26-flags-removed-on-both-sides.json": "939523792b2876db084bd324a9760be11275585120e8ae782d180f9226dc902e",
@@ -388,7 +391,7 @@
       "/cases": 10
     },
     "vectors/search/extraction.json": {
-      "/cases": 8
+      "/cases": 9
     },
     "vectors/search/queries.json": {
       "/cases": 353,
@@ -410,5 +413,5 @@
       "/cases": 24
     }
   },
-  "sync": 232
+  "sync": 233
 }
