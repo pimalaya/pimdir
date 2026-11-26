@@ -82,8 +82,9 @@ change: the-freeze-plan
 - [x] Campaign 2 run: 4,180 jobs on io-pimdir 52ea926, one seed failing (structure 2047), a harness finding, no engine or spec finding: a `sender` reference kept once a later row takes the address off the card, as STORAGE §14.2 states, which the harness judged against the final model alone (io-pimdir d5f2b89, cairn/log/2026-11-25-campaign-two.md, its structure profile rerun clean). No spec break: the stop rule's first campaign
 - [x] Campaign 3 run: 4,180 jobs on io-pimdir d5f2b89 in 10,244 s on 32 workers, no seed failing, 23 differences all of the accepted `sender` class (campaign-2's harness finding), no engine or spec finding. No spec break: the stop rule's second campaign
 - [x] Live night 3 (2026-11-25): a spec reading taken for the owner to confirm, SEARCH §8.1, an empty span matches nothing whatever the kind (cairn/log/2026-11-25-the-empty-span-matches-nothing.md); it moves the engine, so the stop rule's count starts again on the commit carrying it, campaign-4 and campaign-5 recorded (io-pimdir tests/generated/campaigns.json, seeds 4001 and 5001 on)
-- [ ] Campaign 4 run on the commit carrying the empty-span reading
-- [ ] Campaign 5 run on the same commit; with no spec break in either, the stop rule is met
+- [x] Campaign 4 run: 4,180 jobs on io-pimdir b796d88 (the empty-span reading) in 8,806 s on 32 workers, no seed failing, 25 differences all of the accepted `sender` class, no engine or spec finding. No spec break: the stop rule's first campaign on the new engine
+- [x] Campaign 5 run on b796d88: 4,180 jobs in 9,424 s, three jobs failing (structure 5036, histories 5109), harness findings, no engine or spec finding: the harness demanded `sender` references STORAGE §14.2 does not owe, a pair standing since the store was written and one to a retained card (io-pimdir e8f4199, test-only, cairn/log/2026-11-26-campaigns-four-and-five.md)
+- [x] Campaign 5 rerun in full on io-pimdir e8f4199 (engine unchanged from b796d88): 4,180 jobs in 9,907 s on 32 workers, no seed failing, 22 differences all of the accepted `sender` class. No spec break in campaign 4 or 5 on the same engine: the stop rule (D5) is met, on io-pimdir e8f4199
 
 ## 8. Release mechanics
 
