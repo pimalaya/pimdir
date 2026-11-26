@@ -127,7 +127,7 @@
     "vectors/fixtures/todo-someday.ics": "cbad49748cacfebee3a43b6b4ad87d09d662edfaebcda29a652eaaff04fcc1ca",
     "vectors/fixtures/todo-waiting.ics": "72a107067723eacc1511a2989385588bd046eb5edd071b47694d101976ca52a4",
     "vectors/objects.json": "b901f40b9612c0e3244a72cc8aaaae1ae10e506c5e48a108d8dc2638ff6efcdd",
-    "vectors/payloads.json": "af80939e8867754d6be5ecadf95293c4617c4651a4a02e70412d37da0fa517af",
+    "vectors/payloads.json": "45aa256e7556e3c7e56b8eb69263d1e9b26a8e1a9cabf207d8e411224d3276db",
     "vectors/schema/manifest.schema.json": "96f560e9d11124166a2539390a36a1275438ce74bd95e8d8e307415252d6e678",
     "vectors/schema/objects.schema.json": "27d5271230b92359ea242565def4f1fab4bfde465bca7ce263c961c8cf94398b",
     "vectors/schema/payloads.schema.json": "cfeeaef33d63945aa2cd4ee9bce53b9b298595dccbea94b0a1f256e4c1959e8d",

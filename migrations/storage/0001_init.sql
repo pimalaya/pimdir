@@ -3,10 +3,9 @@
 -- Applied by a migration runner (§6) to a fresh database, inside a
 -- transaction; the runner sets `PRAGMA user_version = 1` on success. Loads on
 -- SQLite >= 3.18 (§4.1): a column's type is held by a CHECK on typeof() rather
--- than by STRICT, and nothing here calls a JSON function. While STORAGE.md is
--- a draft this file is edited in place, store_meta.format_version naming the
--- draft a store was written under (§4.2); once version 1 is released it never
--- changes, and a change to the schema is a migration to the next version (§6).
+-- than by STRICT, and nothing here calls a JSON function. This file is
+-- version 1's and never changes: a change to the schema is a migration to the
+-- next version (§6).
 
 -- Pages freed by a delete go back to the filesystem when the owner asks
 -- (§4.1). A database takes the mode only while it holds no table, so it is
@@ -17,9 +16,9 @@ PRAGMA auto_vacuum = INCREMENTAL;
 CREATE TABLE store_meta (
     id              INTEGER PRIMARY KEY CHECK (id = 1),
     format          TEXT    NOT NULL DEFAULT 'pimdir' CHECK (typeof(format) = 'text'),
-    -- The version of STORAGE.md whose schema the store holds (§4.2): the
-    -- draft's own name while it is a draft, storage-vN once released. A
-    -- program opens a draft's store only under that exact draft.
+    -- The version of STORAGE.md whose schema the store holds (§4.2),
+    -- storage-vN, N its major alone. A draft's store, which named its draft,
+    -- is refused.
     format_version  TEXT    NOT NULL CHECK (typeof(format_version) = 'text'),
     version         INTEGER NOT NULL CHECK (typeof(version) = 'integer'),  -- tracks user_version (§4.2)
     -- The lowest schema version a reader, and a producer, must know to open
@@ -46,9 +45,8 @@ CREATE TABLE store_meta (
     -- re-derives them.
     derivation      INTEGER NOT NULL CHECK (typeof(derivation) = 'integer'),
     -- The version of SYNC.md whose engine wrote the sync state (§14): NULL
-    -- until an engine writes, then its own, the draft's name while SYNC.md is
-    -- a draft and sync-vN once released. An engine refuses a version it does
-    -- not implement (SYNC.md §10).
+    -- until an engine writes, then its own, sync-vN. An engine refuses a
+    -- version it does not implement (SYNC.md §10).
     sync_version    TEXT    CHECK (typeof(sync_version) IN ('text', 'null')),
     -- Hands out the next item `seq`; only ever increases, so a public id is
     -- never reused store-wide (§9.1).

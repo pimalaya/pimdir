@@ -3,8 +3,7 @@
 #
 # Holds the bytes a release froze (README.md, Status): every line of
 # checks/frozen.sha256 names a file and the SHA-256 it had when its part was
-# released; the check fails when one is gone or holds other bytes. The list
-# is empty while every part is a draft, and the check then passes on nothing.
+# released; the check fails when one is gone or holds other bytes.
 # A line naming lists after its path freezes a case file to a prefix, which
 # checks/appended.py holds, and is skipped here.
 #

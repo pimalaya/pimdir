@@ -1,6 +1,6 @@
 # Pimdir search specification
 
-Status: search-draft-20, requiring storage-draft-19, released together with the storage and sync parts
+Status: search-v1.0.0, requiring storage-v1.0.0, released together with the storage and sync parts
 
 The search part of the pimdir standard: a full-text index over a store ([STORAGE.md](./STORAGE.md)) and the query language over it, cross-domain.
 
@@ -42,9 +42,9 @@ The index is derived. Every row is recomputed from the store and the bodies, and
 Two implementations sharing one store directory share these rules of its index:
 
 - **A SQLite file.** The index MUST be a SQLite database named index.db, at the path STORAGE §3 reserves.
-- **An index names its version and its shape.** Whatever its layout, an index holds a one-row table `index_meta` whose `format` is `pimdir-index`, whose `format_version` names the version of this part it follows, this draft's name, `search-draft-20`, while this part is a draft and `search-vN` once released (N its major), and whose `shape` names the layout of its tables, a name no other layout bears (io-pimdir's is `canonical`). Versions are ordered: drafts by their number, every draft below every release, releases by their major.
+- **An index names its version and its shape.** Whatever its layout, an index holds a one-row table `index_meta` whose `format` is `pimdir-index`, whose `format_version` names the version of this part it follows, `search-vN`, N its major alone (`search-v1` for this version), a draft's index naming its draft (`search-draft-NN`), and whose `shape` names the layout of its tables, a name no other layout bears (io-pimdir's is `canonical`). Versions are ordered: drafts by their number, every draft below every release, releases by their major.
 - **An indexer leaves an index that is not its own untouched.** An indexer MUST refuse an index.db holding no `index_meta`, one whose `shape` is not its own, and one whose `format_version` lies above its own, naming the index's version and shape and its own, and MUST NOT rebuild, write nor delete it: a person deleting index.db hands the store to another indexer, losing nothing (§1).
-- **A query client reads only an index it implements.** It MUST refuse an index whose `shape` or `format_version` it does not implement, naming both, rather than answer from it; while this part is a draft it implements its own draft alone, as STORAGE §4.2 has a program open only its own draft's store.
+- **A query client reads only an index it implements.** It MUST refuse an index whose `shape` or `format_version` it does not implement, naming both, rather than answer from it; it implements no draft, as STORAGE §4.2 has no release open a draft's store.
 - **One writer.** The indexer is the sole writer of index.db and MUST hold an exclusive advisory lock on index.lock for a refresh, on the owner lock's terms: taken whole-file with `flock(2)` on Unix or `LockFileEx` on Windows, never an `fcntl` record lock (STORAGE §8). Query clients open index.db read-only, any number at once, and take no lock.
 
 ## 3. The index
@@ -358,7 +358,7 @@ The cases bind every index (§12), but a case sorted by `relevance` binds its or
 
 ## 12. Conformance
 
-An implementation offering search conforms by one profile or both, stated as STORAGE §17 says (`search-draft-20 indexer`, `search-draft-20 query client`) with the shape of the index it builds or reads (§2), and MUST meet every section its row names and answer the vectors it names.
+An implementation offering search conforms by one profile or both, stated as STORAGE §17 says (`search-v1.0.0 indexer`, `search-v1.0.0 query client`) with the shape of the index it builds or reads (§2), and MUST meet every section its row names and answer the vectors it names.
 
 **The hit-set guarantee.** Whatever its layout and full-text module (FTS5, FTS4, FTS3 or none), an index answers the hit sets vectors/search/ gives, folding as §5 says and matching as §8.5 says, but for the text §6 leaves out; its order by relevance is its own (§8.2).
 

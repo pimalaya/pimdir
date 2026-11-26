@@ -1,6 +1,6 @@
 # Pimdir storage specification
 
-Status: storage-draft-19, the base, requiring no other part, released together with the sync and search parts
+Status: storage-v1.0.0, the base, requiring no other part, released together with the sync and search parts
 
 The storage part of the pimdir standard, and its base: a **SQLite database** (the index and the mutable state) plus a **content-addressed blob directory** (the bodies). The two layers over it are [SYNC.md](./SYNC.md), how sources reconcile through the store, and [SEARCH.md](./SEARCH.md), the index and query language over it.
 
@@ -94,19 +94,19 @@ No other file belongs in the directory: what an implementation keeps of its own 
 
 ### 4.2 Schema version
 
-`store_meta.format_version` names the version of this part whose schema the store holds: this draft's name, `storage-draft-19`, while this part is a draft, and `storage-vN` once released, N its major alone, written at creation and by every migration (§6).
+`store_meta.format_version` names the version of this part whose schema the store holds: `storage-vN`, N its major alone (`storage-v1` for this version), written at creation and by every migration (§6). A draft of this part wrote its own name, `storage-draft-NN`.
 
-**A draft's store opens under that draft alone.** While this part is a draft, a program of any profile MUST refuse a store whose `format_version` is not its own draft's name, naming both, and a store lacking the column, which a draft before storage-draft-08 wrote. A released program refuses every draft store the same way. A refused store is never reconciled, migrated, rebuilt, written nor deleted.
+**A draft's store is refused.** A program of any profile MUST refuse a store whose `format_version` names a draft, naming both versions, and a store lacking the column, which a draft before storage-draft-08 wrote: a draft's schema was edited in place, so its store is read by no release. A refused store is never reconciled, migrated, rebuilt, written nor deleted.
 
 **Which store is the earlier.** Format versions are ordered: none first, then the drafts by the number after `storage-draft-`, read as a decimal integer (`storage-draft-08` before `storage-draft-19`), then the releases by their major (`storage-v1` before `storage-v2`). A program refusing a store for its `format_version` MUST say, by this order, which of the two is the earlier, and what that asks: a store below its own was written by an earlier engine, whose queued writes it alone holds, so the user syncs it with that engine until nothing is queued, then moves its directory aside and syncs a new store; a store above its own asks for a later program. A marker this order does not read (another prefix, no number, a major with a leading zero) is named as it stands and ordered neither way. No refusal advises deleting the store. vectors/versions.json pins the order.
 
-The schema version is `PRAGMA user_version`, mirrored in `store_meta.version`. The two MUST agree; a store where they disagree is corrupt. Both move together, only in the transaction applying a migration (§6). This part's major version is the schema version; a minor version adds a rule or a vector and breaks no store; a patch is editorial. While this part is a draft, 0001_init.sql is edited in place and `user_version` stays `1`; once version 1 is released it never changes (§6).
+The schema version is `PRAGMA user_version`, mirrored in `store_meta.version`. The two MUST agree; a store where they disagree is corrupt. Both move together, only in the transaction applying a migration (§6). This part's major version is the schema version; a minor version adds a rule or a vector and breaks no store; a patch is editorial. 0001_init.sql is version 1's and never changes; a change to the schema is a migration to the next version (§6).
 
-**Compatibility versions.** `store_meta.read_version` is the lowest schema version a program must implement to read the store, and `store_meta.produce_version` the lowest to enqueue into it (§15); each migration states which it raises (§6). Once this part is released, an owner opens a store whose `version` it knows and migrates it to its own; a reader one whose `read_version` is at most its own schema version; a producer one whose `read_version` and `produce_version` both are, each reading a store below its own version as that version defines it. While this part is a draft the exact `format_version` governs alone, and the three stay `1`.
+**Compatibility versions.** `store_meta.read_version` is the lowest schema version a program must implement to read the store, and `store_meta.produce_version` the lowest to enqueue into it (§15); each migration states which it raises (§6). Once this part is released, an owner opens a store whose `version` it knows and migrates it to its own; a reader one whose `read_version` is at most its own schema version; a producer one whose `read_version` and `produce_version` both are, each reading a store below its own version as that version defines it.
 
 **A store above a program's version is judged by `store_meta` alone.** A released reader or producer opening a store whose `version` is above its own MUST judge it by six columns of `store_meta` and by nothing else of the schema: `format` is `pimdir`; `format_version` is `storage-v` followed by `version`; `version` equals `PRAGMA user_version`; `read_version`, and for a producer `produce_version` too, is at most its own version; `hash_algo` is one it knows (§6 step 2). No migration renames, drops nor redefines these six. Such a program MUST NOT refuse the store, nor read it as corrupt, for a `user_version` above its own, nor for a table, a column, an index, a trigger or a view it does not know: its SQL names its columns (§4.4), so what that version added moves nothing it reads or writes. What it compares of the schema's text is §18's.
 
-A program judging whether it opens a store at all (here and §6 step 2) MAY read `store_meta` with `*`, taking each column it knows by name, the row it judges being perhaps another draft's: the one exception to §4.4's column rule.
+A program judging whether it opens a store at all (here and §6 step 2) MAY read `store_meta` with `*`, taking each column it knows by name, the row it judges being perhaps another version's: the one exception to §4.4's column rule.
 
 ### 4.3 Tables
 
@@ -202,7 +202,7 @@ An added column raises neither only because every statement names its columns (�
 An owner opening a store runs these steps in order, and nothing else changes the schema:
 
 1. Read `PRAGMA user_version`, `0` for a fresh database, which goes to step 3.
-2. Read `store_meta`. A store §4.2 says the program does not open MUST be refused, naming both versions: a draft's store under another draft or a release, a store lacking `format_version`, a released store above the highest version the implementation knows. So MUST a store whose `hash_algo` the implementation does not know, naming it (§7). It is never reconciled, migrated, rebuilt nor written.
+2. Read `store_meta`. A store §4.2 says the program does not open MUST be refused, naming both versions: a draft's store, a store lacking `format_version`, a released store above the highest version the implementation knows. So MUST a store whose `hash_algo` the implementation does not know, naming it (§7). It is never reconciled, migrated, rebuilt nor written.
 3. For each migration above the store's version, in order: open a transaction, run the script, set `user_version` and the versions of `store_meta` the migration states, commit. A failed script rolls back and stops. A fresh database writes the `store_meta` row in the transaction applying 0001_init.sql.
 
 **A migration that rebuilds a table.** SQLite changes a table's constraints, and on the floor (§4.1) drops or renames a column, only by a rebuild, and with foreign keys on dropping a table deletes or nulls every row referencing it, with no error. A rebuild MUST NOT run in one transaction with foreign keys on, as step 3 runs any other migration. A migration states that it rebuilds, and then:
@@ -412,7 +412,7 @@ A **closed** vocabulary is held by a `CHECK`: a value outside it is refused at t
 - **`refusal`**, **`refused_key`**, **`refused_at`**: the reason the remote gave for refusing a change of this source for good, scrubbed of credentials (§18), that change's idempotency key (SYNC.md §4), and when; all three set or none. A refusal recorded replaces the one standing.
 - **`action`**: `add`, `set-flags`, `remove`, `move`, `copy`, `update`, `set-performer`, `set-property` (§15.3), an intent of Annex B.2, or an application's own. **`capability`**: a name of Annex B, or an application's own starting with `x-`.
 - **`payload`**: versioned JSON with a leading integer `v` (§15.3). **`target_collection`**: the collection a `move` or a `copy` names as `to`, or one an `add` names in `supersedes`, written by the producer with the payload and read by the owner in place of the payload's. **`error`**: `NULL` while pending, set when parked; free text, but a text beginning with `unconfirmed: ` says the row is an intent whose outcome is unknown (§15.2), and no other row's begins so.
-- **`sync_version`**: `sync-draft-NN` or `sync-vN` (§14). **`format_version`**: `storage-draft-NN` or `storage-vN` (§4.2).
+- **`sync_version`**: `sync-vN`, or a draft's `sync-draft-NN` (§14, SYNC.md §10). **`format_version`**: `storage-vN`, or a draft's `storage-draft-NN`, which §4.2 refuses.
 - **`store_id`**: 32 lowercase hexadecimal digits, 16 random bytes drawn at creation. **`incarnation`**: 1 at creation, raised by every restore (§8). No program changes `store_id`, and none lowers `incarnation`.
 
 ## 14. Operations
@@ -608,7 +608,7 @@ Every file under vectors/ states the version of its format as a top-level `v` an
 
 ## 17. Conformance
 
-An implementation conforms to this part by one profile, each holding the one before. It MUST meet every section its row names and pass the vectors its row names, and MUST state its conformance as each part's version and the profile it meets there, the layers' by SYNC.md §12 and SEARCH.md §12: `storage-draft-19 owner, sync-draft-16 engine`.
+An implementation conforms to this part by one profile, each holding the one before. It MUST meet every section its row names and pass the vectors its row names, and MUST state its conformance as each part's version and the profile it meets there, the layers' by SYNC.md §12 and SEARCH.md §12: `storage-v1.0.0 owner, sync-v1.0.0 engine`.
 
 | Profile | What it does | Owes | Vectors |
 | --- | --- | --- | --- |

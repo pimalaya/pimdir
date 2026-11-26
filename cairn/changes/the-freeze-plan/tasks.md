@@ -90,8 +90,8 @@ change: the-freeze-plan
 
 - [x] pimalaya/nix release workflow: refuse a tag whose version is not the crate's; mark a tag holding `-` a pre-release
 - [x] The freeze checklist of cairn/log/2026-11-13-the-freeze-gate-is-rehearsed.md read against the current drafts: rewritten for the trees of 2026-11-25 in checklist.md, beside this file, with io-pimdir 1.0.0's steps and CI green before any tag (owner, 2026-11-25)
-- [ ] The rehearsal of the freeze commit on scratch copies (checklist.md step 3)
-- [ ] io-pimdir passing the tree to freeze, tests/pending_vectors.txt empty, checks/io-pimdir.rev naming it
+- [x] The rehearsal of the freeze commit on scratch copies (checklist.md step 3), 2026-11-26: it found the later store refused as damaged in io-pimdir and the parts checks/tags.sh did not own, both fixed before the freeze commit (cairn/log/2026-11-26-the-v1-release.md)
+- [x] io-pimdir passing the tree to freeze, tests/pending_vectors.txt empty, checks/io-pimdir.rev naming it (2026-11-26)
 - [ ] Ready: the owner runs the freeze commit and the tags
 
 ## Left on 2026-11-20

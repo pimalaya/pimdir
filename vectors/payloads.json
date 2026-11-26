@@ -62,7 +62,7 @@
     { "action": "collection-delete", "outcome": "valid", "payload": { "v": 1, "source": "graph" } },
     { "action": "collection-delete", "outcome": "malformed", "payload": { "v": 1 }, "note": "no performer" },
     { "action": "collection-delete", "outcome": "malformed", "payload": { "v": 1, "source": "graph", "recursive": true }, "note": "a delete never takes the collections under it" },
-    { "action": "remove", "outcome": "unknown", "payload": { "v": 2, "seq": 5 }, "note": "a known action at a version this draft does not define: left pending, never read as v 1 though every member is one v 1 defines" },
+    { "action": "remove", "outcome": "unknown", "payload": { "v": 2, "seq": 5 }, "note": "a known action at a version this version does not define: left pending, never read as v 1 though every member is one v 1 defines" },
     { "action": "update", "outcome": "unknown", "payload": { "v": 2, "seq": 5, "object": "v4jutopv7gq2nicajxvdnxgjjgn4wjojvxarfn6mtkj4vza7gjra", "patch": true }, "note": "a known action at v 2 holding a member v 1 does not define: unknown, never malformed" },
     { "action": "set-flags", "outcome": "unknown", "payload": { "v": 2, "seq": "5" }, "note": "a known action at v 2 that would be malformed at v 1: unknown, never parked" },
     { "action": "set-property", "outcome": "valid", "payload": { "v": 1, "seq": 5, "key": "pimdir/label", "add": ["Receipts"] }, "note": "a local label added" },
@@ -92,7 +92,7 @@
     { "action": "set-property", "outcome": "malformed", "payload": { "v": 1, "seq": 5, "key": "pimdir/label", "add": "a" }, "note": "add is an array" },
     { "action": "set-property", "outcome": "malformed", "payload": { "v": 1, "seq": 5, "key": "pimdir/label", "add": ["a"], "set": ["b"] }, "note": "a member v 1 does not define" },
     { "action": "set-property", "outcome": "unknown", "payload": { "v": 2, "seq": 5, "key": "Pimdir/Label" }, "note": "a known action at v 2: unknown, never parked" },
-    { "action": "snooze", "outcome": "unknown", "payload": { "v": 1, "seq": 5, "until": "2026-12-01T09:00:00Z" }, "note": "an action this draft does not define" },
+    { "action": "snooze", "outcome": "unknown", "payload": { "v": 1, "seq": 5, "until": "2026-12-01T09:00:00Z" }, "note": "an action this version does not define" },
     { "action": "x-archive", "outcome": "unknown", "payload": { "v": 1, "seq": 5 }, "note": "an application's own action" },
     { "action": "x-archive", "outcome": "unknown", "payload": { "v": 3 }, "note": "an application's own action at a version of its own" },
 
@@ -103,7 +103,7 @@
     { "action": "set-flags", "outcome": "malformed", "payload": { "v": 1e0, "seq": 5, "flags": [] }, "note": "a known action whose v is written with an exponent, 1e0: likewise" },
     { "action": "add", "outcome": "malformed", "payload": { "v": null, "flags": [], "object": "v4jutopv7gq2nicajxvdnxgjjgn4wjojvxarfn6mtkj4vza7gjra" }, "note": "a known action whose v is null" },
     { "action": "submit", "outcome": "malformed", "payload": { "v": true, "source": "smtp", "from": "alice@example.org", "rcpts": ["bob@example.org"] }, "note": "a known action whose v is a boolean, which is no integer" },
-    { "action": "snooze", "outcome": "unknown", "payload": { "seq": 5 }, "note": "an action this draft does not define stating no v: unknown all the same, read no further" },
+    { "action": "snooze", "outcome": "unknown", "payload": { "seq": 5 }, "note": "an action this version does not define stating no v: unknown all the same, read no further" },
     { "action": "x-archive", "outcome": "unknown", "payload": { "v": "one" }, "note": "an application's own action, whatever its v" }
 
   ]

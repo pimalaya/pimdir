@@ -8,8 +8,7 @@
 # such list cut to that length. The check fails when the file is gone, a list
 # holds fewer entries, or the digest differs: a later version appends cases
 # and edits, reorders or removes none, nor anything else the file states.
-# The lines are none while every part is a draft, and the check then passes
-# on nothing. checks/frozen.sh reads the lines of two fields alone.
+# checks/frozen.sh reads the lines of two fields alone.
 #
 # The digest is taken over the JSON written with its keys sorted by code
 # point, no whitespace and no escape but those JSON requires, in UTF-8, so

@@ -89,13 +89,13 @@ The history follows [Cairn](https://github.com/pimalaya/cairn), the documents th
 
 ## Status
 
-Draft: **storage-draft-19**, **sync-draft-16** and **search-draft-20**, each named by a git tag. An implementation states the version of each part it conforms to.
+Released: **storage-v1.0.0**, **sync-v1.0.0** and **search-v1.0.0**, each named by a git tag. An implementation states the version of each part it conforms to.
 
 A released part is versioned `<part>-vX.Y.Z`: STORAGE's major is the store schema version, SEARCH's a breaking change to the query language or to what an answer states, SYNC's a breaking change to the connector seam or the engine.
 
-While STORAGE is a draft, a store opens only under the exact draft that wrote it, every other draft and every release refusing it: a program built on a draft is reinstalled over a new store, never upgraded.
+A store a draft wrote opens under no release, as it opened under no other draft: a program built on a draft syncs until nothing is pending with its last draft binary, then is reinstalled over a new store, never upgraded.
 
-The three parts are released together, as `storage-v1.0.0`, `sync-v1.0.0` and `search-v1.0.0` tagged at one commit, once the reference implementation passes every check and vector at the drafts to be released: the sync state a store holds follows the sync part, and the query language people type and the answers the search vectors pin bind every program offering search, so no part freezes without the others. Until then, schema version 1 is edited in place; after it, every schema change is a migration, stating which older readers and producers may still open the store.
+The three parts were released together, tagged at one commit once the reference implementation passed every check and vector: the sync state a store holds follows the sync part, and the query language people type and the answers the search vectors pin bind every program offering search, so no part froze without the others. Schema version 1 never changes: every schema change is a migration, stating which older readers and producers may still open the store.
 
 At a release, checks/tags.sh runs with `--released`, which fails on a part whose version has no tag, and checks/frozen.sha256 gains the digests of the bytes that version froze, which checks/frozen.sh holds from then on, and of the case lists it froze, which checks/appended.py holds to an intact prefix, so a minor version appends cases and edits none.
 

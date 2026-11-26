@@ -2,30 +2,406 @@
 # SHA-256, two spaces, the path from the repository's root. checks/frozen.sh
 # fails when a file listed here is gone or holds other bytes, so what version 1
 # froze cannot be edited in place by a later commit (STORAGE.md §4.2, §4.4,
-# §6, §15.3).
-#
-# Empty while every part is a draft. The commit releasing a part adds, with
-# `bash checks/frozen.sh . --digest <path...>`:
-#
-# storage-v1.0.0
-#   migrations/storage/0001_init.sql
-#   payloads/*.v1.schema.json
-# sync-v1.0.0
-#   vectors/sync/*.json (every case the release holds, one file each, so a
-#   minor version adds a case and moves none)
-#   vectors/schema/sync.schema.json
-# search-v1.0.0
-#   vectors/search/store.json
-#   every fixture a file of vectors/search/ names
-#   vectors/schema/search-*.schema.json
-#   and, with `python3 checks/appended.py . --digest <path> <pointer...>`, a
-#   line `<sha256>  <path> <pointer>=<count>...` for each case file:
-#   vectors/search/queries.json /cases /occurrences, and refresh.json,
-#   chunks.json and extraction.json /cases. checks/appended.py holds each to
-#   the cases its release held as an intact prefix, the file's other fields
-#   unchanged, so a minor version appends cases and edits none. The schemas
-#   keep their names: a case file's format, its `v` and its schema, is frozen
-#   with it, so a minor appends only cases its schema accepts, and a case
-#   needing a field it lacks goes in a new file under a schema of its own.
+# §6, §15.3). A line `<sha256>  <path> <pointer>=<count>...` freezes a case
+# file to an intact prefix of each list it names, the file's other fields
+# unchanged, which checks/appended.py holds: a minor version appends cases
+# its schema accepts and edits none, and a case needing a field the schema
+# lacks goes in a new file under a schema of its own.
 #
 # A line leaves this file only with the major version that drops its file.
+
+# storage-v1.0.0: the schema, the payload schemas, the storage vectors' schemas
+# and case lists.
+701f941c1aa8ae93848cadae236866207a307336e07852c5c0a0dfedfbb45ef8  migrations/storage/0001_init.sql
+fea1b79dc02327f4bc7cd3c03df9bb0ff4802fc5f84bfccb94c4619b9b9f4309  payloads/add.v1.schema.json
+baa43b7ad692d6517ce0bfdfbd230e6ac86f060594b8cf327c0dc29355f689c9  payloads/calendar-cancel.v1.schema.json
+cfa88045bc8e2b96ad17baa2dbec39e78b6dd58ab29e74857db0170f2e0d13c4  payloads/calendar-reply.v1.schema.json
+7a51f04cd4fa1e46b6aac02827ed4b97e446c3fb1a33eacb1d93e8262a5d8759  payloads/collection-create.v1.schema.json
+a4993ee051e5f66203451d02c172e3203a40187aacc6e93dbed160b15eb7ef99  payloads/collection-delete.v1.schema.json
+9c19b9da111bb20513f1fe71de6bd554b7c048eb026bcb33460ca413089cf51e  payloads/collection-rename.v1.schema.json
+5724d1de7b0d9a76538ad54ec4f40022353b068e7f2cb63563d9d2e2662b248c  payloads/copy.v1.schema.json
+8ce122eb35c4248cfa239caea8d1604669b79191777bd68231dd0560861a4ec9  payloads/move.v1.schema.json
+d2c7636f7012a4fa7c8ca50fe6b0dbce0722800ad2b645d577518ba0e4c06716  payloads/remove.v1.schema.json
+918948f4e7d6a9c8f583c135cb41d15ff1423c8f6ba6f8493917e66217a8c384  payloads/set-flags.v1.schema.json
+e3a3ef1b716fa3cf4632a6b7aedfd916fd7fe0c503f7efbf9f41f37ce62df1ca  payloads/set-performer.v1.schema.json
+4c288003807f9e22e723c6c920d9a585bd55f0e5c1248b0eb4351098b569f6a7  payloads/set-property.v1.schema.json
+7b89a35f30f0e897b3c4eef16fd5948d85eacc0dc6a6a391e0dc779ec18a84b0  payloads/submit.v1.schema.json
+d7a11e15cb3e32d95f341f3fdc351c52e66ab352c720615e3683179c1c3b0495  payloads/update.v1.schema.json
+27d5271230b92359ea242565def4f1fab4bfde465bca7ce263c961c8cf94398b  vectors/schema/objects.schema.json
+cfeeaef33d63945aa2cd4ee9bce53b9b298595dccbea94b0a1f256e4c1959e8d  vectors/schema/payloads.schema.json
+5dcd70af3d37d44420d5b5289ba5643a6e8905f0c9dc63d285e91a57287f4a54  vectors/schema/summaries.schema.json
+189ca52345b56a64626844d8805ebaea10356ae5ecae651a8c9675610a500705  vectors/schema/versions.schema.json
+df7e9fc3145ffb9b7619c4d4164841cc206a14d9c285d074b28c1e61c3b5cc61  vectors/objects.json /objects=13
+be8170db9ecb41230225efd25207d8d13a4c4a0560bd8afde1cbc4691e757874  vectors/payloads.json /cases=102
+f8c6e36644554c109e8089ad7929ef479adaf7d58a05213941c6e9dd13ae59a1  vectors/summaries.json /cases=73
+5eb8235f557bb4d97c5776473144a8a1cb82a6c48aa68ee2d8b60cf98df85baf  vectors/versions.json /cases=24
+
+# sync-v1.0.0: every case, one file each, and its schema.
+4c21981d4f790448e14bd822cd8cff8ade79cfea9a7e9fd86d6966e34d2b01ff  vectors/sync/01-remote-flag-pulled.json
+b0a6667bc59a01b1ecfac8072175454ad8d2d3cf023469bd8b91305bbf4b8a2a  vectors/sync/02-local-flag-pushed.json
+67040a35de16557bf15a53d3c5260f8780349e70b304c49c7911ecdd7726e8c1  vectors/sync/03-flags-merge-both-sides.json
+3e4495aaf4523c1190e46fbdf2c06c7ac798f4b8117541a62b4c854db4e7a2b4  vectors/sync/04-remote-delete-retains.json
+8cea7a422cdb15100f0499d1c44c4242706ea1dd1a5da8569efc1326ad185e65  vectors/sync/05-local-delete-pushed.json
+3f57706fa01da26c149f55ca376264579655d1cc5b0d3dd5bda57973a56b37c3  vectors/sync/06-a-listed-member-is-named-by-its-page.json
+c09c014b00840cfa06f4d617c52a829363a4abaec14d0a285bc6919570201add  vectors/sync/07-a-meta-upgrade-revisits-an-unheld-claim.json
+f97cdffcde47e678b1d3a623bd4636cc5f52cdab456054d564a42d25eb122740  vectors/sync/08-read-only-reverts-a-delete.json
+4755ab3a648e1b010808152e7597308b974c2aa2dc32865f1127ee1ee3ab682e  vectors/sync/09-two-sources-propagate-a-flag.json
+307a8a0c922c16cd1c0be30e502624520aec392aed28e9a7afa4c09f9a38b35b  vectors/sync/100-an-overruling-edit-keeps-the-diverging-body.json
+dae215e9d63e85018f46038f95eccb069f8413f639638e47af39136e48850aae  vectors/sync/101-an-overruling-edit-refuses-an-unread-diverging-body.json
+3366fca1bade0159625f03eda960b469af667cf09b46e737051a92d9179ebc46  vectors/sync/102-an-overruling-edit-keeps-the-item-conflict-body.json
+703c420a642511dc16b33ef7cb30968078fa2c06eecd92be4009a00f91f9f2f1  vectors/sync/103-a-person-resolving-a-conflict-discards-by-choice.json
+e652d1e6efda21b2b59cc47a68bd8b0ddf269fffee9ccd5c81b98d4203ebe70b  vectors/sync/104-a-second-policy-loser-is-minted-again.json
+f097b2dbef1593867e03a52ab6be1a8909c9202ed095a10c2035653cc6057d0c  vectors/sync/105-an-overruling-edit-keeps-both-diverging-bodies.json
+104339f42da1b5928b589e367951998d745f13383ecbc00e6ed688cb3df47f92  vectors/sync/106-an-empty-listing-parks-below-twenty.json
+8560d74499efa3e29108e31b024c433792ac2a024b01191a37a0b642745f85b7  vectors/sync/107-a-narrowed-round-keeps-what-its-filter-could-not-list.json
+e714e7f6e2a2b9318795855483d9025ae2ef8b6cbe13883bdd9dd1d73833be5a  vectors/sync/108-a-file-revived-at-meta-sets-its-retained-body-aside.json
+470f3e20e595ccbfcfa519219944dcfb9d7821f664e7bea7e2a8f15b10dec0f4  vectors/sync/109-a-retained-message-under-its-id-meets-another-message.json
+0c0b9f2a6218aa8342936f11818d8e42d5d43170ecad0a98a1b1ffbc26c11a72  vectors/sync/10-rekey-carries-state-by-link-id.json
+6853ccd4bd7b538b72489a760b02cd58cb7eeaf909711faebcca612f18f3e5bb  vectors/sync/110-a-retained-message-revives-only-at-its-size.json
+26b09065fac89618b2b1d652d9b3e82f8874474ffac0a11d3516968dbf98b60f  vectors/sync/111-a-pending-create-lands-only-on-agreement.json
+20bfebaaef74a042c6e52562587f31c015750f625ce07bfb249e6a3fee90db8f  vectors/sync/112-prefer-incoming-meeting-an-unread-item-body-records-the-divergence.json
+a999fc9ae3599de390bce5a3749dc0b7a17c9230c1ee422db9ba27ae1aa9b027  vectors/sync/113-prefer-existing-meeting-an-unread-item-body-records-the-divergence.json
+d52af5a2bc2d2fb0cbb0395cc852146379d158216039e10ec26618356978e0ef  vectors/sync/114-a-fill-settles-a-prefer-incoming-divergence.json
+e8d8702d4211c5c4a422d0116fabea7d12d7674afff275344a66b49501d854b0  vectors/sync/115-a-fill-settles-a-prefer-existing-divergence.json
+05255f7da434993679007500178ab086df53c4e72be4abb54c95a857c705e406  vectors/sync/116-an-upgrade-settles-a-prefer-local-conflict-keeping-the-server-body.json
+204474ade8b0157bb79232e513ec3f0b1cf6689063aab44f44ef9c7759cf4eff  vectors/sync/117-prefer-local-keeps-the-body-it-pushes-over.json
+39564550719bcb800a5e79a9c1a4db22b2738ebe4f7865e961926618ad2e85db  vectors/sync/118-a-person-settles-an-item-conflict-keeping-its-body-through-the-other-source.json
+1d23584502240612b8eef8913afa434e0e205967a9895730331b118ce461a700  vectors/sync/119-a-person-settles-an-item-conflict-taking-the-diverging-body-through-the-other-source.json
+4fb88b66d1fb790fa5cb9416479b64f3f1027348f5e70b5d8c567fded5e887c7  vectors/sync/11-remote-content-pulled.json
+f65bce854d864d6e246596b0a5c4893d9e2810416428a5e782c66dbc5b81d558  vectors/sync/120-a-person-settles-an-item-conflict-with-a-merged-body-through-the-other-source.json
+265b40a7a8b0b90b7bf74ff873329e9bf154590e8b5e66da7194be82e656d449  vectors/sync/121-a-person-settles-an-item-conflict-keeping-its-body-through-the-agreeing-source.json
+6dde8f1db5074bddd189da3916450333dbf79d9286fe51a4661ac663471bea7a  vectors/sync/122-a-person-settles-an-item-conflict-taking-the-diverging-body-through-the-agreeing-source.json
+c964feda5cbfc220cbf08fcab3d6c76e376cf19a8a0faf1d33c50aee72ecaa5a  vectors/sync/123-a-person-settles-an-item-conflict-with-a-merged-body-through-the-agreeing-source.json
+cfc185ffb4372e2047bf33e2c82bf22e0817adbf44d755bd03ee413a19b090f9  vectors/sync/124-an-ordinary-edit-over-an-item-conflict-parks.json
+014b1a353c3a87e58815dde0d09daa0cbe51c441dca84bcca4a74f68d5ab2010  vectors/sync/125-a-resolution-of-another-conflict-parks.json
+a3e934dddd94ff36e47f9728f87ef0d933b9a0c800544b031f9756c6fc74fbec  vectors/sync/126-a-resolution-meeting-no-conflict-parks.json
+79c4bfccb18f6cae65e42c8a9d6e9631ff0dfb92b7d9529c72ffa81d8b83fb19  vectors/sync/127-an-ordinary-edit-through-a-conflicted-binding-parks.json
+db931d9601a69a33dd2d57b2b57534c13232774149c0e6c4c46e295acf1255a4  vectors/sync/128-a-resolution-of-an-unread-diverging-body-parks.json
+00f8c796a1222415dffd52475eeb27de29be741100a3103300ba96d4e4e40093  vectors/sync/129-a-resolution-naming-one-of-two-conflicts-parks.json
+84ec6878148be8ceed30d0e13db519389d87975c07a913e56151978afb6ab656  vectors/sync/12-local-content-pushed.json
+553fe87975563f29319ad19c523b0025b41ad80bb26a8516a1d6d4f6c27b8e51  vectors/sync/130-a-fetch-meeting-a-failing-file-under-its-name-files-it-again.json
+aecefc3052d93a4c8ee38591235de5e7c483133d3e4c03c3ac149d673d113b00  vectors/sync/131-a-resolution-naming-both-conflicts-settles-both.json
+67a02d27027fa39c14c85b2b5c05c6a0b5fe9855b3af3b31a9d4604440656989  vectors/sync/132-an-edit-over-an-unread-base-waits-for-its-body.json
+820f69e6fce3d07d1094a1abbe31e255bf063417429eaaccccf3caa0ca8d16e6  vectors/sync/133-an-upgrade-reads-the-unread-base-under-an-edit.json
+5d27bf79d7ba95942fdca595513f0d1ecae8116ab27eecc356da5e310fe1f1e2  vectors/sync/134-a-capped-round-finds-no-member-absent.json
+ab31edd7689928abbc815404af49358e00b1e6f4421cd5046526687b6e1fa11e  vectors/sync/135-a-bodiless-copy-to-another-source-is-refused.json
+aa08c43731b2a7ddbbe4d7aaabf5b0de352554fd47e27cd9a682b8020a1c4f43  vectors/sync/136-a-delivered-create-waits-for-its-arrival.json
+ba9f0a2027c61971b5766e47e95b7a26fa9dbc79e2443ee54c8e3e284f58494e  vectors/sync/137-a-delivered-tombstone-lands-and-pushes-its-relocation.json
+349708e831aab65c42ddfdbb637c3bf7b459a92e869647ee61dbba22365ba90c  vectors/sync/138-a-delivered-create-lands-and-pushes-its-flags.json
+5d7e7bc5cf47ff91844035f44068888fe74e497f40d265f8511889746bf1ab79  vectors/sync/139-a-round-landing-no-delivered-create-keeps-it-waiting.json
+3f947c1f6a49a392bceabc0360ca4dcf84254acb09eab7d9254d562596f07022  vectors/sync/13-both-edited-manual-conflicts.json
+939dd35b926199b9640c0af50335aba414445ba9c2b86cda9abed641f02af814  vectors/sync/140-a-relocation-carried-out-as-a-delete-delivers-nothing.json
+1258836ca2f1ab6cd09679b5139bb448ef0d87dad625328d4fab90bb8bfe0321  vectors/sync/141-a-queued-flag-change-keeps-a-flag-landed-since-its-producer-read.json
+d5135d9ebb425d639b8179118b6ade0698b9d2373e3704453d6a04ca2fa0eb51  vectors/sync/142-a-flag-change-stating-its-base-over-an-unknown-set-is-refused.json
+852a7d952cdaaef9ba90b3e1792d41944e7cf05a642bfaa433ee827b129d72fb  vectors/sync/143-a-remove-meeting-a-conflict-it-does-not-name-is-refused.json
+241b3c499be6f8c21fabccd793a5443ba3ed3b1124ca56d9ca12fc274e739789  vectors/sync/144-a-remove-resolving-an-unread-diverging-body-is-refused.json
+cca422d53f0b3e93449c1bc2a7d10f457820a33291a114079593c4db27017c1d  vectors/sync/145-a-guarded-remove-refuses-a-replaced-body.json
+32a201d03c0fe2efa085bf4df040ed1fe017cc400530bda192a6b7dc8422586a  vectors/sync/146-a-remove-naming-an-item-conflict-settles-it.json
+186259113fd310974db1ed1327f0376a261c601e6b4e4305c77def56969b3eb4  vectors/sync/147-an-upgrade-fetches-rather-than-links-another-message-of-its-size.json
+e34587d32cc87a2e69773eb864d0837c093ac953a27a947f834167f49347b2b4  vectors/sync/148-a-message-disagreeing-across-mailboxes-shares-no-seq.json
+d81b08e4886e69d0613c21666b9d633d65b3116ed97f226028319c28603a0066  vectors/sync/149-a-bodiless-row-is-held-elsewhere-only-by-a-row-that-agrees.json
+74c05cdc70effbf1bfa7b5d6ba25e0c197eab8c6bc3847ae90824772989820b2  vectors/sync/14-both-edited-prefer-remote-pulls.json
+9c8c0a823b80b9cca844ebd2aaa6dbc03f63225128087307bf23ec10ff734ad3  vectors/sync/150-a-delivered-create-is-given-up-on-request.json
+b3e01f344fdfcee80159fdffbde3d67510d0aa67e2a968efc85ba38674c084a6  vectors/sync/151-an-abandon-is-refused-on-a-pending-create.json
+840d12e2cc4a2c547ad9ebd7b98307a5556e17f9d85005850e085f7984aab718  vectors/sync/152-a-tombstoned-delivered-create-landing-on-a-bodiless-arrival-revives.json
+6d2ac5d46d1f00293675ea4a9bd1caafabb6f1e6fa270e675926ea0ea7a02726  vectors/sync/153-a-guarded-edit-is-refused-over-an-emptied-item.json
+3264490d594f20bca9d715c6ea69a1f3d96d6eb3b8c231c803785eb7e82b052e  vectors/sync/154-a-guarded-remove-is-refused-over-an-emptied-item.json
+68c1ad3f9bc1026f3188200205e5d0b0f99b27d4ae75fe530b495fdf11212bc6  vectors/sync/155-a-move-through-a-conflicted-binding-is-refused.json
+7c2a0f95fb17297d4e0dfb9430b7e957d779c71849c050f3d35f5a78a2466105  vectors/sync/156-a-move-of-an-item-in-conflict-is-refused.json
+ee130c947352d68200450f7eba97b7afd9325a4f09bd1c6aeb94d53abbfea6e8  vectors/sync/157-an-abandon-beside-another-source-leaves-it-the-delete.json
+a83132aeeb219413455106179ad823fd53924bc85faeef89c1770853d0093bce  vectors/sync/158-a-body-entering-under-another-messages-key-records-no-stand-in.json
+0e2890a06ca5e4ca2fc0fff5d15041297685bc52330c3a3ac8301fd994a0c888  vectors/sync/159-a-capped-rekey-leaving-a-member-out-parks.json
+7e53e05a0021bfbb4dae4a783aa73e86c549de482b56a01fa8876ce64ead9f43  vectors/sync/15-both-edited-prefer-local-over-an-unread-body-conflicts.json
+e0006bc3d49031b1b82d4046ce491adf0ca34e1c98b73ccd30effbb51bb5f5e3  vectors/sync/160-a-band-narrowed-by-arrival-keeps-an-old-dated-member-its-enumeration-holds.json
+03fa92e293f5142ebb5d111761d3ca61b1ba79badd45229cd904245dc8fb5b5a  vectors/sync/161-a-narrowed-round-keeps-a-date-ahead-of-its-arrival-its-enumeration-holds.json
+90bad36b14d4da38448e56455ff7d05e6212da0fd641cb4df85468c234db57de  vectors/sync/162-a-refused-add-records-its-refusal.json
+66f1bd1f312a389e4751222e80519527f14798238324edc27d475ab43f66178e  vectors/sync/163-a-refused-add-is-held-while-it-stands.json
+56228e700f11ab707dd68a5793b30b636535d6d74522a734762b0d3c588550eb  vectors/sync/164-an-add-edited-since-its-refusal-is-pushed-and-lands.json
+56f5b2fa32494a6d40cea0dda62a892cf76f69cbed2d5ab7d7eb581be2933ed5  vectors/sync/165-an-accepted-update-clears-the-refusal-standing.json
+cdd6c51f4b914dcb3c1b67853314dbf38ba203f2692343809202626c50b8cc35  vectors/sync/166-a-refused-remove-is-held.json
+5f6291409225154c39dea2c7c03324f53e10af1e0bd8ef54813ae9198ade29ad  vectors/sync/167-a-withdrawal-takes-the-refusal-with-its-binding.json
+ed009643d6cbdc541e5b7a113b4f5b059ce316e2027b9056a48df022fe785249  vectors/sync/168-a-tombstone-over-a-conflicted-binding-pushes-no-remove.json
+57e81e783fad2391c35cc831334bc06f91404796e12582f00849593d10fde507  vectors/sync/169-a-delete-propagates-over-an-item-conflict.json
+36ae54f2302b02c98de86798946149a1a2a2ced665288eeee59520d9d4497f77  vectors/sync/16-vanished-local-edit-restages-a-create.json
+5ceca3e5328905df47c536977a98bdaf27bbd8b4f60387347a47884405edf806  vectors/sync/170-a-move-into-its-own-collection-is-refused.json
+687bdc96ea706ae67d8cf7a88fad4eb3a6fb5f1992254f83ed896449c92be77c  vectors/sync/171-a-refused-offered-create-is-bound-with-its-refusal.json
+2e9cb0b77fc4c8a1348d4a710ed876b800548003cb29092e106f5c6135171f20  vectors/sync/172-a-fetch-meeting-a-partial-file-with-no-row-files-it-again.json
+e61d45d1bed32355186a9fa434d5183437d2837f2cd93fd2761b5044633514bc  vectors/sync/173-an-upgrade-reading-its-base-keeps-the-item-conflict.json
+bb692e7abc503aee361d29a7a4efffdbb996b5430d7234b5ee4fda624fd00341  vectors/sync/174-keep-local-pushes-over-a-change-the-source-alone-made.json
+dcee4658dc957ac1e9643f28a857d3d7385422e05d60c820d34c3c578a0e5036  vectors/sync/175-keep-local-records-an-unread-change-the-source-alone-made.json
+a716c43868d4157287aa4176f8137cc89e7ccd8db21d6551690ecde5b283d397  vectors/sync/176-an-add-stating-another-bodys-hash-key-is-refused.json
+624ba59a08da2fe73afa3a37bb184430b18b827f48a17f593fce5aa5faeb57ea  vectors/sync/177-an-add-stating-its-own-hash-key-is-staged-under-it.json
+18e26684f7936390ccec7c3019e127571cea92fa38e747fca68bfe8a0c7aa6f2  vectors/sync/178-a-move-stages-the-targets-create-under-its-source.json
+c91cca07906a0d16d143b6826f560b7b18667198e263a2a27f65c1655beb3c35  vectors/sync/179-flags-set-on-a-pending-create-ride-along.json
+d29b97019d35213cbb18490e1fc105dcfd08d934d2198b9d9af19275bb1c3d21  vectors/sync/17-add-accepted-supersedes-the-provisional-handle.json
+eb4254ec6704684d0e1986c8fde1eb905c2f81c1f64692c2438dffae62db7350  vectors/sync/180-an-ordinary-edit-moves-the-agreement-point.json
+5029331c120229091c202e8eb9934d1bed0dfb044580ed128ae2287d257e85a5  vectors/sync/181-prefer-remote-over-an-item-another-source-changed-meets-prefer-incoming.json
+a260253d5b692678062bd99fe55e41ca34ac138a5d3bb311e84557fd4c0c89a6  vectors/sync/182-prefer-remote-over-an-item-another-source-changed-meets-prefer-existing.json
+81efc2d6eabde8a5e3bdd6e19bc5d9c7e1c4d176a148e0e1f415768c461f3001  vectors/sync/183-prefer-remote-over-an-item-another-source-changed-meets-manual.json
+0204cb2632b04997fd76ae18b802a23a95ad3ec2773f2943a57ab7f868e297cd  vectors/sync/184-a-member-joining-an-item-reports-added-alone.json
+f3308152a2910f323d8d619bf3b65a4351b42278f12029a941b7c2cf770cae8c  vectors/sync/185-a-member-joining-with-a-diverging-body-meets-prefer-incoming.json
+32e61bf415bb4d8bc59442b935b43e95618d6245f70be5c0bed1034b7f3383f1  vectors/sync/186-a-pending-create-beside-a-parked-round-derives-no-add.json
+c552170ed9a8026550312ad62ba3729bdcb3a0839b4b303a58a903a6850de07d  vectors/sync/187-a-member-joining-without-its-body-records-the-divergence.json
+d8afadd0af67144ce7c6229fe944005478e7a9ea74543c2be6bf57a31872e375  vectors/sync/188-an-upgrade-reading-a-joined-body-equal-to-the-items-clears-the-conflict.json
+988301d2cb5abf47e53bdc8b63a16f8c8cccef17df472f32aaf3d0c2aff542c2  vectors/sync/189-a-member-carrying-the-placements-own-body-is-the-lost-push.json
+834af39298de153483ba653b81059c6514de5aefacf51ef093a677d729112508  vectors/sync/18-add-rejected-stays-pending.json
+8c1fe76db606983ccc7dc001e693c0b451b2e0596a958fcc63f9dce4a371e0e6  vectors/sync/190-a-rekey-reports-an-arrival-added.json
+c54db19c52360b89f3f0cd33837c22b1ceec13a02a267a1126f35d2f7aa92114  vectors/sync/191-a-hash-keyed-item-is-offered-to-no-other-source.json
+1b919b01566d0361ae090e821d0df50fd34a09024b7813d345bca3ec5d14f06a  vectors/sync/192-a-server-edit-meeting-another-sources-change-is-the-collections-divergence.json
+fcf4b92435a68bb318bf382162cb105555052572759248c5508f4198f6bf08cb  vectors/sync/193-a-server-edit-meeting-another-sources-change-under-manual-conflicts-the-item.json
+dedad9a27938ba1d41a20e2c44958dc0a49536de4953fe3f00a58203676b0d0d  vectors/sync/194-a-write-draws-named-members-seqs-before-kept-bodies.json
+d4b0987619a1d18e3e7148200050cd50fa36fb47a3bccda6449054417818569e  vectors/sync/195-a-rekey-runs-the-flag-axis-on-its-listed-flags.json
+943c5f90b5cb671008aeaf1c103886d9d90495873f37aa39b8a02a7b4c88dd58  vectors/sync/196-a-relocation-stating-its-handle-lands-the-create-on-it.json
+1c8194ab2d8743e5dbef1fa6740021855a37fb6e1c2ebbaa949d602d998579e3  vectors/sync/197-a-listing-after-a-landed-relocation-mints-the-other-message.json
+36f89a3ff13b02fec682e5243394fe25bf78fe681f9fef7088a9fceed4f1d2bd  vectors/sync/198-an-upgrade-fetches-rather-than-links-a-body-under-another-server-object-id.json
+273145d0b1a1953cdc24342c1f4d3539ca562612f4b157078a61a4fff0e7fee8  vectors/sync/199-an-upgrade-links-a-body-under-an-equal-server-object-id.json
+6f23942ec9b35aa6b9aeafeaaa3fa1616da547870d0fe8dfc5f9957852a81805  vectors/sync/19-delta-vanished-retains.json
+9fd189ac8fe84e03417f0f8fbbbd0f776ca0366a3fbc9e0f8d0274db2886364d  vectors/sync/200-a-listing-records-the-server-object-id-it-states.json
+09d1020ac2fef97d046f1fe5437d32e8f060dbca98e42f1de75a7a528f859b08  vectors/sync/201-a-rekey-listing-unknown-flags-keeps-the-base.json
+ff46b47272f6495df7351baa0e5afe423b7df4452c8bfac7c145857642c5757e  vectors/sync/202-a-rekey-listing-no-revision-carries-the-conflict.json
+2cb09cd6c7f3a2d1632d78d6fc3a5d111398527c5f054b49e1ce45c2a4bd54bd  vectors/sync/203-a-rekey-lands-a-delivered-create-on-its-member.json
+c8da5ef00c45bcdffba28f31342939a97413171e208894dbde1056ef1734a438  vectors/sync/204-a-rekey-joins-an-offered-copy-to-its-member.json
+807c29153e608819c172951a7128f64f517e03bf5aee1291d29763e4b9888a15  vectors/sync/205-a-rekey-lands-a-pending-create-on-its-member.json
+c2f848b8c31c4212c39a229b58906f56267c892ec406cf017025772bdf1b5c59  vectors/sync/206-a-rekey-mints-a-member-disagreeing-with-a-pending-create-apart.json
+b809755df5a8d5b30c77f729bc52371e1e9ac183db953fa994e5e213b7593f47  vectors/sync/207-a-rekey-carries-a-conflicted-tombstone-listed-at-its-base-revision.json
+85ec8f096a5eb67ba5a7c39d1d07d26cc4986d00c270df7c503b037e3140d7d4  vectors/sync/208-a-rekey-carries-a-conflicted-tombstone-listed-at-its-conflict-revision.json
+3d266aab5485dcf2c5fd660e2baea3bb7609bde8789a6bafd8201e96f10df845  vectors/sync/209-a-rekey-records-a-tombstone-holding-an-edit-as-a-conflict.json
+21729b1c61a5085e531c817866cf1471944a0d22bf4df5ce4a89289cb7edf40d  vectors/sync/20-move-source-first-relocates.json
+312604e252a0b4b5cb0dff1de86b4053cefae558578f0a9f36ba2ace3c0ab210  vectors/sync/210-a-rekey-listing-a-handle-twice-keeps-its-first-entry.json
+094b8d358471d3182baea165e9c64ce6c4cc33f6a604ee75658e0aefc77bb719  vectors/sync/211-a-rekey-stores-an-arrivals-listed-body.json
+10b94036bef19b6c2b64967966b0d1b404928a1a106452469b991efb2fcd88c6  vectors/sync/212-a-rekey-pull-stores-its-listed-body.json
+a3d591bea52132956033b8ea4e9c43236da0e23da729cdbf18916328c0398f38  vectors/sync/213-a-rekey-carries-a-tombstone-taking-the-listed-flags.json
+a2ea4e65305aa9d975ea9849ab1b2e5cf2ace567dcafbb98ddf1948ff74050fa  vectors/sync/214-a-relocation-stating-its-handle-lands-the-create-on-the-flags-its-member-carries.json
+751107b5cca13e75aea361e9424e9e039d9cda0105b294305727b8249ce287af  vectors/sync/215-a-fourth-copy-of-one-message-takes-the-next-free-minted-key.json
+589a8f8a14760a5d261ccb1b24b45eba1a495dd0c74245ca7905f2ccf96634fa  vectors/sync/216-a-copy-over-its-sources-tombstone-revives-it-under-its-handle.json
+2023d00060f865384b3d2d17923fcf61b21d9ada9b0a7c5fd9c60a7b5b4e0262  vectors/sync/217-a-move-over-its-sources-tombstone-revives-it-and-deletes-the-original.json
+2ff079ece4ecbdc421937205d520a76f32a743ffa96df567942c169da2652bff  vectors/sync/218-an-add-over-its-sources-tombstone-revives-it-under-its-handle.json
+9c74afa02bf35ad724e7be87bd893d59d19483f79ca7a09696288c78f8a35197  vectors/sync/219-an-add-of-another-message-beside-its-sources-tombstone-is-minted.json
+6e6d36fb5836347ca11426072acfd4cad17924e268516fd3ffeee1ca0009cc80  vectors/sync/21-a-page-lands-a-pending-create.json
+6728a91860ce606c0870e8d623a604b59c1c0133c4eb7d89d4523890a54d0c1e  vectors/sync/220-a-copy-over-a-tombstoned-delivered-create-revives-it-delivered.json
+3c7e6d606e14026648dfe5a354955bf4b6a2b53a51db7ddaae69c1ab80fbdeb2  vectors/sync/221-a-flag-change-on-a-delivered-create-leaves-its-base-naming-nothing.json
+2b8103c74c9e246309a1471bab93637eec458e41a26783f573e4ad60baffc390  vectors/sync/222-an-upgrade-beside-another-member-of-its-id-fetches-rather-than-links.json
+34d5e13547361e5641f991bdd49528f81e9d5a3392b4ef55c69ede920156b3e1  vectors/sync/223-a-copy-taking-the-body-another-member-of-its-id-holds-releases-it-from-that-member.json
+7a68692b1357a96752cf3562939699284e7e4c1cfec974b80df62aac3e485ef1  vectors/sync/224-keep-local-pulls-a-flag-change-the-source-alone-made.json
+eceead97b93b46868c26b8cc27c984fd637dfbe40f7b2fff8f4f089152089a97  vectors/sync/225-keep-local-drops-a-member-the-source-alone-deleted.json
+5eb58d13956950ab07432bf5bbf233c204d3b3a477e64d7b07d95983db4df20f  vectors/sync/226-an-add-stating-an-alt-key-its-body-does-not-derive-is-staged-under-it.json
+4e52358af0fdfd1ae50cee8c2970d6ea4057c84ebdf547662451b824d387c6ba  vectors/sync/227-a-copy-into-a-collection-another-source-syncs-stages-the-create-under-it.json
+538d3a3d7d881a0dfd77f6281043f35a85dfea0d692dcec4bd76c76f5ec00cd3  vectors/sync/228-a-move-into-a-collection-another-source-syncs-stages-the-create-under-it.json
+c4e11f39fea30572f072f6122efb3c7ea237bcb5c020d0047be931052bf883e4  vectors/sync/229-a-move-into-a-collection-no-source-syncs-is-refused.json
+86bdf0df6fea79ff71e196cb3ad427d5d84df35ff5a3c1b4472fe489f7c0b15b  vectors/sync/22-rekey-carries-a-minted-key.json
+a772e0bf39c426f4dbdf214e57082e70623bdaceddfea0147b6cc079aea1e736  vectors/sync/230-a-copy-over-the-target-sources-own-tombstone-revives-it-under-its-handle.json
+613a8bf9d5514e0da15923bf4f5e919fdbea31fc6aadd5a57c09e266272f5804  vectors/sync/231-an-edit-restating-the-deleted-body-does-not-beat-its-delete.json
+bfd56bbefe49fc0f9c59e4e304bf9b1903086ff86e754cb2b24086a5b8da4ce9  vectors/sync/232-a-card-revived-at-meta-keeps-its-retained-body-under-that-bodys-own-sort-key.json
+8c3b838a9144de4b230cfaeed801c2dedea5600836e2724b96d9f3abcf80b0fc  vectors/sync/233-a-card-revived-by-a-member-carrying-another-body-adopts-it-and-releases-the-retained-one.json
+ae2cb3b101bd6d6ceba7c1e8747e49028b7b0f6d7abe527cb7bce53a34431e08  vectors/sync/234-a-parked-round-of-two-pages-keeps-its-first-pages-checkpoint.json
+1953953294d0a5d4bf6b30e9407ee2ed052cedc776a6e07336a2c20697462874  vectors/sync/235-a-rekey-giving-every-member-its-old-handle-bumps-the-generation.json
+b19e0fd8324ed7cc59a5c530437a3daacedeb7f24c2908e89109009f038b6dd2  vectors/sync/236-a-listing-restates-a-bodiless-summary-and-leaves-a-held-bodys-alone.json
+e269fcf2c1257c342ed2f9500294b786ffb02669ffd379fdd5b99d53480f2516  vectors/sync/237-a-card-its-server-edited-under-the-etag-the-base-holds-is-pulled.json
+2bf4af01325044a30a0246c85efe09d82de1fba6b1786f9ffcd287d830c268d4  vectors/sync/238-a-card-its-server-edited-under-the-etag-the-base-holds-conflicts-with-a-local-edit.json
+1e7959b910c14ee3440b89abc8e3c2d9d700b152c38adea34c70a9b5f1006cb6  vectors/sync/239-prefer-local-keeps-a-body-its-server-edited-under-the-etag-the-base-holds.json
+5bec1da6775beb586e1ccf04d00b517c9e3338da49fe567b673ef6d95c9a3b1a  vectors/sync/23-rekey-remote-edit-conflicts-a-local-edit.json
+3fbce11dccad6791244a8b104420457da1f09a40a791b60ac085310ae56892b1  vectors/sync/240-a-tombstone-meeting-a-body-its-server-edited-under-the-etag-the-base-holds-revives.json
+b932c557be7085a7866e60d37e1699669d2ef60ef5de5e0149ce75c23ac2e213  vectors/sync/241-a-rekey-meeting-a-body-its-server-edited-under-the-etag-the-base-holds-carries-a-conflict.json
+96231ce7b6751288c6aa5ab3b57c16b7016cb509cbd6a42eb8772741e4f3e1ba  vectors/sync/242-prefer-remote-keeps-the-edit-it-drops-for-a-body-its-server-edited-under-the-etag-the-base-holds.json
+8dc7ea3fe1b40843931ede7613eda160673e72c5eec8cec1c774cd5257e3dc23  vectors/sync/24-rekey-remote-edit-pulls.json
+ecceb304017675ce8ebb36d9adba457a6548de303473da71754316c81340088d  vectors/sync/25-a-create-waits-for-its-round.json
+939523792b2876db084bd324a9760be11275585120e8ae782d180f9226dc902e  vectors/sync/26-flags-removed-on-both-sides.json
+366cc2c579ebd02ba7311dc6132ab4befe3d73b56415d6a47db549f321ca9d0c  vectors/sync/27-flags-merge-with-no-base-is-the-union.json
+6733687edf6017cc5223980802f597ea51c2fb284fa9a8dd21fa447aad63cc1d  vectors/sync/28-two-sources-diverge-under-manual.json
+f1fb3a35982552a69fd4223c33a22893e4a83877a2ef3bfe8b4476e45bdb6ded  vectors/sync/29-rekey-keeps-a-pending-create.json
+9825f40b43f9c4e8fb8ea34010823625dfb336011cb7dd0a3afd2b28a9489c86  vectors/sync/30-full-upgrade-moves-the-base.json
+eb67952e15d6885f1a50e688f78a99c2346e6ecd7b8acca6aef6c5be2fffb3eb  vectors/sync/31-fallback-keys-collide-and-mint.json
+c00b7e6ea28834b01050d9d8a589f94ac0b994e09284fcc7b07e8a92ba618070  vectors/sync/32-remove-settles-a-conflict.json
+417eebe205572f1f00d67dcc8ac3ae1d117941d70a7993b9399dd83999fb60ff  vectors/sync/33-an-item-conflict-reports-a-server-edit.json
+9f38c90ab99c7f68a40a1e4a57b2d46dcfdb7794d707c0e6a46d45d6ab84e936  vectors/sync/34-a-paged-round-lands-page-by-page.json
+fd1e82ddb7e909c2a8320c6a5ed8cbac6313c4db82ff5db6ea4de3416d9db153  vectors/sync/35-an-interrupted-round-resumes-from-its-cursor.json
+4a831163f04af4355168018b26402b11b97550d8a9d46d0ae9144af0820e48a6  vectors/sync/36-a-rejected-cursor-restarts-the-round.json
+7c7fc274f0ea1c464fbbaa14669c5374d0e7ae9378e58c3f82073dd43117f04c  vectors/sync/37-an-old-date-received-today.json
+561bdbd50aa19ca244564b222623a0f4bd78507cf4d87d27088738fcda435872  vectors/sync/38-a-future-date-is-in-scope.json
+ad218c167e0f798230ce6c9f40cd482cdd0767b3e4d2c755538af2c31194ec70  vectors/sync/39-no-date-is-always-in-scope.json
+288c5a4d164311d61e13fca499ce78f3bc9d73880f1602ca97227faa8d0867d6  vectors/sync/40-an-explicit-removal-applies-out-of-scope.json
+a212e4f11afd7b24dcd2d4434e6c9964e30f2dfa19c13f86a7778cd3fe78ff26  vectors/sync/41-a-widening-lists-the-band-it-lacks.json
+027967b0ddb2cfb1e071a335f6701ae735c8150f887184e42c45f3be7b26af3a  vectors/sync/42-a-collection-removes-nothing.json
+bdb7570551e5bbbdad30eb965ef49f77def63d5efa7cb2d4b52236675d7f7f7c  vectors/sync/43-an-out-of-scope-create-waits.json
+ef17ef43eeb04082cc0dcf94ad69bd55cd508db6a230fe42db04728ccbec590b  vectors/sync/44-the-attachment-mark-without-the-body.json
+6bd03ef17413a0f40e6d6d07c5dc910264681e5b1d3ff45dc45086491d87aa9b  vectors/sync/45-the-walk-replaces-the-mark.json
+cf7054fa0aca81c932d4e0c2040d1940094d99ea46c7117b82a9204eb9f486c0  vectors/sync/46-a-band-round-keeps-an-undated-member.json
+82d4542ffb67f2b71c4b5ec95a2142ef9720142a0c9b179a365856df318bb34b  vectors/sync/47-a-whole-scope-round-drops-an-undated-member.json
+6135ea2f4dbfaf34bf3e70c06d0f62f8841060ec38d3d8ab966c82167bce12e0  vectors/sync/48-a-move-beside-a-held-copy-relocates.json
+b5071aa48b2270033dcfec8243790a2152d4094a939c11aa6fb52969b4b0e532  vectors/sync/49-a-create-beside-a-held-copy-copies-from-its-origin.json
+c9d6a87dd3ca64bb73866d7dae3a683a96764e748206c3d2f512523a2494ca3d  vectors/sync/50-a-page-lands-a-create-under-a-minted-key.json
+3b1aaf7de6efcf04f47b4fe203745c8073cff4f1e9ff94630205c66dc4b97f42  vectors/sync/51-remove-withdraws-a-pending-create.json
+423cf79f93b4dc64899e8ceb1114a99b6cb6899064e240cbf21c559a1761154d  vectors/sync/52-a-held-body-keeps-its-size.json
+884c3c4e1ccdc3acebe601b7ecb4456e3062ae3b8e2cf9bb2737b16d69ad8d98  vectors/sync/53-the-body-restates-the-size.json
+8e16d23d1ed9c8e78a71cd5a8adb4c53d0fea2b128f5c50b9b711382d0bd75c0  vectors/sync/54-a-released-body-is-a-meta-row.json
+3a1e8c5598e4330369349448e2e1150de0f71432dcd10ff32f59539ad67c21aa  vectors/sync/55-a-file-is-named-at-meta.json
+df22ced918e8e56889c8d807589cc5e02b5eff05ecf4ac77d017deefc6f02e6f  vectors/sync/56-a-file-is-fetched.json
+c8db44db82840c4a0b4ead5fc7a0491036ce6f757a3cdbec3ad0c9e81f3e12ff  vectors/sync/57-a-remote-file-edit-is-pulled.json
+b80aba7a15b2bb93ec47b4f17673d50776f2c5b38f29bbd097c2ca7c66afd6d8  vectors/sync/58-a-local-file-edit-is-pushed.json
+1cd008c605139af7ff5b1e116053b8d88164e62403bca28428172820e1c29c6c  vectors/sync/59-concurrent-file-edits-conflict.json
+935bbcd7fc20e6f2897ef47dfe39c6684951c3937ebb824ad450bed51e45e4e5  vectors/sync/60-a-renamed-file-keeps-its-identity.json
+735355238a568c91190b95bb7f34dc8c3627705429126b2c601eb2808309036e  vectors/sync/61-a-remote-file-delete-retains.json
+ca90ea29a1fe3468941ad7ef3cd3a2e3ac20872538202ee4b2dffa1773baada5  vectors/sync/62-a-delta-head-lands-an-arrival-the-round-keeps.json
+e769dd970db87534b639a8d00d9ce136a272f97a1a015514d7c47196461d806e  vectors/sync/63-a-removal-a-head-states-applies-at-once.json
+629b6e5a835cf989824046a82fe20e77f3a4abfc4664b61195d8100b5ed2626f  vectors/sync/64-a-member-a-head-named-and-a-page-lists-is-one.json
+2c816c7a34114f65c27cf4a31e3749678ba8380d679d8675c575c9303c3a1b5d  vectors/sync/65-a-band-head-lands-an-arrival-unstamped.json
+a2c76853896950bbef4e958d20ab89dbd517277999923d42d05ec24a32bd105d  vectors/sync/66-the-last-page-decides-what-a-band-head-named.json
+3a4b7e25a00caf5e512e955185ecbea60e90775c7297dfda9e2e65e582d299c5  vectors/sync/67-a-head-lands-a-create-and-holds-the-others.json
+c84c8411a8a0ec1d6941ea935275dcaf0ea0469d937473ea22172f48f61e7bf1  vectors/sync/68-a-rejected-head-restarts-the-round.json
+ee122d65a9d8951bbe8f0d05c01d0868b05cfcdc975d812559523b4562f5afeb  vectors/sync/69-a-band-round-head-lists-from-the-source-checkpoint.json
+e58c954679a3abfd596d9aba244b51d865bbd43e563606882c1426c248904246  vectors/sync/70-a-body-entering-stands-for-its-attachments.json
+aa2db04362bd70241f04f0887dd145593e1f20c8f99d07d44147462240bceeae  vectors/sync/71-a-superseded-delete-waits-for-its-add.json
+d1089cccff581e8e96d2437a8636e73ec97bbe8f4156d39ff0c02d0576fc486e  vectors/sync/72-an-accepted-add-releases-the-superseded-delete.json
+aeafb7ba4d09effad3742ac1daed272f62be1f8a05b90d773fe422da1ad43582  vectors/sync/73-a-create-keeping-its-identity-names-the-member-to-move.json
+8a44d09f91b316a98e7d1489079bdd989b9ff735383fe4499bf1889fa56cd14e  vectors/sync/74-a-partial-round-deletes-nothing-anywhere.json
+94d15fb0d580861caabd46f18b6464a642c28f2fe2cb3fdcb50eb5c2f741847e  vectors/sync/75-a-closed-round-absence-propagates.json
+b04f55d00bb810e31321702c6a32f2179f5f28fde95d593ee431f220b5be3a65  vectors/sync/76-a-propagated-absence-is-pushed.json
+772a155b1364148cd499507fbe29bff630fb870ecd2efdb10dbdf3652dd68475  vectors/sync/77-a-mass-absence-parks.json
+357f027f815c44927bd45bbdbf3700165585b5d388f5c3673eaf0e8340232809  vectors/sync/78-a-confirmed-mass-absence-closes.json
+e82e2d873d8c50eb7ace89b4cf2a68d9cc37888046038c8773a2d312d756a2f2  vectors/sync/79-a-page-without-a-cursor-fails-the-round.json
+0da4691520d2c3a2a411848edd8af0f35e12843a8805d5c94be258840edbbcce  vectors/sync/80-a-body-less-pull-keeps-the-agreed-body.json
+9009d9626bba80e5c1e6fb32e1fd0856a89a41994e618af24eae3feda2bf1db6  vectors/sync/81-a-body-meeting-an-emptied-item-diverges.json
+cca8d1bb1a5561dbb88fac65a487ce8685a36ff672c0c05be3845cb9dce2d4f5  vectors/sync/82-a-fill-keeps-the-item-conflict.json
+13d7ea2a335ca0bf28b77032500527e4b986e84912108e4574b308d61c2bfcda  vectors/sync/83-a-body-less-pull-over-an-edit-conflicts.json
+77c77fd1f7da9d2f6219b5622aa1a4535a0861fe68405b92b004b5004b9c9dc5  vectors/sync/84-the-upgrade-fetches-an-item-conflict-body.json
+f72fe95aa4b151f20e9a0235ab692345468305845652d9a736f4bda40799e1c2  vectors/sync/85-prefer-incoming-keeps-the-body-it-replaced.json
+9c6b9a0ce9e6b6f11b72d486bbc3aadb7500dd92ca04f0198f57cf7501afc73b  vectors/sync/86-prefer-existing-keeps-the-body-it-refused.json
+7e3434ee2c2e7ab140bd53588929efc02ce638c29d0d5a32ed5ac413fb22c64a  vectors/sync/87-a-guarded-edit-refuses-a-replaced-body.json
+93a28eb39be42801589d981d46f144fb373fe3dbdd58ba461d7a3b3183e300ae  vectors/sync/88-an-unreadable-add-stages-nothing.json
+771abecba90f2be4e229b96c3a3c5b7f5c1cafe5fd8b7cc35e57ec45e521dc8f  vectors/sync/89-a-rekey-missing-most-members-parks.json
+020d6e472480dc062f0b8e015162db9047420f1bab411a867e78920d3dd19a6e  vectors/sync/90-a-fetched-conflict-body-meets-prefer-incoming.json
+3a444e3ba7c719ddd0850db35cc53e6b35c39f6ec38caec11366b19aaa4bab6a  vectors/sync/91-a-fetched-conflict-body-meets-prefer-existing.json
+ba537c160a37221de96bef065358220bb7c1187e71f49ce215d2558fee7e2a5d  vectors/sync/92-an-add-accepted-without-a-handle-waits-for-its-page.json
+0ef5081b20aa6626f267807de59681b3283f71774be63e0da28949e7fd10275d  vectors/sync/93-a-second-source-message-under-a-held-id-mints.json
+a918b74e02cee72bc34baf2ca5692cc00bc4518c9fbcd323977bb5f40339657f  vectors/sync/94-a-corrupt-body-is-never-pushed.json
+0ed8eb03136734275ea77ac307bf0c675364b3196553de40177252fba4515007  vectors/sync/95-a-rekey-reusing-a-gone-handle-drops-it-first.json
+54f48762224d221feafdf3592d7a0f48f173d580c67f6a3ebc35ad8b8752f9c8  vectors/sync/96-a-rekey-matches-copies-at-one-revision-in-handle-order.json
+61fcced1171c080049f489c8ca4d02d10f109cdbc5a03e37b34fd372c71d5590  vectors/sync/97-a-bodiless-arrival-landing-a-mutable-create-conflicts.json
+cced178d782c73cf6817ce62d9b28c2a110d749bfa89cf6515703d0d3fbb8bbb  vectors/sync/98-an-upgrade-fetching-the-staged-body-clears-the-conflict.json
+e9a28454abfef4d4671335bcab647f9eade22a3c5f06e838493c56bb312a08ea  vectors/sync/99-a-page-before-the-last-mints-another-message-apart.json
+5847aac0b86a2361311fac14b67ad0db74afe7bb838c0098643738d4c76ab367  vectors/schema/sync.schema.json
+
+# search-v1.0.0: the store the cases read, the search schemas and case lists.
+e782d0e8a53bab0891b4db528a95c8b67ab0b9916451d07f73bcae3bc3b2a9d1  vectors/search/store.json
+0d98341ffd6455327e176688d4affe359b04dc0317d2a3bb920d4fcc6a0d653c  vectors/schema/search-chunks.schema.json
+d8f405d7959b3c5dd19cf8cf304beb14ab9bd37c254641e2463fe3b441212211  vectors/schema/search-extraction.schema.json
+47b35f9a7586b8517110a1194f6441e1118efea4f0463799e1a94147eff89c31  vectors/schema/search-queries.schema.json
+f6fa901bb4722a888dbfef0b8e0e4371076dee4546c7f8a1777dfdd6dcc7266b  vectors/schema/search-refresh.schema.json
+056ccdee9ee7ac8dacd7ef8508e92f71d0ca8e7e905ed7c05776b747c9596e49  vectors/schema/search-store.schema.json
+33c2c0f59013cfd48c7e36a1a4023f0c17d097990d0c0a78a8709bfec6e3b8fb  vectors/search/queries.json /cases=355 /occurrences=8
+9353aa9f606d4474c64b310daf0d7efb2d9952d5ef62f7f1500066471275a41b  vectors/search/refresh.json /cases=18
+0725a976d492f1e84db9203384270ab5f9f6694853c5925cc710b640727fc791  vectors/search/chunks.json /cases=10
+7428ec772d4b8432254335702cdd1ad9d964d3ef807de83fe114a2485672beee  vectors/search/extraction.json /cases=9
+
+# Every fixture a frozen case names.
+802161b904b64c5827fac3d343a76f17dee9ce70f0901df9c68c6fdf0cb1c9a7  vectors/fixtures/card-basic-edited.vcf
+781a60c43ff07d07c80aad206413c51ff1c9d4d88ee14c02daf642520376d2de  vectors/fixtures/card-basic-renamed.vcf
+50f54f38567fa927a5fbc8237c5585339e4fad9526bd32ab11b7e89945ad4d4e  vectors/fixtures/card-basic-retitled.vcf
+54c7df946911624a84be8ef57bcf28b67424d3422e3704132792f1096b57594d  vectors/fixtures/card-basic.vcf
+a67f1d0e31f6a4e0c0c963ba921954f092a2d662beb89766ca97b308b966298b  vectors/fixtures/card-casefold.vcf
+fde9d3339da9e3dcd46bd139f2283565dce7544bcf097309e0fa79ffaff93093  vectors/fixtures/card-empty-uid.vcf
+48a7723f4a203690d6282a54a8d86bcd1f1edad91cc572892e2060428a11c2c0  vectors/fixtures/card-escaped.vcf
+85a959dad0e5c7ccfd39d94fde527efefc0fa278f7529a22a1caaafd2c8cbf8a  vectors/fixtures/card-final-sigma.vcf
+7a663bd48c5f8d07e7a7e4a756c8269b78ddff3f6b8efc44856e03a9b5ed9456  vectors/fixtures/card-full-lowercase.vcf
+0b05c0e2dac3d41cf12a5f8698258531fdb8cba51b169b02009db2fd2d646d24  vectors/fixtures/card-held.vcf
+b630518f316037a5e90c25d914c7cdc9596253f1c8676566b830c225712a2aba  vectors/fixtures/card-kind.vcf
+bd991755531163b3fe94303465e97bffa6fa86c0fd9efc4c610c39c49be3af92  vectors/fixtures/card-nbsp-name.vcf
+86e53a157b63d8823e2e39ad8f2a4cb73e8b45f1c22433d09956fa64619934c2  vectors/fixtures/card-no-colon.vcf
+a3cb99621233d48e9e2879ab855868c20b026f1ad6e5d8965209be298d48d55a  vectors/fixtures/card-no-fn.vcf
+64cc9e7f891d5db6781721b0573abedc70ccecffd35f87163a57794c89f69f25  vectors/fixtures/card-reserved-uid.vcf
+5fba106c8a7b00acdbcadf1546f00f9559f5c38dcd87703ebd2ea18f66930f2b  vectors/fixtures/card-scripts.vcf
+5f520d92b10cfd58fbc7acf823e2a20852d299b18a49efc60015dd05cb3421e7  vectors/fixtures/card-titles.vcf
+60dd8fa85e494488929486005fbd62150bf0c6334854cad491fc13ec95ab6419  vectors/fixtures/event-attach.ics
+74e73c59979abd73ffe83f9b79139de3660bb730dc9372138cec61452e760b82  vectors/fixtures/event-blank-uid.ics
+82b3fdd0c4256f46e5e5bb0479b0947d9964ec53059c269cdc94337d9b8f2bf2  vectors/fixtures/event-cut-before-start.ics
+6e0fa060b00f2b96f9f5a7aab7cc99c2738bb0971cd478b0892b916f7fa6d7f8  vectors/fixtures/event-date-new-year.ics
+397052fb43d67750a07ee2cffab27c6a15a6a1acf03657435d9e536197227a63  vectors/fixtures/event-date-only.ics
+8d8120a617415867fb5380339602f0031f2133b7aa34ca1e6dc5a83a0e1847b7  vectors/fixtures/event-dense.ics
+6a3ffad0e917377bf9ddaa26f6c90d2ac534bb100f38e63c7aa3d82daeef9996  vectors/fixtures/event-exceptions.ics
+45007e98d5f2fe7e35aa04efd5f8feba9f863ac4b6a043772256c84d4af3c8f8  vectors/fixtures/event-floating.ics
+c58c4563b4bf0b749da20a0fac932d33195288c2ad3dc483ebf7690f529965e0  vectors/fixtures/event-floating-late.ics
+5bb168a2470b3465d683f284646451abd2fa5937467fff60de3d0a5e45c3092a  vectors/fixtures/event-hourly.ics
+3cc846e8f4ce8b765a10379d9125de418309f97fc230adbab2e3895d3d89db30  vectors/fixtures/event-no-dtstart.ics
+a5a814e5a69405d457de8e82c0e3f4ab0c6492bef92261d8240d354fe7b8bfd8  vectors/fixtures/event-no-uid.ics
+6d4303706e7e81064f65f2bbb821a8d3f72b4da49a059f48745ed6cbfe70fc63  vectors/fixtures/event-override-only.ics
+223d3a3ac0df5f7d613feab6d9e3f86ce8e84652b64d772c29fec419e5619a71  vectors/fixtures/event-people.ics
+d00ad5f9dfb109e46726fc9ecaf6364be43143120bd29f3e767738e553565496  vectors/fixtures/event-recurring.ics
+3f44a404dec6e473bdb62cf84fe81b2918f1cfaa36e892ad564b8c7012e7f456  vectors/fixtures/event-sparse.ics
+23c764669a0ae5b2116cb93f7087d269b6dd5df1bbc7df291e83fb120c1859e5  vectors/fixtures/event-unknown-tzid.ics
+7cdbe2e20ef2dac0100fb00c67ead99368d2bd7d0704a26e00216c1024311c1f  vectors/fixtures/event-until-same-day.ics
+bf516e3a930d54e2517f8bb12f008260962fd91569173e601d463a202c6caaf4  vectors/fixtures/event-utc.ics
+b23d49d44a7340b2c07548d1fdff80a09e1a48822f2a006b19dcd05de88892eb  vectors/fixtures/event-zoned-fall-back.ics
+652edb3204c3fc811fec3e1b7e3974b6c85ac1f9f5c029ebe79ad6d5a317eeac  vectors/fixtures/event-zoned-fold.ics
+f1a6952e4912cca399e6b682dbb39b57eba50a199e3bc6110474eaca7f12fc47  vectors/fixtures/event-zoned-gap.ics
+e185ad59dbbd335ab3021a902174547969009e3206cdab6f6b7c34048bcadbae  vectors/fixtures/event-zoned-hostile.ics
+fb9060bf0ef26b33511b8caa2ec3847657b4de777f693d801eea55be10d05ee4  vectors/fixtures/event-zoned-iana.ics
+577c4af4c2ce937ad0ac0e2c229b43d0d91c726b175657a2fbfc1540c0bbd09f  vectors/fixtures/event-zoned-midnight.ics
+82bd869da45807f380045bb5676d76649c5b9656b6f87ee322b5b648afef82a2  vectors/fixtures/file-notes-edited.txt
+1061a62a350c47937fe10c64a24086839e03c2be2ab84ce4f007111833d081fb  vectors/fixtures/file-notes.txt
+595c7cca7c0947662bc1bf2b112614761e60a7beb2fa8f6658046fcab8f91ef8  vectors/fixtures/journal-basic.ics
+55fba7adfba28fa6a9c2d0dfe301c93d0b547ee8287c6e35263211fc9254da36  vectors/fixtures/mail-attachment.eml
+d0842b73267213b4c0b9f36ba5351e895ddb55267c17ed6fed41aba231b8cdd2  vectors/fixtures/mail-attachments.eml
+62b91709d66c9a64497a17af9fc3dbe6962decca9d660c109802edacb22bbd52  vectors/fixtures/mail-bare-file.eml
+92e9c0ca6376f3050e56e201147e15ae1a6a91e5cf80eaef30dfc5780d7d32f1  vectors/fixtures/mail-bare-parts.eml
+19f9499d0a7cbd18b833c168a0d1de9639b2b7edc1f62e5b718548c2e79ceefc  vectors/fixtures/mail-basic.eml
+e3a1e1b40a8fed58fe71fb4ae71a054dd3d105a5b618fdc56e6289cd6b4623e8  vectors/fixtures/mail-basic-rewritten.eml
+9803915cef88eda28dd9c86a4949b772505835ac38d466a3accfdde758484f77  vectors/fixtures/mail-basic-twin.eml
+50a19945dc3549c0581ab7f00f26d60b01d85d08d0dcdc7b8364914349b404ad  vectors/fixtures/mail-bracketless-id.eml
+cb71bff99fdfac81974480fe9e234b931fa25970ddbfd2763cf1793b6a789993  vectors/fixtures/mail-charset-gbk.eml
+f66bd30121ca5c67ae02674b7c8b711f4409705c2d132e0c230a01d1d67ab3ea  vectors/fixtures/mail-charset-iso-2022-jp.eml
+d3a80b80b4296ab22ce43c0ac2731c40d31cf6518ea9dd1db260a2ddf0686406  vectors/fixtures/mail-charset-iso-8859-2.eml
+63b513f3c30103ce83a8287da4a20a6e20ce85f66f7dea3428251727da5262fe  vectors/fixtures/mail-charset-replacement.eml
+2a2a37702d0c05527db99604fa9fc85a89a868c23c87ab8734a1d2a745aea31b  vectors/fixtures/mail-charset-windows-1252.eml
+953fa89f055fd256daa114af72b2bbe9a279e0ce96a6c0a806b9d72f8c8a7ed9  vectors/fixtures/mail-cut-delimiter.eml
+5231f45929042567dbeda1c50da096cfdd46977b8737a0c8c32e7b4fe5dfd696  vectors/fixtures/mail-deep-parts.eml
+9430ac55c95f37b6630ee99dbe265ca0d7821afb3327cccd5bad6afd6d9a4d21  vectors/fixtures/mail-deep-text.eml
+3f9098cd257c4b2140d7141d5d0627899ee6b96f7941daf45bfd9b4a8f9d3a6f  vectors/fixtures/mail-encoded.eml
+dc991974c2e09dde94ad1f0a2fb07dbec9f39ebb1d0f5e30c566ee03ee455db8  vectors/fixtures/mail-encrypted.eml
+3dda0d2391cf1199b82065b6c3f9d830c9ff5ff2fce84285ba046933b0014f74  vectors/fixtures/mail-folded-subject.eml
+327ce6f180b316e9fd8b30b583071d689b8dc62b46fe9bbd232392d5c3364803  vectors/fixtures/mail-future-date.eml
+79fc1716a64534009fb1c0f83f64646da061a1510db7405e832b641ce4a2cbf6  vectors/fixtures/mail-header-cut.eml
+aafe93cd18d2913a09da1582cdfe5259bf1a31057e647622e10acaa2ebf382a3  vectors/fixtures/mail-id-comment.eml
+c49c098f2204d9c92c8626f7d3580784e9a254a4809d778a17f2e1e208a8cbb2  vectors/fixtures/mail-invitation.eml
+dbd4a890aacc5b6a0e1163352916634a7cf04962845b840c50940dc02e4b8267  vectors/fixtures/mail-lost.eml
+1ce8f806d47992b4ba52488c9b956485657510ca19b4a1f805227c27cc7c1f32  vectors/fixtures/mail-malformed-word.eml
+41747aa4ab0e5962f547599ca8d24bef0cb852ce178b4ba7b8fc13045f4288be  vectors/fixtures/mail-many-attachments.eml
+af05edbaef8bddbcc17890efd6511e998f4c0d3a582c15a5b95f62370b7c14e7  vectors/fixtures/mail-many-parts.eml
+c7774531c78e21b52926ff3c430bbcaf2872bd8455e7f0c2506f5cb0ad37ecd3  vectors/fixtures/mail-many-text.eml
+8e134dad609ec630c3990caf5844a47683a2ba4678f3dc9600894371fa4e59ab  vectors/fixtures/mail-military-zone.eml
+e09eb7a099a3d943d69800acb44e5c5fbb052e1ac1fa5f4e08ac00fe838adb78  vectors/fixtures/mail-mixed-footer.eml
+a774a7fbf6c107c7fee8af0187f3d57b0125826556b88dd36492ac39eb1bff58  vectors/fixtures/mail-multi-reply.eml
+fef02e6c317401245856769a0085409391540b58b96619b77bfdb3e2e1aaa197  vectors/fixtures/mail-named-zone.eml
+514046118b9ebcf1e966e60ed0d1560cfccc7bdce8d52325ac80bf7b05056cac  vectors/fixtures/mail-no-message-id.eml
+8b52c02a5d8d9813ac3a2902e6e6d6e8de7fca23cca3a4db537ab4b7a2328942  vectors/fixtures/mail-no-seconds.eml
+fa11548b0b34e932949a0c94954eba1d12336275a726c1dbb5bff93859f28cfb  vectors/fixtures/mail-no-subject.eml
+69b3fac1790ca842197137cae42b5b3c1333326fd8598ba291152d49e7524c75  vectors/fixtures/mail-obsolete-year.eml
+59903c335e944600d747d28e765056fe39d94fe5203318f2f6343fc27adc7eef  vectors/fixtures/mail-out-of-range-date.eml
+e32ad8b785b3d6d2df013357d86d93f1d4512ecc59c9913e9dc9ba4f294bf9fb  vectors/fixtures/mail-quoted-printable.eml
+d710b086f9618da2e334fa7b0db378b9b756d620182263ed8f9b227c1e7afc11  vectors/fixtures/mail-raw-8bit.eml
+2365b456ace61c2a23ff78fe2e314a5a812b0a4512897de8601456d11e2874f7  vectors/fixtures/mail-recent.eml
+ee90db4cc45f0d6405e4af19945c3f56e831b6d549e4f988be7ab46e8cdb5e5b  vectors/fixtures/mail-references-only.eml
+706105a963ae9b2648ad51cdd6936543c5639925c55ce216193358bfd16ce815  vectors/fixtures/mail-repeated-fields.eml
+5e243c8aeae365b9fa9dd5c15fe5ae372f474a568f7876903d9f99a5ff1286d6  vectors/fixtures/mail-repeated-part-fields.eml
+23bafeb80859b3767ea125835374c26aa162846d9d72e84da0fcd9cb323cd601  vectors/fixtures/mail-reply.eml
+57cd76aa632b80eb84b06996cd705c13abbf40bfd79ab6d345c858129e3cbe34  vectors/fixtures/mail-reused-id-attachment.eml
+3220c7ba4b9a8f1f1a5acf3dc7fae516516a4e15a402c546546fb8cd626ecb31  vectors/fixtures/mail-reused-id-same-size.eml
+b475c6ded5b0825b690d52b1e39882952b6b4dc26a92b4d037e92007655c6d6e  vectors/fixtures/mail-reused-message-id.eml
+b1d6bed4db063970965cd7f27cddfada0c5aba757a57ba0383b89f4cf4fb9008  vectors/fixtures/mail-spaced-field-name.eml
+7fe5b58a362afa0d4ceb392428ca04f09cf0d5e6df9cb1a0e2418b1afdf52eef  vectors/fixtures/mail-split-quince.eml
+e5ea7d0dda269e537aa2d2559c9648a3df6ab145d22680de4fd692a07640b810  vectors/fixtures/mail-split-rhubarb.eml
+3e7ecd0336ebc80195ccb1fe616fdfeac4c310e9f071dd893526632953c94fac  vectors/fixtures/mail-stray-cr.eml
+8caf7836216001e5f981404b1bd41820a0b4dd9750be48e1f00d03d14e0a3227  vectors/fixtures/mail-unclosed-multipart.eml
+8d50e9ab0d3c088e2bc8fe10e2bdc7933778c40741cdd99a83500561f4efb38a  vectors/fixtures/mail-unparseable-date.eml
+0af88b55f4ffc8ebc372c34e8992421b54f752b3b618b7394a814394ddf7b05f  vectors/fixtures/mail-unparseable-id.eml
+32ec351eaf756d8d48ce80beec0ab3bc459e9aee737fdfbfd0c28a4c0d6a4399  vectors/fixtures/todo-captured.ics
+03c99177ee7b86b4aac2ff763296b3a81150d9d2ec76f62c305c103eb438226d  vectors/fixtures/todo-contact-text.ics
+da92fedd3d7fb22dae0ec56faaaba88a1084ddeb0ff7bfa62e73b9837fd54bc3  vectors/fixtures/todo-dtstart-and-due.ics
+49b25c23495bda773f83aa0ffe646b2a568cb676b7acdb55987486587209c33a  vectors/fixtures/todo-due-date.ics
+e77ce3713360cce62644f02eb8ece26eb8486469de54c3d45470426b8093cc7c  vectors/fixtures/todo-due-only.ics
+ab4602ba76467e3b61ffacd0f5800e88ca5fc0c95b393dbd16144d19dd8f5853  vectors/fixtures/todo-gtd.ics
+626db64d54b7bd947293f33e0b958c62d110620730d196853db5f15e7e4e9f0d  vectors/fixtures/todo-inbox-done.ics
+69c1849a15eac6930f4e678c82552ad84682327c2d5d72a1df446978bfc2c881  vectors/fixtures/todo-inbox-filed.ics
+6405be4a07e0aaf9c1ebd73c17d830ef48f671e3789a5c3834c893afb6f5283a  vectors/fixtures/todo-inbox.ics
+d469b8f69c505e8ae835524ccc72fff3cb132578432b6e9ab99232bd74dc04eb  vectors/fixtures/todo-next.ics
+cbad49748cacfebee3a43b6b4ad87d09d662edfaebcda29a652eaaff04fcc1ca  vectors/fixtures/todo-someday.ics
+72a107067723eacc1511a2989385588bd046eb5edd071b47694d101976ca52a4  vectors/fixtures/todo-waiting.ics

@@ -107,15 +107,13 @@
           ${python pkgs}/bin/python3 ${./checks/vectors.py} ${standard} | tee $out
         '';
 
-        # The bytes a release froze, against checks/frozen.sha256: nothing
-        # while every part is a draft.
+        # The bytes a release froze, against checks/frozen.sha256.
         frozen = pkgs.runCommand "pimdir-frozen" { } ''
           bash ${./checks/frozen.sh} ${format} ${./checks/frozen.sha256} | tee $out
         '';
 
         # The cases a release froze, an intact prefix of each case file
-        # checks/frozen.sha256 names with its lists: nothing while every
-        # part is a draft.
+        # checks/frozen.sha256 names with its lists.
         appended = pkgs.runCommand "pimdir-appended" { } ''
           ${pkgs.python3}/bin/python3 ${./checks/appended.py} ${format} ${./checks/frozen.sha256} | tee $out
         '';

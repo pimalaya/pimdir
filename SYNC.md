@@ -1,6 +1,6 @@
 # Pimdir sync specification
 
-Status: sync-draft-16, requiring storage-draft-19, released together with it and the search part
+Status: sync-v1.0.0, requiring storage-v1.0.0, released together with it and the search part
 
 The sync part of the pimdir standard: how one or more sources reconcile through a store ([STORAGE.md](./STORAGE.md)), so the store is an offline replica of each source and every source sees every other's changes. It fixes what an engine derives from the store's rows and a source's answers, and what it writes back.
 
@@ -158,7 +158,7 @@ Where a source serves a member nothing raw (Annex A.1 says which), the connector
 
 The remote path is the folder and the member's name, which the connector derives. A rename on the server is the same handle listed under a new name: a summary write on the same placement. A move between two folders the source syncs is the member leaving one and joining the other under the same key, as a move of a message is.
 
-A server stating no such id (a plain WebDAV collection keyed by href alone) is not a file source in this draft.
+A server stating no such id (a plain WebDAV collection keyed by href alone) is not a file source in this version.
 
 A file's meta is what its listing states, never its bytes (STORAGE Annex A.7): its decoded name, its media type and its length; the listing carries no body. A file stays at `Meta` until a `Full` upgrade fetches its bytes, which then fix its size. Its revision is its ETag (`getetag`), and a source stating none for a file MUST NOT push its content.
 
@@ -221,7 +221,7 @@ The next listing names the member, and the page naming it lands the create (§6)
 
 *Note:* A source enforcing none (a server ignoring `If-Match`, an IMAP server without CONDSTORE, an API with no precondition) leaves a window between the listing a push was derived from and the push. A change made on the server in that window is lost: a body under an `Update`, the member under a `Remove`, the flags a `SetFlags` names. Every other change the server made survives, and the next listing reports it.
 
-*Note:* In this draft no row of the store says which sources leave the window open, so a producer cannot tell an unguarded write from a guarded one.
+*Note:* In this version no row of the store says which sources leave the window open, so a producer cannot tell an unguarded write from a guarded one.
 
 **The idempotency key.** Every change carries a key naming it, so a connector logging keys recognises the replay of a push whose record was lost, and a chunk replayed after a crash (§5) applies once. The key MUST be derived as follows, so two engines over one store key one change alike:
 
@@ -640,9 +640,9 @@ A batch is cut between candidates, never inside one, and a rekey is never cut. T
 
 **The write keys another message apart.** A `Links` load answers this source's holders alone, so a page before the last, a head and an upgrade name a member without seeing an item another source binds under the same hint, and cannot apply §6's rule for another message reusing a `Message-ID`. The write applies it whichever step named the member (STORAGE §14), and an engine whose load showed the row mints the member the same way first, so both name it alike.
 
-**The version of the sync state.** An engine records its version, this part's (`sync-draft-16` now), in `store_meta.sync_version` (STORAGE §14), in the transaction of its first write to a store naming none. A store naming none holds no sync state yet.
+**The version of the sync state.** An engine records its version, this part's major alone (`sync-v1` for this version), in `store_meta.sync_version` (STORAGE §14), in the transaction of its first write to a store naming none. A store naming none holds no sync state yet.
 
-While this part is a draft, an engine MUST refuse a store whose `sync_version` names another version than its own draft's, naming both, and run no verb on it: a draft's sync state is read under that draft alone, as a draft's store is (STORAGE §4.2). Once this part is released, an engine MUST refuse sync state a draft wrote, or a major above its own; sync state of a major below its own it reads as that major defines it, and records its own version only in the write converting what the majors between them changed.
+An engine MUST refuse a store whose `sync_version` names a draft (`sync-draft-NN`) or a major above its own, naming both, and run no verb on it: a draft's sync state is read by no release, as a draft's store is not (STORAGE §4.2). Sync state of a major below its own it reads as that major defines it, and records its own version only in the write converting what the majors between them changed.
 
 ## 11. Test vectors
 
@@ -670,7 +670,7 @@ Every case pins two rules: no `Remove` is pushed but for a tombstone the store h
 
 ## 12. Conformance
 
-An implementation offering sync conforms by one profile or both, stated as STORAGE §17 says (`sync-draft-16 engine`, `sync-draft-16 connector (IMAP)`), and MUST meet every section its row names and pass the vectors it names.
+An implementation offering sync conforms by one profile or both, stated as STORAGE §17 says (`sync-v1.0.0 engine`, `sync-v1.0.0 connector (IMAP)`), and MUST meet every section its row names and pass the vectors it names.
 
 | Profile | What it does | Owes | Vectors |
 | --- | --- | --- | --- |

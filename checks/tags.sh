@@ -67,12 +67,13 @@ named="$(fixtures vectors/summaries.json vectors/sync/*.json vectors/search/stor
 unnamed="$(comm -23 <(find vectors/fixtures -type f | sort) <(echo "$named"))"
 
 part STORAGE.md migrations/storage payloads vectors/objects.json vectors/summaries.json \
-    vectors/payloads.json vectors/schema/objects.schema.json vectors/schema/summaries.schema.json \
-    vectors/schema/payloads.schema.json $(fixtures vectors/summaries.json) $unnamed
+    vectors/payloads.json vectors/versions.json vectors/schema/objects.schema.json \
+    vectors/schema/summaries.schema.json vectors/schema/payloads.schema.json \
+    vectors/schema/versions.schema.json $(fixtures vectors/summaries.json) $unnamed
 part SYNC.md vectors/sync vectors/schema/sync.schema.json $(fixtures vectors/sync/*.json)
 part SEARCH.md vectors/search vectors/schema/search-store.schema.json \
     vectors/schema/search-queries.schema.json vectors/schema/search-chunks.schema.json \
-    vectors/schema/search-refresh.schema.json $(fixtures vectors/search/store.json vectors/search/refresh.json)
+    vectors/schema/search-refresh.schema.json vectors/schema/search-extraction.schema.json $(fixtures vectors/search/store.json vectors/search/refresh.json)
 part conventions/gtd.md conventions/gtd
 
 if [ "$failures" -gt 0 ]; then
