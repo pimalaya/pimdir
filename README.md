@@ -82,6 +82,7 @@ payloads/       the JSON Schemas of the queue's payloads
 vectors/        the normative test data
 checks/         schema, floor, vector, reference, frozen and appended checks (nix flake check), rehearsal migrations, tags and implementation (CI)
 conventions/    Pimalaya's own conventions, outside the standard (gtd.md)
+CHANGELOG.md    the releases, each part by its own version
 cairn/          the dated history (log/) and audit ledgers (changes/)
 ```
 
